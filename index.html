@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#111827" />
+  <title>SK Web</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+<header><div><strong>SK Web</strong><small>Inventario y control de activos SK 3.7</small></div><button id="syncBtn" type="button">☁ Sincronizar</button></header>
+<nav id="nav">
+  <button data-view="home" class="active">Inicio</button>
+  <button data-view="personal">Personal</button>
+  <button data-view="assets">Nuevo activo</button>
+  <button data-view="novelties">Novedades</button>
+  <button data-view="consumption">Consumo YT</button>
+</nav>
+<main>
+<section id="home" class="view active"><h1>SK Web</h1><p class="lead">La operación se guarda primero en esta tablet. Internet no es necesario para registrar ni consultar datos ya almacenados.</p><div class="cards"><article><b id="pCount">0</b><span>Personas</span></article><article><b id="aCount">0</b><span>Activos</span></article><article><b id="nCount">0</b><span>Novedades</span></article><article><b id="cCount">0</b><span>Consumos</span></article></div><p id="syncStatus" class="status">Almacenamiento local listo.</p></section>
+<section id="personal" class="view"><h2>Personal</h2><form id="personalForm"><label>Documento<input name="documento" required></label><label>Nombres y apellidos<input name="nombre" required></label><label>Empresa<select name="empresa" required><option>SK 3.7</option><option>DESMIN</option></select></label><label>Área<input name="area" required></label><label>Cargo<input name="cargo" required></label><label>PIN<input name="pin" inputmode="numeric"></label><button>Guardar persona</button></form><div id="personalList" class="list"></div></section>
+<section id="assets" class="view"><h2>Registrar nuevo activo</h2><form id="assetForm"><label>Clase<input name="clase" required></label><label>Fabricante<input name="fabricante"></label><label>Serial<input name="serial"></label><label>Modelo<input name="modelo" placeholder="Ej. 28 o 29"></label><label>Largo<input name="largo" inputmode="decimal"></label><label>Mina propietaria<select name="mina"><option value="">Seleccionar</option><option>Sandra K</option><option>Providencia</option><option>El Silencio</option><option>Carla</option><option>Alianza</option></select></label><label>Marca anterior<input name="marcaAnterior"></label><label>Marca interna<input name="marcaInterna" readonly placeholder="Automática"></label><label>Consecutivo<input name="consecutivo" readonly placeholder="Automático"></label><label>Estado<select name="estado"><option>Operativo/a</option><option>Averiado/a</option><option>En reparación</option><option>No apareció</option><option>Por dar de baja</option><option>Dado/a de baja</option><option>Extraviado/a</option></select></label><button>Registrar activo</button></form><p class="hint">Ubicación inicial automática: Bodega de Superficie.</p><div id="assetList" class="list"></div></section>
+<section id="novelties" class="view"><h2>Novedades de activos</h2><form id="noveltyForm"><label>Activo<select name="assetId" id="novAsset" required></select></label><label>Novedad<select name="descripcion" id="novDesc" required></select></label><label>Ubicación<input name="ubicacion" required></label><label>Estado<select name="estado"><option>Operativo/a</option><option>Averiado/a</option><option>En reparación</option><option>No apareció</option><option>Por dar de baja</option><option>Dado/a de baja</option><option>Extraviado/a</option></select></label><button>Guardar novedad</button></form><div id="noveltyList" class="list"></div></section>
+<section id="consumption" class="view"><h2>Consumo de repuestos YT / Columnas</h2><form id="consumptionForm"><label>Máquina / Columna<select name="assetId" id="conAsset" required></select></label><label>Modelo<input id="conModel" readonly></label><label>Inventario origen<select name="origen" id="origin"><option>YT29</option><option>YT28</option></select></label><label>Repuesto<select name="partId" id="part" required></select></label><label>No. de item<input id="partNo" readonly></label><label>Nombre de repuesto<input id="partName" readonly></label><label>Cantidad<input name="cantidad" type="number" min="1" value="1" required></label><label>Responsable<select name="responsableId" id="responsible"></select></label><button>Registrar consumo</button></form><p class="hint">El inventario origen determina qué repuestos aparecen y de cuál inventario se descuenta.</p><div id="consumptionList" class="list"></div></section>
+</main>
+<script src="app.js"></script>
+</body>
+</html>
