@@ -1,1 +1,3 @@
-const PERSONAL_SEED=[{"id":"PERSONAL-0001","documento":"5744033","nombre":"Juliana Greidimar caripa Aguilera","empresa":"","area":"","cargo":"Sst"}];
+// Carga inicial de Personal desde AppSheet. Los PIN se excluyen del repositorio público.
+const PERSONAL_SOURCE_URL='data:text/plain;charset=utf-8,';
+async function seedPersonal(){const current=await all('personal');if(current.length)return;const r=await fetch('personal-data.tsv?v=20260908');if(!r.ok)throw new Error('No se pudo cargar Personal inicial');const text=await r.text();let i=0;for(const line of text.trim().split(/\r?\n/)){const [documento='',nombre='',empresa='',area='',cargo='']=line.split('\t');if(!documento&&!nombre)continue;i++;await put('personal',{id:`PERSONAL-${String(i).padStart(4,'0')}`,documento,nombre,empresa,area,cargo,createdAt:now(),updatedAt:now(),syncState:'seed'})}}
