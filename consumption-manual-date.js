@@ -1,0 +1,10 @@
+// Fecha manual para consumo de repuestos.
+// Mantiene createdAt/updatedAt como fecha técnica de sincronización,
+// pero fechaISO/fechaLocal corresponden a la fecha operativa elegida por el usuario.
+(()=>{
+const isoToday=()=>{const d=new Date(),z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`};
+const localFromISO=iso=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(iso||''))return'';const [y,m,d]=iso.split('-');return `${Number(d)}/${Number(m)}/${y}`};
+function mount(){const f=document.querySelector('#consumptionForm');if(!f||document.querySelector('#consumptionDate'))return;const qty=f.querySelector('input[name="cantidad"]')?.closest('label');const lab=document.createElement('label');lab.innerHTML='Fecha de consumo<input name="fechaConsumo" id="consumptionDate" type="date" required>';if(qty)f.insertBefore(lab,qty);else f.insertBefore(lab,f.querySelector('button'));document.querySelector('#consumptionDate').value=isoToday()}
+async function save(e){const f=e.target;if(f?.id!=='consumptionForm'||f.dataset.manualDateSaving==='1')return;e.preventDefault();e.stopImmediatePropagation();const x=fd(f),qty=Number(x.cantidad),date=x.fechaConsumo;if(!(qty>0))return alert('Cantidad mínima no válida');if(!date)return alert('Selecciona la fecha del consumo.');const p=(await all('parts')).find(y=>y.id===x.partId);if(!p)return alert('Selecciona un repuesto.');const d=new Date();delete x.fechaConsumo;await put('consumptions',{...mark(),...x,cantidad:qty,noItem:p.numero||'',nombreRepuesto:p.nombre,fechaISO:date,fechaLocal:localFromISO(date),horaLocal:d.toLocaleTimeString('es-CO')});f.dataset.manualDateSaving='1';f.reset();delete f.dataset.manualDateSaving;f.cantidad.value=1;document.querySelector('#consumptionDate').value=date;document.querySelector('#origin').value='YT29';await refresh();window.dispatchEvent(new Event('skweb-consumption-changed'))}
+window.addEventListener('load',()=>setTimeout(mount,800));document.addEventListener('submit',save,true);
+})();
