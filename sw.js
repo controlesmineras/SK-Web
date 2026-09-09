@@ -1,6 +1,6 @@
-const VERSION='20260909-6';
+const VERSION='20260909-8';
 const CACHE=`sk-web-shell-${VERSION}`;
-const CORE=['./','./index.html','./styles.css','./app.js','./searchable-consumption.js','./asset-admin-ui.js','./offline-navigation.js','./sync-latest.js','./consumption-manual-date.js','./consumption-query-v2.js','./consumption-admin-delete.js','./personal-seed.js','./asset-seed-1.js','./asset-seed-2.js','./asset-seed-3.js','./asset-seed.js','./manifest.webmanifest','./icons/icon-192.png','./icons/icon-512.png','./icons/icon-180.png'];
+const CORE=['./','./index.html','./styles.css','./app.js','./searchable-consumption.js','./asset-admin-ui.js','./offline-navigation.js','./sync-latest.js','./consumption-manual-date.js','./consumption-query-v2.js','./consumption-admin-delete.js','./personal-seed.js','./asset-seed-1.js','./asset-seed-2.js','./asset-seed-3.js','./asset-seed.js','./manifest.webmanifest','./icons/icon-sk-web.svg'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('sk-web-shell-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim()).then(()=>self.clients.matchAll({type:'window'})).then(clients=>clients.forEach(client=>client.postMessage({type:'SKWEB_VERSION',version:VERSION})))));
 self.addEventListener('message',event=>{if(event.data?.type==='SKWEB_SKIP_WAITING')self.skipWaiting();if(event.data?.type==='SKWEB_GET_VERSION')event.source?.postMessage({type:'SKWEB_VERSION',version:VERSION})});
