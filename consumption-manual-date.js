@@ -4,30 +4,7 @@
 (()=>{
 const isoToday=()=>{const d=new Date(),z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`};
 const localFromISO=iso=>{if(!/^\d{4}-\d{2}-\d{2}$/.test(iso||''))return'';const [y,m,d]=iso.split('-');return `${Number(d)}/${Number(m)}/${y}`};
-function mount(){const f=document.querySelector('#consumptionForm');if(!f||document.querySelector('#consumptionDate'))return;const qty=f.querySelector('input[name="cantidad"]')?.closest('label');const lab=document.createElement('label');lab.innerHTML='Fecha de consumo<input name="fechaConsumo" id="consumptionDate" type="date" required>';if(qty)f.insertBefore(lab,qty);else f.insertBefore(lab,f.querySelector('button'));document.querySelector('#consumptionDate').value=isoToday()}
-async function save(e){const f=e.target;if(f?.id!=='consumptionForm'||f.dataset.manualDateSaving==='1')return;
-// La edición completa la maneja consumption-admin-delete.js. No permitir que este flujo de alta cree un duplicado.
-if(f.dataset.editingConsumptionId)return;
-e.preventDefault();e.stopImmediatePropagation();
-if(f.dataset.consumptionSaveBusy==='1')return;
-const button=f.querySelector('button[type="submit"],button:not([type])'),oldText=button?.textContent||'Registrar consumo';
-f.dataset.consumptionSaveBusy='1';if(button){button.disabled=true;button.textContent='Guardando…'}
-try{
-  const x=fd(f),qty=Number(x.cantidad),date=x.fechaConsumo,responsableId=x.responsableId,responsableTexto=document.querySelector('#responsibleSearch')?.value||'';
-  if(!(qty>0))return alert('Cantidad mínima no válida');if(!date)return alert('Selecciona la fecha del consumo.');if(!responsableId)return alert('Selecciona el responsable.');
-  const p=(await all('parts')).find(y=>y.id===x.partId);if(!p)return alert('Selecciona un repuesto.');
-  const d=new Date();delete x.fechaConsumo;
-  await put('consumptions',{...mark(),...x,cantidad:qty,noItem:p.numero||'',nombreRepuesto:p.nombre,fechaISO:date,fechaLocal:localFromISO(date),horaLocal:d.toLocaleTimeString('es-CO')});
-  f.dataset.manualDateSaving='1';f.reset();delete f.dataset.manualDateSaving;f.cantidad.value=1;document.querySelector('#consumptionDate').value=date;document.querySelector('#origin').value='YT29';
-  const rs=document.querySelector('#responsible'),ri=document.querySelector('#responsibleSearch');if(rs)rs.value=responsableId;if(ri)ri.value=responsableTexto;
-  // El alta no necesita releer Personal, Activos, Novedades y todo el historial.
-  // Confirmamos la escritura ya terminada y actualizamos solo el contador visible.
-  const total=await countStore('consumptions');const counter=document.querySelector('#cCount');if(counter)counter.textContent=total;
-  const status=document.querySelector('#consumptionSaveStatus');if(status){status.textContent=`Guardado en este dispositivo · ${total} consumos`;status.hidden=false}
-  window.dispatchEvent(new CustomEvent('skweb-consumption-changed',{detail:{total,source:'create'}}));
-}catch(err){
-  console.error('SK Web consumo local:',err);const message=err?.name==='QuotaExceededError'?'El almacenamiento del dispositivo está lleno. No se perdió el formulario; libera espacio y vuelve a intentar.':`No se pudo guardar en este dispositivo: ${err?.message||err}`;alert(message)
-}finally{delete f.dataset.consumptionSaveBusy;if(button){button.disabled=false;button.textContent=oldText}}
-}
+function mount(){const f=document.querySelector('#consumptionForm');if(!f||document.querySelector('#consumptionDate'))return;const machine=document.querySelector('#conAssetSearch')?.closest('label');const lab=document.createElement('label');lab.innerHTML='Fecha de consumo<input name="fechaConsumo" id="consumptionDate" type="date" required>';if(machine)machine.after(lab);else f.insertBefore(lab,f.querySelector('button'));document.querySelector('#consumptionDate').value=isoToday()}
+async function save(e){const f=e.target;if(f?.id!=='consumptionForm'||f.dataset.manualDateSaving==='1')return;if(f.dataset.editingConsumptionId)return;e.preventDefault();e.stopImmediatePropagation();if(f.dataset.consumptionSaveBusy==='1')return;const button=f.querySelector('button[type="submit"],button:not([type])'),oldText=button?.textContent||'Registrar consumo';f.dataset.consumptionSaveBusy='1';if(button){button.disabled=true;button.textContent='Guardando…'}try{const x=fd(f),qty=Number(x.cantidad),date=x.fechaConsumo,responsableId=x.responsableId,responsableTexto=document.querySelector('#responsibleSearch')?.value||'';if(!(qty>0))return alert('Cantidad mínima no válida');if(!date)return alert('Selecciona la fecha del consumo.');if(!responsableId)return alert('Selecciona el responsable.');const p=(await all('parts')).find(y=>y.id===x.partId);if(!p)return alert('Selecciona un repuesto.');const d=new Date();delete x.fechaConsumo;await put('consumptions',{...mark(),...x,cantidad:qty,noItem:p.numero||'',nombreRepuesto:p.nombre,fechaISO:date,fechaLocal:localFromISO(date),horaLocal:d.toLocaleTimeString('es-CO')});f.dataset.manualDateSaving='1';f.reset();delete f.dataset.manualDateSaving;f.cantidad.value=1;document.querySelector('#consumptionDate').value=date;document.querySelector('#equipmentType').value='YT';document.querySelector('#origin').value='YT29';const rs=document.querySelector('#responsible'),ri=document.querySelector('#responsibleSearch');if(rs)rs.value=responsableId;if(ri)ri.value=responsableTexto;const total=await countStore('consumptions');const counter=document.querySelector('#cCount');if(counter)counter.textContent=total;const status=document.querySelector('#consumptionSaveStatus');if(status){status.textContent=`Guardado en este dispositivo · ${total} consumos`;status.hidden=false}window.dispatchEvent(new CustomEvent('skweb-consumption-changed',{detail:{total,source:'create'}}))}catch(err){console.error('SK Web consumo local:',err);const message=err?.name==='QuotaExceededError'?'El almacenamiento del dispositivo está lleno. No se perdió el formulario; libera espacio y vuelve a intentar.':`No se pudo guardar en este dispositivo: ${err?.message||err}`;alert(message)}finally{delete f.dataset.consumptionSaveBusy;if(button){button.disabled=false;button.textContent=oldText}}}
 window.addEventListener('load',()=>setTimeout(mount,800));document.addEventListener('submit',save,true);
 })();
