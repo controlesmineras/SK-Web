@@ -1,1 +1,1 @@
-PLACEHOLDER
+async function seedAssets(){const current=await all('assets');if(current.length||!window.ASSET_SEED?.length)return false;for(const x of window.ASSET_SEED)await put('assets',{...x,createdAt:now(),updatedAt:now(),syncState:'pending'});return true;}
