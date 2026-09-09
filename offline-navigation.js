@@ -23,5 +23,10 @@ window.addEventListener('load',()=>{
     const b=e.target.closest('[data-view]');if(!b)return;
     e.preventDefault();show(b.dataset.view);
   },true);
+  let promptEvent=null;const install=document.querySelector('#installBtn'),standalone=()=>matchMedia('(display-mode: standalone)').matches||navigator.standalone===true,ios=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();promptEvent=e;if(install&&!standalone())install.hidden=false});
+  install?.addEventListener('click',async()=>{if(promptEvent){promptEvent.prompt();await promptEvent.userChoice;promptEvent=null;install.hidden=true}else if(ios)alert('Toca Compartir y luego “Agregar a pantalla de inicio”.');else alert('Abre el menú del navegador y selecciona “Instalar aplicación”.')});
+  if(install&&ios&&!standalone())install.hidden=false;
+  if('serviceWorker'in navigator)navigator.serviceWorker.register('./sw.js').catch(e=>console.error('SK Web service worker:',e));
 });
 })();
