@@ -26,3 +26,15 @@ La sincronización remota se implementará como capa separada para poder compara
 
 ## Sincronización
 Cada registro local tiene ID único, createdAt, updatedAt y syncState. La primera versión operará con una tablet por bodega, por lo que no se implementará todavía resolución avanzada de conflictos multidispositivo.
+
+La sincronización es bidireccional: descarga la base central, concilia cada registro por ID y fecha de actualización, protege los registros locales, sube la versión unificada y solo entonces marca los pendientes como sincronizados. La interfaz muestra por separado registros enviados y cambios recibidos.
+
+## Usuarios y auditoría
+- Los usuarios se vinculan con registros existentes de Personal.
+- El PIN se almacena mediante PBKDF2-SHA-256 con una sal aleatoria; nunca se guarda el PIN legible.
+- Los roles iniciales son Administrador y Operador.
+- Cada creación conserva `createdBy` y cada modificación conserva `updatedBy`, con ID de usuario, documento y nombre.
+- Las eliminaciones lógicas conservan además el autor que realizó el cambio mediante `updatedBy`.
+- La sesión se conserva solamente durante la sesión actual del navegador.
+
+La autenticación local es la primera fase. Para retirar por completo el acceso compartido de Gmail, el transporte con Drive debe sustituirse por una API central autenticada; la app no debe entregar credenciales de la cuenta propietaria a los dispositivos operativos.
