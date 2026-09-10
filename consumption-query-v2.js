@@ -1,4 +1,4 @@
-// Consultas SK Web v15 - número de clase canónico; histórico como respaldo
+// Consultas SK Web v16 - máquina = número de clase, sin serial
 (()=>{
 const norm=v=>(v??'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const localISO=d=>{const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`};
@@ -9,9 +9,9 @@ const fmt=d=>{if(!d)return'';const[y,m,x]=d.split('-');return `${x}/${m}/${y}`},
 const assetNo=a=>window.SKAssetFields?.numero(a)||a?.numeroClase||a?.numeroYT||a?.orden||(/^[0-9]+$/.test(String(a?.marcaAnterior||''))?a.marcaAnterior:'');
 let mode='detail',orders=[];
 function invKey(c,a){const x=a.get(c.assetId)||{},t=/columna/i.test(x.clase||c.tipoEquipo||'')?'Columna':'YT',m=(c.origen||'').replace(/[^0-9]/g,'')||x.modelo||'';return `${t} ${m}`.trim()}
-function historicalNo(c){const raw=String(c.numeroClase||c.numeroYT||c.maquina||c.assetLabel||'').trim();const m=raw.match(/(?:^|\b)(?:YT|Columna)\s*[-#:]?\s*(\d+)/i)||raw.match(/^\s*(\d+)(?:\s*-|\s*$)/);return m?m[1]:''}
+function historicalNo(c){const direct=String(c.numeroClase||c.numeroYT||'').trim();if(/^([A-Z]+)?\d+$/i.test(direct))return direct;const raw=String(c.maquina||c.assetLabel||'').trim();const m=raw.match(/(?:^|\b)(?:YT|Columna)\s*[-#:]?\s*([A-Z]*\d+)/i)||raw.match(/^\s*([A-Z]*\d+)(?:\s*-|\s*$)/i);return m?m[1]:''}
 function machineShort(c,a){const x=a.get(c.assetId),n=x&&assetNo(x);return String(n||historicalNo(c)||'').trim()}
-function machineLabel(c,a){const x=a.get(c.assetId);if(x){const n=assetNo(x),serial=x.serial&&norm(x.serial)!=='no aplica'?String(x.serial).trim():'';if(n)return[n,serial].filter(Boolean).join(' - ')}return c.maquina||c.assetLabel||historicalNo(c)||''}
+function machineLabel(c,a){return machineShort(c,a)}
 const fields={date:'Fecha',time:'Hora de registro',item:'Número de item',machine:'Máquina',inv:'Inventario',name:'Repuesto',qty:'Cantidad'};
 function val(r,k){if(k==='date')return r.date||'';if(k==='time')return timeKey(r);if(k==='item')return r.item&&r.item!=='—'?r.item:null;return r[k]??''}
 function cmpVal(a,b,k){const x=val(a,k),y=val(b,k);if(k==='item'){const ax=x!==null,by=y!==null;if(ax!==by)return ax?-1:1;if(!ax)return String(a.name||'').localeCompare(String(b.name||''),'es',{sensitivity:'base'});const an=Number(x),bn=Number(y);if(Number.isFinite(an)&&Number.isFinite(bn)&&an!==bn)return an-bn}if(k==='qty')return(Number(x)||0)-(Number(y)||0);return String(x??'').localeCompare(String(y??''),'es',{numeric:true,sensitivity:'base'})}
