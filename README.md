@@ -8,7 +8,10 @@ Primera etapa: aplicación local-first para tablet con Personal, registro de act
 - Interfaz inicial: implementada.
 - Almacenamiento local IndexedDB: implementado.
 - Operación offline entre módulos: implementada.
-- Sincronización Google Drive appDataFolder: pendiente de credenciales/configuración Google.
+- Sincronización bidireccional Google Drive appDataFolder: implementada con conciliación registro por registro.
+- Usuarios locales vinculados a Personal, PIN cifrado, roles y huella de auditoría: implementados.
+- Contador de registros pendientes y resumen de enviados/recibidos: implementados.
+- API central sin sesión compartida de Gmail: pendiente de vincular y desplegar el servicio de base de datos.
 - Prueba alternativa con Google Sheets: prevista posteriormente.
 
 Proyecto estudiado, diseñado y desarrollado por **Nelson Castellanos C.-Huy Sano**.
