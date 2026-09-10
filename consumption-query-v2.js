@@ -1,4 +1,4 @@
-// Consultas SK Web v13 - agrupación diaria real por repuesto
+// Consultas SK Web v14 - máquina desde activo actual; histórico solo como respaldo
 (()=>{
 const norm=v=>(v??'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const localISO=d=>{const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`};
@@ -9,8 +9,8 @@ const fmt=d=>{if(!d)return'';const[y,m,x]=d.split('-');return `${x}/${m}/${y}`};
 const esc=s=>(s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 let mode='detail',orders=[];
 function invKey(c,a){const x=a.get(c.assetId)||{},t=/columna/i.test(x.clase||c.tipoEquipo||'')?'Columna':'YT',m=(c.origen||'').replace(/[^0-9]/g,'')||x.modelo||'';return `${t} ${m}`.trim()}
-function machineLabel(c,a){const x=a.get(c.assetId)||{};if(c.assetLabel)return c.assetLabel;if(c.maquina)return c.maquina;const t=/columna/i.test(x.clase||c.tipoEquipo||'')?'Columna':'YT',num=x.numeroYT||x.marcaInterna||x.marcaAnterior||'',serial=x.serial&&norm(x.serial)!=='no aplica'?x.serial:'';return t==='Columna'?(num||serial||''):[num,serial].filter(Boolean).join(' - ')}
-function machineShort(c,a){const x=a.get(c.assetId)||{};let num=String(x.numeroYT||'').trim();if(num)return num.replace(/^\s*(yt|columna)\s*/i,'').trim();const raw=String(c.maquina||c.assetLabel||'').trim();const m=raw.match(/(?:^|\b)(?:YT|Columna)\s*[-#:]?\s*(\d+)/i);if(m)return m[1];return raw||x.marcaInterna||x.marcaAnterior||''}
+function machineLabel(c,a){const x=a.get(c.assetId);if(x){const t=/columna/i.test(x.clase||c.tipoEquipo||'')?'Columna':'YT',num=String(x.numeroYT||'').replace(/^\s*(yt|columna)\s*/i,'').trim(),serial=x.serial&&norm(x.serial)!=='no aplica'?String(x.serial).trim():'';const base=[num,serial].filter(Boolean).join(' - ');if(base)return base;if(x.marcaInterna)return String(x.marcaInterna)}return c.maquina||c.assetLabel||''}
+function machineShort(c,a){const x=a.get(c.assetId);if(x){const num=String(x.numeroYT||'').replace(/^\s*(yt|columna)\s*/i,'').trim();if(num)return num;const serial=x.serial&&norm(x.serial)!=='no aplica'?String(x.serial).trim():'';if(serial)return serial;if(x.marcaInterna)return String(x.marcaInterna).trim()}const raw=String(c.maquina||c.assetLabel||'').trim();const m=raw.match(/(?:^|\b)(?:YT|Columna)\s*[-#:]?\s*(\d+)/i);if(m)return m[1];return raw}
 const fields={date:'Fecha',time:'Hora de registro',item:'Número de item',machine:'Máquina',inv:'Inventario',name:'Repuesto',qty:'Cantidad'};
 function val(r,k){if(k==='date')return r.date||'';if(k==='time')return timeKey(r);if(k==='item'){const v=r.item;return v&&v!=='—'?v:null}return r[k]??''}
 function cmpVal(a,b,k){const x=val(a,k),y=val(b,k);if(k==='item'){const ax=x!==null,by=y!==null;if(ax!==by)return ax?-1:1;if(!ax)return String(a.name||'').localeCompare(String(b.name||''),'es',{sensitivity:'base'});const an=Number(x),bn=Number(y);if(Number.isFinite(an)&&Number.isFinite(bn)&&an!==bn)return an-bn}if(k==='qty')return(Number(x)||0)-(Number(y)||0);return String(x??'').localeCompare(String(y??''),'es',{numeric:true,sensitivity:'base'})}
