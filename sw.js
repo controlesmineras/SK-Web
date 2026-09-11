@@ -1,4 +1,4 @@
-const VERSION='20260911-13';
+const VERSION='20260911-15';
 const CACHE=`sk-web-shell-${VERSION}`;
 const CORE=['./','./index.html','./styles.css','./bulk-import.css','./app.js','./asset-field-compat.js','./searchable-consumption.js','./asset-admin-ui.js','./novelty-transport.js','./offline-navigation.js','./sync-latest.js','./consumption-manual-date.js','./consumption-query-v2.js','./income-module.js','./consumption-admin-delete.js','./bulk-import.js','./personal-seed.js','./asset-seed-1.js','./asset-seed-2.js','./asset-seed-3.js','./asset-seed.js','./manifest.webmanifest','./icons/icon-sk-web.svg','https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting())));
