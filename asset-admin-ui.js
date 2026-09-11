@@ -22,7 +22,8 @@ function initClassPicker(){
  input.addEventListener('blur',()=>setTimeout(()=>{if(input.value&&!validClass(input.value)){input.value='';delete input.dataset.selected}close()},150));
 }
 function updateClassOnlyOptions(type){
- document.querySelectorAll('#assetForm option[data-class-only]').forEach(o=>{const allowed=norm(o.dataset.classOnly)===type;o.hidden=!allowed;o.disabled=!allowed;if(!allowed&&o.parentElement.value===o.value)o.parentElement.value=''});
+ const form=document.querySelector('#assetForm');if(!form)return;
+ ['modelo','fabricante'].forEach(name=>{const select=form.elements[name];if(!select)return;if(!select._classCatalog)select._classCatalog=[...select.options].map(o=>({value:o.value,text:o.textContent,classOnly:o.dataset.classOnly||''}));const current=select.value,allowed=select._classCatalog.filter(o=>!o.value||norm(o.classOnly)===type);select.replaceChildren(...allowed.map(item=>{const o=document.createElement('option');o.value=item.value;o.textContent=item.text;if(item.classOnly)o.dataset.classOnly=item.classOnly;return o}));if(allowed.some(o=>o.value===current))select.value=current;else select.value=''});
 }
 function updateAssetFields(){const f=document.querySelector('#assetForm');if(!f)return;const type=norm(f.elements.clase?.value),isColumn=type==='columna',isYT=type==='yt',isSelfRescuer=type==='autorrescatador';f.classList.toggle('asset-is-column',isColumn);f.classList.toggle('asset-is-yt',isYT);f.classList.toggle('asset-is-yt-column',isYT||isColumn);f.classList.toggle('asset-is-autorrescatador',isSelfRescuer);updateClassOnlyOptions(type);if(!isColumn&&f.elements.largo)f.elements.largo.value='';if(f.elements.estadoVisor){f.elements.estadoVisor.required=isSelfRescuer;if(!isSelfRescuer)f.elements.estadoVisor.value=''}applySuggestedMark()}
 const numberOf=a=>txt(window.SKAssetFields?.numero(a)||a.numeroClase||a.numeroYT||a.orden);
