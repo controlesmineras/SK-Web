@@ -7,6 +7,9 @@
 .importSummary .ok{border-color:#67ad7d;background:#edf9f1}
 .importSummary .warn{border-color:#d4a23a;background:#fff8e8}
 .importSummary .bad{border-color:#cf6b6b;background:#fff0f0}
+.importMismatch{grid-column:1/-1;background:#fff0f0;border:2px solid #bd3f3f;border-radius:11px;padding:14px;display:flex;flex-direction:column;gap:5px;color:#7b2020}
+.importMismatch b{font-size:1.05rem}
+.import-first-error td{border-top:2px solid #bd3f3f;border-bottom:2px solid #bd3f3f}
 .import-valid td{background:#f4fbf6}
 .import-duplicate td{background:#fff9eb}
 .import-error td{background:#fff2f2}
@@ -14,4 +17,12 @@
 .importActions button{background:#e4e9ed;color:#26384a}
 .importActions #importConfirm{background:#173d59;color:#fff}
 .importActions #importConfirm:disabled{opacity:.5;cursor:not-allowed}
-@media(max-width:720px){.importForm,.importSummary{grid-template-columns:1fr 1fr}.importForm button{grid-column:1/-1}}
+.importTabs{display:flex;gap:8px;margin:14px 0 10px;padding:5px;background:#dfe5ea;border:1px solid #c5cdd4;border-radius:11px;width:max-content;max-width:100%}
+.importTabs button{background:#fff;color:#173d59;border:2px solid #aeb8c1}
+.importTabs button.active{background:#173d59;color:#fff;border-color:#173d59}
+.pasteForm{grid-template-columns:minmax(230px,28%) 1fr;align-items:start}
+.pasteForm .pasteArea{grid-row:span 2}
+.pasteForm textarea{min-height:250px;white-space:pre;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;overflow:auto;resize:vertical}
+.pasteRule{margin:0;background:#fff8e8;border-left:4px solid #d4a23a;border-radius:7px;padding:11px;color:#674b12;line-height:1.4}
+.pasteForm button{grid-column:1/-1}
+@media(max-width:720px){.importForm,.importSummary,.pasteForm{grid-template-columns:1fr 1fr}.importForm button,.pasteForm button{grid-column:1/-1}.pasteForm .pasteArea{grid-column:1/-1;grid-row:auto}.importTabs{width:100%}.importTabs button{flex:1}}
