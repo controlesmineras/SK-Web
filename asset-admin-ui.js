@@ -10,10 +10,10 @@ function initClassPicker(){
  const input=document.querySelector('#assetClass');if(!input||document.querySelector('#assetClassSuggestions'))return;
  input.removeAttribute('list');input.setAttribute('aria-controls','assetClassSuggestions');
  const box=document.createElement('div');box.id='assetClassSuggestions';box.className='liveSuggestions assetClassSuggestions';box.setAttribute('role','listbox');input.insertAdjacentElement('afterend',box);
- const close=()=>{box.classList.remove('open');input.setAttribute('aria-expanded','false')};
+ const close=()=>{box.classList.remove('open');input.closest('label')?.classList.remove('class-picker-open');input.setAttribute('aria-expanded','false')};
  const choose=value=>{input.value=value;input.dataset.selected=value;close();input.dispatchEvent(new Event('change',{bubbles:true}))};
- const render=()=>{const q=norm(input.value),rows=classOptions().filter(v=>!q||norm(v).includes(q));box.innerHTML=rows.map(v=>`<button type="button" role="option" data-class-value="${v.replace(/"/g,'&quot;')}">${v}</button>`).join('')||'<div class="noSuggestion">No hay clases que coincidan.</div>';box.classList.add('open');input.setAttribute('aria-expanded','true')};
- input.addEventListener('focus',render);
+ const render=()=>{const q=norm(input.value),rows=classOptions().filter(v=>!q||norm(v).includes(q));box.innerHTML=rows.map(v=>`<button type="button" role="option" data-class-value="${v.replace(/"/g,'&quot;')}">${v}</button>`).join('')||'<div class="noSuggestion">No hay clases que coincidan.</div>';box.classList.add('open');input.closest('label')?.classList.add('class-picker-open');input.setAttribute('aria-expanded','true')};
+ input.addEventListener('focus',render);input.addEventListener('click',render);
  input.addEventListener('input',()=>{delete input.dataset.selected;render()});
  input.addEventListener('keydown',e=>{if(e.key==='Escape'){close();input.blur()}else if(e.key==='ArrowDown'){e.preventDefault();box.querySelector('button')?.focus()}else if(e.key==='Enter'&&box.classList.contains('open')){const exact=classOptions().find(v=>norm(v)===norm(input.value));if(exact){e.preventDefault();choose(exact)}}});
  box.addEventListener('click',e=>{const b=e.target.closest('[data-class-value]');if(b)choose(b.dataset.classValue)});
