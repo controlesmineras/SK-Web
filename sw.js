@@ -1,4 +1,4 @@
-const VERSION='20260910-20';
+const VERSION='20260911-1';
 const CACHE=`sk-web-shell-${VERSION}`;
 const CORE=['./','./index.html','./styles.css','./app.js','./asset-field-compat.js','./searchable-consumption.js','./asset-admin-ui.js','./novelty-transport.js','./offline-navigation.js','./sync-latest.js','./consumption-manual-date.js','./consumption-query-v2.js','./consumption-admin-delete.js','./personal-seed.js','./asset-seed-1.js','./asset-seed-2.js','./asset-seed-3.js','./asset-seed.js','./manifest.webmanifest','./icons/icon-sk-web.svg'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(CORE)).then(()=>self.skipWaiting())));
