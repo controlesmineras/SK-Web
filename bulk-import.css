@@ -1,0 +1,17 @@
+.importForm{grid-template-columns:repeat(3,minmax(0,1fr));align-items:end}
+.importForm button{grid-column:auto}
+.importSummary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin:18px 0 12px}
+.importSummary article{background:#fff;border:1px solid #d8e0e6;border-radius:11px;padding:14px;display:flex;flex-direction:column}
+.importSummary b{font-size:1.65rem}
+.importSummary span{color:#667085}
+.importSummary .ok{border-color:#67ad7d;background:#edf9f1}
+.importSummary .warn{border-color:#d4a23a;background:#fff8e8}
+.importSummary .bad{border-color:#cf6b6b;background:#fff0f0}
+.import-valid td{background:#f4fbf6}
+.import-duplicate td{background:#fff9eb}
+.import-error td{background:#fff2f2}
+.importActions{display:flex;justify-content:flex-end;gap:10px;margin-top:14px}
+.importActions button{background:#e4e9ed;color:#26384a}
+.importActions #importConfirm{background:#173d59;color:#fff}
+.importActions #importConfirm:disabled{opacity:.5;cursor:not-allowed}
+@media(max-width:720px){.importForm,.importSummary{grid-template-columns:1fr 1fr}.importForm button{grid-column:1/-1}}
