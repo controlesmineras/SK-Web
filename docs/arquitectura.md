@@ -3,7 +3,7 @@
 ## Principio
 SK Web es **local-first**. La tablet trabaja contra IndexedDB y no necesita Internet para consultar o registrar información ya disponible localmente.
 
-Flujo: `Interfaz -> IndexedDB local -> botón Sincronizar -> Google Drive appDataFolder`.
+Flujo: `Interfaz -> IndexedDB local -> sincronización automática -> servicio SK Web -> Google Drive appDataFolder`.
 
 La sincronización remota se implementará como capa separada para poder comparar posteriormente appDataFolder con Google Sheets sin reescribir los módulos.
 
@@ -25,4 +25,4 @@ La sincronización remota se implementará como capa separada para poder compara
 - Estados: Operativo/a, Averiado/a, En reparación, No apareció, Por dar de baja, Dado/a de baja, Extraviado/a.
 
 ## Sincronización
-Cada registro local tiene ID único, createdAt, updatedAt y syncState. La primera versión operará con una tablet por bodega, por lo que no se implementará todavía resolución avanzada de conflictos multidispositivo.
+Cada registro local tiene ID único, createdAt, updatedAt y syncState. El servicio concilia cada ID, conserva el `updatedAt` más reciente y usa un bloqueo para impedir escrituras simultáneas. La app sincroniza al abrir, al recuperar Internet, después de registrar y periódicamente. Si falla la red, conserva la operación en IndexedDB para el siguiente intento.

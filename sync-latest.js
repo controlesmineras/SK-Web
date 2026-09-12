@@ -26,6 +26,7 @@
   async function normalizeLocal(store,rows){const out=[];for(const original of rows){let x=original;if(!x?.id){x={...x,id:uuid(),updatedAt:now(),createdAt:x?.createdAt||now(),syncState:'pending'};await put(store,x)}out.push(x)}return out}
   async function mergeLatest(cloud){const merged={schema:5,updatedAt:now()};for(const store of stores){const local=await normalizeLocal(store,await all(store));const remote=Array.isArray(cloud?.[store])?cloud[store]:[];const map=new Map();for(const x of remote)if(x?.id)map.set(x.id,x);for(const x of local)if(x?.id)map.set(x.id,chooseLatest(x,map.get(x.id)));merged[store]=[...map.values()]}return merged}
   async function writeMergedLocal(data){for(const store of stores){if(!Array.isArray(data[store]))continue;await clearStore(store);for(const x of data[store])await put(store,x)}}
+  window.writeSyncedSnapshot=writeMergedLocal;
   async function syncLatest(){
     const b=document.querySelector('#syncBtn'),s=document.querySelector('#syncStatus');if(!b||b.disabled)return;
     try{
@@ -44,5 +45,5 @@
     }catch(e){console.error('SK Web sync v5:',e);buzz([45,35,45]);if(s)s.textContent='Sin sincronizar · '+(e?.message||e);alert('No se pudo sincronizar: '+(e?.message||e))}
     finally{b.disabled=false;b.textContent='☁ Sincronizar'}
   }
-  window.addEventListener('load',()=>{const old=document.querySelector('#syncBtn');if(!old)return;const fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.addEventListener('click',syncLatest)});
+  window.addEventListener('load',()=>{if(window.skSyncApi?.configured())return;const old=document.querySelector('#syncBtn');if(!old)return;const fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.addEventListener('click',syncLatest)});
 })();
