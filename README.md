@@ -2,6 +2,8 @@
 
 Sistema web de inventario y control de activos SK 3.7.
 
+La aplicación operativa de Plaza Blending está en `/plaza/`. Comparte `sk-web-central.json`, puede leer sus referencias operativas y el servidor solo le permite escribir en `blendingIncomes` y `blendingDeliveries`.
+
 Primera etapa: aplicación local-first para tablet con Personal, registro de activos fijos, novedades administrativas y consumo de repuestos YT/Columnas. La operación se almacena en IndexedDB para funcionar sin conexión; un servicio privado sincroniza automáticamente con Google Drive `appDataFolder` sin solicitar una cuenta de Google al operario.
 
 ## Estado
