@@ -12,3 +12,7 @@ Primera etapa: aplicación local-first para tablet con Personal, registro de act
 - Prueba alternativa con Google Sheets: prevista posteriormente.
 
 Proyecto estudiado, diseñado y desarrollado por **Nelson Castellanos C.-Huy Sano**.
+
+## Plaza Blending
+
+La aplicación operativa independiente vive en `/plaza/` y comparte `sk-web-central.json` con SK Web. El servidor limita Plaza a lectura operativa y escritura exclusiva de ingresos y entregas.
