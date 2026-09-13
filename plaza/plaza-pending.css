@@ -1,0 +1,6 @@
+.headerSync{align-items:flex-end;gap:7px}
+.pendingBadge{display:inline-flex;align-items:center;border-radius:999px;padding:6px 10px;font-size:.78rem;font-weight:800;box-shadow:0 2px 7px #0003}
+.pendingBadge.pending{background:#f59e0b;color:#402500}
+.pendingBadge.synced{background:#22a35a;color:#fff}
+.pendingBadge.error{background:#dc3b32;color:#fff}
+@media(max-width:520px){.pendingBadge{font-size:.7rem;padding:5px 8px}.headerSync{max-width:55%;align-items:flex-end}}
