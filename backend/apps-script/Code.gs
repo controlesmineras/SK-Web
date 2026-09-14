@@ -5,7 +5,35 @@ function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toI
 function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');if(q.action==='plazaUserAdmin')return plazaUserAdmin_(q);if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},merged=merge_(cloud,q.data);writeFile_(id,merged);return json_({ok:true,data:merged})}finally{lock.releaseLock()}}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 function plazaLogin_(q){const document=String(q.document||'').trim(),pin=String(q.pin||'');if(!document||!pin)throw new Error('Documento y PIN son obligatorios');const id=findFile_(),cloud=id?readFile_(id):{},person=(cloud.personal||[]).find(x=>String(x.documento||'').trim()===document&&!x.deleted);if(!person||person.plazaEnabled!==true||!person.pinHash)throw new Error('Usuario no habilitado para Plaza Blending');if(!safeEqual_(String(person.pinHash),hashPin_(document,pin)))throw new Error('Documento o PIN incorrecto');const role=person.plazaRole==='supervisor'?'plaza_supervisor':'plaza_operator',expires=Date.now()+12*60*60*1000,payload=[document,role,expires].join('|'),token=Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload);return json_({ok:true,token,user:{id:person.id,documento:document,nombre:person.nombre||'',role:role},expiresAt:new Date(expires).toISOString()})}
-function plazaSync_(q){const auth=verifyToken_(q.token),incoming=q.data||{},lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)]));PLAZA_WRITE.forEach(name=>{const existing=new Set((cloud[name]||[]).map(x=>x&&x.id));allowed[name]=(Array.isArray(incoming[name])?incoming[name]:[]).filter(x=>x&&x.syncState==='pending'&&!existing.has(x.id)).map(x=>{const row=stampActor_(x,auth),qty=Number(row.quantity);if(!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},next=(Number(current.quantity)||0)+(name==='blendingIncomes'?qty:-qty);if(next<0)throw new Error('La cantidad ingresada supera la disponibilidad');current.quantity=next;current.updatedAt=new Date().toISOString();stock.set(row.itemId,current);row.syncState='synced';return row})});allowed.inventoryStock=Array.from(stock.values());const merged=merge_(cloud,allowed);writeFile_(id,merged);const view={schema:merged.schema,updatedAt:merged.updatedAt};PLAZA_READ.forEach(name=>view[name]=Array.isArray(merged[name])?merged[name]:[]);view.personal=view.personal.map(x=>publicPerson_(x));return json_({ok:true,data:view})}finally{lock.releaseLock()}}
+function plazaSync_(q){
+  const auth=verifyToken_(q.token),incoming=q.data||{},lock=LockService.getScriptLock();
+  lock.waitLock(30000);
+  try{
+    const id=findFile_(),cloud=id?readFile_(id):{},allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)]));
+    PLAZA_WRITE.forEach(name=>{
+      const existing=new Set((cloud[name]||[]).map(x=>x&&x.id));
+      allowed[name]=(Array.isArray(incoming[name])?incoming[name]:[]).filter(x=>x&&x.syncState==='pending'&&!existing.has(x.id)).map(x=>{
+        const row=stampActor_(x,auth),qty=Number(row.quantity);
+        if(!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');
+        if(name==='blendingDeliveries'&&row.assetId){
+          const asset=(cloud.assets||[]).find(x=>x&&x.id===row.assetId&&!x.deleted);
+          if(!asset)throw new Error('El activo seleccionado no existe');
+          if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');
+          asset.ubicacion=row.destination||'Operación';asset.updatedAt=new Date().toISOString();
+        }else{
+          const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},next=(Number(current.quantity)||0)+(name==='blendingIncomes'?qty:-qty);
+          if(next<0)throw new Error('La cantidad ingresada supera la disponibilidad');
+          current.quantity=next;current.updatedAt=new Date().toISOString();stock.set(row.itemId,current);
+        }
+        row.syncState='synced';return row;
+      });
+    });
+    allowed.inventoryStock=Array.from(stock.values());
+    const merged=merge_(cloud,allowed);writeFile_(id,merged);const view={schema:merged.schema,updatedAt:merged.updatedAt};
+    PLAZA_READ.forEach(name=>view[name]=Array.isArray(merged[name])?merged[name]:[]);view.personal=view.personal.map(x=>publicPerson_(x));
+    return json_({ok:true,data:view});
+  }finally{lock.releaseLock()}
+}
 function stampActor_(x,auth){if(!x||!x.id)throw new Error('Movimiento sin identificador');const out=Object.assign({},x);out.actorDocument=auth.document;out.actorRole=auth.role;delete out.pinHash;delete out.plazaEnabled;delete out.plazaRole;return out}
 function hashPin_(document,pin){const salt=PropertiesService.getScriptProperties().getProperty('SK_AUTH_SALT');if(!salt)throw new Error('Falta configurar SK_AUTH_SALT');return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,document+'|'+pin+'|'+salt,Utilities.Charset.UTF_8))}
 function sign_(payload){const secret=PropertiesService.getScriptProperties().getProperty('SK_AUTH_SECRET');if(!secret)throw new Error('Falta configurar SK_AUTH_SECRET');return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload,secret))}
