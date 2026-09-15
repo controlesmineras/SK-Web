@@ -30,7 +30,7 @@
       if(choice.outcome==='accepted')localStorage.setItem('skPlazaInstalled','yes');
       installPrompt=null;updateButton();return;
     }
-    if(action==='open'){location.assign('./?source=open-app');return}
+    if(action==='open'){const link=document.createElement('a');link.href='./?source=open-app';link.hidden=true;link.setAttribute('aria-hidden','true');document.body.append(link);link.click();setTimeout(()=>link.remove(),0);return}
     if(isIOS()){alert('Para instalar Plaza Blending en iPhone: toca Compartir y luego Agregar a pantalla de inicio.');return}
     alert('La instalación todavía no está disponible. Espera unos segundos y vuelve a intentarlo, o usa la opción Instalar aplicación del menú del navegador.');
   });
