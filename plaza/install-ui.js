@@ -34,13 +34,24 @@
     if(isIOS()){alert('Para instalar Plaza Blending en iPhone: toca Compartir y luego Agregar a pantalla de inicio.');return}
     alert('La instalación todavía no está disponible. Espera unos segundos y vuelve a intentarlo, o usa la opción Instalar aplicación del menú del navegador.');
   });
+  let registration=null;
   async function register(){
-    if(!('serviceWorker'in navigator))return;
+    if(!('serviceWorker'in navigator))return null;
     try{
-      const registration=await navigator.serviceWorker.register('./sw.js?v=20260915-1',{scope:'./',updateViaCache:'none'});
+      registration=await navigator.serviceWorker.register('./sw.js?v=20260915-2',{scope:'./',updateViaCache:'none'});
       await registration.update();
       if(registration.waiting)registration.waiting.postMessage({type:'PLAZA_SKIP_WAITING'});
-    }catch(error){console.error('No se pudo preparar Plaza Blending para instalación:',error)}
+      return registration;
+    }catch(error){console.error('No se pudo preparar Plaza Blending para instalación:',error);return null}
   }
+  async function updateApp(){
+    if(!navigator.onLine)throw new Error('Sin conexión para actualizar la aplicación');
+    const reg=registration||await register(),stamp=Date.now(),assets=['./index.html','./plaza.js','./plaza.css','./plaza-pending.css','./plaza-home.css','./plaza-collaborator.js','./install-ui.js','./manifest.webmanifest'];
+    if(reg){await reg.update();if(reg.waiting)reg.waiting.postMessage({type:'PLAZA_SKIP_WAITING'})}
+    await Promise.all(assets.map(path=>fetch(`${path}?update=${stamp}`,{cache:'reload'}).then(response=>{if(!response.ok)throw new Error(`No se pudo actualizar ${path}`)})));
+    localStorage.setItem('skPlazaAppUpdatedAt',new Date().toISOString());
+    return true;
+  }
+  window.SKPlazaInstall={updateApp};
   window.addEventListener('load',()=>{register();updateButton()});
 })();
