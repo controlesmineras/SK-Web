@@ -1,8 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
   <rect width="512" height="512" fill="#102c40"/>
   <g transform="translate(50 98)">
-    <path fill="#fff" d="M83 70h113l-50 78 50 78H83l51-78z"/>
-    <path fill="#f7b538" d="M252 0h118l-86 147 86 169H252l-91-169z"/>
+    <!-- S angular continua: conserva claramente la lectura de la letra S -->
+    <path fill="#fff" d="M82 70H198L160 130H121L151 177L121 224H160L198 284H82L126 215L82 147L126 78H82Z"/>
+    <!-- K corporativa -->
+    <path fill="#f7b538" d="M252 0H370L284 147L370 316H252L161 147Z"/>
     <text x="280" y="286" fill="#102c40" font-family="Arial,Helvetica,sans-serif" font-size="46" font-weight="900">3.7</text>
   </g>
 </svg>
