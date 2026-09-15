@@ -6,3 +6,5 @@
 .pendingBadge.retrying{background:#f59e0b;color:#402500}
 .pendingBadge.error{background:#dc3b32;color:#fff}
 @media(max-width:520px){.pendingBadge{font-size:.7rem;padding:5px 8px}.headerSync{max-width:55%;align-items:flex-end}}
+#installAppBtn{background:#f2c66d;color:#493516;border:1px solid #d7a94d;padding:9px 12px;box-shadow:0 2px 7px #0002}
+#installAppBtn:hover,#installAppBtn:focus-visible{background:#f7d889}
