@@ -13,7 +13,7 @@
   function options(rows,label){return '<option value="">Seleccionar…</option>'+rows.filter(row=>!row.deleted).map(row=>`<option value="${esc(row.id)}">${esc(label(row))}</option>`).join('')}
   function isRetired(asset){return /dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`)}
   function isFixedItem(item){return Boolean(item?.isFixedAsset===true||item?.esActivoFijo===true||item?.fixedAsset===true)}
-  function deliveryItems(){return(data.inventoryCriteria||[]).filter(item=>!item.deleted&&item.active!==false)}
+  function deliveryItems(){return(data.inventoryCriteria||[]).filter(item=>!item.deleted&&item.active!==false).sort((a,b)=>Number(isFixedItem(a))-Number(isFixedItem(b))||itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'}))}
   function findItem(id){return(data.inventoryCriteria||[]).find(item=>item.id===id)||deliveryItems().find(item=>item.id===id)}
   function availableAssets(item){const className=norm(itemName(item)),reserved=new Set(deliveryDraft.map(row=>row.assetId).filter(Boolean));return(data.assets||[]).filter(asset=>!asset.deleted&&!reserved.has(asset.id)&&!isRetired(asset)&&norm(asset.ubicacion)==='bodega de superficie'&&norm(asset.clase)===className).sort((a,b)=>(Number(assetNumber(a))||Number.MAX_SAFE_INTEGER)-(Number(assetNumber(b))||Number.MAX_SAFE_INTEGER)||assetNumber(a).localeCompare(assetNumber(b),'es',{numeric:true})||(a.serial||'').localeCompare(b.serial||'','es',{numeric:true}))}
   function assetLabel(asset){return[asset.clase,assetNumber(asset)&&`N.º ${assetNumber(asset)}`,asset.marcaActual||asset.marcaInterna||asset.marcaAnterior,asset.serial&&!/no aplica/i.test(asset.serial)?`Serial ${asset.serial}`:''].filter(Boolean).join(' · ')}
