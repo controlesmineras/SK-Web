@@ -59,6 +59,25 @@
     alert('Chrome todavía está preparando la instalación. Espera unos segundos y vuelve a intentarlo, o usa Instalar aplicación desde el menú del navegador.');
   });
 
+  async function updateAdminApp(){
+    const updateButton=document.querySelector('#adminUpdateAppHome');
+    if(!navigator.onLine){alert('Necesitas conexión a Internet para actualizar la aplicación. Los datos guardados en el dispositivo no se modificarán.');return}
+    if(updateButton){updateButton.disabled=true;updateButton.textContent='↻ ACTUALIZANDO…'}
+    try{
+      if('serviceWorker'in navigator){
+        const registrations=await navigator.serviceWorker.getRegistrations();
+        for(const registration of registrations){await registration.update();if(registration.waiting)registration.waiting.postMessage({type:'SKWEB_SKIP_WAITING'})}
+      }
+      if('caches'in window){const keys=await caches.keys();await Promise.all(keys.filter(key=>key.startsWith('sk-web-shell-')).map(key=>caches.delete(key)))}
+      location.replace('./?appUpdate='+Date.now());
+    }catch(error){
+      console.error('Actualización de SK Admin:',error);
+      alert('No fue posible actualizar la aplicación. Revisa la conexión e intenta nuevamente.');
+      if(updateButton){updateButton.disabled=false;updateButton.textContent='↻ ACTUALIZAR APP'}
+    }
+  }
+  document.querySelector('#adminUpdateAppHome')?.addEventListener('click',updateAdminApp);
+
   // Criterios de inventario: el buscador no muestra el catálogo completo.
   // Los resultados aparecen únicamente al escribir y permanecen dentro de una lista desplazable.
   function installInventorySearchUX(){
