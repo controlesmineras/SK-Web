@@ -10,3 +10,5 @@
 .adminSyncBadge.error{color:#fff;background:#c83f49}
 #syncStatus{position:absolute!important;width:1px!important;height:1px!important;padding:0!important;margin:-1px!important;overflow:hidden!important;clip:rect(0,0,0,0)!important;white-space:nowrap!important;border:0!important}
 @media(max-width:720px){.headerActions{gap:6px!important}.headerActions #updateAppBtn{min-width:0;padding:8px 9px!important;font-size:.78rem!important}.adminSyncBadge{margin-left:-2px}.adminSyncBadge.synced{margin-left:-5px}}
+
+.homeUpdateRow{display:flex;justify-content:flex-end;margin:10px 0 0}.homeUpdateRow #adminUpdateAppHome{background:#eef3f7;color:#173d59;border:1px solid #cbd7df;box-shadow:0 2px 7px #0002;min-width:170px}.homeUpdateRow #adminUpdateAppHome:disabled{opacity:.72;cursor:wait}@media(max-width:720px){.homeUpdateRow{justify-content:stretch}.homeUpdateRow #adminUpdateAppHome{width:100%}}
