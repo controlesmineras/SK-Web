@@ -60,9 +60,109 @@
   function reportFileBase(){const from=$('#deliveryDateFrom')?.value||'inicio',to=$('#deliveryDateTo')?.value||'hoy',epp=$('#deliveryEppOnly')?.checked?'_EPP':'';return`entregas_${from}_a_${to}${epp}`}
   function downloadBlob(blob,name){const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1500)}
   function xmlEsc(value){return String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&apos;'}[char]))}
-  function exportDeliveriesExcel(){const rows=deliveryQueryRows().map(deliveryReportRow);if(!rows.length)return alert('No hay entregas para exportar con los filtros seleccionados.');const headers=['FECHA Y HORA','ELEMENTO','ACTIVO ESPECÍFICO','CANTIDAD','FUNCIONARIO','DOCUMENTO','EMPRESA','ÁREA','ENTREGÓ','DESTINO','OBSERVACIONES'],keys=['fecha','elemento','activo','cantidad','funcionario','documento','empresa','area','entrego','destino','observaciones'],cell=value=>`<Cell><Data ss:Type="${typeof value==='number'?'Number':'String'}">${xmlEsc(value)}</Data></Cell>`,table=[`<Row>${headers.map(cell).join('')}</Row>`,...rows.map(row=>`<Row>${keys.map(key=>cell(row[key])).join('')}</Row>`)].join(''),xml=`<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="ENTREGAS"><Table>${table}</Table></Worksheet></Workbook>`;downloadBlob(new Blob(['\ufeff',xml],{type:'application/vnd.ms-excel;charset=utf-8'}),reportFileBase()+'.xls')}
+  function exportDeliveriesExcel(){
+  const rows=deliveryQueryRows().map(deliveryReportRow);
+  if(!rows.length)return alert('No hay entregas para exportar con los filtros seleccionados.');
+  const headers=['FECHA Y HORA','ELEMENTO','ACTIVO ESPECÍFICO','CANTIDAD','FUNCIONARIO','DOCUMENTO','EMPRESA','ÁREA','ENTREGÓ','DESTINO','OBSERVACIONES'];
+  const keys=['fecha','elemento','activo','cantidad','funcionario','documento','empresa','area','entrego','destino','observaciones'];
+  const widths=keys.map((key,index)=>{
+    const longest=Math.max(headers[index].length,...rows.map(row=>String(row[key]??'').length));
+    return Math.min(260,Math.max(55,longest*6.7+14));
+  });
+  const cell=(value,style='')=>`<Cell${style?` ss:StyleID="${style}"`:''}><Data ss:Type="${typeof value==='number'?'Number':'String'}">${xmlEsc(value)}</Data></Cell>`;
+  const columns=widths.map(width=>`<Column ss:AutoFitWidth="1" ss:Width="${width.toFixed(1)}"/>`).join('');
+  const table=`<Row ss:StyleID="Header">${headers.map(value=>cell(value,'Header')).join('')}</Row>`+rows.map(row=>`<Row>${keys.map(key=>cell(row[key])).join('')}</Row>`).join('');
+  const xml=`<?xml version="1.0" encoding="UTF-8"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Styles><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Center"/><Font ss:FontName="Calibri" ss:Size="11"/></Style><Style ss:ID="Header"><Font ss:FontName="Calibri" ss:Size="11" ss:Bold="1"/><Interior ss:Color="#D9EAF7" ss:Pattern="Solid"/><Alignment ss:Vertical="Center"/></Style></Styles><Worksheet ss:Name="ENTREGAS"><Table>${columns}${table}</Table><WorksheetOptions xmlns="urn:schemas-microsoft-com:office:excel"><FreezePanes/><FrozenNoSplit/><SplitHorizontal>1</SplitHorizontal><TopRowBottomPane>1</TopRowBottomPane></WorksheetOptions></Worksheet></Workbook>`;
+  downloadBlob(new Blob(['\ufeff',xml],{type:'application/vnd.ms-excel;charset=utf-8'}),reportFileBase()+'.xls');
+}
   function pdfLiteral(value){return String(value??'').replace(/[–—]/g,'-').replace(/\\/g,'\\\\').replace(/\(/g,'\\(').replace(/\)/g,'\\)').replace(/[^\x20-\x7E\xA0-\xFF]/g,'?').replace(/[\xA0-\xFF]/g,char=>'\\'+char.charCodeAt(0).toString(8).padStart(3,'0'))}
-  function exportDeliveriesPdf(){const rows=deliveryQueryRows().map(deliveryReportRow);if(!rows.length)return alert('No hay entregas para exportar con los filtros seleccionados.');const cut=(value,size)=>{const text=String(value??'');return text.length>size?text.slice(0,size-1)+'…':text},from=$('#deliveryDateFrom')?.value||'inicio',to=$('#deliveryDateTo')?.value||'hoy',title=`ENTREGAS PLAZA BLENDING | ${from} A ${to}${$('#deliveryEppOnly')?.checked?' | SOLO EPP':''}`,lines=[title,'','FECHA | ELEMENTO / ACTIVO | CANT. | FUNCIONARIO / DOCUMENTO | EMPRESA | AREA | ENTREGO | DESTINO',...rows.map(row=>[cut(row.fecha,18),cut(row.elemento+(row.activo?' - '+row.activo:''),34),row.cantidad,cut(row.funcionario+' / '+row.documento,30),cut(row.empresa,16),cut(row.area,20),cut(row.entrego,22),cut(row.destino,16)].join(' | '))],perPage=40,pages=[];for(let i=0;i<lines.length;i+=perPage)pages.push(lines.slice(i,i+perPage));const objectCount=3+pages.length*2,objects=new Array(objectCount+1),fontId=3+pages.length*2;objects[1]='<< /Type /Catalog /Pages 2 0 R >>';const kids=[];pages.forEach((page,index)=>{const pageId=3+index*2,contentId=pageId+1;kids.push(pageId+' 0 R');const stream='BT\n/F1 7 Tf\n30 565 Td\n11 TL\n'+page.map(line=>`(${pdfLiteral(line)}) Tj T*`).join('\n')+'\nET';objects[pageId]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 842 595] /Resources << /Font << /F1 ${fontId} 0 R >> >> /Contents ${contentId} 0 R >>`;objects[contentId]=`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`});objects[2]=`<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>`;objects[fontId]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';let pdf='%PDF-1.4\n',offsets=[0];for(let id=1;id<=objectCount;id++){offsets[id]=pdf.length;pdf+=`${id} 0 obj\n${objects[id]}\nendobj\n`}const xref=pdf.length;pdf+=`xref\n0 ${objectCount+1}\n0000000000 65535 f \n`;for(let id=1;id<=objectCount;id++)pdf+=String(offsets[id]).padStart(10,'0')+' 00000 n \n';pdf+=`trailer\n<< /Size ${objectCount+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;downloadBlob(new Blob([pdf],{type:'application/pdf'}),reportFileBase()+'.pdf')}
+  function exportDeliveriesPdf(){
+  const rows=deliveryQueryRows().map(deliveryReportRow);
+  if(!rows.length)return alert('No hay entregas para exportar con los filtros seleccionados.');
+  const columns=[
+    {label:'FECHA Y HORA',key:'fecha',width:66},
+    {label:'ELEMENTO / ACTIVO',key:'elementoActivo',width:120},
+    {label:'CANT.',key:'cantidad',width:34},
+    {label:'FUNCIONARIO / DOCUMENTO',key:'funcionarioDocumento',width:125},
+    {label:'EMPRESA',key:'empresa',width:62},
+    {label:'ÁREA',key:'area',width:92},
+    {label:'ENTREGÓ',key:'entrego',width:105},
+    {label:'DESTINO',key:'destino',width:70},
+    {label:'OBSERVACIONES',key:'observaciones',width:108}
+  ];
+  const reportRows=rows.map(row=>({...row,elementoActivo:row.elemento+(row.activo?'\n'+row.activo:''),funcionarioDocumento:row.funcionario+'\n'+row.documento}));
+  const pageWidth=842,pageHeight=595,left=30,right=30,top=540,bottom=32,lineHeight=8,padding=3,fontSize=6.2;
+  const wrap=(value,width)=>{
+    const text=String(value??'').trim(),max=Math.max(4,Math.floor((width-padding*2)/(fontSize*.54))),paragraphs=text.split(/\n/),lines=[];
+    for(const paragraph of paragraphs){
+      const words=paragraph.split(/\s+/).filter(Boolean);
+      if(!words.length){lines.push('');continue}
+      let line='';
+      for(let word of words){
+        while(word.length>max){if(line){lines.push(line);line=''}lines.push(word.slice(0,max));word=word.slice(max)}
+        if(!line)line=word;
+        else if((line+' '+word).length<=max)line+=' '+word;
+        else{lines.push(line);line=word}
+      }
+      if(line)lines.push(line);
+    }
+    return lines.length?lines:[''];
+  };
+  const textCommand=(text,x,y,size=fontSize,bold=false)=>`BT /${bold?'F2':'F1'} ${size} Tf 1 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)} Tm (${pdfLiteral(text)}) Tj ET`;
+  const rectCommand=(x,y,width,height,fill=false)=>fill?`0.90 0.94 0.97 rg ${x.toFixed(1)} ${y.toFixed(1)} ${width.toFixed(1)} ${height.toFixed(1)} re f 0 G`:`0.65 G 0.45 w ${x.toFixed(1)} ${y.toFixed(1)} ${width.toFixed(1)} ${height.toFixed(1)} re S 0 G`;
+  const drawTableRow=(values,yTop,isHeader=false)=>{
+    const wrapped=columns.map(column=>wrap(values[column.key]??'',column.width));
+    const height=Math.max(isHeader?2:1,...wrapped.map(lines=>lines.length))*lineHeight+padding*2;
+    let x=left,commands=[];
+    columns.forEach((column,index)=>{
+      const yBottom=yTop-height;
+      if(isHeader)commands.push(rectCommand(x,yBottom,column.width,height,true));
+      commands.push(rectCommand(x,yBottom,column.width,height,false));
+      wrapped[index].forEach((line,lineIndex)=>commands.push(textCommand(line,x+padding,yTop-padding-fontSize-lineIndex*lineHeight,fontSize,isHeader)));
+      x+=column.width;
+    });
+    return{height,commands};
+  };
+  const from=$('#deliveryDateFrom')?.value||'inicio',to=$('#deliveryDateTo')?.value||'hoy',filterText=`RANGO: ${from} A ${to}${$('#deliveryEppOnly')?.checked?'  |  SOLO EPP':''}`,pages=[];
+  let commands=[],y=top;
+  const beginPage=()=>{
+    commands=[
+      textCommand('ENTREGAS PLAZA BLENDING',left,568,13,true),
+      textCommand(filterText,left,552,8,false),
+      textCommand(`REGISTROS: ${rows.length}`,pageWidth-right-100,552,8,true)
+    ];
+    const headerValues={};columns.forEach(column=>headerValues[column.key]=column.label);
+    const header=drawTableRow(headerValues,y,true);commands.push(...header.commands);y-=header.height;
+  };
+  const finishPage=()=>{pages.push(commands.join('\n'));commands=[]};
+  beginPage();
+  for(const row of reportRows){
+    const preview=drawTableRow(row,y,false);
+    if(y-preview.height<bottom){finishPage();y=top;beginPage()}
+    const rendered=drawTableRow(row,y,false);commands.push(...rendered.commands);y-=rendered.height;
+  }
+  finishPage();
+  pages.forEach((page,index)=>{pages[index]=page+'\n'+textCommand(`PÁGINA ${index+1} DE ${pages.length}`,pageWidth/2-28,16,7,false)});
+  const objectCount=4+pages.length*2,objects=new Array(objectCount+1),fontId=3+pages.length*2,fontBoldId=fontId+1;
+  objects[1]='<< /Type /Catalog /Pages 2 0 R >>';
+  const kids=[];
+  pages.forEach((stream,index)=>{
+    const pageId=3+index*2,contentId=pageId+1;
+    kids.push(pageId+' 0 R');
+    objects[pageId]=`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageWidth} ${pageHeight}] /Resources << /Font << /F1 ${fontId} 0 R /F2 ${fontBoldId} 0 R >> >> /Contents ${contentId} 0 R >>`;
+    objects[contentId]=`<< /Length ${stream.length} >>\nstream\n${stream}\nendstream`;
+  });
+  objects[2]=`<< /Type /Pages /Kids [${kids.join(' ')}] /Count ${pages.length} >>`;
+  objects[fontId]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>';
+  objects[fontBoldId]='<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica-Bold /Encoding /WinAnsiEncoding >>';
+  let pdf='%PDF-1.4\n',offsets=[0];
+  for(let id=1;id<=objectCount;id++){offsets[id]=pdf.length;pdf+=`${id} 0 obj\n${objects[id]}\nendobj\n`}
+  const xref=pdf.length;
+  pdf+=`xref\n0 ${objectCount+1}\n0000000000 65535 f \n`;
+  for(let id=1;id<=objectCount;id++)pdf+=String(offsets[id]).padStart(10,'0')+' 00000 n \n';
+  pdf+=`trailer\n<< /Size ${objectCount+1} /Root 1 0 R >>\nstartxref\n${xref}\n%%EOF`;
+  downloadBlob(new Blob([pdf],{type:'application/pdf'}),reportFileBase()+'.pdf');
+}
   function renderRecentQueries(){const deliveries=$('#recentDeliveriesList'),incomes=$('#recentIncomesList');if(!deliveries||!incomes)return;const personal=data.personal||[],people=new Map(personal.map(person=>[person.id,person])),peopleByDocument=new Map(personal.map(person=>[String(person.documento||''),person])),now=Date.now(),recent=(rows,days)=>rows.filter(row=>!row.deleted&&movementDate(row)&&now-movementDate(row).getTime()<=days*86400000).sort((a,b)=>movementDate(b)-movementDate(a));const deliveryRows=deliveryQueryRows(),incomeRows=recent(data.blendingIncomes||[],30),dateLabel=row=>movementDate(row).toLocaleString('es-CO',{dateStyle:'medium',timeStyle:'short'});$('#recentDeliveriesCount').textContent=`${deliveryRows.length} ${deliveryRows.length===1?'entrega encontrada':'entregas encontradas'}${$('#deliveryEppOnly')?.checked?' · Solo EPP':''}`;deliveries.innerHTML=deliveryRows.map(row=>{const person=people.get(row.recipientId),operatorDocument=String(row.actorDocument||row.operatorDocument||''),operator=peopleByDocument.get(operatorDocument)||people.get(row.operatorId),operatorName=operator?.nombre||row.operatorName||operatorDocument||'No informado';return `<article><div><b>${esc(movementItem(row))}</b><span>${esc(dateLabel(row))} · Cantidad: ${esc(row.quantity||1)}</span><span>Recibe: ${esc(person?.nombre||row.recipientName||'No informado')}</span><span>Documento: ${esc(person?.documento||row.recipientDocument||'No informado')}</span><span>Empresa: ${esc(person?.empresa||'No informada')}</span><span>Área: ${esc(person?.area||'No informada')}</span><span>Entregó: ${esc(operatorName)}</span>${row.assetLabel?`<span>Activo específico: ${esc(row.assetLabel)}</span>`:''}${row.destination?`<span>Destino: ${esc(row.destination)}</span>`:''}</div></article>`}).join('')||'<p class="permission">No hay entregas que coincidan con el rango y los filtros seleccionados.</p>';$('#recentIncomesCount').textContent=`${incomeRows.length} ${incomeRows.length===1?'ingreso':'ingresos'} en los últimos 30 días`;incomes.innerHTML=incomeRows.map(row=>`<article><div><b>${esc(movementItem(row))}</b><span>${esc(dateLabel(row))} · Cantidad: ${esc(row.quantity||1)}</span>${row.notes?`<span>Observaciones: ${esc(row.notes)}</span>`:''}</div></article>`).join('')||'<p class="permission">No hay ingresos registrados en los últimos 30 días.</p>'}
   function setupQueryMenu(){if(!$('#recentDeliveries')){const contacts=$('#contacts'),delivery=document.createElement('section'),income=document.createElement('section');delivery.id='recentDeliveries';delivery.className='view recentMovements';delivery.innerHTML='<h2>Entregas recientes</h2><div class="deliveryQueryFilters"><label>DESDE<input id="deliveryDateFrom" type="date"></label><label>HASTA<input id="deliveryDateTo" type="date"></label><label class="deliveryEppSwitch"><span>SOLO EPP</span><input id="deliveryEppOnly" type="checkbox"><span class="deliverySwitchVisual" aria-hidden="true"></span></label><div class="deliveryExportActions"><button type="button" id="exportDeliveriesExcel">DESCARGAR EXCEL</button><button type="button" id="exportDeliveriesPdf">DESCARGAR PDF</button></div></div><p id="recentDeliveriesCount" class="permission"></p><div id="recentDeliveriesList" class="recentMovementList"></div>';income.id='recentIncomes';income.className='view recentMovements';income.innerHTML='<h2>Ingresos recientes</h2><p id="recentIncomesCount" class="permission"></p><div id="recentIncomesList" class="recentMovementList"></div>';contacts.after(delivery,income)}if(!$('#queryMenuStyle')){const style=document.createElement('style');style.id='queryMenuStyle';style.textContent='.queryMenuGrid{display:grid;grid-template-columns:1fr;gap:12px}.queryMenuGrid button{min-height:70px;font-size:1.02rem;background:linear-gradient(145deg,#f4f5f6,#d5dade);color:#263642;border:1px solid #c4cacf}.recentMovementList{display:grid;gap:10px}.recentMovementList article{border:1px solid #d7e0e7;border-radius:10px;padding:12px;background:#fff}.recentMovementList article>div{display:grid;gap:4px}.recentMovementList span{color:#52687a}.deliveryQueryFilters{display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:12px;margin:12px 0 16px}.deliveryQueryFilters label{display:flex;flex-direction:column;gap:6px;font-weight:800}.deliveryEppSwitch{grid-column:1/-1;flex-direction:row!important;align-items:center;justify-content:space-between;padding:12px 14px;border:1px solid #d7e0e7;border-radius:10px;background:#fff}.deliveryEppSwitch input{position:absolute;opacity:0}.deliverySwitchVisual{position:relative;width:48px;height:28px;border-radius:999px;background:#c7cbd0}.deliverySwitchVisual:after{content:"";position:absolute;width:22px;height:22px;left:3px;top:3px;border-radius:50%;background:#fff;box-shadow:0 1px 4px rgba(0,0,0,.25);transition:.2s}.deliveryEppSwitch input:checked+.deliverySwitchVisual{background:#34c759}.deliveryEppSwitch input:checked+.deliverySwitchVisual:after{transform:translateX(20px)}.deliveryExportActions{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap}.deliveryExportActions button{flex:1;min-width:160px;background:#173d59;color:#fff}@media(max-width:600px){.deliveryQueryFilters{grid-template-columns:1fr}.deliveryEppSwitch,.deliveryExportActions{grid-column:1}.deliveryExportActions{flex-direction:column}}';document.head.append(style)}const overlay=document.createElement('div');overlay.id='plazaQueryMenu';overlay.className='registerMenuOverlay';overlay.hidden=true;overlay.innerHTML='<div class="registerMenu"><div class="registerMenuHead"><h2>HACER CONSULTAS</h2><button type="button" data-close-query aria-label="Cerrar">×</button></div><p>SELECCIONA LA CONSULTA.</p><div class="queryMenuGrid"><button type="button" data-query-view="contacts">PERSONAL</button><button type="button" data-query-view="recentDeliveries">ENTREGAS RECIENTES <small>ÚLTIMOS 7 DÍAS</small></button><button type="button" data-query-view="recentIncomes">INGRESOS RECIENTES <small>ÚLTIMOS 30 DÍAS</small></button></div></div>';document.body.append(overlay);const close=()=>{overlay.hidden=true};overlay.addEventListener('click',event=>{if(event.target===overlay||event.target.closest('[data-close-query]'))close();const button=event.target.closest('[data-query-view]');if(button){close();showView(button.dataset.queryView)}});const today=new Date(),from=new Date();from.setDate(today.getDate()-6);$('#deliveryDateFrom').value=localDateValue(from);$('#deliveryDateTo').value=localDateValue(today);$('#deliveryDateFrom').addEventListener('change',renderRecentQueries);$('#deliveryDateTo').addEventListener('change',renderRecentQueries);$('#deliveryEppOnly').addEventListener('change',renderRecentQueries);$('#exportDeliveriesExcel').addEventListener('click',exportDeliveriesExcel);$('#exportDeliveriesPdf').addEventListener('click',exportDeliveriesPdf);window.openPlazaQueryMenu=()=>{overlay.hidden=false}}
   injectItemSearchStyle();setupDeliveryForm();setupItemSearch($('#deliveryForm'),'Buscar elemento a entregar');setupItemSearch($('#incomeForm'),'Buscar elemento a ingresar');renderDeliveryDraft();setupRegisterMenu();setupQueryMenu();setupSessionHeader();$('#sessionWelcomeStart').addEventListener('click',closeWelcomeMessage);$('#sessionWelcome').addEventListener('click',event=>{if(event.target.id==='sessionWelcome')closeWelcomeMessage()});
