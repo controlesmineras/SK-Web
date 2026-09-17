@@ -109,7 +109,7 @@
     return lines.length?lines:[''];
   };
   const textCommand=(text,x,y,size=fontSize,bold=false)=>`BT /${bold?'F2':'F1'} ${size} Tf 1 0 0 1 ${x.toFixed(1)} ${y.toFixed(1)} Tm (${pdfLiteral(text)}) Tj ET`;
-  const rectCommand=(x,y,width,height,fill=false)=>fill?`0.90 0.94 0.97 rg ${x.toFixed(1)} ${y.toFixed(1)} ${width.toFixed(1)} ${height.toFixed(1)} re f 0 G`:`0.65 G 0.45 w ${x.toFixed(1)} ${y.toFixed(1)} ${width.toFixed(1)} ${height.toFixed(1)} re S 0 G`;
+  const rectCommand=(x,y,width,height,fill=false)=>fill?`0.90 0.94 0.97 rg ${x.toFixed(1)} ${y.toFixed(1)} ${width.toFixed(1)} ${height.toFixed(1)} re f 0 g 0 G`:`0.65 G 0.45 w ${x.toFixed(1)} ${y.toFixed(1)} ${width.toFixed(1)} ${height.toFixed(1)} re S 0 G`;
   const drawTableRow=(values,yTop,isHeader=false)=>{
     const wrapped=columns.map(column=>wrap(values[column.key]??'',column.width));
     const height=Math.max(isHeader?2:1,...wrapped.map(lines=>lines.length))*lineHeight+padding*2;
