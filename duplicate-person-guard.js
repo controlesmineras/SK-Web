@@ -12,7 +12,7 @@
     event.stopImmediatePropagation();
     const values=Object.fromEntries(new FormData(form).entries());
     values.nombre=compose(values);
-    const areas=['Seguridad física','Desmin - Obras civiles','Producción','Administrativa'];
+    const areas=window.SKFormOptions?.values('personal.area')||['Seguridad física','Desmin - Obras civiles','Producción','Producción - Selectivo (Corteros)','Administrativa'];
     if(!areas.includes(values.area))return alert('Selecciona un área de la lista');
     const collaborators=await all('personal');
     const documentNumber=String(values.documento||'').trim();
