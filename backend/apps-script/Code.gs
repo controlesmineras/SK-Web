@@ -13,8 +13,8 @@ function plazaSync_(q){
   try{
     const id=findFile_(),cloud=id?readFile_(id):{},allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)]));
     PLAZA_WRITE.forEach(name=>{
-      const existing=new Set((cloud[name]||[]).map(x=>x&&x.id));
-      allowed[name]=(Array.isArray(incoming[name])?incoming[name]:[]).filter(x=>x&&x.syncState==='pending'&&!existing.has(x.id)).map(x=>{
+      const existingRows=(cloud[name]||[]).filter(Boolean),existing=new Set(existingRows.map(x=>x.id).filter(Boolean)),existingEvents=new Set(existingRows.map(x=>x.syncEventId).filter(Boolean));
+      allowed[name]=(Array.isArray(incoming[name])?incoming[name]:[]).filter(x=>x&&x.syncState==='pending'&&!existing.has(x.id)&&!(x.syncEventId&&existingEvents.has(x.syncEventId))).map(x=>{
         const row=stampActor_(x,auth),qty=Number(row.quantity);
         if(!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');
         if(name==='blendingDeliveries'&&row.assetId){
