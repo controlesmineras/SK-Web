@@ -1,4 +1,4 @@
-const VERSION='20260917-17';
+const VERSION='20260917-18';
 const CACHE=`plaza-blending-shell-${VERSION}`;
 const CORE=['./','./index.html','./plaza.css','./plaza-pending.css','./plaza-collaborator.css','./plaza-home.css','./plaza.js','./plaza-collaborator.js','./asset-not-found.js','./install-ui.js','./manifest.webmanifest','../sync-config.js','../form-option-catalog.js','../icons/icon-sk-web.svg','../icons/icon-192.png','../icons/icon-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(async cache=>{for(const url of CORE){try{await cache.add(new Request(url,{cache:'reload'}))}catch(error){console.warn('No se pudo precargar',url,error)}}}).then(()=>self.skipWaiting())));
