@@ -16,7 +16,15 @@ function plazaSync_(q){
     const id=findFile_(),cloud=id?readFile_(id):{},allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)]));
     PLAZA_WRITE.forEach(name=>{
       const existingRows=(cloud[name]||[]).filter(Boolean),existing=new Set(existingRows.map(x=>x.id).filter(Boolean)),existingEvents=new Set(existingRows.map(x=>x.syncEventId).filter(Boolean));
-      allowed[name]=(Array.isArray(incoming[name])?incoming[name]:[]).filter(x=>x&&x.syncState==='pending'&&!existing.has(x.id)&&!(x.syncEventId&&existingEvents.has(x.syncEventId))).map(x=>{
+      const seenIncomingIds=new Set(),blockedEvents=new Set();
+      const pending=(Array.isArray(incoming[name])?incoming[name]:[]).filter(x=>x&&x.syncState==='pending');
+      pending.forEach(x=>{if(x.syncEventId&&existingEvents.has(x.syncEventId))blockedEvents.add(x.syncEventId)});
+      allowed[name]=pending.filter(x=>{
+        if(!x.id||existing.has(x.id)||seenIncomingIds.has(x.id))return false;
+        seenIncomingIds.add(x.id);
+        if(x.syncEventId&&blockedEvents.has(x.syncEventId))return false;
+        return true;
+      }).map(x=>{
         const row=stampActor_(x,auth),qty=Number(row.quantity);
         if(!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');
         if(name==='blendingDeliveries'&&row.assetId){
