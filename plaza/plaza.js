@@ -6,13 +6,13 @@
   const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
   const norm=value=>String(value||'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
   function authMessage(message){const text=String(message||'').trim();if(/contraseña incorrecta|pin incorrecto/i.test(text))return 'Contraseña incorrecta';if(/usuario no habilitado/i.test(text))return 'Usuario no habilitado para Plaza Blending';if(/documento y (contraseña|pin).*obligatorios/i.test(text))return 'Documento y contraseña son obligatorios';if(/servicio central|base central|conectar/i.test(text))return 'El servicio central no está disponible en este momento. Intenta nuevamente.';return text.replace(/\bPIN\b/gi,'contraseña')||'No fue posible iniciar sesión.'}
-  const itemName=item=>String(item?.name||item?.element||'').trim();
-  const itemAliases=item=>[item?.secondaryName,item?.tertiaryName].map(value=>String(value||'').trim()).filter(Boolean);
+  const itemName=item=>String(item?.name||item?.element||item?.CI_ELEMENTO||item?.ciElemento||item?.itemName||'').trim();
+  const itemAliases=item=>[item?.secondaryName,item?.tertiaryName,item?.CI_ALIAS_SECUNDARIO,item?.CI_ALIAS_TERCIARIO].map(value=>String(value||'').trim()).filter(Boolean);
   const itemSearchLabel=item=>[itemName(item)||'Elemento',...itemAliases(item)].join(' · ');
   const assetNumber=asset=>String(asset.numeroClase||asset.numeroYT||asset.orden||'').trim();
   function options(rows,label){return '<option value="">Seleccionar…</option>'+rows.filter(row=>!row.deleted).map(row=>`<option value="${esc(row.id)}">${esc(label(row))}</option>`).join('')}
   function isRetired(asset){return /dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`)}
-  function isFixedItem(item){return Boolean(item?.isFixedAsset===true||item?.esActivoFijo===true||item?.fixedAsset===true)}
+  function isFixedItem(item){const value=item?.isFixedAsset??item?.esActivoFijo??item?.fixedAsset??item?.CI_ES_A_FIJO;return value===true||['true','si','sí','1','yes'].includes(norm(value))}
   function deliveryItems(){return(data.inventoryCriteria||[]).filter(item=>!item.deleted&&item.active!==false).sort((a,b)=>{const group=item=>item?.isEpp===true?0:isFixedItem(item)?2:1;return group(a)-group(b)||itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'})})}
   function findItem(id){return(data.inventoryCriteria||[]).find(item=>item.id===id)||deliveryItems().find(item=>item.id===id)}
   function availableAssets(item){const className=norm(itemName(item)),reserved=new Set(deliveryDraft.map(row=>row.assetId).filter(Boolean));return(data.assets||[]).filter(asset=>!asset.deleted&&!reserved.has(asset.id)&&!isRetired(asset)&&norm(asset.ubicacion)==='bodega de superficie'&&norm(asset.clase)===className).sort((a,b)=>(Number(assetNumber(a))||Number.MAX_SAFE_INTEGER)-(Number(assetNumber(b))||Number.MAX_SAFE_INTEGER)||assetNumber(a).localeCompare(assetNumber(b),'es',{numeric:true})||(a.serial||'').localeCompare(b.serial||'','es',{numeric:true}))}
