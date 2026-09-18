@@ -36,6 +36,6 @@
 <script src="asset-seed.js?v=20260908-3"></script>
 <script src="inventory-admin.js?v=20260917-6"></script>
 <script src="inventory-stock-query.js?v=20260914-1"></script>
-<script src="actas-admin.js?v=20260915-1"></script><script src="admin-home-navigation.js?v=20260915-1"></script>
+<script src="actas-admin.js?v=20260915-1"></script><script src="admin-home-navigation.js?v=20260918-1"></script>
 <script>window.addEventListener('load',()=>{let tries=0;const t=setInterval(async()=>{tries++;if(typeof db!=='undefined'&&db){clearInterval(t);try{await seedPersonal();await seedAssets();await refresh();document.querySelector('#syncStatus').textContent=window.skSyncApi?.configured()?'Base local lista · sincronización automática activa.':'Base local lista. Personal y activos cargados.'}catch(e){console.error(e)}}else if(tries>40)clearInterval(t)},250)})</script>
 </body></html>
