@@ -23,7 +23,7 @@ function plazaSync_(q){
           if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');
           asset.ubicacion=row.destination||'Operación';asset.updatedAt=new Date().toISOString();
         }else{
-          const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},next=(Number(current.quantity)||0)+(name==='blendingIncomes'?qty:-qty);
+          const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},balanceBefore=Number(current.quantity)||0,next=balanceBefore+(name==='blendingIncomes'?qty:-qty);row.balanceBefore=balanceBefore;row.balanceAfter=next;
           if(next<0)throw new Error('La cantidad ingresada supera la disponibilidad');
           current.quantity=next;current.updatedAt=new Date().toISOString();stock.set(row.itemId,current);
         }
