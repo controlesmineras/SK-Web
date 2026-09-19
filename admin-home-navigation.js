@@ -1,7 +1,7 @@
 // Navegación principal de SK Web Administrador: Inicio -> Consultar / Registrar.
 (()=>{
 'use strict';
-const modules={inventoryStockAdmin:'inventory-stock-admin.js?v=20260918-1',personQuery:'person-query.js?v=20260914-1',optionCatalog:'form-option-catalog.js?v=20260917-2'};
+const modules={inventoryStockAdmin:'inventory-stock-admin.js?v=20260919-1',personQuery:'person-query.js?v=20260914-1',optionCatalog:'form-option-catalog.js?v=20260917-2'};
 let currentView='home',previousView='home';
 function loadModule(id){return new Promise((resolve,reject)=>{if((id==='inventoryStockAdmin'&&window.SKInventoryStockAdmin)||(id==='personQuery'&&window.SKPersonQuery)||(id==='optionCatalog'&&window.SKFormOptions))return resolve();const src=modules[id];if(!src)return resolve();let s=document.querySelector(`script[data-admin-module="${id}"]`);if(s){s.addEventListener('load',resolve,{once:true});s.addEventListener('error',reject,{once:true});return}s=document.createElement('script');s.src=src;s.dataset.adminModule=id;s.onload=resolve;s.onerror=reject;document.body.appendChild(s)})}
 function setupHeader(){const header=document.querySelector('body>header');if(!header||header.dataset.adminCompact==='1')return;header.dataset.adminCompact='1';const brand=header.firstElementChild;if(brand){brand.classList.add('adminBrand');brand.innerHTML='<img src="icons/icon-sk-web.svg?v=20260915-1" alt="SK 3.7"><small>INV. ADMINISTRADOR</small>'}const center=document.createElement('div');center.className='adminHeaderCenter';center.innerHTML='<button type="button" class="adminHeaderHome" aria-label="Ir a Inicio">INICIO</button>';header.appendChild(center)}
