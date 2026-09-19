@@ -11,6 +11,7 @@
 .plazaAccessState,.plazaAccessActions{grid-column:1/-1}
 .plazaAccessActions{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 .plazaAccessActions button{grid-column:auto}
+.rowActions .reverseBtn,.rowActions .dangerBtn{display:inline-flex!important;align-items:center;justify-content:center;width:max-content!important;min-width:0!important;min-height:34px!important;padding:7px 12px!important;font-size:.8rem!important;line-height:1!important;white-space:nowrap!important}
 .reverseBtn{background:#f59e0b!important;color:#4a2a00!important}
 .reverseBtn:hover{background:#d97706!important;color:#fff!important}
 .dangerBtn{background:#a92323!important;color:#fff!important}
