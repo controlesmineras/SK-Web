@@ -34,3 +34,9 @@ header .plazaHeaderCenter{grid-column:2;justify-self:center}
 header .headerSync{grid-column:3;justify-self:end!important;align-items:flex-end!important}
 #app>nav{display:none!important}
 @media(max-width:720px){header .headerSync{grid-column:3!important;grid-row:1!important;justify-self:end!important;margin-left:auto!important}}
+
+/* Mantener visible el resultado de sincronización a la derecha. */
+header .headerSync{display:flex!important;flex-direction:row!important;flex-wrap:nowrap!important;justify-content:flex-end!important;align-items:center!important;max-width:none!important;overflow:visible!important;white-space:nowrap}
+header .headerSync #syncBtn{order:2;flex:0 0 auto}
+header .headerSync .pendingBadge{order:3;flex:0 0 auto}
+header .headerSync .pendingBadge.synced{display:inline-flex!important;align-items:center;justify-content:center;color:#35d879!important;text-shadow:0 0 9px rgba(53,216,121,.65)}
