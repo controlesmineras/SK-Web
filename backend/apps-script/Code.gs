@@ -27,6 +27,11 @@ function plazaSync_(q){
       }).map(x=>{
         const row=stampActor_(x,auth),qty=Number(row.quantity);
         if(!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');
+        if(name==='blendingDeliveries'){
+          if(!row.recipientId)throw new Error('La entrega no tiene receptor confirmado');
+          const recipient=(cloud.personal||[]).find(person=>person&&person.id===row.recipientId&&!person.deleted);
+          if(!recipient)throw new Error('El colaborador receptor aún no está confirmado en la base central. Sincroniza primero Personal y vuelve a intentar la entrega.');
+        }
         if(name==='blendingDeliveries'&&row.assetId){
           const asset=(cloud.assets||[]).find(x=>x&&x.id===row.assetId&&!x.deleted);
           if(!asset)throw new Error('El activo seleccionado no existe');
