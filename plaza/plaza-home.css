@@ -27,3 +27,10 @@ header{grid-template-columns:minmax(180px,1fr) auto minmax(180px,1fr)}
 .homeSessionCard #homeUserRole{margin:0;color:#fff;font-size:.9rem;opacity:.88}
 .homeSessionCard #logoutBtn{width:auto;min-width:160px;background:#eef3f7;color:#173d59;border:1px solid #c7d3dc}
 @media(max-width:720px){header{grid-template-columns:minmax(74px,1fr) auto minmax(112px,1fr)!important;gap:6px!important}.plazaHeaderCenter #plazaHeaderHome{min-height:34px;padding:5px 10px;font-size:.8rem}.homeSessionCard{margin-top:22px!important}}
+
+/* La cabecera es la única navegación visible. */
+header>div:first-child{grid-column:1;justify-self:start}
+header .plazaHeaderCenter{grid-column:2;justify-self:center}
+header .headerSync{grid-column:3;justify-self:end!important;align-items:flex-end!important}
+#app>nav{display:none!important}
+@media(max-width:720px){header .headerSync{grid-column:3!important;grid-row:1!important;justify-self:end!important;margin-left:auto!important}}
