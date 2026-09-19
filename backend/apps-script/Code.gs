@@ -17,6 +17,12 @@ function plazaSync_(q){
     PLAZA_WRITE.forEach(name=>{
       const existingRows=(cloud[name]||[]).filter(Boolean),existing=new Set(existingRows.map(x=>x.id).filter(Boolean)),existingEvents=new Set(existingRows.map(x=>x.syncEventId).filter(Boolean));
       const seenIncomingIds=new Set(),blockedEvents=new Set();
+      // Última barrera de idempotencia: una misma operación lógica no puede volver a aplicarse
+      // aunque un cliente antiguo genere nuevos id/syncEventId durante un doble envío.
+      const duplicateWindowMs=15000;
+      const movementKey=row=>[name,row.actorDocument||'',row.recipientId||'',row.itemId||'',Number(row.quantity)||0,row.assetId||'',row.destination||''].join('|');
+      const recentKeys=new Map();
+      existingRows.forEach(row=>{const t=Date.parse(row.createdAt||row.updatedAt||'');if(Number.isFinite(t))recentKeys.set(movementKey(row),Math.max(recentKeys.get(movementKey(row))||0,t))});
       const pending=(Array.isArray(incoming[name])?incoming[name]:[]).filter(x=>x&&x.syncState==='pending');
       pending.forEach(x=>{if(x.syncEventId&&existingEvents.has(x.syncEventId))blockedEvents.add(x.syncEventId)});
       allowed[name]=pending.filter(x=>{
@@ -25,7 +31,9 @@ function plazaSync_(q){
         if(x.syncEventId&&blockedEvents.has(x.syncEventId))return false;
         return true;
       }).map(x=>{
-        const row=stampActor_(x,auth),qty=Number(row.quantity);
+        const row=stampActor_(x,auth),qty=Number(row.quantity),movementTime=Date.parse(row.createdAt||row.updatedAt||'')||Date.now(),key=movementKey(row),lastTime=recentKeys.get(key)||0;
+        if(lastTime&&Math.abs(movementTime-lastTime)<=duplicateWindowMs)return null;
+        recentKeys.set(key,movementTime);
         if(!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');
         if(name==='blendingDeliveries'){
           if(!row.recipientId)throw new Error('La entrega no tiene receptor confirmado');
@@ -43,7 +51,7 @@ function plazaSync_(q){
           current.quantity=next;current.updatedAt=new Date().toISOString();stock.set(row.itemId,current);
         }
         row.syncState='synced';return row;
-      });
+      }).filter(Boolean);
     });
     allowed.inventoryStock=Array.from(stock.values());
     const merged=merge_(cloud,allowed);writeFile_(id,merged);const view={schema:merged.schema,updatedAt:merged.updatedAt};
