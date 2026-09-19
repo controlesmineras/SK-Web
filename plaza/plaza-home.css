@@ -15,3 +15,15 @@ header,header>*,main,#home,.homeActions,.homeActions>button,.welcome,.view{min-w
 .homeActions [data-home-view="personal"]{position:relative}
 @media(max-width:720px){header{width:100%;overflow:hidden}.headerSync{min-width:0}.headerSync #syncBtn{max-width:100%;font-size:.78rem;padding:8px 9px}.sessionHeader{min-width:0}.sessionHeader span{min-width:0}main{width:100%;max-width:100%;overflow:hidden}#home{width:100%;max-width:100%;padding:20px}.homeActions{width:100%;max-width:100%;gap:12px}.homeActions button{min-width:0;padding:16px 12px;font-size:.92rem}.homeActions [data-home-view="personal"]>span{right:16px}}
 @media(max-width:390px){#home{padding:16px 12px}.homeActions{gap:8px}.homeActions button{padding:14px 8px;font-size:.82rem}.homeActions span{font-size:1.35rem}.homeActions [data-home-view="personal"]>span{right:10px}}
+
+/* Navegación superior y sesión del bodeguero en Inicio. */
+header{grid-template-columns:minmax(180px,1fr) auto minmax(180px,1fr)}
+.plazaHeaderCenter{grid-column:2;display:flex!important;align-items:center;justify-content:center}
+.plazaHeaderCenter #plazaHeaderHome{min-height:36px;padding:6px 13px;border-radius:9px;background:#fff;color:#102f45;border:1px solid rgba(255,255,255,.9);box-shadow:0 2px 8px rgba(0,0,0,.18);font-size:.88rem;font-weight:750;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
+.plazaHeaderCenter #plazaHeaderHome.isCurrent{background:transparent;color:#fff;border-color:transparent;box-shadow:none;cursor:default;opacity:1}
+.homeSessionCard{width:min(420px,100%);margin:28px auto 0!important;padding:18px!important;display:flex!important;flex-direction:column!important;align-items:center!important;justify-content:center!important;gap:14px!important;text-align:center;background:#f7f9fa!important;border:1px solid #d8e1e7!important;border-radius:12px!important}
+.homeSessionCard>div{display:flex!important;flex-direction:column!important;align-items:center!important;gap:5px!important}
+.homeSessionCard #userName{color:#173d59;font-size:1.05rem;font-weight:750}
+.homeSessionCard #homeUserRole{margin:0;color:#667085;font-size:.9rem}
+.homeSessionCard #logoutBtn{width:auto;min-width:160px;background:#eef3f7;color:#173d59;border:1px solid #c7d3dc}
+@media(max-width:720px){header{grid-template-columns:minmax(74px,1fr) auto minmax(112px,1fr)!important;gap:6px!important}.plazaHeaderCenter #plazaHeaderHome{min-height:34px;padding:5px 10px;font-size:.8rem}.homeSessionCard{margin-top:22px!important}}
