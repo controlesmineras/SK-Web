@@ -2,9 +2,9 @@
 (()=>{
   const config=()=>window.SK_SYNC_CONFIG||{};let running=false,timer=0,activePromise=null;
   const configured=()=>/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/.test(config().apiUrl||'');
-  const ui=state=>window.SKAdminSyncUI?.setState?.(state);
-  function buttonStart(){const b=document.querySelector('#updateAppBtn');if(!b||b.dataset.busy==='true')return null;b.disabled=true;b.dataset.autoSync='true';b.classList.add('isSyncing');b.textContent='☁ SINCRONIZANDO';return b}
-  function buttonStop(b){if(!b||b.dataset.busy==='true')return;delete b.dataset.autoSync;b.disabled=false;b.classList.remove('isSyncing');b.textContent='☁ SINCRONIZAR'}
+  const ui=state=>window.SKAdminSyncUI?.setState?.(state);const buttonText=value=>{const label=document.querySelector('#updateAppBtnLabel');if(label)label.textContent=value};
+  function buttonStart(){const b=document.querySelector('#updateAppBtn');if(!b||b.dataset.busy==='true')return null;b.disabled=true;b.dataset.autoSync='true';b.classList.add('isSyncing');buttonText('☁ SINCRONIZANDO');return b}
+  function buttonStop(b){if(!b||b.dataset.busy==='true')return;delete b.dataset.autoSync;b.disabled=false;b.classList.remove('isSyncing');buttonText('☁ SINCRONIZAR')}
   async function pendingSnapshot(){const snapshot={schema:6,updatedAt:new Date().toISOString()};for(const store of stores)snapshot[store]=(await all(store)).filter(row=>row?.syncState==='pending');return snapshot}
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   function isTransient(error){const msg=String(error?.message||error||'').toLowerCase();return error?.name==='AbortError'||msg.includes('load failed')||msg.includes('failed to fetch')||msg.includes('network')||msg.includes('respondió 429')||msg.includes('respondió 5')}
