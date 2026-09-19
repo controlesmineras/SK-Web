@@ -7,3 +7,11 @@ header{display:grid;grid-template-columns:minmax(310px,1fr) minmax(330px,auto) m
 @media(max-width:720px){.homeActions{grid-template-columns:1fr 1fr}.homeActions [data-home-view="contacts"]{grid-column:1;grid-row:1}.homeActions [data-home-view="income"]{grid-column:2;grid-row:1}.homeActions [data-home-view="personal"]{grid-column:1/-1;grid-row:2}}
 
 .homeActions [data-home-view="personal"]{justify-content:center!important;text-align:center!important}.homeActions [data-home-view="personal"]>span{position:absolute;right:24px}
+
+/* Protección responsive para Android y pantallas móviles estrechas. */
+html,body{width:100%;max-width:100%;overflow-x:hidden}
+header,header>*,main,#home,.homeActions,.homeActions>button,.welcome,.view{min-width:0;max-width:100%}
+.homeActions button{white-space:normal;overflow-wrap:anywhere}
+.homeActions [data-home-view="personal"]{position:relative}
+@media(max-width:720px){header{width:100%;overflow:hidden}.headerSync{min-width:0}.headerSync #syncBtn{max-width:100%;font-size:.78rem;padding:8px 9px}.sessionHeader{min-width:0}.sessionHeader span{min-width:0}main{width:100%;max-width:100%;overflow:hidden}#home{width:100%;max-width:100%;padding:20px}.homeActions{width:100%;max-width:100%;gap:12px}.homeActions button{min-width:0;padding:16px 12px;font-size:.92rem}.homeActions [data-home-view="personal"]>span{right:16px}}
+@media(max-width:390px){#home{padding:16px 12px}.homeActions{gap:8px}.homeActions button{padding:14px 8px;font-size:.82rem}.homeActions span{font-size:1.35rem}.homeActions [data-home-view="personal"]>span{right:10px}}
