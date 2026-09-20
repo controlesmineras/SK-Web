@@ -1,6 +1,6 @@
 // Navegación interna offline, instalación y actualización automática/manual de SK Web.
 (()=>{
-const APP_VERSION='20/09/2026 · Sincronización de inventario reforzada';
+const APP_VERSION='20/09/2026';
 function show(view){document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===view));document.querySelectorAll('#nav [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view===view));window.scrollTo({top:0,behavior:'instant'});if(view==='queries')window.dispatchEvent(new Event('skweb-open-queries'))}
 function openNewAsset(){show('assets');if(typeof newAsset==='function')newAsset(true);else{const f=document.querySelector('#assetForm');f?.reset();if(f?.elements?.id)f.elements.id.value='';const b=document.querySelector('#assetSaveBtn');if(b)b.textContent='Registrar activo'}document.querySelector('#assetForm')?.scrollIntoView({block:'start'})}
 function versionBadge(){let b=document.querySelector('#appVersion');if(!b){b=document.createElement('small');b.id='appVersion';b.style.cssText='opacity:.72;font-size:.75rem;margin-top:2px';document.querySelector('header>div:first-child')?.append(b)}b.textContent=`Versión ${APP_VERSION}`}
