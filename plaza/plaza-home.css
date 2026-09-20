@@ -50,3 +50,9 @@ header .headerSync #syncBtn .pendingBadge{position:static!important;display:inli
 header .headerSync #syncBtn .pendingBadge.synced{font-size:1.05rem!important;min-width:14px!important;height:auto!important;padding:0!important}
 header .headerSync #syncBtn .pendingBadge.pending,header .headerSync #syncBtn .pendingBadge.retrying,header .headerSync #syncBtn .pendingBadge.error{min-width:21px!important;height:21px!important;padding:0 5px!important;font-size:.7rem!important}
 @media(max-width:720px){header .headerSync{grid-template-columns:auto!important}header .headerSync #syncBtn{grid-column:1!important;grid-row:1!important}header .headerSync .headerLastSync{grid-column:1!important;grid-row:2!important}header .headerSync #installAppBtn:not([hidden]){grid-column:1!important;grid-row:3!important}}
+
+/* Volver arriba en la consulta de entregas recientes. */
+#deliveryScrollTop{position:fixed;right:max(18px,env(safe-area-inset-right));bottom:max(18px,env(safe-area-inset-bottom));z-index:115;width:48px;height:48px;padding:0;border-radius:50%;display:grid;place-items:center;background:#173d59;color:#fff;border:1px solid #0f3047;box-shadow:0 5px 16px rgba(16,47,69,.32);font-size:1.55rem;font-weight:700;line-height:1;transition:transform .15s ease,opacity .15s ease}
+#deliveryScrollTop:hover,#deliveryScrollTop:focus-visible{transform:translateY(-2px);background:#102f45}
+#deliveryScrollTop[hidden]{display:none!important}
+@media(max-width:520px){#deliveryScrollTop{right:max(12px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));width:44px;height:44px;font-size:1.4rem}}
