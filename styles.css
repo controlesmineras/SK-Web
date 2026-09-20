@@ -21,3 +21,4 @@
 .headerActions #updateAppBtn .adminSyncBadge{position:static;display:inline-grid;place-items:center;margin:0!important;flex:0 0 auto}
 .headerActions #updateAppBtn .adminSyncBadge.synced{font-size:1.05rem;min-width:14px;height:auto;padding:0}
 .headerActions #updateAppBtn .adminSyncBadge:not(.synced){min-width:21px;height:21px;padding:0 5px;font-size:.7rem}
+.adminSyncGroup{display:flex!important;flex-direction:column!important;align-items:center!important;gap:3px!important}.adminLastSync{display:block!important;margin:0!important;font-size:.66rem;line-height:1.1;white-space:nowrap;opacity:.78;text-align:center;font-weight:650;letter-spacing:.01em}@media(max-width:720px){.adminLastSync{display:block!important;font-size:.5rem!important;line-height:1!important}.adminSyncGroup{gap:2px!important}}
