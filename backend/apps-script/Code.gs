@@ -15,9 +15,12 @@ function plazaSync_(q){
   const auth=verifyToken_(q.token),incoming=q.data||{},lock=LockService.getScriptLock();
   lock.waitLock(30000);
   try{
-    const id=findFile_(),cloud=id?readFile_(id):{},hasPending=PLAZA_WRITE.some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending'));
+    const id=findFile_(),cloud=id?readFile_(id):{},hasPending=['assets'].concat(PLAZA_WRITE).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending'));
     if(!hasPending){if(q.since&&cloud.updatedAt===q.since)return json_({ok:true,notModified:true,updatedAt:cloud.updatedAt});const unchanged={schema:cloud.schema,updatedAt:cloud.updatedAt};PLAZA_READ.forEach(name=>unchanged[name]=Array.isArray(cloud[name])?cloud[name]:[]);unchanged.personal=unchanged.personal.map(x=>publicPerson_(x));return json_({ok:true,data:unchanged,updatedAt:cloud.updatedAt})}
-    const allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)]));
+    const allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)])),cloudAssets=Array.isArray(cloud.assets)?cloud.assets:[],pendingAssets=(Array.isArray(incoming.assets)?incoming.assets:[]).filter(x=>x&&x.id&&x.syncState==='pending'),assetIds=new Set(cloudAssets.map(x=>x.id).filter(Boolean)),acceptedAssets=[];
+    pendingAssets.forEach(input=>{if(assetIds.has(input.id))return;const asset=stampActor_(input,auth),criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===asset.criteriaId&&!item.deleted&&item.active!==false);if(!criterion||!truthy_(criterion.isFixedAsset??criterion.esActivoFijo??criterion.CI_ES_A_FIJO))throw new Error('La clase seleccionada no está configurada como activo fijo');const required=[['usesSerial','serial','serial'],['usesLength','largo','largo'],['usesModel','modelo','modelo'],['usesManufacturer','fabricante','fabricante'],['requiresInternalMark','marcaInterna','marca interna']];if(!String(asset.numeroClase||asset.numeroYT||'').trim())throw new Error('Falta el número de clase del activo');required.forEach(rule=>{if(truthy_(criterion[rule[0]])&&!String(asset[rule[1]]||'').trim())throw new Error('Falta '+rule[2]+' del activo')});const className=String(asset.clase||'').trim().toLowerCase(),number=String(asset.numeroClase||asset.numeroYT||'').trim().toLowerCase(),serial=String(asset.serial||'').trim().toLowerCase(),mark=String(asset.marcaInterna||asset.marcaActual||'').trim().toLowerCase(),duplicate=cloudAssets.concat(acceptedAssets).find(row=>row&&!row.deleted&&String(row.clase||'').trim().toLowerCase()===className&&((serial&&String(row.serial||'').trim().toLowerCase()===serial)||(number&&String(row.numeroClase||row.numeroYT||'').trim().toLowerCase()===number)||(mark&&String(row.marcaInterna||row.marcaActual||'').trim().toLowerCase()===mark)));if(duplicate)throw new Error('El activo ya existe en la tabla de Activos fijos');asset.ubicacion='Bodega de Superficie';asset.syncState='synced';acceptedAssets.push(asset);assetIds.add(asset.id)});
+    if(acceptedAssets.length)allowed.assets=acceptedAssets;
+    const workingAssets=cloudAssets.concat(acceptedAssets);
     PLAZA_WRITE.forEach(name=>{
       const existingRows=(cloud[name]||[]).filter(Boolean),existing=new Set(existingRows.map(x=>x.id).filter(Boolean)),existingEvents=new Set(existingRows.map(x=>x.syncEventId).filter(Boolean));
       const seenIncomingIds=new Set(),blockedEvents=new Set();
@@ -44,11 +47,10 @@ function plazaSync_(q){
           const recipient=(cloud.personal||[]).find(person=>person&&person.id===row.recipientId&&!person.deleted);
           if(!recipient)throw new Error('El colaborador receptor aún no está confirmado en la base central. Sincroniza primero Personal y vuelve a intentar la entrega.');
         }
-        if(name==='blendingDeliveries'&&row.assetId){
-          const asset=(cloud.assets||[]).find(x=>x&&x.id===row.assetId&&!x.deleted);
+        if(row.assetId){
+          const asset=workingAssets.find(x=>x&&x.id===row.assetId&&!x.deleted);
           if(!asset)throw new Error('El activo seleccionado no existe');
-          if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');
-          asset.ubicacion=row.destination||'Operación';asset.updatedAt=new Date().toISOString();
+          if(name==='blendingDeliveries'){if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');asset.ubicacion=row.destination||'Operación'}else asset.ubicacion='Bodega de Superficie';asset.updatedAt=new Date().toISOString();
         }else{
           const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},balanceBefore=Number(current.quantity)||0,next=balanceBefore+(name==='blendingIncomes'?qty:-qty);row.balanceBefore=balanceBefore;row.balanceAfter=next;
           if(next<0)throw new Error('La cantidad ingresada supera la disponibilidad');
@@ -64,6 +66,7 @@ function plazaSync_(q){
   }finally{lock.releaseLock()}
 }
 function stampActor_(x,auth){if(!x||!x.id)throw new Error('Movimiento sin identificador');const out=Object.assign({},x);out.actorDocument=auth.document;out.actorRole=auth.role;delete out.pinHash;delete out.plazaEnabled;delete out.plazaRole;return out}
+function truthy_(value){return value===true||['true','si','sí','1','yes'].indexOf(String(value||'').trim().toLowerCase())>=0}
 function hashPin_(document,pin){const salt=PropertiesService.getScriptProperties().getProperty('SK_AUTH_SALT');if(!salt)throw new Error('Falta configurar SK_AUTH_SALT');return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,document+'|'+pin+'|'+salt,Utilities.Charset.UTF_8))}
 function sign_(payload){const secret=PropertiesService.getScriptProperties().getProperty('SK_AUTH_SECRET');if(!secret)throw new Error('Falta configurar SK_AUTH_SECRET');return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload,secret))}
 function verifyToken_(token){const bits=String(token||'').split('.');if(bits.length!==2)throw new Error('Sesión no válida');const payload=Utilities.newBlob(Utilities.base64DecodeWebSafe(bits[0])).getDataAsString(),parts=payload.split('|');if(parts.length!==3||!safeEqual_(bits[1],sign_(payload))||Number(parts[2])<Date.now())throw new Error('La sesión venció');if(parts[1]!=='plaza_operator'&&parts[1]!=='plaza_supervisor')throw new Error('Permiso no válido');return{document:parts[0],role:parts[1]}}
