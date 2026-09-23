@@ -28,7 +28,7 @@ const clean=value=>String(value||'').trim(),norm=value=>clean(value).toLocaleLow
 let config=null;
 function plazaRecord(){return(window.SKPlaza?.getData?.().inventoryCriteria||[]).find(row=>row.id===RECORD_ID||row.recordType==='formOptions')}
 async function adminRecord(){if(typeof all!=='function'||typeof db==='undefined'||!db)return null;return(await all('inventoryCriteria')).find(row=>row.id===RECORD_ID||row.recordType==='formOptions')}
-function normalized(raw){const out={};for(const [key,list] of Object.entries(defaults)){const supplied=raw?.options?.[key];out[key]=Array.isArray(supplied)?supplied.map(clean).filter(Boolean):[...list]}return out}
+function normalized(raw){const out={};for(const [key,list] of Object.entries(defaults)){const supplied=raw?.options?.[key];out[key]=Array.isArray(supplied)?supplied.map(clean).filter(Boolean):[...list];if(key==='inventory.unit'&&!out[key].some(value=>norm(value)==='rollo'))out[key].push('Rollo')}return out}
 function values(key,fallback=[]){return[...(config?.[key]||defaults[key]||fallback)]}
 function allowedPersonalAreas(company){return values('personal.area').filter(area=>!(norm(company)==='desmin'&&norm(area)==='produccion - selectivo (corteros)'))}
 function validPersonalArea(company,area){return allowedPersonalAreas(company).some(option=>norm(option)===norm(area))}
