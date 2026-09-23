@@ -2,7 +2,7 @@
 (()=>{
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot',"'":'&#39;'}[c]));
 const norm=s=>String(s||'').trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
-const inventoryUnitValues=()=>window.SKFormOptions?.values('inventory.unit',['Unidad','Par','Rollo'])||['Unidad','Par','Rollo'];
+const inventoryUnitValues=()=>{const units=window.SKFormOptions?.values('inventory.unit',['Unidad','Par','Rollo'])||['Unidad','Par','Rollo'];return units.some(unit=>norm(unit)===norm('Rollo'))?units:[...units,'Rollo']};
 const INVENTORY_UNITS={map:callback=>inventoryUnitValues().map(callback),find:callback=>inventoryUnitValues().find(callback)};
 const boolFields=['isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable'];
 const defaultEnabledOperations=new Set(['allowAssignment','allowTransfer','allowRemission']);
