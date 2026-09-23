@@ -6,7 +6,7 @@ const defaults={
   'personal.company':['SK 3.7','DESMIN'],
   'personal.area':['Seguridad física','Desmin - Obras civiles','Producción','Producción - Selectivo (Corteros)','Administrativa'],
   'personal.role':['Operador minero','Operador de seguridad','Escolta','Machinero','Supervisor','No informado'],
-  'inventory.unit':['Unidad','Par'],
+  'inventory.unit':['Unidad','Par','Rollo'],
   'asset.model.yt':['28','29'],
   'asset.model.autorrescatador':['Oxypro 50'],
   'asset.manufacturer.yt':['Gisi','Irreconocible'],
