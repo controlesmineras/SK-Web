@@ -56,3 +56,4 @@ header .headerSync #syncBtn .pendingBadge.pending,header .headerSync #syncBtn .p
 #deliveryScrollTop:hover,#deliveryScrollTop:focus-visible{transform:translateY(-2px);background:#102f45}
 #deliveryScrollTop[hidden]{display:none!important}
 @media(max-width:520px){#deliveryScrollTop{right:max(12px,env(safe-area-inset-right));bottom:max(14px,env(safe-area-inset-bottom));width:44px;height:44px;font-size:1.4rem}}
+#addIncomeItem{background:#315f49;color:#fff}
