@@ -1,5 +1,12 @@
 # SK Web
 
+## Abrir las aplicaciones
+
+| Aplicación | Acceso directo |
+| --- | --- |
+| SK Admin | [Abrir SK Admin](https://controlesmineras.github.io/SK-Web/) |
+| Plaza Blending | [Abrir Plaza Blending](https://controlesmineras.github.io/SK-Web/plaza/) |
+
 Sistema web de inventario y control de activos SK 3.7.
 
 Primera etapa: aplicación local-first para tablet con Personal, registro de activos fijos, novedades administrativas y consumo de repuestos YT/Columnas. La operación se almacena en IndexedDB para funcionar sin conexión; un servicio privado sincroniza automáticamente con Google Drive `appDataFolder` sin solicitar una cuenta de Google al operario.
