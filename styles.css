@@ -35,3 +35,6 @@
 .adminHomeUser{margin:-6px auto 15px;text-align:center;color:#173d59;font-size:1rem;font-weight:700}.adminHomeUser[hidden]{display:none!important}
 
 .adminHomeUser{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}.adminHomeUserOnline{width:11px;height:11px;flex:0 0 11px;margin-right:6px;border-radius:50%;background:#27cf68;box-shadow:0 0 0 3px #27cf6829,0 0 9px #27cf68}.adminHomeUserSeparator{color:#637786}#adminHomeUserRole{font-weight:600;color:#405a6d}
+
+/* Actualización al final de Inicio, separada de Movimientos. */
+.homeMovementRow{grid-template-columns:1fr!important}.homeAccess>.homeUpdateInline{grid-column:1/-1;display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;min-height:64px!important;margin-top:10px;padding:13px 18px!important;border:1px solid #a3cbe3!important;border-radius:14px!important;background:linear-gradient(145deg,#e6f5ff,#b9ddf2)!important;color:#12547d!important;box-shadow:0 4px 12px #5aa9d333!important;font-size:1rem!important;font-weight:750!important;text-align:center!important}
