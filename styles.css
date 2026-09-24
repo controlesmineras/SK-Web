@@ -61,3 +61,8 @@ body>header .headerActions #updateAppBtn,body>header .headerActions .adminSessio
 body>header .headerActions .adminLastSync{font-size:.72rem!important;line-height:1.2!important;opacity:.95!important}
 body>header .headerActions .adminSessionCaption{display:block;color:#fff;font-size:.72rem;font-weight:650;line-height:1.2;opacity:.95;white-space:nowrap}
 @media(max-width:720px){body>header .headerActions .adminLastSync,body>header .headerActions .adminSessionCaption{font-size:.61rem!important}}
+
+/* Marca de agua del logo original, detrás del contenido de Inicio. */
+#home{position:relative;isolation:isolate}
+#home::before{content:"";position:absolute;z-index:-1;top:14px;left:50%;width:min(56vw,440px);aspect-ratio:1;transform:translateX(-50%);background:url('icons/icon-512.png') center/contain no-repeat;opacity:.075;pointer-events:none}
+@media(max-width:720px){#home::before{top:12px;width:min(75vw,300px);opacity:.065}}
