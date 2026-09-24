@@ -33,3 +33,5 @@
 .adminPullActions{position:fixed;inset:0;z-index:45000;display:grid;place-items:center;padding:20px;background:#071926a3}.adminPullPanel{width:min(380px,100%);display:grid;gap:10px;padding:22px;background:#fff;border-radius:16px;box-shadow:0 18px 45px #0004}.adminPullPanel h2{margin:0 0 4px;text-align:center;font-size:1.15rem;color:#173d59}.adminPullPanel button{min-height:48px;background:#173d59;color:#fff}.adminPullPanel [data-pull-action="close"]{background:#edf2f5;color:#173d59}
 
 .adminHomeUser{margin:-6px auto 22px;text-align:center;color:#173d59;font-size:1rem;font-weight:700}.adminHomeUser[hidden]{display:none!important}
+
+.adminHomeUser{display:flex;align-items:center;justify-content:center;gap:5px;flex-wrap:wrap}.adminHomeUserOnline{width:11px;height:11px;flex:0 0 11px;margin-right:6px;border-radius:50%;background:#27cf68;box-shadow:0 0 0 3px #27cf6829,0 0 9px #27cf68}.adminHomeUserSeparator{color:#637786}#adminHomeUserRole{font-weight:600;color:#405a6d}
