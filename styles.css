@@ -54,8 +54,8 @@
 @media(max-width:480px){#plazaMovements .plazaMovementTabs{gap:8px}#plazaMovements .plazaMovementTabs button{padding:10px 6px;font-size:.82rem}}
 
 /* Cabecera: botones alineados y fecha de sincronización legible. */
-body>header .headerActions{align-items:flex-start!important;position:relative;top:-3px}
-body>header .headerActions .adminSyncGroup,body>header .headerActions .adminSession{align-items:center!important;gap:5px!important}
+body>header .headerActions{align-items:center!important;position:relative;top:0}
+body>header .headerActions .adminSyncGroup,body>header .headerActions .adminSession{align-items:center!important;justify-content:center!important;gap:3px!important}
 body>header .headerActions .adminSession{flex-direction:column!important}
 body>header .headerActions #updateAppBtn,body>header .headerActions .adminSession button{height:40px!important;min-height:40px!important}
 body>header .headerActions .adminLastSync{font-size:.72rem!important;line-height:1.2!important;opacity:.95!important}
