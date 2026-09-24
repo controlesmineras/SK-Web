@@ -64,11 +64,14 @@
     if(!navigator.onLine){alert('Necesitas conexión a Internet para actualizar la aplicación. Los datos guardados en el dispositivo no se modificarán.');return}
     if(updateButton){updateButton.disabled=true;updateButton.textContent='↻ ACTUALIZANDO…'}
     try{
+      // La navegación ya usa la red antes de la caché; no retrasar la recarga
+      // mientras se precargan todos los recursos del service worker.
       if('serviceWorker'in navigator){
-        const registrations=await navigator.serviceWorker.getRegistrations();
-        for(const registration of registrations){await registration.update();if(registration.waiting)registration.waiting.postMessage({type:'SKWEB_SKIP_WAITING'})}
+        navigator.serviceWorker.getRegistration('./').then(registration=>{
+          if(registration?.waiting)registration.waiting.postMessage({type:'SKWEB_SKIP_WAITING'});
+          return registration?.update();
+        }).catch(error=>console.warn('Actualización del servicio en segundo plano:',error));
       }
-      if('caches'in window){const keys=await caches.keys();await Promise.all(keys.filter(key=>key.startsWith('sk-web-shell-')).map(key=>caches.delete(key)))}
       location.replace('./?appUpdate='+Date.now());
     }catch(error){
       console.error('Actualización de SK Admin:',error);
