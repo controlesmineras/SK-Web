@@ -2,9 +2,9 @@
 (()=>{
   const config=()=>window.SK_SYNC_CONFIG||{};let running=false,timer=0,activePromise=null;
   const configured=()=>/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/.test(config().apiUrl||'');
-  const ui=state=>window.SKAdminSyncUI?.setState?.(state);const buttonText=value=>{const label=document.querySelector('#updateAppBtnLabel');if(label)label.textContent=value};
-  function buttonStart(){const b=document.querySelector('#updateAppBtn');if(!b||b.dataset.busy==='true')return null;b.disabled=true;b.dataset.autoSync='true';b.classList.add('isSyncing');buttonText('☁ SINCRONIZANDO');return b}
-  function buttonStop(b){if(!b||b.dataset.busy==='true')return;delete b.dataset.autoSync;b.disabled=false;b.classList.remove('isSyncing');buttonText('☁ SINCRONIZAR')}
+  const ui=state=>window.SKAdminSyncUI?.setState?.(state);const buttonText=value=>{const button=document.querySelector('#updateAppBtn');if(button){button.setAttribute('aria-label',value);button.title=value}};
+  function buttonStart(){const b=document.querySelector('#updateAppBtn');if(!b||b.dataset.busy==='true')return null;b.disabled=true;b.dataset.autoSync='true';b.classList.add('isSyncing');buttonText('Sincronizando datos');return b}
+  function buttonStop(b){if(!b||b.dataset.busy==='true')return;delete b.dataset.autoSync;b.disabled=false;b.classList.remove('isSyncing');buttonText('Sincronizar datos')}
   async function pendingSnapshot(){const snapshot={schema:6,updatedAt:new Date().toISOString()};for(const store of stores)snapshot[store]=(await all(store)).filter(row=>row?.syncState==='pending');return snapshot}
   async function markSnapshotSynced(snapshot){for(const store of stores)for(const row of snapshot[store]||[])await put(store,{...row,syncState:'synced'})}
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
