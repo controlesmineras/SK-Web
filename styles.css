@@ -52,3 +52,12 @@
 #plazaMovements .plazaMovementTabs button.active{border-color:#173d59;background:#173d59;color:#fff;box-shadow:0 4px 11px #173d5940}
 #plazaMovements .plazaMovementTabs button:focus-visible{outline:3px solid #09bbd1;outline-offset:3px}
 @media(max-width:480px){#plazaMovements .plazaMovementTabs{gap:8px}#plazaMovements .plazaMovementTabs button{padding:10px 6px;font-size:.82rem}}
+
+/* Cabecera: botones alineados y fecha de sincronización legible. */
+body>header .headerActions{align-items:flex-start!important;position:relative;top:-3px}
+body>header .headerActions .adminSyncGroup,body>header .headerActions .adminSession{align-items:center!important;gap:5px!important}
+body>header .headerActions .adminSession{flex-direction:column!important}
+body>header .headerActions #updateAppBtn,body>header .headerActions .adminSession button{height:40px!important;min-height:40px!important}
+body>header .headerActions .adminLastSync{font-size:.72rem!important;line-height:1.2!important;opacity:.95!important}
+body>header .headerActions .adminSessionCaption{display:block;color:#fff;font-size:.72rem;font-weight:650;line-height:1.2;opacity:.95;white-space:nowrap}
+@media(max-width:720px){body>header .headerActions .adminLastSync,body>header .headerActions .adminSessionCaption{font-size:.61rem!important}}
