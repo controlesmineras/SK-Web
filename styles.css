@@ -25,3 +25,6 @@
 
 /* Botón compacto: la nube permanece fija y las flechas giran durante la sincronización. */
 .headerActions #updateAppBtn .adminSyncIcons{display:inline-flex;align-items:center;gap:4px;line-height:1}.adminSyncCloud{font-size:1.22rem}.adminSyncArrows{display:block;width:22px;height:22px;transform-origin:center;flex:none}.headerActions #updateAppBtn.isSyncing .adminSyncArrows{animation:adminSyncSpin .9s linear infinite}@keyframes adminSyncSpin{to{transform:rotate(360deg)}}@media(prefers-reduced-motion:reduce){.headerActions #updateAppBtn.isSyncing .adminSyncArrows{animation:none}}
+
+/* Título e información breve de la pantalla inicial. */
+#home>h1{text-align:center;margin-bottom:8px}.adminHomeInfo{display:block;margin:0 auto 20px;text-align:center}.adminHomeInfo summary{display:grid;place-items:center;margin:0 auto;width:28px;height:28px;border:1px solid #9bb3c5;border-radius:50%;background:#fff;color:#173d59;font-size:1rem;font-weight:800;line-height:1;cursor:pointer;list-style:none}.adminHomeInfo summary::-webkit-details-marker{display:none}.adminHomeInfo summary:focus-visible{outline:3px solid #2778a5;outline-offset:3px}.adminHomeInfo p{max-width:44rem;margin:8px auto 0;color:#44596a;font-size:.9rem;line-height:1.4}
