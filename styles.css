@@ -44,3 +44,11 @@
 
 /* Evita que el menú antiguo por pestañas aparezca antes de cargar la navegación de Admin. */
 #nav{display:none!important}
+
+/* Selector visible de Entregas e Ingresos en Movimientos P. Blending. */
+#plazaMovements .plazaMovementTabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:12px 0 16px}
+#plazaMovements .plazaMovementTabs button{min-width:0;min-height:58px;padding:12px 14px;border:2px solid #51758e;border-radius:12px;background:#fff;color:#173d59;box-shadow:0 3px 8px #10283a20;font-size:.96rem;line-height:1.25;cursor:pointer;transition:background .15s,box-shadow .15s,transform .15s}
+#plazaMovements .plazaMovementTabs button:hover{background:#eaf3f9;box-shadow:0 5px 13px #10283a29;transform:translateY(-1px)}
+#plazaMovements .plazaMovementTabs button.active{border-color:#173d59;background:#173d59;color:#fff;box-shadow:0 4px 11px #173d5940}
+#plazaMovements .plazaMovementTabs button:focus-visible{outline:3px solid #09bbd1;outline-offset:3px}
+@media(max-width:480px){#plazaMovements .plazaMovementTabs{gap:8px}#plazaMovements .plazaMovementTabs button{padding:10px 6px;font-size:.82rem}}
