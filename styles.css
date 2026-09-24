@@ -40,7 +40,7 @@
 .homeMovementRow{grid-template-columns:1fr!important}.homeAccess>.homeUpdateInline{grid-column:1/-1;display:flex!important;align-items:center!important;justify-content:center!important;width:100%!important;min-height:64px!important;margin-top:10px;padding:13px 18px!important;border:1px solid #a3cbe3!important;border-radius:14px!important;background:linear-gradient(145deg,#e6f5ff,#b9ddf2)!important;color:#12547d!important;box-shadow:0 4px 12px #5aa9d333!important;font-size:1rem!important;font-weight:750!important;text-align:center!important}
 
 /* Accesos de usuarios agrupados y con estilos distinguibles. */
-.homeAccess .adminAccessRow{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.adminAccessRow>.homeAccessBtn{width:100%;min-width:0;min-height:76px}.adminAccessRow .adminUsersBtn{grid-column:auto!important}.adminAccessRow>.plazaAccessBtn{background:#f5c542!important;color:#102f45!important;border:2px solid #173d59!important;box-shadow:0 4px 12px #ad6d1c40!important}@media(max-width:620px){.homeAccess .adminAccessRow{grid-template-columns:1fr;gap:12px}}
+.homeAccess .adminAccessRow{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}.adminAccessRow>.homeAccessBtn{grid-column:auto!important;width:100%;min-width:0;min-height:76px}.adminAccessRow .adminUsersBtn{grid-column:auto!important}.adminAccessRow>.plazaAccessBtn{background:#f5c542!important;color:#102f45!important;border:2px solid #173d59!important;box-shadow:0 4px 12px #ad6d1c40!important}@media(max-width:620px){.homeAccess .adminAccessRow{grid-template-columns:1fr;gap:12px}}
 
 /* Evita que el menú antiguo por pestañas aparezca antes de cargar la navegación de Admin. */
 #nav{display:none!important}
