@@ -1,6 +1,6 @@
-const VERSION='20260923-2';
+const VERSION='20260925-1';
 const CACHE=`plaza-blending-shell-${VERSION}`;
-const CORE=['./','./index.html','./plaza.css','./plaza-pending.css','./plaza-collaborator.css','./plaza-home.css','./plaza.js','./plaza-collaborator.js','./asset-not-found.js','./install-ui.js','./manifest.webmanifest','../sync-config.js','../form-option-catalog.js','../icons/icon-sk-web.svg','../icons/icon-192.png','../icons/icon-512.png'];
+const CORE=['./','./index.html','./plaza.css','./plaza-pending.css','./plaza-collaborator.css','./plaza-home.css','./plaza.js','./plaza-collaborator.js','./asset-not-found.js','./install-ui.js','./manifest.webmanifest','../sync-config.js','../form-option-catalog.js','./icon-volqueta.svg','./icon-volqueta-192.png','./icon-volqueta-512.png','./icon-volqueta-180.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(async cache=>{for(const url of CORE){try{await cache.add(new Request(url,{cache:'reload'}))}catch(error){console.warn('No se pudo precargar',url,error)}}}).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('plaza-blending-shell-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('message',event=>{if(event.data?.type==='PLAZA_SKIP_WAITING')self.skipWaiting()});
