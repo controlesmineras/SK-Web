@@ -1,4 +1,4 @@
-const VERSION='20260925-1';
+const VERSION='20260925-2';
 const CACHE=`sk-web-shell-${VERSION}`;
 const CORE=['./','./index.html','./styles.css','./bulk-import.css','./app.js','./admin-install-ui.js','./sync-config.js','./admin-auth.js','./sync-api.js','./asset-field-compat.js','./searchable-consumption.js','./asset-admin-ui.js','./novelty-transport.js','./offline-navigation.js','./sync-latest.js','./consumption-manual-date.js','./consumption-query-v2.js','./income-module.js','./consumption-admin-delete.js','./bulk-import.js','./personal-seed.js','./asset-seed-1.js','./asset-seed-2.js','./asset-seed-3.js','./asset-seed.js','./inventory-admin.js','./form-option-catalog.js','./actas-admin.js','./inventory-stock-query.js','./admin-home-navigation.js','./person-query.js','./manifest.webmanifest','./icons/icon-sk-web.svg','./icons/icon-180.png','./icons/icon-192.png','./icons/icon-512.png','./icons/favicon.ico'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(async cache=>{for(const url of CORE){try{await cache.add(new Request(url,{cache:'reload'}))}catch(e){console.warn('No se pudo precargar',url,e)}}}).then(()=>self.skipWaiting())));
