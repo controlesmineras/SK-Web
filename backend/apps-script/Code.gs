@@ -6,7 +6,7 @@ function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action
 
 function adminUsers_(){const raw=PropertiesService.getScriptProperties().getProperty('SK_ADMIN_USERS');if(!raw)return[];try{const rows=JSON.parse(raw);return Array.isArray(rows)?rows:[]}catch(e){throw new Error('La configuración de usuarios Web Admin está dañada')}}
 function saveAdminUsers_(rows){PropertiesService.getScriptProperties().setProperty('SK_ADMIN_USERS',JSON.stringify(rows))}
-function publicAdminUser_(x){return{id:x.id,username:x.username,name:x.name||x.username,role:x.role==='owner'?'owner':'assistant',enabled:x.enabled!==false,createdAt:x.createdAt||'',updatedAt:x.updatedAt||''}}
+function publicAdminUser_(x){return{id:x.id,personId:x.personId||'',document:x.document||'',username:x.username,name:x.name||x.username,role:x.role==='owner'?'owner':'assistant',enabled:x.enabled!==false,createdAt:x.createdAt||'',updatedAt:x.updatedAt||''}}
 function adminStatus_(){return json_({ok:true,configured:adminUsers_().length>0})}
 function validAdminUsername_(value){const username=String(value||'').trim().toLowerCase();if(!/^[a-z0-9._-]{4,40}$/.test(username))throw new Error('El usuario debe tener entre 4 y 40 caracteres y usar solo letras, números, punto, guion o guion bajo');return username}
 function adminBootstrap_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{if(adminUsers_().length)throw new Error('El administrador principal ya fue creado');const username=validAdminUsername_(q.username),password=String(q.password||''),name=String(q.name||'').trim();if(password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');if(!name)throw new Error('Escribe el nombre del administrador');const now=new Date().toISOString(),user={id:'ADMIN-'+Utilities.getUuid(),username:username,name:name,role:'owner',enabled:true,passwordHash:hashPin_(username,password),createdAt:now,updatedAt:now};saveAdminUsers_([user]);return adminSession_(user)}finally{lock.releaseLock()}}
@@ -15,7 +15,34 @@ function adminSession_(user){const expires=Date.now()+12*60*60*1000,payload=[use
 function verifyAdminToken_(token){const bits=String(token||'').split('.');if(bits.length!==2)throw new Error('Inicia sesión en Web Admin');const payload=Utilities.newBlob(Utilities.base64DecodeWebSafe(bits[0])).getDataAsString(),parts=payload.split('|');if(parts.length!==3||!safeEqual_(bits[1],sign_(payload))||Number(parts[2])<Date.now())throw new Error('La sesión de Web Admin venció');const user=adminUsers_().find(x=>x.username===parts[0]&&x.enabled!==false);if(!user||!['owner','assistant'].includes(parts[1])||parts[1]!==user.role)throw new Error('La cuenta ya no tiene acceso a Web Admin');return{username:user.username,name:user.name||user.username,role:user.role}}
 function requireOwner_(auth){if(!auth||auth.role!=='owner')throw new Error('Esta operación requiere el rol Administrador principal')}
 function adminUsersList_(){return json_({ok:true,users:adminUsers_().map(publicAdminUser_)})}
-function adminUserSave_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const rows=adminUsers_(),username=validAdminUsername_(q.username),name=String(q.name||'').trim(),password=String(q.password||''),id=String(q.id||''),now=new Date().toISOString();if(!name)throw new Error('Escribe el nombre del usuario');const duplicate=rows.find(x=>x.username===username&&x.id!==id);if(duplicate)throw new Error('Ese nombre de usuario ya está registrado');let user=rows.find(x=>x.id===id),previousUsername=user&&user.username;if(!user){if(password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');user={id:'ADMIN-'+Utilities.getUuid(),createdAt:now};rows.push(user)}else if(password&&password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');if(previousUsername&&previousUsername!==username&&!password)throw new Error('Al cambiar el usuario también debes asignar una contraseña nueva');user.username=username;user.name=name;user.role='assistant';user.enabled=q.enabled!==false;if(password)user.passwordHash=hashPin_(username,password);user.updatedAt=now;saveAdminUsers_(rows);return json_({ok:true,user:publicAdminUser_(user)})}finally{lock.releaseLock()}}
+function adminUserSave_(q){
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const rows=adminUsers_(),id=String(q.id||''),now=new Date().toISOString();
+  let user=rows.find(x=>x.id===id);
+  if(id&&!user)throw new Error('El usuario no existe');
+  if(user&&user.role==='owner')throw new Error('No se puede modificar al Desarrollador-administrador desde este formulario');
+  const personId=String(q.personId||'').trim();
+  if(!personId)throw new Error('Selecciona un colaborador registrado en Personal');
+  const fileId=findFile_(),cloud=fileId?readFile_(fileId):{};
+  const person=(cloud.personal||[]).find(x=>String(x.id)===personId&&!x.deleted);
+  if(!person)throw new Error('El colaborador no existe en la base central. Sincroniza Personal antes de conceder acceso.');
+  const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
+  if(area!=='seguridad fisica')throw new Error('Solo se permite conceder acceso a colaboradores del área Seguridad física');
+  const document=String(person.documento||'').trim(),name=String(person.nombre||'').trim();
+  if(!document||!name)throw new Error('Completa el nombre y documento del colaborador en Personal');
+  if(user&&user.personId&&user.personId!==personId)throw new Error('No se puede transferir una cuenta a otro colaborador');
+  if(rows.some(x=>x.id!==id&&(x.personId===personId||(x.document&&String(x.document).trim()===document))))throw new Error('Este colaborador ya tiene una cuenta Web Admin');
+  const username=validAdminUsername_(q.username),password=String(q.password||''),previousUsername=user&&user.username;
+  if(rows.some(x=>x.username===username&&x.id!==id))throw new Error('Ese nombre de usuario ya está registrado');
+  if(!user){if(password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');user={id:'ADMIN-'+Utilities.getUuid(),createdAt:now};rows.push(user)}
+  else if(password&&password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');
+  if(previousUsername&&previousUsername!==username&&!password)throw new Error('Al cambiar el usuario también debes asignar una contraseña nueva');
+  user.username=username;user.name=name;user.personId=personId;user.document=document;user.role='assistant';user.enabled=q.enabled!==false;
+  if(password)user.passwordHash=hashPin_(username,password);
+  user.updatedAt=now;saveAdminUsers_(rows);return json_({ok:true,user:publicAdminUser_(user)});
+ }finally{lock.releaseLock()}
+}
 function adminUserDisable_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const rows=adminUsers_(),user=rows.find(x=>x.id===String(q.id||''));if(!user)throw new Error('El usuario no existe');if(user.role==='owner')throw new Error('No se puede desactivar al Administrador principal');user.enabled=false;user.updatedAt=new Date().toISOString();saveAdminUsers_(rows);return json_({ok:true,user:publicAdminUser_(user)})}finally{lock.releaseLock()}}
 function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const allowed=['personal','actas','consumptions'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,since)}
 
@@ -99,3 +126,4 @@ function findFile_(){const files=DriveApp.getFilesByName(CLOUD_FILE),valid=[];le
 function readFile_(id){return JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8'))}
 function writeFile_(id,data){const body=JSON.stringify(data);if(id){DriveApp.getFileById(id).setContent(body);return id}return DriveApp.createFile(CLOUD_FILE,body,MimeType.PLAIN_TEXT).getId()}
 function json_(x){return ContentService.createTextOutput(JSON.stringify(x)).setMimeType(ContentService.MimeType.JSON)}
+
