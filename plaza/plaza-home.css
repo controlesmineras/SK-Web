@@ -73,3 +73,12 @@ header #syncBtn.isSyncing .plazaSyncArrows{animation:plazaSyncSpin .9s linear in
 header .plazaSyncLabel{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 @media(prefers-reduced-motion:reduce){header #syncBtn.isSyncing .plazaSyncArrows{animation:none}}
 @media(max-width:720px){header .headerSync{gap:5px!important}header .plazaSyncGroup .headerLastSync{font-size:.55rem!important}}
+
+/* Cabecera de Plaza con el mismo ritmo visual que System Admin. */
+body>header{min-height:116px;padding:14px 28px;background:#10283a}
+body>header .plazaBrand img{width:82px;height:82px;flex-basis:82px}
+body>header .plazaHeaderCenter #plazaHeaderHome,body>header .plazaHeaderCenter #plazaHeaderHome.isCurrent{min-height:54px;padding:10px 21px;background:#fff;color:#102f45;border:1px solid #fff;box-shadow:0 2px 8px #0002;cursor:pointer;opacity:1;font-size:1.1rem}
+body>header .plazaSyncGroup #syncBtn{order:0!important}
+body>header .plazaSyncGroup .headerLastSync{order:1!important}
+body>header .plazaSyncCloud{font-size:1.15rem;line-height:1}
+@media(max-width:720px){body>header{min-height:0;padding:12px}body>header .plazaBrand img{width:48px;height:48px;flex-basis:48px}body>header .plazaHeaderCenter #plazaHeaderHome,body>header .plazaHeaderCenter #plazaHeaderHome.isCurrent{min-height:34px;padding:5px 10px;font-size:.8rem}}
