@@ -42,7 +42,7 @@
 <script src="asset-seed.js?v=20260908-3"></script>
 <script src="inventory-admin.js?v=20260923-4"></script>
 <script src="inventory-stock-query.js?v=20260914-1"></script>
-<script src="actas-admin.js?v=20260915-1"></script><script src="admin-home-navigation.js?v=20260925-1"></script>
+<script src="actas-admin.js?v=20260925-1"></script><script src="admin-home-navigation.js?v=20260925-2"></script>
 <script>{const button=document.querySelector('#adminHomeInfoToggle'),dialog=document.querySelector('#adminHomeInfoDialog'),close=document.querySelector('#adminHomeInfoClose');const dismiss=()=>{dialog.hidden=true;button.focus()};button?.addEventListener('click',()=>{dialog.hidden=false;close.focus()});dialog?.addEventListener('click',dismiss);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dialog.hidden)dismiss()})}window.addEventListener('load',()=>{let tries=0;const t=setInterval(async()=>{tries++;if(typeof db!=='undefined'&&db){clearInterval(t);try{await seedPersonal();await seedAssets();await refresh();document.querySelector('#syncStatus').textContent=window.skSyncApi?.configured()?'Base local lista · sincronización automática activa.':'Base local lista. Personal y activos cargados.'}catch(e){console.error(e)}}else if(tries>40)clearInterval(t)},250)})</script>
 </body></html>
 
