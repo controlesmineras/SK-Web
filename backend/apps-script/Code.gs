@@ -2,7 +2,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='adminUsersList'){requireOwner_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireOwner_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireOwner_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireOwner_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireOwner_(auth);return plazaUserAdmin_(q)}if(q.action==='adminReverseMovement'){requireOwner_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireOwner_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='adminUsersList'){requireOwner_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireOwner_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireOwner_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireOwner_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireOwner_(auth);return plazaUserAdmin_(q)}if(q.action==='adminReverseMovement'){requireOwner_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireOwner_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Invitaciones de un solo uso: el enlace contiene un secreto aleatorio, nunca una contraseña.
 function invitationKey_(token){return 'SK_INVITE_'+hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token),Utilities.Charset.UTF_8))}
@@ -78,6 +78,36 @@ function adminUserSave_(q){
 }
 function adminUserDisable_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const rows=adminUsers_(),user=rows.find(x=>x.id===String(q.id||''));if(!user)throw new Error('El usuario no existe');if(user.role==='owner')throw new Error('No se puede desactivar al Administrador principal');user.enabled=false;user.updatedAt=new Date().toISOString();revokeInvitations_('admin',user.document);saveAdminUsers_(rows);return json_({ok:true,user:publicAdminUser_(user)})}finally{lock.releaseLock()}}
 function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const allowed=['personal','actas','consumptions'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,since)}
+
+// Los auxiliares solo pueden agregar el cargo que acaban de buscar, sin coincidencias.
+// La sincronización general sigue bloqueando cualquier escritura en inventoryCriteria.
+function cargoNorm_(value){return String(value||'').trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ')}
+function cargoCatalog_(cloud){
+ const rows=Array.isArray(cloud.inventoryCriteria)?cloud.inventoryCriteria:[],record=rows.find(row=>row&&row.id==='SYSTEM-FORM-OPTIONS-V1')||rows.find(row=>row&&row.recordType==='formOptions'),supplied=record&&record.options&&record.options['personal.role'];
+ return{record:record,values:Array.isArray(supplied)?supplied:['Operador minero','Operador de seguridad','Escolta','Machinero','Supervisor','No informado']};
+}
+function adminCargoSearch_(q,auth){
+ const value=String(q.query||'').trim().replace(/\s+/g,' ');if(!value||value.length>120)throw new Error('Escribe un cargo de hasta 120 caracteres');
+ const id=findFile_(),catalog=cargoCatalog_(id?readFile_(id):{}),matches=catalog.values.filter(item=>cargoNorm_(item).includes(cargoNorm_(value)));
+ let searchToken='';
+ if(!matches.length){searchToken=Utilities.getUuid();CacheService.getScriptCache().put('admin-cargo-search-'+searchToken,JSON.stringify({username:auth.username,value:value}),600)}
+ return json_({ok:true,value:value,matches:matches,searchToken:searchToken});
+}
+function adminCargoAdd_(q,auth){
+ const token=String(q.searchToken||'');if(!/^[a-f0-9-]{36}$/i.test(token))throw new Error('Primero busca el cargo que quieres agregar');
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const cache=CacheService.getScriptCache(),key='admin-cargo-search-'+token,raw=cache.get(key),search=raw?JSON.parse(raw):null;
+  if(!search||search.username!==auth.username)throw new Error('La búsqueda venció. Busca nuevamente el cargo');
+  const id=findFile_(),cloud=id?readFile_(id):{},catalog=cargoCatalog_(cloud),value=search.value;
+  if(catalog.values.some(item=>cargoNorm_(item).includes(cargoNorm_(value)))){cache.remove(key);throw new Error('Ya hay un cargo que coincide. Revisa la búsqueda')}
+  const old=catalog.record||{},now=new Date().toISOString(),record=Object.assign({},old,{id:old.id||'SYSTEM-FORM-OPTIONS-V1',recordType:'formOptions',options:Object.assign({},old.options||{}, {'personal.role':catalog.values.concat([value])}),deleted:true,active:false,createdAt:old.createdAt||now,updatedAt:now,syncState:'synced'});
+  const rows=Array.isArray(cloud.inventoryCriteria)?cloud.inventoryCriteria:[],index=rows.indexOf(catalog.record);
+  if(index<0)rows.push(record);else rows[index]=record;
+  cloud.inventoryCriteria=rows;cloud.updatedAt=now;writeFile_(id,cloud);cache.remove(key);
+  return json_({ok:true,value:value,record:record});
+ }finally{lock.releaseLock()}
+}
 
 function adminSync_(incoming,since){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},baseUpdatedAt=cloud.updatedAt||'',changes={},hasPending=Object.keys(incoming||{}).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.id&&x.syncState==='pending'));if(!hasPending){if(since&&baseUpdatedAt===since)return json_({ok:true,notModified:true,updatedAt:baseUpdatedAt});return json_({ok:true,data:cloud,updatedAt:baseUpdatedAt})}Object.keys(incoming||{}).forEach(name=>{if(name==='schema'||name==='updatedAt'||!Array.isArray(incoming[name]))return;changes[name]=incoming[name].filter(x=>x&&x.id&&x.syncState==='pending').map(x=>Object.assign({},x,{syncState:'synced'}))});const merged=merge_(cloud,changes);writeFile_(id,merged);if(since&&baseUpdatedAt===since)return json_({ok:true,acknowledged:true,updatedAt:merged.updatedAt});return json_({ok:true,data:merged,updatedAt:merged.updatedAt})}finally{lock.releaseLock()}}
 
@@ -159,4 +189,3 @@ function findFile_(){const cache=CacheService.getScriptCache(),cached=cache.get(
 function readFile_(id){return JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8'))}
 function writeFile_(id,data){const body=JSON.stringify(data);if(id){DriveApp.getFileById(id).setContent(body);return id}return DriveApp.createFile(CLOUD_FILE,body,MimeType.PLAIN_TEXT).getId()}
 function json_(x){return ContentService.createTextOutput(JSON.stringify(x)).setMimeType(ContentService.MimeType.JSON)}
-

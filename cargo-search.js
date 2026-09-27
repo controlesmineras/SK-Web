@@ -18,20 +18,21 @@
     const close=()=>{menu.hidden=true;input.setAttribute('aria-expanded','false')};
     const sync=()=>{input.value=entries().find(option=>option.value===select.value)?.textContent||'';input.setCustomValidity('');close()};
     const draw=()=>{
-      const query=normalize(input.value),rows=entries().filter(option=>!query||normalize(option.textContent).includes(query));
+      const query=select.value?'':normalize(input.value),rows=entries().filter(option=>!query||normalize(option.textContent).includes(query));
       menu.replaceChildren();
       for(const option of rows){const button=document.createElement('button');button.type='button';button.textContent=option.textContent;button.dataset.value=option.value;menu.append(button)}
       if(!rows.length){const message=document.createElement('p');message.textContent='No hay cargos que coincidan.';menu.append(message)}
       menu.hidden=false;input.setAttribute('aria-expanded','true');
     };
-    const choose=value=>{select.value=value;sync();select.dispatchEvent(new Event('change',{bubbles:true}));input.focus()};
+    const choose=value=>{select.value=value;sync();select.dispatchEvent(new Event('change',{bubbles:true}));input.focus();close()};
     input.addEventListener('focus',()=>{if(select.value&&input.value!==select.selectedOptions[0]?.textContent)sync();draw()});
-    input.addEventListener('input',()=>{select.value='';input.setCustomValidity('Selecciona un cargo de la lista.');draw()});
+    input.addEventListener('click',draw);
+  input.addEventListener('input',()=>{select.value='';input.setCustomValidity('Selecciona un cargo de la lista.');draw()});
     input.addEventListener('keydown',event=>{if(event.key==='Escape')close();if(event.key==='Enter'&&!menu.hidden){const first=menu.querySelector('button');if(first){event.preventDefault();choose(first.dataset.value)}}});
     menu.addEventListener('click',event=>{const button=event.target.closest('button[data-value]');if(button)choose(button.dataset.value)});
     document.addEventListener('click',event=>{if(!label.contains(event.target))close()});
     form.addEventListener('reset',()=>setTimeout(sync,0));
-    window.addEventListener('skweb-options-applied',sync);
+    window.addEventListener('skweb-options-applied',()=>{if(document.activeElement===input&&!select.value&&input.value){draw();return}sync()});
     label.refreshCargoSearch=sync;
     sync();
   }
