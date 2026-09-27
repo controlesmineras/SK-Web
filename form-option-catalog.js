@@ -32,7 +32,7 @@ function normalized(raw){const out={};for(const [key,list] of Object.entries(def
 function values(key,fallback=[]){return[...(config?.[key]||defaults[key]||fallback)]}
 function allowedPersonalAreas(company){return values('personal.area').filter(area=>!(norm(company)==='desmin'&&norm(area)==='produccion - selectivo (corteros)'))}
 function validPersonalArea(company,area){return allowedPersonalAreas(company).some(option=>norm(option)===norm(area))}
-function options(select,list,{placeholder,attributes}={}){if(!select)return;const current=select.value,first=placeholder??select.querySelector('option[value=""]')?.textContent??'';select.replaceChildren();if(first){const option=document.createElement('option');option.value='';option.textContent=first;select.append(option)}for(const value of list){const option=document.createElement('option');option.value=value;option.textContent=value;if(attributes)for(const [name,v] of Object.entries(attributes(value)||{}))option.dataset[name]=v;select.append(option)}if([...select.options].some(option=>option.value===current))select.value=current}
+function options(select,list,{placeholder,attributes}={}){if(!select||select.tagName!=='SELECT')return;const current=select.value,first=placeholder??select.querySelector('option[value=""]')?.textContent??'';select.replaceChildren();if(first){const option=document.createElement('option');option.value='';option.textContent=first;select.append(option)}for(const value of list){const option=document.createElement('option');option.value=value;option.textContent=value;if(attributes)for(const [name,v] of Object.entries(attributes(value)||{}))option.dataset[name]=v;select.append(option)}if([...select.options].some(option=>option.value===current))select.value=current}
 function combined(keyA,keyB){return values(keyA).map(value=>({value,exclude:'autorrescatador'})).concat(values(keyB).map(value=>({value,only:'autorrescatador'})))}
 function apply(){
   for(const form of [document.querySelector('#personalForm'),document.querySelector('#plazaCollaboratorForm')])if(form){options(form.elements.empresa,values('personal.company'));options(form.elements.area,allowedPersonalAreas(form.elements.empresa?.value));options(form.elements.cargo,values('personal.role'));if(form.elements.empresa&&!form.elements.empresa.dataset.areaRule){form.elements.empresa.dataset.areaRule='1';form.elements.empresa.addEventListener('change',()=>options(form.elements.area,allowedPersonalAreas(form.elements.empresa.value)))}}
@@ -61,5 +61,6 @@ function mountAdmin(){if(window.SKPlaza||document.querySelector('#optionCatalog'
 window.SKFormOptions={values,allowedPersonalAreas,validPersonalArea,load,apply,mountAdmin,labels,defaults};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{mountAdmin();load().then(()=>window.SKFormOptions.render?.())},{once:true});else{mountAdmin();load().then(()=>window.SKFormOptions.render?.())}
 window.addEventListener('load',()=>setTimeout(()=>load().then(()=>window.SKFormOptions.render?.()),500),{once:true});
+window.addEventListener('skweb-db-ready',load);
 window.addEventListener('skweb-synced',load);
 })();
