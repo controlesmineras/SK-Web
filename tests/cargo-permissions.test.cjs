@@ -63,3 +63,4 @@ test('catálogo ausente: conserva los cargos predeterminados y agrega el nuevo',
  const s=service({inventoryCriteria:[{id:'item1',name:'Guantes'}]});assert.equal(search(s,'Supervisor').searchToken,'');
  const saved=add(s,search(s,'Mecánico').searchToken);assert.equal(saved.ok,true);assert.equal(saved.record.options['personal.role'].length,7);assert.equal(s.cloud().inventoryCriteria.length,2);
 });
+
