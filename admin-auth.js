@@ -6,7 +6,7 @@ let token=sessionStorage.getItem('skAdminToken')||'',user=null,validated=false,u
 try{user=JSON.parse(sessionStorage.getItem('skAdminUser')||'null')}catch(_){sessionStorage.removeItem('skAdminUser')}
 function validUser(value){return Boolean(value&&typeof value==='object'&&typeof value.username==='string'&&value.username.trim()&&['owner','assistant'].includes(value.role))}
 function checkSession(result,sessionToken){if(typeof sessionToken!=='string'||!sessionToken.trim()||!validUser(result?.user))throw new Error('El servidor no devolvió una sesión completa. Reintenta la comprobación de acceso.');return {...result.user,name:result.user.name||result.user.username}}
-const assistantViews=new Set(['home','queries','personQuery','plazaMovements','personal','actas','consumption','optionCatalog']);
+const assistantViews=new Set(['home','queries','personQuery','plazaMovements','personal','novelties','actas','consumption','optionCatalog']);
 const api=()=>window.SK_SYNC_CONFIG?.apiUrl||'';
 async function request(action,body={},withKey=false){if(!api())throw new Error('El servicio central no está configurado');const payload={action,...body};if(token)payload.token=token;if(withKey)payload.key=window.SK_SYNC_CONFIG?.apiKey||'';const response=await fetch(api(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow',cache:'no-store',credentials:'omit'}),text=await response.text();let result;try{result=JSON.parse(text)}catch(_){throw new Error('El servidor no devolvió una respuesta válida')}if(!result.ok)throw new Error(result.error||'Solicitud rechazada');return result}
 function ready(){return Boolean(validated&&token&&validUser(user))}
