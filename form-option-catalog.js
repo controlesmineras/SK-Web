@@ -18,11 +18,12 @@ const defaults={
   'asset.state.autorrescatador':['Apto según inspección','Pendiente de inspección','No apto – Abierto o activado','No apto – Daño físico visible','No apto – Sello o precinto alterado','No apto – Indicador negro','No apto – Vida útil vencida','En oficina para garantía','Dado de baja'],
   'asset.physicallyMarked':['Sí','No','Desconocido'],
   'asset.deliveryAvailable':['Sí','No'],
+  'novelty.description':['Se asigna (si es nueva)','Se entrega (cuando es usada)','Sale fuera de mina a reparación','Sale trasladada a otra mina','Revista física','Encontrada abandonada','Dada de baja mediante acta','Ingresa a bodega superficie de reparación','Se devuelve reparada a mina de procedencia'],
   'delivery.destination':['Operación','Traslado','Reparación']
 };
 const labels={
   'personal.company':'Personal · Empresa','personal.area':'Personal · Área','personal.role':'Personal · Cargo','inventory.unit':'Inventario · Unidad de medida',
-  'asset.model.yt':'Activos · Modelos de YT','asset.model.autorrescatador':'Activos · Modelos de autorrescatador','asset.manufacturer.yt':'Activos · Marca comercial de YT','asset.manufacturer.autorrescatador':'Activos · Marca comercial de autorrescatador','asset.viewerColor':'Activos · Color del visor','asset.owner':'Activos · Mina propietaria','asset.location':'Activos · Ubicación','asset.state.standard':'Activos · Estados generales','asset.state.autorrescatador':'Activos · Estados de autorrescatador','asset.physicallyMarked':'Activos · Marcación física','asset.deliveryAvailable':'Activos · Disponible para entrega','delivery.destination':'Entregas · Destino'
+  'asset.model.yt':'Activos · Modelos de YT','asset.model.autorrescatador':'Activos · Modelos de autorrescatador','asset.manufacturer.yt':'Activos · Marca comercial de YT','asset.manufacturer.autorrescatador':'Activos · Marca comercial de autorrescatador','asset.viewerColor':'Activos · Color del visor','asset.owner':'Activos · Mina propietaria','asset.location':'Activos · Ubicación','asset.state.standard':'Activos · Estados generales','asset.state.autorrescatador':'Activos · Estados de autorrescatador','asset.physicallyMarked':'Activos · Marcación física','asset.deliveryAvailable':'Activos · Disponible para entrega','novelty.description':'Novedades de activos · Tipo de novedad','delivery.destination':'Entregas · Destino'
 };
 const clean=value=>String(value||'').trim(),norm=value=>clean(value).toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' '),esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 let config=null;
@@ -37,6 +38,7 @@ function combined(keyA,keyB){return values(keyA).map(value=>({value,exclude:'aut
 function apply(){
   for(const form of [document.querySelector('#personalForm'),document.querySelector('#plazaCollaboratorForm')])if(form){options(form.elements.empresa,values('personal.company'));options(form.elements.area,allowedPersonalAreas(form.elements.empresa?.value));options(form.elements.cargo,values('personal.role'));if(form.elements.empresa&&!form.elements.empresa.dataset.areaRule){form.elements.empresa.dataset.areaRule='1';form.elements.empresa.addEventListener('change',()=>options(form.elements.area,allowedPersonalAreas(form.elements.empresa.value)))}}
   options(document.querySelector('#inventoryItemForm [name="unit"]'),values('inventory.unit'));
+  options(document.querySelector('#noveltyForm [name="descripcion"]'),values('novelty.description'));
   options(document.querySelector('#noveltyForm [name="estado"]'),values('asset.state.standard'));
   const asset=document.querySelector('#assetForm');if(asset){
     const models=values('asset.model.yt').map(value=>({value,only:'yt'})).concat(values('asset.model.autorrescatador').map(value=>({value,only:'autorrescatador'})));
