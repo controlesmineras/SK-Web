@@ -79,6 +79,59 @@ function adminUserSave_(q){
 function adminUserDisable_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const rows=adminUsers_(),user=rows.find(x=>x.id===String(q.id||''));if(!user)throw new Error('El usuario no existe');if(user.role==='owner')throw new Error('No se puede desactivar al Administrador principal');user.enabled=false;user.updatedAt=new Date().toISOString();revokeInvitations_('admin',user.document);saveAdminUsers_(rows);return json_({ok:true,user:publicAdminUser_(user)})}finally{lock.releaseLock()}}
 function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const allowed=['personal','actas','consumptions','novelties','assets'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,auth.role!=='owner'&&(incoming.novelties||[]).some(row=>row&&row.syncState==='pending')?'':since,auth)}
 
+// Se ejecuta bajo el mismo bloqueo de sincronización. El registro de marcas nunca
+// se borra al dar de baja un activo ni se acepta desde un cliente.
+function usesAutomaticAssetMark_(asset){
+ const type=String(asset&&asset.clase||'').trim().toLowerCase();
+ return !!type&&!/^(autorrescatador(?:es)?\b|yt(?:\b|\d)|columnas?\b)/i.test(type);
+}
+function automaticAssetMarkCode_(index){
+ if(!Number.isInteger(index)||index<0||index>=26*26*26)throw new Error('Se agotaron las marcas de tres letras. Contacta al administrador.');
+ return String.fromCharCode(65+Math.floor(index/676),65+Math.floor(index/26)%26,65+index%26);
+}
+function assignAssetMarks_(cloud,rows){
+ const registry=(Array.isArray(cloud.assetMarkRegistry)?cloud.assetMarkRegistry:[]).map(row=>Object.assign({},row));
+ const byId=new Map(registry.map(row=>[row.id,row])),existing=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
+ const used=new Set(registry.map(row=>row.code));
+ // Reservar también marcas físicas anteriores, incluso de activos dados de baja.
+ (cloud.assets||[]).concat(rows).forEach(asset=>{if(!asset)return;['marcaInterna','marcaActual','nuevaMarca','marcaAnterior','numeroMarcaActual'].forEach(key=>{const value=String(asset[key]||'').trim().toUpperCase();if(/^[A-Z]{3}$/.test(value))used.add(value)})});
+ let next=Math.max(-1,...registry.map(row=>Number.isInteger(row.sequence)?row.sequence:-1))+1,changed=false;
+ const assets=rows.map(input=>{
+  const asset=Object.assign({},input),old=existing.get(asset.id);
+  let entry=byId.get(asset.id);
+  const requested=asset.markingPolicy==='letters-v1',eligible=usesAutomaticAssetMark_(asset);
+  // Un cliente antiguo o una edición no puede borrar/cambiar una marca ya emitida.
+  if(!entry&&old&&old.markingPolicy==='letters-v1'&&old.markStatus==='assigned'&&/^[A-Z]{3}$/.test(old.nuevaMarca||'')){
+   entry={id:old.id,code:old.nuevaMarca,sequence:old.markSequence,issuedAt:old.markAssignedAt};registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);if(Number.isInteger(entry.sequence))next=Math.max(next,entry.sequence+1);
+  }
+  if(!entry&&requested&&eligible&&(!old||old.markingPolicy==='letters-v1'&&old.markStatus==='pending')){
+   while(next<17576&&used.has(automaticAssetMarkCode_(next)))next++;
+   entry={id:asset.id,code:automaticAssetMarkCode_(next),sequence:next,issuedAt:new Date().toISOString()};
+   next++;registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);changed=true;
+  }
+  if(entry){
+   const prior=String(asset.marcaActual||asset.marcaInterna||'').trim();
+   if(!old&&prior&&prior!==entry.code&&!asset.marcaAnterior)asset.marcaAnterior=prior;
+   Object.assign(asset,{marcaInterna:entry.code,marcaActual:entry.code,nuevaMarca:entry.code,markingPolicy:'letters-v1',markStatus:'assigned',markSequence:entry.sequence,markAssignedAt:entry.issuedAt});
+  }else if(requested){
+   // Solo las altas que pidan la nueva secuencia se marcan; no se remarca el inventario existente.
+   for(const key of ['markingPolicy','markStatus','markSequence','markAssignedAt']){if(old&&Object.prototype.hasOwnProperty.call(old,key))asset[key]=old[key];else delete asset[key]}
+  }
+  return asset;
+ });
+ return{assets:assets,registry:registry,changed:changed};
+}
+
+// Recupera altas hechas con el cliente nuevo antes de actualizar este servicio.
+// Solo completa solicitudes explícitas; nunca remarca el inventario anterior.
+function completePendingAssetMarks_(cloud){
+ const pending=(cloud.assets||[]).filter(asset=>asset&&!asset.deleted&&asset.markingPolicy==='letters-v1'&&asset.markStatus==='pending'&&usesAutomaticAssetMark_(asset));
+ if(!pending.length)return false;
+ const marking=assignAssetMarks_(cloud,pending),updatedAt=new Date().toISOString(),byId=new Map(marking.assets.map(asset=>[asset.id,Object.assign({},asset,{updatedAt:updatedAt,syncState:'synced'})]));
+ cloud.assets=cloud.assets.map(asset=>byId.get(asset.id)||asset);cloud.assetMarkRegistry=marking.registry;cloud.updatedAt=updatedAt;
+ return true;
+}
+
 // El auxiliar actualiza el estado del activo mediante novedades, nunca su ficha completa.
 function prepareAdminNovelties_(incoming,cloud,auth){
  const pending=name=>(Array.isArray(incoming[name])?incoming[name]:[]).filter(row=>row&&row.id&&row.syncState==='pending');
@@ -145,7 +198,24 @@ function adminCargoAdd_(q,auth){
  }finally{lock.releaseLock()}
 }
 
-function adminSync_(incoming,since,auth){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},baseUpdatedAt=cloud.updatedAt||'',changes={};incoming=prepareAdminNovelties_(incoming,cloud,auth);const hasPending=Object.keys(incoming||{}).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.id&&x.syncState==='pending'));if(!hasPending){if(since&&baseUpdatedAt===since)return json_({ok:true,notModified:true,updatedAt:baseUpdatedAt});return json_({ok:true,data:cloud,updatedAt:baseUpdatedAt})}Object.keys(incoming||{}).forEach(name=>{if(name==='schema'||name==='updatedAt'||!Array.isArray(incoming[name]))return;changes[name]=incoming[name].filter(x=>x&&x.id&&x.syncState==='pending').map(x=>Object.assign({},x,{syncState:'synced'}))});const merged=merge_(cloud,changes);writeFile_(id,merged);if(since&&baseUpdatedAt===since)return json_({ok:true,acknowledged:true,updatedAt:merged.updatedAt});return json_({ok:true,data:merged,updatedAt:merged.updatedAt})}finally{lock.releaseLock()}}
+function adminSync_(incoming,since,auth){
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const id=findFile_(),cloud=id?readFile_(id):{},baseUpdatedAt=cloud.updatedAt||'',changes={},recovered=completePendingAssetMarks_(cloud);
+  incoming=prepareAdminNovelties_(incoming,cloud,auth);
+  const hasPending=Object.keys(incoming||{}).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.id&&x.syncState==='pending'));
+  if(!hasPending){
+   if(recovered)writeFile_(id,cloud);
+   if(!recovered&&since&&baseUpdatedAt===since)return json_({ok:true,notModified:true,updatedAt:baseUpdatedAt});
+   return json_({ok:true,data:cloud,updatedAt:cloud.updatedAt||''});
+  }
+  Object.keys(incoming||{}).forEach(name=>{if(name==='schema'||name==='updatedAt'||!Array.isArray(incoming[name]))return;changes[name]=incoming[name].filter(x=>x&&x.id&&x.syncState==='pending').map(x=>Object.assign({},x,{syncState:'synced'}))});
+  const marking=assignAssetMarks_(cloud,changes.assets||[]);if(changes.assets)changes.assets=marking.assets;delete changes.assetMarkRegistry;
+  const merged=merge_(cloud,changes);if(marking.registry.length)merged.assetMarkRegistry=marking.registry;writeFile_(id,merged);
+  if(!recovered&&since&&baseUpdatedAt===since&&!marking.changed&&!marking.assets.some(asset=>asset.markingPolicy==='letters-v1'))return json_({ok:true,acknowledged:true,updatedAt:merged.updatedAt});
+  return json_({ok:true,data:merged,updatedAt:merged.updatedAt});
+ }finally{lock.releaseLock()}
+}
 
 function adminReverseMovement_(q){const type=q.type==='delivery'?'blendingDeliveries':q.type==='income'?'blendingIncomes':'';if(!type)throw new Error('Tipo de movimiento no válido');const movementId=String(q.movementId||'').trim();if(!movementId)throw new Error('Falta identificar el movimiento');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},rows=Array.isArray(cloud[type])?cloud[type]:[],row=rows.find(x=>x&&x.id===movementId&&!x.deleted);if(!row)throw new Error('El movimiento no existe en la base central');if(row.reversed===true||row.reversado===true)throw new Error('Este movimiento ya fue reversado');if(row.assetId)throw new Error('La reversión de activos fijos requiere restaurar también su ubicación y no está habilitada en esta operación');const qty=Number(row.quantity);if(!(qty>0)||!row.itemId)throw new Error('El movimiento no tiene cantidad válida');const stockRows=Array.isArray(cloud.inventoryStock)?cloud.inventoryStock:(cloud.inventoryStock=[]),stock=stockRows.find(x=>x&&x.itemId===row.itemId),current=Number(stock?.quantity)||0,next=type==='blendingDeliveries'?current+qty:current-qty;if(next<0)throw new Error('No se puede revertir el ingreso: las existencias actuales son menores que la cantidad a descontar');const now=new Date().toISOString(),target=stock||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0};target.quantity=next;target.updatedAt=now;if(!stock)stockRows.push(target);row.reversed=true;row.reversado=true;row.reversedAt=now;row.reversedBy='SK Admin';row.reversalBalanceBefore=current;row.reversalBalanceAfter=next;row.updatedAt=now;writeFile_(id,cloud);return json_({ok:true,data:cloud,movement:{id:row.id,type:type,balanceBefore:current,balanceAfter:next,quantity:qty}})}finally{lock.releaseLock()}}
 
@@ -156,12 +226,13 @@ function plazaSync_(q){
   const auth=verifyToken_(q.token),incoming=q.data||{},lock=LockService.getScriptLock();
   lock.waitLock(30000);
   try{
-    const id=findFile_(),cloud=id?readFile_(id):{},hasPending=['assets'].concat(PLAZA_WRITE).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending'));
-    if(!hasPending){if(q.since&&cloud.updatedAt===q.since)return json_({ok:true,notModified:true,updatedAt:cloud.updatedAt});const unchanged={schema:cloud.schema,updatedAt:cloud.updatedAt};PLAZA_READ.forEach(name=>unchanged[name]=Array.isArray(cloud[name])?cloud[name]:[]);unchanged.personal=unchanged.personal.map(x=>publicPerson_(x));return json_({ok:true,data:unchanged,updatedAt:cloud.updatedAt})}
+    const id=findFile_(),cloud=id?readFile_(id):{},recovered=completePendingAssetMarks_(cloud),hasPending=['assets'].concat(PLAZA_WRITE).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending'));
+    if(!hasPending){if(recovered)writeFile_(id,cloud);if(!recovered&&q.since&&cloud.updatedAt===q.since)return json_({ok:true,notModified:true,updatedAt:cloud.updatedAt});const unchanged={schema:cloud.schema,updatedAt:cloud.updatedAt};PLAZA_READ.forEach(name=>unchanged[name]=Array.isArray(cloud[name])?cloud[name]:[]);unchanged.personal=unchanged.personal.map(x=>publicPerson_(x));return json_({ok:true,data:unchanged,updatedAt:cloud.updatedAt})}
     const allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)])),cloudAssets=Array.isArray(cloud.assets)?cloud.assets:[],pendingAssets=(Array.isArray(incoming.assets)?incoming.assets:[]).filter(x=>x&&x.id&&x.syncState==='pending'),assetIds=new Set(cloudAssets.map(x=>x.id).filter(Boolean)),acceptedAssets=[];
-    pendingAssets.forEach(input=>{if(assetIds.has(input.id))return;const asset=stampActor_(input,auth),criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===asset.criteriaId&&!item.deleted&&item.active!==false);if(!criterion||!truthy_(criterion.isFixedAsset??criterion.esActivoFijo??criterion.CI_ES_A_FIJO))throw new Error('La clase seleccionada no está configurada como activo fijo');const required=[['usesSerial','serial','serial'],['usesLength','largo','largo'],['usesModel','modelo','modelo'],['usesManufacturer','fabricante','fabricante'],['requiresInternalMark','marcaInterna','marca interna']];if(!String(asset.numeroClase||asset.numeroYT||'').trim())throw new Error('Falta el número de clase del activo');required.forEach(rule=>{if(truthy_(criterion[rule[0]])&&!String(asset[rule[1]]||'').trim())throw new Error('Falta '+rule[2]+' del activo')});const className=String(asset.clase||'').trim().toLowerCase(),number=String(asset.numeroClase||asset.numeroYT||'').trim().toLowerCase(),serial=String(asset.serial||'').trim().toLowerCase(),mark=String(asset.marcaInterna||asset.marcaActual||'').trim().toLowerCase(),duplicate=cloudAssets.concat(acceptedAssets).find(row=>row&&!row.deleted&&String(row.clase||'').trim().toLowerCase()===className&&((serial&&String(row.serial||'').trim().toLowerCase()===serial)||(number&&String(row.numeroClase||row.numeroYT||'').trim().toLowerCase()===number)||(mark&&String(row.marcaInterna||row.marcaActual||'').trim().toLowerCase()===mark)));if(duplicate)throw new Error('El activo ya existe en la tabla de Activos fijos');asset.ubicacion='Bodega de Superficie';asset.syncState='synced';acceptedAssets.push(asset);assetIds.add(asset.id)});
-    if(acceptedAssets.length)allowed.assets=acceptedAssets;
-    const workingAssets=cloudAssets.concat(acceptedAssets);
+    pendingAssets.forEach(input=>{if(assetIds.has(input.id)){const existing=cloudAssets.find(asset=>asset.id===input.id);if(existing&&existing.markingPolicy==='letters-v1'&&existing.markStatus==='pending'&&usesAutomaticAssetMark_(existing))acceptedAssets.push(Object.assign({},existing));return;}const asset=stampActor_(input,auth),criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===asset.criteriaId&&!item.deleted&&item.active!==false);if(!criterion||!truthy_(criterion.isFixedAsset??criterion.esActivoFijo??criterion.CI_ES_A_FIJO))throw new Error('La clase seleccionada no está configurada como activo fijo');const required=[['usesSerial','serial','serial'],['usesLength','largo','largo'],['usesModel','modelo','modelo'],['usesManufacturer','fabricante','fabricante'],['requiresInternalMark','marcaInterna','marca interna']];if(!String(asset.numeroClase||asset.numeroYT||'').trim())throw new Error('Falta el número de clase del activo');required.forEach(rule=>{if(truthy_(criterion[rule[0]])&&!(rule[1]==='marcaInterna'&&asset.markingPolicy==='letters-v1'&&usesAutomaticAssetMark_(asset))&&!String(asset[rule[1]]||'').trim())throw new Error('Falta '+rule[2]+' del activo')});const className=String(asset.clase||'').trim().toLowerCase(),number=String(asset.numeroClase||asset.numeroYT||'').trim().toLowerCase(),serial=String(asset.serial||'').trim().toLowerCase(),mark=String(asset.marcaInterna||asset.marcaActual||'').trim().toLowerCase(),duplicate=cloudAssets.concat(acceptedAssets).find(row=>row&&!row.deleted&&String(row.clase||'').trim().toLowerCase()===className&&((serial&&String(row.serial||'').trim().toLowerCase()===serial)||(number&&String(row.numeroClase||row.numeroYT||'').trim().toLowerCase()===number)||(mark&&String(row.marcaInterna||row.marcaActual||'').trim().toLowerCase()===mark)));if(duplicate)throw new Error('El activo ya existe en la tabla de Activos fijos');asset.ubicacion='Bodega de Superficie';asset.syncState='synced';acceptedAssets.push(asset);assetIds.add(asset.id)});
+    const marking=assignAssetMarks_(cloud,acceptedAssets);
+    if(marking.assets.length)allowed.assets=marking.assets;
+    const markedIds=new Set(marking.assets.map(asset=>asset.id)),workingAssets=cloudAssets.filter(asset=>!markedIds.has(asset.id)).concat(marking.assets);
     PLAZA_WRITE.forEach(name=>{
       const existingRows=(cloud[name]||[]).filter(Boolean),existing=new Set(existingRows.map(x=>x.id).filter(Boolean)),existingEvents=new Set(existingRows.map(x=>x.syncEventId).filter(Boolean));
       const seenIncomingIds=new Set(),blockedEvents=new Set();
@@ -191,6 +262,7 @@ function plazaSync_(q){
         if(row.assetId){
           const asset=workingAssets.find(x=>x&&x.id===row.assetId&&!x.deleted);
           if(!asset)throw new Error('El activo seleccionado no existe');
+          row.assetLabel=[asset.clase,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.marcaActual||asset.marcaInterna,asset.serial&&'Serial '+asset.serial].filter(Boolean).join(' · ');
           if(name==='blendingDeliveries'){if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');asset.ubicacion=row.destination||'Operación'}else asset.ubicacion='Bodega de Superficie';asset.updatedAt=new Date().toISOString();
         }else{
           const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},balanceBefore=Number(current.quantity)||0,next=balanceBefore+(name==='blendingIncomes'?qty:-qty);row.balanceBefore=balanceBefore;row.balanceAfter=next;
@@ -201,7 +273,7 @@ function plazaSync_(q){
       }).filter(Boolean);
     });
     allowed.inventoryStock=Array.from(stock.values());
-    const merged=merge_(cloud,allowed);writeFile_(id,merged);const view={schema:merged.schema,updatedAt:merged.updatedAt};
+    const merged=merge_(cloud,allowed);if(marking.registry.length)merged.assetMarkRegistry=marking.registry;writeFile_(id,merged);const view={schema:merged.schema,updatedAt:merged.updatedAt};
     PLAZA_READ.forEach(name=>view[name]=Array.isArray(merged[name])?merged[name]:[]);view.personal=view.personal.map(x=>publicPerson_(x));
     return json_({ok:true,data:view});
   }finally{lock.releaseLock()}
