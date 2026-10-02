@@ -38,8 +38,6 @@ function combined(keyA,keyB){return values(keyA).map(value=>({value,exclude:'aut
 function apply(){
   for(const form of [document.querySelector('#personalForm'),document.querySelector('#plazaCollaboratorForm')])if(form){options(form.elements.empresa,values('personal.company'));options(form.elements.area,allowedPersonalAreas(form.elements.empresa?.value));options(form.elements.cargo,values('personal.role'));if(form.elements.empresa&&!form.elements.empresa.dataset.areaRule){form.elements.empresa.dataset.areaRule='1';form.elements.empresa.addEventListener('change',()=>options(form.elements.area,allowedPersonalAreas(form.elements.empresa.value)))}}
   options(document.querySelector('#inventoryItemForm [name="unit"]'),values('inventory.unit'));
-  options(document.querySelector('#noveltyForm [name="descripcion"]'),values('novelty.description'));
-  options(document.querySelector('#noveltyForm [name="estado"]'),values('asset.state.standard'));
   const asset=document.querySelector('#assetForm');if(asset){
     const models=values('asset.model.yt').map(value=>({value,only:'yt'})).concat(values('asset.model.autorrescatador').map(value=>({value,only:'autorrescatador'})));
     const brands=values('asset.manufacturer.yt').map(value=>({value,only:'yt'})).concat(values('asset.manufacturer.autorrescatador').map(value=>({value,only:'autorrescatador'})));

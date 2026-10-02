@@ -77,7 +77,43 @@ function adminUserSave_(q){
  }finally{lock.releaseLock()}
 }
 function adminUserDisable_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const rows=adminUsers_(),user=rows.find(x=>x.id===String(q.id||''));if(!user)throw new Error('El usuario no existe');if(user.role==='owner')throw new Error('No se puede desactivar al Administrador principal');user.enabled=false;user.updatedAt=new Date().toISOString();revokeInvitations_('admin',user.document);saveAdminUsers_(rows);return json_({ok:true,user:publicAdminUser_(user)})}finally{lock.releaseLock()}}
-function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const allowed=['personal','actas','consumptions'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,since)}
+function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const allowed=['personal','actas','consumptions','novelties','assets'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,auth.role!=='owner'&&(incoming.novelties||[]).some(row=>row&&row.syncState==='pending')?'':since,auth)}
+
+// El auxiliar actualiza el estado del activo mediante novedades, nunca su ficha completa.
+function prepareAdminNovelties_(incoming,cloud,auth){
+ const pending=name=>(Array.isArray(incoming[name])?incoming[name]:[]).filter(row=>row&&row.id&&row.syncState==='pending');
+ const novelties=pending('novelties'),assets=pending('assets'),limited=auth&&auth.role!=='owner';
+ const visorChange=value=>cargoNorm_(value)==='cambio de color del visor';
+ const assetMap=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
+ const historical=new Map((cloud.novelties||[]).filter(Boolean).map(row=>[row.id,row]));
+ const patches=new Map(),accepted=[];
+ novelties.slice().sort((a,b)=>stamp_(a)-stamp_(b)).forEach(row=>{
+  const asset=assetMap.get(row.assetId)||(!limited&&assets.find(item=>item.id===row.assetId));
+  const visor=visorChange(row.descripcion),previous=historical.get(row.id);
+  if(limited&&previous){
+   for(const key of ['assetId','descripcion','ubicacion','estado','estadoVisor'])if(String(previous[key]||'')!==String(row[key]||''))throw new Error('No puedes modificar una novedad ya registrada');
+   accepted.push(Object.assign({},previous,{syncState:'pending'}));return;
+  }
+  if((limited||visor)&&(!asset||asset.deleted))throw new Error('El activo de la novedad no existe en la base central. Sincroniza primero.');
+  if(limited&&(row.deleted||!String(row.descripcion||'').trim()))throw new Error('La novedad no es válida');
+  if(visor){
+   if(cargoNorm_(asset.clase)!=='autorrescatador')throw new Error('El cambio de color del visor solo está disponible para autorrescatadores');
+   if(!String(row.estadoVisor||'').trim())throw new Error('Selecciona el color del visor');
+  }else if(row.estadoVisor)throw new Error('El color del visor requiere la novedad Cambio de color del visor');
+  if(!limited)return;
+  const novelty=Object.assign({},row,{registeredBy:auth.username,registeredByName:auth.name||auth.username});
+  accepted.push(novelty);
+  const current=patches.get(asset.id)||asset;
+  if(stamp_(row)>=stamp_(current)){
+   const patch=Object.assign({},current,{ubicacion:row.ubicacion,estado:row.estado,updatedAt:row.updatedAt||row.createdAt,syncState:'pending'});
+   if(visor)patch.estadoVisor=row.estadoVisor;
+   patches.set(asset.id,patch);
+  }
+ });
+ if(!limited)return incoming;
+ assets.forEach(row=>{if(!novelties.some(novelty=>novelty.assetId===row.id))throw new Error('Tu rol solo permite actualizar activos mediante una novedad');});
+ return Object.assign({},incoming,{novelties:accepted,assets:Array.from(patches.values())});
+}
 
 // Los auxiliares solo pueden agregar el cargo que acaban de buscar, sin coincidencias.
 // La sincronización general sigue bloqueando cualquier escritura en inventoryCriteria.
@@ -109,7 +145,7 @@ function adminCargoAdd_(q,auth){
  }finally{lock.releaseLock()}
 }
 
-function adminSync_(incoming,since){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},baseUpdatedAt=cloud.updatedAt||'',changes={},hasPending=Object.keys(incoming||{}).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.id&&x.syncState==='pending'));if(!hasPending){if(since&&baseUpdatedAt===since)return json_({ok:true,notModified:true,updatedAt:baseUpdatedAt});return json_({ok:true,data:cloud,updatedAt:baseUpdatedAt})}Object.keys(incoming||{}).forEach(name=>{if(name==='schema'||name==='updatedAt'||!Array.isArray(incoming[name]))return;changes[name]=incoming[name].filter(x=>x&&x.id&&x.syncState==='pending').map(x=>Object.assign({},x,{syncState:'synced'}))});const merged=merge_(cloud,changes);writeFile_(id,merged);if(since&&baseUpdatedAt===since)return json_({ok:true,acknowledged:true,updatedAt:merged.updatedAt});return json_({ok:true,data:merged,updatedAt:merged.updatedAt})}finally{lock.releaseLock()}}
+function adminSync_(incoming,since,auth){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},baseUpdatedAt=cloud.updatedAt||'',changes={};incoming=prepareAdminNovelties_(incoming,cloud,auth);const hasPending=Object.keys(incoming||{}).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.id&&x.syncState==='pending'));if(!hasPending){if(since&&baseUpdatedAt===since)return json_({ok:true,notModified:true,updatedAt:baseUpdatedAt});return json_({ok:true,data:cloud,updatedAt:baseUpdatedAt})}Object.keys(incoming||{}).forEach(name=>{if(name==='schema'||name==='updatedAt'||!Array.isArray(incoming[name]))return;changes[name]=incoming[name].filter(x=>x&&x.id&&x.syncState==='pending').map(x=>Object.assign({},x,{syncState:'synced'}))});const merged=merge_(cloud,changes);writeFile_(id,merged);if(since&&baseUpdatedAt===since)return json_({ok:true,acknowledged:true,updatedAt:merged.updatedAt});return json_({ok:true,data:merged,updatedAt:merged.updatedAt})}finally{lock.releaseLock()}}
 
 function adminReverseMovement_(q){const type=q.type==='delivery'?'blendingDeliveries':q.type==='income'?'blendingIncomes':'';if(!type)throw new Error('Tipo de movimiento no válido');const movementId=String(q.movementId||'').trim();if(!movementId)throw new Error('Falta identificar el movimiento');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},rows=Array.isArray(cloud[type])?cloud[type]:[],row=rows.find(x=>x&&x.id===movementId&&!x.deleted);if(!row)throw new Error('El movimiento no existe en la base central');if(row.reversed===true||row.reversado===true)throw new Error('Este movimiento ya fue reversado');if(row.assetId)throw new Error('La reversión de activos fijos requiere restaurar también su ubicación y no está habilitada en esta operación');const qty=Number(row.quantity);if(!(qty>0)||!row.itemId)throw new Error('El movimiento no tiene cantidad válida');const stockRows=Array.isArray(cloud.inventoryStock)?cloud.inventoryStock:(cloud.inventoryStock=[]),stock=stockRows.find(x=>x&&x.itemId===row.itemId),current=Number(stock?.quantity)||0,next=type==='blendingDeliveries'?current+qty:current-qty;if(next<0)throw new Error('No se puede revertir el ingreso: las existencias actuales son menores que la cantidad a descontar');const now=new Date().toISOString(),target=stock||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0};target.quantity=next;target.updatedAt=now;if(!stock)stockRows.push(target);row.reversed=true;row.reversado=true;row.reversedAt=now;row.reversedBy='SK Admin';row.reversalBalanceBefore=current;row.reversalBalanceAfter=next;row.updatedAt=now;writeFile_(id,cloud);return json_({ok:true,data:cloud,movement:{id:row.id,type:type,balanceBefore:current,balanceAfter:next,quantity:qty}})}finally{lock.releaseLock()}}
 
