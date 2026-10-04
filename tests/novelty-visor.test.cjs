@@ -21,7 +21,7 @@ test('ambos roles rechazan color en otra clase, color vacío y tipo equivocado',
   const s=service();assert.throws(()=>s.sync({novelties:[novelty(extra)]},role));assert.equal(s.cloud().novelties.length,0);
  }
 });
-test('auxiliar no crea activos, modifica fichas sin novedad ni cambia otros catálogos',()=>{
+test('auxiliar rechaza altas incompletas, fichas sin novedad y otros catálogos',()=>{
  for(const data of [{assets:[{id:'new',syncState:'pending'}]},{assets:[{id:'ar',estadoVisor:'Blanco',syncState:'pending'}]},{inventoryCriteria:[{id:'catalog',syncState:'pending'}]}])assert.throws(()=>service().sync(data));
 });
 test('reintentar no duplica la novedad ni revierte un color más reciente',()=>{

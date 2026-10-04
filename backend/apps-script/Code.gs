@@ -77,7 +77,7 @@ function adminUserSave_(q){
  }finally{lock.releaseLock()}
 }
 function adminUserDisable_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const rows=adminUsers_(),user=rows.find(x=>x.id===String(q.id||''));if(!user)throw new Error('El usuario no existe');if(user.role==='owner')throw new Error('No se puede desactivar al Administrador principal');user.enabled=false;user.updatedAt=new Date().toISOString();revokeInvitations_('admin',user.document);saveAdminUsers_(rows);return json_({ok:true,user:publicAdminUser_(user)})}finally{lock.releaseLock()}}
-function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const allowed=['personal','actas','consumptions','novelties','assets'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,auth.role!=='owner'&&(incoming.novelties||[]).some(row=>row&&row.syncState==='pending')?'':since,auth)}
+function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const allowed=['personal','actas','consumptions','novelties','assets'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,auth.role!=='owner'&&['novelties','assets'].some(name=>(incoming[name]||[]).some(row=>row&&row.syncState==='pending'))?'':since,auth)}
 
 // Se ejecuta bajo el mismo bloqueo de sincronización. El registro de marcas nunca
 // se borra al dar de baja un activo ni se acepta desde un cliente.
@@ -132,14 +132,47 @@ function completePendingAssetMarks_(cloud){
  return true;
 }
 
-// El auxiliar actualiza el estado del activo mediante novedades, nunca su ficha completa.
+// Las altas del auxiliar se validan en el servidor; las fichas existentes siguen
+// protegidas. La huella permite reintentar un alta sin sobrescribir cambios posteriores.
+function assistantAssetFingerprint_(row){
+ const fields=['id','clase','numeroYT','numeroClase','modelo','fabricante','serial','estadoVisor','largo','marcada','mina','fechaIngreso','fechaNovedad','horaNovedad','descripcionNovedad','documentoResponsable','nombreResponsable','documentoBodeguero','nombreBodeguero','ubicacion','estado','disponibleEntrega','asignadaId','observaciones','marcaAnterior','numeroMarcaActual','createdAt','deleted'];
+ if(!usesAutomaticAssetMark_(row))fields.push('marcaInterna','marcaActual','nuevaMarca');
+ return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(fields.map(key=>[key,String(row[key]||'')])),Utilities.Charset.UTF_8));
+}
+function prepareAssistantAsset_(row,cloud,known,auth){
+ const text=value=>String(value||'').trim(),number=text(row.numeroClase||row.numeroYT);
+ if(row.deleted||!text(row.clase)||!number||!text(row.ubicacion)||!stamp_(row)||!Date.parse(row.createdAt||''))throw new Error('El activo nuevo requiere clase, número de clase, ubicación y fecha de registro válidos');
+ const criterion=(cloud.inventoryCriteria||[]).find(item=>item&&!item.deleted&&item.active!==false&&item.isFixedAsset===true&&cargoNorm_(item.name||item.nombre||item.elemento)===cargoNorm_(row.clase));
+ if(!criterion)throw new Error('Selecciona una CLASE activa de Criterios de inventario');
+ const automatic=usesAutomaticAssetMark_(row);
+ for(const [flag,field] of [['usesSerial','serial'],['usesLength','largo'],['usesModel','modelo'],['usesManufacturer','fabricante'],['requiresInternalMark','marcaInterna']])if(criterion[flag]&&!(automatic&&field==='marcaInterna')&&!text(row[field]))throw new Error('Falta un campo obligatorio del activo: '+field);
+ for(const existing of known.values()){
+  if(existing.deleted||cargoNorm_(existing.clase)!==cargoNorm_(row.clase))continue;
+  const same=(a,b)=>text(a)&&cargoNorm_(a)!=='no aplica'&&cargoNorm_(a)===cargoNorm_(b);
+  if(same(number,existing.numeroClase||existing.numeroYT)||same(row.serial,existing.serial)||!automatic&&same(row.marcaActual||row.marcaInterna,existing.marcaActual||existing.marcaInterna))throw new Error('Este activo ya existe: revisa número de clase, serial y marca');
+ }
+ const asset=Object.assign({},row,{numeroClase:number,numeroYT:number,registeredBy:auth.username,registeredByName:auth.name||auth.username,registrationFingerprint:assistantAssetFingerprint_(row)});
+ for(const key of ['markingPolicy','markStatus','markSequence','markAssignedAt'])delete asset[key];
+ if(automatic)Object.assign(asset,{marcaInterna:'',marcaActual:'',nuevaMarca:'',markingPolicy:'letters-v1',markStatus:'pending'});
+ return asset;
+}
+
+// El auxiliar puede crear activos; actualiza el estado de los existentes mediante novedades.
 function prepareAdminNovelties_(incoming,cloud,auth){
  const pending=name=>(Array.isArray(incoming[name])?incoming[name]:[]).filter(row=>row&&row.id&&row.syncState==='pending');
  const novelties=pending('novelties'),assets=pending('assets'),limited=auth&&auth.role!=='owner';
  const visorChange=value=>cargoNorm_(value)==='cambio de color del visor';
  const assetMap=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
  const historical=new Map((cloud.novelties||[]).filter(Boolean).map(row=>[row.id,row]));
- const patches=new Map(),accepted=[];
+ const patches=new Map(),accepted=[],assetIds=new Set();
+ if(limited)assets.forEach(row=>{
+  if(assetIds.has(row.id))throw new Error('El lote contiene un activo repetido');
+  assetIds.add(row.id);
+  const previous=assetMap.get(row.id);
+  if(!previous){const created=prepareAssistantAsset_(row,cloud,assetMap,auth);assetMap.set(row.id,created);patches.set(row.id,created);return;}
+  if(previous.registeredBy===auth.username&&previous.registrationFingerprint&&previous.registrationFingerprint===assistantAssetFingerprint_(row))return;
+  else if(!novelties.some(novelty=>novelty.assetId===row.id))throw new Error('Tu rol solo permite agregar activos nuevos; modifica su estado mediante una novedad');
+ });
  novelties.slice().sort((a,b)=>stamp_(a)-stamp_(b)).forEach(row=>{
   const asset=assetMap.get(row.assetId)||(!limited&&assets.find(item=>item.id===row.assetId));
   const visor=visorChange(row.descripcion),previous=historical.get(row.id);
@@ -164,7 +197,6 @@ function prepareAdminNovelties_(incoming,cloud,auth){
   }
  });
  if(!limited)return incoming;
- assets.forEach(row=>{if(!novelties.some(novelty=>novelty.assetId===row.id))throw new Error('Tu rol solo permite actualizar activos mediante una novedad');});
  return Object.assign({},incoming,{novelties:accepted,assets:Array.from(patches.values())});
 }
 

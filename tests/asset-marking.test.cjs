@@ -54,7 +54,7 @@ test('tras actualizar el servicio completa solicitudes ya sincronizadas, sin rem
   s[method]({});assert.equal(s.cloud().assetMarkRegistry.length,1);
  }
 });
-test('una novedad del auxiliar conserva la marca automática sin abrir permisos de alta',()=>{
+test('una novedad del auxiliar conserva la marca automática y las altas requieren datos completos',()=>{
  const s=service();s.admin({assets:[asset('1')]});const data={novelties:[{id:'n',assetId:'1',descripcion:'Revista física',ubicacion:'Mina',estado:'Operativo/a',createdAt:date,updatedAt:date,syncState:'pending'}]};
  const result=s.ctx.adminSyncAuthorized_(data,'',{role:'assistant',username:'aux'});assert.equal(result.data.assets[0].nuevaMarca,'AAA');assert.throws(()=>s.ctx.adminSyncAuthorized_({assets:[asset('2')]},'',{role:'assistant'}));
 });
