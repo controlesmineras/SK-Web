@@ -20,8 +20,15 @@ function updateFields(){
   field.hidden=!active;field.style.display=active?'':'none';select.disabled=!active;select.required=active;
   if(!active)select.value='';
 }
+function defaultEventTime(form){
+  const parts=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
+  const values=Object.fromEntries(parts.map(p=>[p.type,p.value]));
+  if(!form.elements.fechaNovedad.value)form.elements.fechaNovedad.value=`${values.year}-${values.month}-${values.day}`;
+  if(!form.elements.horaNovedad.value)form.elements.horaNovedad.value=`${values.hour}:${values.minute}`;
+}
 async function update(){
   const form=document.querySelector('#noveltyForm');if(!form||typeof db==='undefined'||!db)return;
+  defaultEventTime(form);
   const ticket=++generation,assetId=form.elements.assetId.value,assets=await all('assets');
   if(ticket!==generation||assetId!==form.elements.assetId.value)return;
   const asset=assets.find(row=>row.id===assetId),changed=selectedAsset?.id!==asset?.id;
@@ -50,8 +57,9 @@ async function save(event){
     if(visor&&!isRescuer(asset))throw new Error('El cambio de color del visor solo está disponible para autorrescatadores.');
     if(visor&&!colors().includes(data.estadoVisor))throw new Error('Selecciona el color del visor.');
     if(!visor)delete data.estadoVisor;
-    const date=new Date(),meta=mark();
-    const novelty={...meta,...data,fechaLocal:date.toLocaleDateString('es-CO'),horaLocal:date.toLocaleTimeString('es-CO')};
+    const date=new Date(data.fechaNovedad+'T'+data.horaNovedad+':00-05:00'),meta=mark();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(data.fechaNovedad)||!/^\d{2}:\d{2}$/.test(data.horaNovedad)||!Number.isFinite(date.getTime()))throw new Error('Selecciona la fecha y hora de la novedad.');
+    const novelty={...meta,...data,occurredAt:date.toISOString(),fechaLocal:date.toLocaleDateString('es-CO',{timeZone:'America/Bogota'}),horaLocal:date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota'})};
     if(visor)novelty.estadoVisorAnterior=asset.estadoVisor||'';
     const updated={...asset,ubicacion:data.ubicacion,estado:data.estado,updatedAt:meta.updatedAt,syncState:'pending'};
     if(visor)updated.estadoVisor=data.estadoVisor;
