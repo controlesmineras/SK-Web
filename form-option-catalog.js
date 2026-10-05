@@ -11,6 +11,7 @@ const defaults={
   'asset.model.autorrescatador':['Oxypro 50'],
   'asset.manufacturer.yt':['Gisi','Irreconocible'],
   'asset.manufacturer.autorrescatador':['Steel pro'],
+  'asset.manufacturer.motosierra':['Makita','Stihl'],
   'asset.viewerColor':['Marrón','Azul celeste','Blanco','Negro','Amarillo','Averiado'],
   'asset.owner':['Sandra K','Providencia','El Silencio','Carla','Alianza'],
   'asset.location':['Bodega de Superficie','Bodega de Producción-N. 4','Socavón','Extraviado'],
@@ -23,7 +24,7 @@ const defaults={
 };
 const labels={
   'personal.company':'Personal · Empresa','personal.area':'Personal · Área','personal.role':'Personal · Cargo','inventory.unit':'Inventario · Unidad de medida',
-  'asset.model.yt':'Activos · Modelos de YT','asset.model.autorrescatador':'Activos · Modelos de autorrescatador','asset.manufacturer.yt':'Activos · Marca comercial de YT','asset.manufacturer.autorrescatador':'Activos · Marca comercial de autorrescatador','asset.viewerColor':'Activos · Color del visor','asset.owner':'Activos · Mina propietaria','asset.location':'Activos · Ubicación','asset.state.standard':'Activos · Estados generales','asset.state.autorrescatador':'Activos · Estados de autorrescatador','asset.physicallyMarked':'Activos · Marcación física','asset.deliveryAvailable':'Activos · Disponible para entrega','novelty.description':'Novedades de activos · Tipo de novedad','delivery.destination':'Entregas · Destino'
+  'asset.model.yt':'Activos · Modelos de YT','asset.model.autorrescatador':'Activos · Modelos de autorrescatador','asset.manufacturer.yt':'Activos · Marca comercial de YT','asset.manufacturer.autorrescatador':'Activos · Marca comercial de autorrescatador','asset.manufacturer.motosierra':'Activos · Marca comercial de motosierra','asset.viewerColor':'Activos · Color del visor','asset.owner':'Activos · Mina propietaria','asset.location':'Activos · Ubicación','asset.state.standard':'Activos · Estados generales','asset.state.autorrescatador':'Activos · Estados de autorrescatador','asset.physicallyMarked':'Activos · Marcación física','asset.deliveryAvailable':'Activos · Disponible para entrega','novelty.description':'Novedades de activos · Tipo de novedad','delivery.destination':'Entregas · Destino'
 };
 const clean=value=>String(value||'').trim(),norm=value=>clean(value).toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' '),esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 let config=null;
@@ -40,7 +41,7 @@ function apply(){
   options(document.querySelector('#inventoryItemForm [name="unit"]'),values('inventory.unit'));
   const asset=document.querySelector('#assetForm');if(asset){
     const models=values('asset.model.yt').map(value=>({value,only:'yt'})).concat(values('asset.model.autorrescatador').map(value=>({value,only:'autorrescatador'})));
-    const brands=values('asset.manufacturer.yt').map(value=>({value,only:'yt'})).concat(values('asset.manufacturer.autorrescatador').map(value=>({value,only:'autorrescatador'})));
+    const brands=values('asset.manufacturer.yt').map(value=>({value,only:'yt'})).concat(values('asset.manufacturer.autorrescatador').map(value=>({value,only:'autorrescatador'})),values('asset.manufacturer.motosierra').map(value=>({value,only:'motosierra'})));
     options(asset.elements.modelo,models.map(row=>row.value),{attributes:value=>({classOnly:models.find(row=>row.value===value)?.only||''})});
     options(asset.elements.fabricante,brands.map(row=>row.value),{attributes:value=>({classOnly:brands.find(row=>row.value===value)?.only||''})});
     options(asset.elements.estadoVisor,values('asset.viewerColor'));
@@ -125,4 +126,5 @@ if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',
 window.addEventListener('load',()=>setTimeout(()=>load().then(()=>window.SKFormOptions.render?.()),500),{once:true});
 window.addEventListener('skweb-db-ready',load);
 window.addEventListener('skweb-synced',load);
+window.addEventListener('skplaza-synced',load);
 })();

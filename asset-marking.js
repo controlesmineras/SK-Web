@@ -47,6 +47,17 @@ function saved(assets){
   const pending=assets.filter(asset=>asset?.markingPolicy===POLICY&&eligible(asset));if(!pending.length)return false;
   remember(tracked().concat(pending.map(asset=>asset.id)));show(pending,false);return true;
 }
+// Si otra sincronización ya estaba en curso, el alta nueva puede no estar en su lote.
+async function syncSaved(asset){
+  if(scope!=='admin'||asset?.markingPolicy!==POLICY||!navigator.onLine||!window.skSyncApi?.configured?.())return false;
+  const success=await window.skSyncApi.sync({silent:true,forceFull:true});
+  if(!success)return false;
+  const current=(await all('assets')).find(row=>row.id===asset.id);
+  if(current?.syncState==='pending'&&current.markStatus==='pending'){
+    if(!await window.skSyncApi.sync({silent:true,forceFull:true}))return false;
+  }
+  await scan();return true;
+}
 async function scan(){
   const ids=tracked();if(!ids.length)return;
   const version=++scanVersion;
@@ -57,7 +68,7 @@ async function scan(){
   const ready=assets.filter(asset=>ids.includes(asset.id)&&asset.markingPolicy===POLICY&&asset.markStatus==='assigned'&&/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(asset.nuevaMarca||''));
   if(ready.length)show(ready,true);
 }
-window.SKAssetMarking={eligible,prepare,saved,scan};
+window.SKAssetMarking={eligible,prepare,saved,scan,syncSaved};
 window.addEventListener('skweb-synced',scan);window.addEventListener('skplaza-synced',scan);
 window.addEventListener('load',()=>setTimeout(scan,800));window.addEventListener('focus',scan);
 })();
