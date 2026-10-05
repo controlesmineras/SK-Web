@@ -3,7 +3,12 @@
 'use strict';
 const POLICY='letters-v1',scope=location.pathname.includes('/plaza/')?'plaza':'admin',key='skAssetMarkNotifications-'+scope;
 const clean=value=>String(value??'').trim();
-const eligible=value=>{const type=clean(typeof value==='string'?value:value?.clase).toLowerCase();return !!type&&!/^(autorrescatador(?:es)?\b|yt(?:\b|\d)|columnas?\b)/i.test(type)};
+const eligible=value=>{
+ const type=clean(typeof value==='string'?value:value?.clase).toLowerCase();
+ if(!type||/^autorrescatador(?:es)?\b/i.test(type))return false;
+ if(/^(yt(?:\b|\d)|columnas?\b)/i.test(type)){const origin=clean(value?.minaOrigen||value?.mina).toLowerCase().replace(/[.\s-]/g,'');return value?.incomeMarking===true&&!!origin}
+ return true;
+};
 function prepare(asset){
   if(!eligible(asset))return asset;
   return{...asset,marcaInterna:'',marcaActual:'',nuevaMarca:'',markingPolicy:POLICY,markStatus:'pending'};
@@ -32,7 +37,7 @@ function show(assets,confirmed){
     const card=document.createElement('article');card.className='assetMarkCard';const name=clean(asset.clase)||'activo',description=document.createElement('p');
     description.textContent=confirmed?`Ponle esta marca ${/^(motosierra|pulidora|columna|sierra|pistola)\b/i.test(name)?'a la':'al'} ${name.toLocaleLowerCase('es')}:`:name;card.append(description);
     if(confirmed){const code=document.createElement('strong');code.className='assetMarkCode';code.textContent=asset.nuevaMarca;card.append(code)}
-    const detail=document.createElement('small');detail.textContent=[(asset.numeroClase||asset.numeroYT)&&`N.º de clase: ${asset.numeroClase||asset.numeroYT}`,asset.serial&&`Serial: ${asset.serial}`,!confirmed&&'Marca pendiente de sincronización'].filter(Boolean).join(' · ');card.append(detail);cards.append(card);
+    const detail=document.createElement('small');detail.textContent=[(asset.numeroClase||asset.numeroYT)&&`N.º de clase: ${asset.numeroClase||asset.numeroYT}`,asset.serial&&`Serial: ${asset.serial}`,asset.minaOrigen&&`Mina de origen: ${asset.minaOrigen}`,!confirmed&&'Marca pendiente de sincronización'].filter(Boolean).join(' · ');card.append(detail);cards.append(card);
   }
   const confirmation=document.querySelector('#recordConfirmation');if(confirmation){confirmation.hidden=true;confirmation.classList.remove('visible')}
   if(!view.open){returnFocus=document.activeElement;view.showModal()}
