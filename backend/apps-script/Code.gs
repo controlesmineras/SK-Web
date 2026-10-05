@@ -85,7 +85,7 @@ function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const
 function repairIncomeClass_(value){return /^(yt(?:\b|\d)|columnas?\b)/i.test(String(value||'').trim())}
 function sandraKMine_(value){return cargoNorm_(value).replace(/[.\s-]/g,'')==='sandrak'}
 function externalMinePrefix_(mine){const prefixes={'providencia':'P','el silencio':'S','carla':'C','alianza':'L'};return prefixes[cargoNorm_(mine)]||''}
-function plazaIncomeCapabilities_(){return{externalIncomeV1:true,minePrefixes:{'Providencia':'P','El Silencio':'S','Carla':'C','Alianza':'L'}}}
+function plazaIncomeCapabilities_(){return{externalIncomeV1:true,externalMarkSeparator:'-',minePrefixes:{'Providencia':'P','El Silencio':'S','Carla':'C','Alianza':'L'}}}
 function validatePlazaIncomeContext_(row,asset){
  if(!row.incomeType&&!row.originMine)return false; // Compatibilidad con registros anteriores.
  if(!repairIncomeClass_(asset.clase))throw new Error('El tipo de ingreso especial solo corresponde a YT y columnas');
@@ -125,27 +125,28 @@ function assignAssetMarks_(cloud,rows){
  const byId=new Map(registry.map(row=>[row.id,row])),existing=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
  const used=new Set(registry.map(row=>row.code));
  // Reservar también marcas físicas anteriores, incluso de activos dados de baja.
- (cloud.assets||[]).concat(rows).forEach(asset=>{if(!asset)return;['marcaInterna','marcaActual','nuevaMarca','marcaAnterior','numeroMarcaActual'].forEach(key=>{const value=String(asset[key]||'').trim().toUpperCase();if(/^[A-Z]{3}$/.test(value))used.add(value)})});
+ (cloud.assets||[]).concat(rows).forEach(asset=>{if(!asset)return;['marcaInterna','marcaActual','nuevaMarca','marcaAnterior','numeroMarcaActual'].forEach(key=>{const value=String(asset[key]||'').trim().toUpperCase();if(/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(value))used.add(value)})});
  let next=Math.max(-1,...registry.map(row=>row.scheme!=='mine-prefix-v1'&&Number.isInteger(row.sequence)?row.sequence:-1))+1,changed=false;
  const assets=rows.map(input=>{
   const asset=Object.assign({},input),old=existing.get(asset.id);
   let entry=byId.get(asset.id);
   const requested=asset.markingPolicy==='letters-v1',eligible=usesAutomaticAssetMark_(asset);
   // Un cliente antiguo o una edición no puede borrar/cambiar una marca ya emitida.
-  if(!entry&&old&&old.markingPolicy==='letters-v1'&&old.markStatus==='assigned'&&/^[A-Z]{3}$/.test(old.nuevaMarca||'')){
+  if(!entry&&old&&old.markingPolicy==='letters-v1'&&old.markStatus==='assigned'&&/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(old.nuevaMarca||'')){
    entry={id:old.id,code:old.nuevaMarca,sequence:old.markSequence,issuedAt:old.markAssignedAt,...(old.markScheme==='mine-prefix-v1'?{scheme:old.markScheme,prefix:old.markPrefix,mine:old.markMine}:{})};registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);if(entry.scheme!=='mine-prefix-v1'&&Number.isInteger(entry.sequence))next=Math.max(next,entry.sequence+1);
   }
   if(!entry&&requested&&eligible&&(!old||old.markingPolicy==='letters-v1'&&old.markStatus==='pending')){
    const external=asset.incomeMarking===true&&asset.activoExterno===true&&repairIncomeClass_(asset.clase),prefix=external?externalMinePrefix_(asset.mina):'';
    if(external){
     if(!prefix)throw new Error('La mina de origen no tiene un prefijo de marcación configurado');
-    let sequence=0;const code=index=>prefix+String.fromCharCode(65+Math.floor(index/26),65+index%26);
-    while(sequence<676&&used.has(code(sequence)))sequence++;
+    const legacySuffixes=new Set(registry.filter(row=>row.scheme==='mine-prefix-v1'&&row.prefix===prefix&&/^[A-Z]{3}$/.test(row.code||'')).map(row=>row.code.slice(1)));
+    let sequence=0;const code=index=>prefix+'-'+String.fromCharCode(65+Math.floor(index/26),65+index%26);
+    while(sequence<676&&(used.has(code(sequence))||legacySuffixes.has(code(sequence).slice(2))))sequence++;
     if(sequence>=676)throw new Error('Se agotaron las marcas del prefijo '+prefix+' para '+asset.mina+'. Contacta al administrador.');
     entry={id:asset.id,code:code(sequence),sequence:sequence,issuedAt:new Date().toISOString(),scheme:'mine-prefix-v1',prefix:prefix,mine:asset.mina};
    }else{
-    // C, L, P y S quedan reservadas a minas externas; las marcas ya existentes se conservan.
-    while(next<17576&&(used.has(automaticAssetMarkCode_(next))||/^[CLPS]/.test(automaticAssetMarkCode_(next))))next++;
+    // PAA (Sandra K) y P-AA (Providencia) son códigos distintos.
+    while(next<17576&&used.has(automaticAssetMarkCode_(next)))next++;
     entry={id:asset.id,code:automaticAssetMarkCode_(next),sequence:next,issuedAt:new Date().toISOString()};next++;
    }
    registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);changed=true;

@@ -54,7 +54,7 @@ async function scan(){
   if(scope==='plaza')assets=window.SKPlaza?.getData?.().assets||[];
   else if(typeof db!=='undefined'&&db&&typeof all==='function')assets=await all('assets');
   if(version!==scanVersion)return;
-  const ready=assets.filter(asset=>ids.includes(asset.id)&&asset.markingPolicy===POLICY&&asset.markStatus==='assigned'&&/^[A-Z]{3}$/.test(asset.nuevaMarca||''));
+  const ready=assets.filter(asset=>ids.includes(asset.id)&&asset.markingPolicy===POLICY&&asset.markStatus==='assigned'&&/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(asset.nuevaMarca||''));
   if(ready.length)show(ready,true);
 }
 window.SKAssetMarking={eligible,prepare,saved,scan};
