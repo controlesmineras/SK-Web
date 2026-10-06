@@ -79,3 +79,6 @@ body>main .sectionHead button,body>main .homeAccessRegister{border:1px solid #76
 body>main .homeAccessRegister{background:#214b63}
 #home::before{opacity:.12}
 @media(max-width:720px){body>main{width:calc(100% - 20px);margin:12px auto 20px;padding:16px 13px;border-radius:20px}}
+
+/* Opciones de clase con peso normal. */
+#assetClassSuggestions button,#assetClassSuggestions button strong{font-weight:400}
