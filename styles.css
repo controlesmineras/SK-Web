@@ -69,3 +69,13 @@ body>header .headerActions .adminSessionCaption{display:block;color:#fff;font-si
 
 /* Alinear Instalar app con la fila superior de botones en computador. */
 @media(min-width:721px){body>header .headerActions #installBtn:not([hidden]){align-self:flex-start;height:40px;min-height:40px}}
+
+/* Panel azul oscuro de SK Admin, con margen y esquinas redondeadas. */
+body>main{margin:20px auto 28px;width:calc(100% - 32px);max-width:1450px;padding:24px;background:#0d2c3e;border:1px solid #214b63;border-radius:24px;box-shadow:0 10px 28px #0d2c3e24}
+body>main .view>h1,body>main .view>h2,body>main .view>h3,body>main .view>.sectionHead{color:#f8fafc}
+.adminHomeHeading,.adminHomeHeading button,.adminHomeUser,#adminHomeUserRole,.adminHomeUserSeparator{color:#f8fafc}
+body>main .status,body>main .hint{color:#172033}
+body>main .sectionHead button,body>main .homeAccessRegister{border:1px solid #7696ac}
+body>main .homeAccessRegister{background:#214b63}
+#home::before{opacity:.12}
+@media(max-width:720px){body>main{width:calc(100% - 20px);margin:12px auto 20px;padding:16px 13px;border-radius:20px}}
