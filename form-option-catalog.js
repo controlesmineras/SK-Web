@@ -34,7 +34,7 @@ function normalized(raw){const out={};for(const [key,list] of Object.entries(def
 function values(key,fallback=[]){const list=[...(config?.[key]||defaults[key]||fallback)];return key==='personal.role'?list.sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'})):list}
 function allowedPersonalAreas(company){return values('personal.area').filter(area=>!(norm(company)==='desmin'&&norm(area)==='produccion - selectivo (corteros)'))}
 function validPersonalArea(company,area){return allowedPersonalAreas(company).some(option=>norm(option)===norm(area))}
-function options(select,list,{placeholder,attributes}={}){if(!select||select.tagName!=='SELECT')return;const current=select.value,first=placeholder??select.querySelector('option[value=""]')?.textContent??'';select.replaceChildren();if(first){const option=document.createElement('option');option.value='';option.textContent=first;select.append(option)}for(const value of list){const option=document.createElement('option');option.value=value;option.textContent=value;if(attributes)for(const [name,v] of Object.entries(attributes(value)||{}))option.dataset[name]=v;select.append(option)}if([...select.options].some(option=>option.value===current))select.value=current}
+function options(select,list,{placeholder,attributes,preserveUnknown=false}={}){if(!select||select.tagName!=='SELECT')return;const current=select.value,first=placeholder??select.querySelector('option[value=""]')?.textContent??'';select.replaceChildren();if(first){const option=document.createElement('option');option.value='';option.textContent=first;select.append(option)}for(const value of list){const option=document.createElement('option');option.value=value;option.textContent=value;if(attributes)for(const [name,v] of Object.entries(attributes(value)||{}))option.dataset[name]=v;select.append(option)}if(preserveUnknown&&current&&![...select.options].some(option=>option.value===current)){const option=document.createElement('option');option.value=current;option.textContent=current;select.append(option)}if([...select.options].some(option=>option.value===current))select.value=current}
 function combined(keyA,keyB){return values(keyA).map(value=>({value,exclude:'autorrescatador'})).concat(values(keyB).map(value=>({value,only:'autorrescatador'})))}
 function apply(){
   for(const form of [document.querySelector('#personalForm'),document.querySelector('#plazaCollaboratorForm')])if(form){options(form.elements.empresa,values('personal.company'));options(form.elements.area,allowedPersonalAreas(form.elements.empresa?.value));options(form.elements.cargo,values('personal.role'));if(form.elements.empresa&&!form.elements.empresa.dataset.areaRule){form.elements.empresa.dataset.areaRule='1';form.elements.empresa.addEventListener('change',()=>options(form.elements.area,allowedPersonalAreas(form.elements.empresa.value)))}}
@@ -42,8 +42,8 @@ function apply(){
   const asset=document.querySelector('#assetForm');if(asset){
     const models=values('asset.model.yt').map(value=>({value,only:'yt'})).concat(values('asset.model.autorrescatador').map(value=>({value,only:'autorrescatador'})));
     const brands=values('asset.manufacturer.yt').map(value=>({value,only:'yt'})).concat(values('asset.manufacturer.autorrescatador').map(value=>({value,only:'autorrescatador'})),values('asset.manufacturer.motosierra').map(value=>({value,only:'motosierra'})));
-    options(asset.elements.modelo,models.map(row=>row.value),{attributes:value=>({classOnly:models.find(row=>row.value===value)?.only||''})});
-    options(asset.elements.fabricante,brands.map(row=>row.value),{attributes:value=>({classOnly:brands.find(row=>row.value===value)?.only||''})});
+    options(asset.elements.modelo,models.map(row=>row.value),{preserveUnknown:!!asset.elements.id.value,attributes:value=>({classOnly:models.find(row=>row.value===value)?.only||''})});
+    options(asset.elements.fabricante,brands.map(row=>row.value),{preserveUnknown:!!asset.elements.id.value,attributes:value=>({classOnly:brands.find(row=>row.value===value)?.only||''})});
     options(asset.elements.estadoVisor,values('asset.viewerColor'));
     options(asset.elements.mina,values('asset.owner'));
     options(asset.elements.ubicacion,values('asset.location'));
@@ -128,3 +128,4 @@ window.addEventListener('skweb-db-ready',load);
 window.addEventListener('skweb-synced',load);
 window.addEventListener('skplaza-synced',load);
 })();
+
