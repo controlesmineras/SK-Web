@@ -12,12 +12,12 @@
         if(apps.some(app=>app.platform==='webapp'))return true;
       }
     }catch(error){console.warn('No se pudo consultar la instalación de SK Admin:',error)}
-    return localStorage.getItem('skAdminInstalled')==='yes';
+    return false;
   };
   async function updateButton(){
     if(!button)return;
     if(standalone()){button.hidden=true;return}
-    if(await installed()){
+    if(!installPrompt&&await installed()){
       button.hidden=false;
       button.dataset.action='open';
       button.textContent='ABRIR APP';
@@ -30,6 +30,7 @@
   window.addEventListener('beforeinstallprompt',event=>{
     event.preventDefault();
     installPrompt=event;
+    localStorage.removeItem('skAdminInstalled');
     updateButton();
   });
   window.addEventListener('appinstalled',()=>{
