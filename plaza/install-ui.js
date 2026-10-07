@@ -22,7 +22,7 @@
     if(standalone()){button.hidden=true;return}
     button.hidden=false;button.disabled=prompting;
     button.dataset.action=installPrompt?'install':isIOS()?'ios':'waiting';
-    button.textContent='INSTALAR APP';button.title='Instalar Plaza Blending';
+    button.textContent='INSTALAR APP';button.title='Instalar P. Blending G. Inventario';
     // La oferta actual del navegador tiene prioridad sobre cualquier detección previa.
     if(installPrompt)return;
     const present=await installed();if(revision!==buttonRevision||standalone()||installPrompt)return;
@@ -32,7 +32,7 @@
     if(isIOS()){alert(alreadyInstalled?'Abre P. Blending desde su icono en la pantalla de inicio.':'Para instalar P. Blending en iPhone: toca Compartir y luego Agregar a pantalla de inicio.');return}
     if(isMobileAndroid()){alert(alreadyInstalled?'Abre P. Blending desde la lista de aplicaciones de tu teléfono.':'En Chrome, abre el menú de tres puntos y toca Instalar aplicación o Agregar a pantalla principal. Si ya está instalada, ábrela desde la lista de aplicaciones.');return}
     const edge=/Edg\//.test(navigator.userAgent),appsPage=edge?'edge://apps':'chrome://apps';
-    alert((alreadyInstalled?'P. Blending ya está instalada en este navegador. Quitar su icono de la barra de tareas no la desinstala.\n\n':'Usa la opción de instalar esta página como aplicación en el menú de Chrome o Edge.\n\nSi no aparece la opción o ya la habías instalado: ')+`Escribe ${appsPage} en la barra de direcciones y busca P. Blending o Gestión de inventario Plaza Blending. Ábrela desde allí y vuelve a anclarla a la barra de tareas. Usa el mismo perfil del navegador con el que la instalaste.`);
+    alert((alreadyInstalled?'P. Blending ya está instalada en este navegador. Quitar su icono de la barra de tareas no la desinstala.\n\n':'Usa la opción de instalar esta página como aplicación en el menú de Chrome o Edge.\n\nSi no aparece la opción o ya la habías instalado: ')+`Escribe ${appsPage} en la barra de direcciones y busca P. Blending o P. Blending G. Inventario. Ábrela desde allí y vuelve a anclarla a la barra de tareas. Usa el mismo perfil del navegador con el que la instalaste.`);
   }
   async function register(){
     if(!('serviceWorker'in navigator))return null;

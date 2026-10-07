@@ -49,7 +49,7 @@
     }
     if(button.dataset.action==='open'){
       const link=document.createElement('a');
-      link.href='./?source=open-app';
+      link.href='./index.html?source=open-app';
       link.hidden=true;
       link.setAttribute('aria-hidden','true');
       document.body.append(link);
@@ -73,7 +73,7 @@
           return registration?.update();
         }).catch(error=>console.warn('Actualización del servicio en segundo plano:',error));
       }
-      location.replace('./?appUpdate='+Date.now());
+      location.replace('./index.html?appUpdate='+Date.now());
     }catch(error){
       console.error('Actualización de SK Admin:',error);
       alert('No fue posible actualizar la aplicación. Revisa la conexión e intenta nuevamente.');
