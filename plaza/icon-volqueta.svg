@@ -1,7 +1,8 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
   <title id="title">Plaza Blending · volqueta minera</title>
-  <desc id="desc">Volqueta minera amarilla de gran capacidad, sin fondo.</desc>
-  <g transform="translate(-73 -70) scale(1.2)">
+  <desc id="desc">Volqueta minera amarilla de gran capacidad, sobre fondo azul oscuro.</desc>
+  <rect width="512" height="512" rx="100" fill="#102c40"/>
+  <g transform="translate(-45 -64) scale(1.18)">
   <path d="M106 326h279l30-30h26l12 32H106z" fill="#0f2c42"/>
   <path d="M143 194q23-23 52-21 21-25 50-14 19-15 39-3 16 1 23 17 24-6 38 21z" fill="#0e2b40"/>
   <path d="M77 201h273l-40 103H131z" fill="#f7b51b"/>
