@@ -5,7 +5,7 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 
 test('sincroniza asignación y préstamo por activo, conserva históricos y reintentos sin duplicar',()=>{
  const date=new Date().toISOString();
- let cloud={personal:[{id:'person',nombre:'Receptor',documento:'123'}],assets:['assigned','loaned','legacy'].map(id=>({id,clase:'Pulidora',numeroClase:id,ubicacion:'Bodega de Superficie'})),inventoryStock:[{id:'stock',itemId:'gloves',quantity:10}]};
+ let cloud={inventoryCriteria:[{id:'pulidora',name:'Pulidora',isFixedAsset:true,allowLoan:true}],personal:[{id:'person',nombre:'Receptor',documento:'123'}],assets:['assigned','loaned','legacy'].map(id=>({id,clase:'Pulidora',numeroClase:id,ubicacion:'Bodega de Superficie'})),inventoryStock:[{id:'stock',itemId:'gloves',quantity:10}]};
  const ctx=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}});
  vm.runInContext(source,ctx);
  ctx.findFile_=()=> 'file';ctx.readFile_=()=>clone(cloud);ctx.writeFile_=(_,data)=>{cloud=clone(data)};ctx.json_=clone;ctx.verifyToken_=()=>({document:'operator',role:'plaza_operator'});

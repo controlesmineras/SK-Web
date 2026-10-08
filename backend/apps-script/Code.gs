@@ -85,7 +85,7 @@ function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const
 function repairIncomeClass_(value){return /^(yt(?:\b|\d)|columnas?\b)/i.test(String(value||'').trim())}
 function sandraKMine_(value){return cargoNorm_(value).replace(/[.\s-]/g,'')==='sandrak'}
 function externalMinePrefix_(mine){const prefixes={'providencia':'P','el silencio':'S','carla':'C','alianza':'L'};return prefixes[cargoNorm_(mine)]||''}
-function plazaIncomeCapabilities_(){return{externalIncomeV1:true,externalMarkSeparator:'-',minePrefixes:{'Providencia':'P','El Silencio':'S','Carla':'C','Alianza':'L'}}}
+function plazaIncomeCapabilities_(){return{inventoryLoansV1:true,loanReturnsV1:true,externalIncomeV1:true,externalMarkSeparator:'-',minePrefixes:{'Providencia':'P','El Silencio':'S','Carla':'C','Alianza':'L'}}}
 function validatePlazaIncomeContext_(row,asset){
  if(!row.incomeType&&!row.originMine)return false; // Compatibilidad con registros anteriores.
  if(!repairIncomeClass_(asset.clase))throw new Error('El tipo de ingreso especial solo corresponde a YT y columnas');
@@ -292,11 +292,32 @@ function adminSync_(incoming,since,auth){
  }finally{lock.releaseLock()}
 }
 
-function adminReverseMovement_(q){const type=q.type==='delivery'?'blendingDeliveries':q.type==='income'?'blendingIncomes':'';if(!type)throw new Error('Tipo de movimiento no válido');const movementId=String(q.movementId||'').trim();if(!movementId)throw new Error('Falta identificar el movimiento');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},rows=Array.isArray(cloud[type])?cloud[type]:[],row=rows.find(x=>x&&x.id===movementId&&!x.deleted);if(!row)throw new Error('El movimiento no existe en la base central');if(row.reversed===true||row.reversado===true)throw new Error('Este movimiento ya fue reversado');if(row.assetId)throw new Error('La reversión de activos fijos requiere restaurar también su ubicación y no está habilitada en esta operación');const qty=Number(row.quantity);if(!(qty>0)||!row.itemId)throw new Error('El movimiento no tiene cantidad válida');const stockRows=Array.isArray(cloud.inventoryStock)?cloud.inventoryStock:(cloud.inventoryStock=[]),stock=stockRows.find(x=>x&&x.itemId===row.itemId),current=Number(stock?.quantity)||0,next=type==='blendingDeliveries'?current+qty:current-qty;if(next<0)throw new Error('No se puede revertir el ingreso: las existencias actuales son menores que la cantidad a descontar');const now=new Date().toISOString(),target=stock||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0};target.quantity=next;target.updatedAt=now;if(!stock)stockRows.push(target);row.reversed=true;row.reversado=true;row.reversedAt=now;row.reversedBy='SK Admin';row.reversalBalanceBefore=current;row.reversalBalanceAfter=next;row.updatedAt=now;writeFile_(id,cloud);return json_({ok:true,data:cloud,movement:{id:row.id,type:type,balanceBefore:current,balanceAfter:next,quantity:qty}})}finally{lock.releaseLock()}}
+function adminReverseMovement_(q){const type=q.type==='delivery'?'blendingDeliveries':q.type==='income'?'blendingIncomes':'';if(!type)throw new Error('Tipo de movimiento no válido');const movementId=String(q.movementId||'').trim();if(!movementId)throw new Error('Falta identificar el movimiento');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},rows=Array.isArray(cloud[type])?cloud[type]:[],row=rows.find(x=>x&&x.id===movementId&&!x.deleted);if(!row)throw new Error('El movimiento no existe en la base central');if(row.reversed===true||row.reversado===true)throw new Error('Este movimiento ya fue reversado');if(row.movementType==='DEVOLUCIÓN'||cargoNorm_(row.deliveryType)==='prestamo')throw new Error('Los préstamos se cierran desde Retorno de elementos; no se revierten como entregas.');if(row.assetId)throw new Error('La reversión de activos fijos requiere restaurar también su ubicación y no está habilitada en esta operación');const qty=Number(row.quantity);if(!Number.isFinite(qty)||!(qty>0)||!row.itemId)throw new Error('El movimiento no tiene cantidad válida');const stockRows=Array.isArray(cloud.inventoryStock)?cloud.inventoryStock:(cloud.inventoryStock=[]),stock=stockRows.find(x=>x&&x.itemId===row.itemId),current=Number(stock?.quantity)||0,next=type==='blendingDeliveries'?current+qty:current-qty;if(next<0)throw new Error('No se puede revertir el ingreso: las existencias actuales son menores que la cantidad a descontar');const now=new Date().toISOString(),target=stock||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0};target.quantity=next;target.updatedAt=now;if(!stock)stockRows.push(target);row.reversed=true;row.reversado=true;row.reversedAt=now;row.reversedBy='SK Admin';row.reversalBalanceBefore=current;row.reversalBalanceAfter=next;row.updatedAt=now;writeFile_(id,cloud);return json_({ok:true,data:cloud,movement:{id:row.id,type:type,balanceBefore:current,balanceAfter:next,quantity:qty}})}finally{lock.releaseLock()}}
 
 function adminDeleteMovement_(q){const type=q.type==='delivery'?'blendingDeliveries':q.type==='income'?'blendingIncomes':'';if(!type)throw new Error('Tipo de movimiento no válido');const movementId=String(q.movementId||'').trim();if(!movementId)throw new Error('Falta identificar el movimiento');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},rows=Array.isArray(cloud[type])?cloud[type]:[],index=rows.findIndex(x=>x&&x.id===movementId);if(index<0)throw new Error('El movimiento no existe en la base central');const row=rows[index];if(!(row.reversed===true||row.reversado===true))throw new Error('Por seguridad, primero debes REVERTIR el movimiento antes de eliminarlo del historial');rows.splice(index,1);writeFile_(id,cloud);return json_({ok:true,data:cloud,deleted:{id:movementId,type:type}})}finally{lock.releaseLock()}}
 
 function plazaLogin_(q){const document=String(q.document||'').trim(),pin=String(q.pin||'');if(!document||!pin)throw new Error('Documento y contraseña son obligatorios');const id=findFile_(),cloud=id?readFile_(id):{},person=(cloud.personal||[]).find(x=>String(x.documento||'').trim()===document&&!x.deleted);if(!person||person.plazaEnabled!==true||!person.pinHash)throw new Error('Usuario no habilitado para Plaza Blending');if(!safeEqual_(String(person.pinHash),hashPin_(document,pin)))throw new Error('Contraseña incorrecta');const role=person.plazaRole==='supervisor'?'plaza_supervisor':'plaza_operator',expires=Date.now()+12*60*60*1000,payload=[document,role,expires].join('|'),token=Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload);return json_({ok:true,token,user:{id:person.id,documento:document,nombre:person.nombre||'',role:role},expiresAt:new Date(expires).toISOString()})}
+function applyPlazaLoanReturn_(row,asset,movements,cloud,auth){
+  const valid=entry=>entry&&!entry.deleted&&!entry.reversed&&!entry.reversado;
+  const loan=movements.find(entry=>valid(entry)&&entry.id===row.loanId&&entry.movementType!=='DEVOLUCIÓN');
+  if(!loan||cargoNorm_(loan.deliveryType)!=='prestamo')throw new Error('No existe un préstamo válido para esta devolución');
+  if(String(loan.assetId||'')!==String(row.assetId||'')||loan.itemId!==row.itemId||Number(row.quantity)!==Number(loan.quantity)||!Number.isFinite(Number(loan.quantity))||!(Number(loan.quantity)>0))throw new Error('El retorno debe corresponder al elemento y a la cantidad total del préstamo');
+  if(movements.some(entry=>valid(entry)&&entry.movementType==='DEVOLUCIÓN'&&entry.loanId===loan.id))throw new Error('Este préstamo ya fue devuelto. Sincroniza para consultar la devolución registrada.');
+  if(loan.assetId){
+    if(!asset||Number(row.quantity)!==1)throw new Error('El activo prestado no existe o tiene una cantidad inválida');
+    const latest=movements.filter(entry=>valid(entry)&&entry.assetId===asset.id).slice(-1)[0];
+    if(latest?.id!==loan.id||cargoNorm_(asset.ubicacion)==='bodega de superficie'||cargoNorm_(asset.ubicacion)!==cargoNorm_(loan.destination||'Operación'))throw new Error('El activo tiene otro movimiento o ubicación. Revisa el préstamo antes de devolverlo.');
+  }
+  const person=(cloud.personal||[]).find(entry=>entry.id===row.returnedById&&!entry.deleted);
+  if(!person)throw new Error('Selecciona quién devuelve los elementos');
+  const date=new Date(row.returnedAt),now=new Date();
+  if(!Number.isFinite(date.getTime())||date.getTime()>now.getTime()+300000||date.getTime()<Math.floor(Date.parse(loan.createdAt)/60000)*60000)throw new Error('Fecha de devolución no válida');
+  const operator=(cloud.personal||[]).find(entry=>String(entry.documento||'')===String(auth.document)&&!entry.deleted);
+  Object.assign(row,{recipientId:loan.recipientId,returnedAt:date.toISOString(),returnedByName:person.nombre||'',returnedByDocument:person.documento||'',operatorId:operator?.id||'',operatorName:operator?.nombre||'',operatorDocument:auth.document,destination:'Bodega de Superficie'});
+  delete row.deliveryType;
+  row.unit=loan.unit||'Unidad';
+  if(asset)asset.ubicacion='Bodega de Superficie';
+}
 function plazaSync_(q){
   const auth=verifyToken_(q.token),incoming=q.data||{},lock=LockService.getScriptLock();
   lock.waitLock(30000);
@@ -307,14 +328,14 @@ function plazaSync_(q){
     pendingAssets.forEach(input=>{if(assetIds.has(input.id)){const existing=cloudAssets.find(asset=>asset.id===input.id);if(existing&&existing.markingPolicy==='letters-v1'&&existing.markStatus==='pending'&&usesAutomaticAssetMark_(existing))acceptedAssets.push(Object.assign({},existing));return;}const asset=stampActor_(input,auth),criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===asset.criteriaId&&!item.deleted&&item.active!==false);if(!criterion||!truthy_(criterion.isFixedAsset??criterion.esActivoFijo??criterion.CI_ES_A_FIJO))throw new Error('La clase seleccionada no está configurada como activo fijo');preparePlazaIncomeAsset_(asset);const required=[['usesSerial','serial','serial'],['usesLength','largo','largo'],['usesModel','modelo','modelo'],['usesManufacturer','fabricante','fabricante'],['requiresInternalMark','marcaInterna','marca interna']];if(!String(asset.numeroClase||asset.numeroYT||'').trim())throw new Error('Falta el número de clase del activo');required.forEach(rule=>{if(truthy_(criterion[rule[0]])&&!(rule[1]==='marcaInterna'&&asset.markingPolicy==='letters-v1'&&usesAutomaticAssetMark_(asset))&&!String(asset[rule[1]]||'').trim())throw new Error('Falta '+rule[2]+' del activo')});const className=String(asset.clase||'').trim().toLowerCase(),number=String(asset.numeroClase||asset.numeroYT||'').trim().toLowerCase(),serial=String(asset.serial||'').trim().toLowerCase(),mark=String(asset.marcaInterna||asset.marcaActual||'').trim().toLowerCase(),duplicate=cloudAssets.concat(acceptedAssets).find(row=>row&&!row.deleted&&String(row.clase||'').trim().toLowerCase()===className&&((serial&&String(row.serial||'').trim().toLowerCase()===serial)||(number&&String(row.numeroClase||row.numeroYT||'').trim().toLowerCase()===number)||(mark&&String(row.marcaInterna||row.marcaActual||'').trim().toLowerCase()===mark)));if(duplicate)throw new Error('El activo ya existe en la tabla de Activos fijos');asset.ubicacion='Bodega de Superficie';asset.syncState='synced';acceptedAssets.push(asset);assetIds.add(asset.id)});
     const marking=assignAssetMarks_(cloud,acceptedAssets);
     if(marking.assets.length)allowed.assets=marking.assets;
-    const markedIds=new Set(marking.assets.map(asset=>asset.id)),workingAssets=cloudAssets.filter(asset=>!markedIds.has(asset.id)).concat(marking.assets);
+    const markedIds=new Set(marking.assets.map(asset=>asset.id)),workingAssets=cloudAssets.filter(asset=>!markedIds.has(asset.id)).concat(marking.assets),workingDeliveries=(cloud.blendingDeliveries||[]).slice();
     PLAZA_WRITE.forEach(name=>{
       const existingRows=(cloud[name]||[]).filter(Boolean),existing=new Set(existingRows.map(x=>x.id).filter(Boolean)),existingEvents=new Set(existingRows.map(x=>x.syncEventId).filter(Boolean));
       const seenIncomingIds=new Set(),blockedEvents=new Set();
       // Última barrera de idempotencia: una misma operación lógica no puede volver a aplicarse
       // aunque un cliente antiguo genere nuevos id/syncEventId durante un doble envío.
       const duplicateWindowMs=15000;
-      const movementKey=row=>[name,row.actorDocument||'',row.recipientId||'',row.itemId||'',Number(row.quantity)||0,row.assetId||'',row.destination||''].join('|');
+      const movementKey=row=>[name,row.actorDocument||'',row.recipientId||'',row.itemId||'',Number(row.quantity)||0,row.assetId||'',row.destination||'',row.movementType||'',row.loanId||'',row.deliveryType||''].join('|');
       const recentKeys=new Map();
       existingRows.forEach(row=>{const t=Date.parse(row.createdAt||row.updatedAt||'');if(Number.isFinite(t))recentKeys.set(movementKey(row),Math.max(recentKeys.get(movementKey(row))||0,t))});
       const pending=(Array.isArray(incoming[name])?incoming[name]:[]).filter(x=>x&&x.syncState==='pending');
@@ -326,10 +347,24 @@ function plazaSync_(q){
         return true;
       }).map(x=>{
         const row=stampActor_(x,auth),qty=Number(row.quantity),movementTime=Date.parse(row.createdAt||row.updatedAt||'')||Date.now(),key=movementKey(row),lastTime=recentKeys.get(key)||0;
-        if(lastTime&&Math.abs(movementTime-lastTime)<=duplicateWindowMs)return null;
+        // Un activo puede prestarse de nuevo inmediatamente después de devolverlo.
+        // Sus identificadores y la ubicación validan duplicados sin descartar ese nuevo préstamo.
+        if(!row.assetId&&row.movementType!=='DEVOLUCIÓN'&&cargoNorm_(row.deliveryType)!=='prestamo'&&lastTime&&Math.abs(movementTime-lastTime)<=duplicateWindowMs)return null;
         recentKeys.set(key,movementTime);
-        if(!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');
-        if(name==='blendingDeliveries'){
+        if(!Number.isFinite(qty)||!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');
+        const isReturn=row.movementType==='DEVOLUCIÓN';
+        if(isReturn&&(name!=='blendingDeliveries'||!row.loanId))throw new Error('Retorno de elementos incompleto');
+        if(name==='blendingDeliveries'&&!isReturn&&cargoNorm_(row.deliveryType)==='prestamo'){
+          const criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===row.itemId&&!item.deleted&&item.active!==false);
+          if(!criterion||!truthy_(criterion.allowLoan))throw new Error('El elemento no permite préstamos en Criterios de inventario');
+          const fixed=truthy_(criterion.isFixedAsset??criterion.esActivoFijo??criterion.CI_ES_A_FIJO);
+          if(fixed!==Boolean(row.assetId)||fixed&&qty!==1)throw new Error('Selecciona el activo específico que se va a prestar');
+          if(!fixed&&!truthy_(criterion.fractionable)&&!Number.isInteger(qty))throw new Error('Este elemento se presta en cantidades enteras');
+          if(fixed){const asset=workingAssets.find(entry=>entry&&entry.id===row.assetId);if(asset&&cargoNorm_(asset.clase)!==cargoNorm_(criterion.name||criterion.nombre||criterion.elemento||criterion.CI_ELEMENTO))throw new Error('El activo no corresponde al criterio autorizado para préstamo');}
+          row.unit=criterion.unit||criterion.CI_UNIDAD_MEDIDA||'Unidad';
+        }
+        if(isReturn)applyPlazaLoanReturn_(row,workingAssets.find(asset=>asset&&asset.id===row.assetId&&!asset.deleted),workingDeliveries,cloud,auth);
+        if(name==='blendingDeliveries'&&!isReturn){
           if(!row.recipientId)throw new Error('La entrega no tiene receptor confirmado');
           const recipient=(cloud.personal||[]).find(person=>person&&person.id===row.recipientId&&!person.deleted);
           if(!recipient)throw new Error('El colaborador receptor aún no está confirmado en la base central. Sincroniza primero Personal y vuelve a intentar la entrega.');
@@ -338,13 +373,14 @@ function plazaSync_(q){
           const asset=workingAssets.find(x=>x&&x.id===row.assetId&&!x.deleted);
           if(!asset)throw new Error('El activo seleccionado no existe');
           row.assetLabel=[asset.clase,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.marcaActual||asset.marcaInterna,asset.serial&&'Serial '+asset.serial,asset.minaOrigen&&'Origen: '+asset.minaOrigen].filter(Boolean).join(' · ');
-          if(name==='blendingDeliveries'){if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');asset.ubicacion=row.destination||'Operación'}else{asset.ubicacion='Bodega de Superficie';applyPlazaIncomeContext_(row,asset)}asset.updatedAt=new Date().toISOString();
+          if(isReturn)asset.ubicacion='Bodega de Superficie';
+          else if(name==='blendingDeliveries'){if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');asset.ubicacion=row.destination||'Operación'}else{asset.ubicacion='Bodega de Superficie';applyPlazaIncomeContext_(row,asset)}asset.updatedAt=new Date().toISOString();
         }else{
-          const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},balanceBefore=Number(current.quantity)||0,next=balanceBefore+(name==='blendingIncomes'?qty:-qty);row.balanceBefore=balanceBefore;row.balanceAfter=next;
+          const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},balanceBefore=Number(current.quantity)||0,next=balanceBefore+(name==='blendingIncomes'||isReturn?qty:-qty);row.balanceBefore=balanceBefore;row.balanceAfter=next;
           if(next<0)throw new Error('La cantidad ingresada supera la disponibilidad');
           current.quantity=next;current.updatedAt=new Date().toISOString();stock.set(row.itemId,current);
         }
-        row.syncState='synced';return row;
+        row.syncState='synced';if(name==='blendingDeliveries')workingDeliveries.push(row);return row;
       }).filter(Boolean);
     });
     allowed.inventoryStock=Array.from(stock.values());
