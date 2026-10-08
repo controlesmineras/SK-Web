@@ -8,6 +8,12 @@
 .assetReturnCard button{margin-top:12px;background:#173d59;color:white;min-height:46px;width:100%}
 .loanState{color:#315f49}
 #cancelAssetReturn{background:#e2e9ee;color:#173d59}
+.loanMenuSection{margin-top:22px;padding-top:18px;border-top:1px solid #d5dfe6}
+.loanMenuSection h3{margin:0 0 12px;color:#173d59;font-size:1rem;letter-spacing:.05em}
+.loanMenuActions{display:flex;flex-direction:column;gap:10px}
+.loanMenuActions button{min-height:48px;background:#edf2f6;border:1px solid #c7d3dd;color:#173d59;text-align:left;padding:13px 16px}
+.loanMenuActions button:hover,.loanMenuActions button:focus-visible{background:#dfeaf2}
+#plazaRegisterMenu .registerMenu{max-height:calc(100dvh - 36px);overflow:auto}
 #assetReturnSyncError{color:#963c12;background:#fff3e6;padding:12px;border-radius:9px}
 @media(max-width:520px){.assetReturnFilters{grid-template-columns:1fr}#assetReturnForm .deliveryFormActions{grid-template-columns:1fr}}
 

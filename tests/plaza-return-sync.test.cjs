@@ -8,8 +8,8 @@ function harness(){
  const document={querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}};
  const ctx=vm.createContext({document,alert:message=>alerts.push(message),window:{alert:message=>alerts.push(message),addEventListener(){},dispatchEvent(){},SKPlazaReturns:{setSyncError:message=>errors.push(message)}},sessionStorage:{getItem(){return null}},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:{},setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
  const source=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
- vm.runInContext(source+`\nrender=()=>{};window.testing={sync,get:()=>data,set:value=>{data=value},post:fn=>{post=fn},storage:next=>{localStorage.setItem('skPlazaData',JSON.stringify(next));data=next}};})();`,ctx);
- return {api:ctx.window.testing,storage,alerts,errors,ctx};
+ vm.runInContext(source+`\nrender=()=>{};window.testing={sync,deliveryCatalog,currentDeliveryItem,setupRegisterMenu,mode:value=>{deliveryMode=value},get:()=>data,set:value=>{data=value},post:fn=>{post=fn},storage:next=>{localStorage.setItem('skPlazaData',JSON.stringify(next));data=next}};})();`,ctx);
+ return {api:ctx.window.testing,storage,alerts,errors,ctx,nodes};
 }
 const pending=()=>({personal:[],assets:[{id:'asset',ubicacion:'Bodega de Superficie',syncState:'pending'}],blendingIncomes:[],blendingDeliveries:[{id:'return',syncEventId:'return',movementType:'DEVOLUCIÓN',loanId:'loan',assetId:'asset',syncState:'pending'}]});
 
@@ -19,7 +19,7 @@ test('servidor anterior: solo consulta capacidades, conserva la devolución y mu
  assert.equal(await h.api.sync(false),false);
  assert.equal(calls.length,1);assert.deepEqual(calls[0].data,{});
  assert.equal(h.api.get().blendingDeliveries[0].syncState,'pending');
- assert.match(h.errors[0],/Falta actualizar el servicio central/);assert.match(h.alerts[0],/devolución está guardada/);
+ assert.match(h.errors[0],/Falta actualizar el servicio central/);assert.match(h.alerts[0],/registro está guardado/);
 });
 test('sin internet no envía solicitudes y conserva registros locales',async()=>{
  const h=harness();h.api.set(pending());h.ctx.navigator.onLine=false;let calls=0;h.api.post(async()=>{calls++});
@@ -29,10 +29,10 @@ test('servidor actualizado confirma la devolución sin perder otra guardada dura
  const h=harness(),data=pending();h.api.set(data);let calls=0;
  h.api.post(async q=>{
   calls++;
-  if(calls===1)return{ok:true,capabilities:{loanReturnsV1:true}};
+  if(calls===1)return{ok:true,capabilities:{inventoryLoansV1:true}};
   assert.equal(q.data.blendingDeliveries[0].id,'return');
   data.blendingDeliveries.push({id:'return2',syncEventId:'return2',movementType:'DEVOLUCIÓN',loanId:'loan2',syncState:'pending'});
-  return{ok:true,capabilities:{loanReturnsV1:true},data:{personal:[],assets:[{id:'asset',ubicacion:'Bodega de Superficie',syncState:'synced'}],blendingIncomes:[],blendingDeliveries:[{...clone(q.data.blendingDeliveries[0]),syncState:'synced'}]}};
+  return{ok:true,capabilities:{inventoryLoansV1:true},data:{personal:[],assets:[{id:'asset',ubicacion:'Bodega de Superficie',syncState:'synced'}],blendingIncomes:[],blendingDeliveries:[{...clone(q.data.blendingDeliveries[0]),syncState:'synced'}]}};
  });
  assert.equal(await h.api.sync(true),true);assert.equal(calls,2);
  const rows=h.api.get().blendingDeliveries;assert.equal(rows.length,2);assert.equal(rows[0].syncState,'synced');assert.equal(rows[1].syncState,'pending');
@@ -42,7 +42,7 @@ test('el formulario conserva el préstamo si falla el almacenamiento y evita dob
  const nodes=new Map(),alerts=[];const button={disabled:false};
  const form={hidden:false,reset(){},querySelector(){return button},elements:{returnedBy:{value:'123 · Persona'},returnedAt:{value:'2026-10-08T10:00:00Z'},notes:{value:'Completo'}}};
  nodes.set('#assetReturnForm',form);nodes.set('#assetReturnFilter',{value:'PENDIENTE'});nodes.set('#assetReturnSearch',{value:''});
- let data={personal:[{id:'person',documento:'123',nombre:'Persona'}],assets:[{id:'asset',ubicacion:'Operación'}],blendingDeliveries:[{id:'loan',assetId:'asset',itemId:'item',deliveryType:'PRÉSTAMO',recipientId:'person',destination:'Operación',createdAt:'2026-10-01T00:00:00Z'}]},fail=true,syncs=0;
+ let data={personal:[{id:'person',documento:'123',nombre:'Persona'}],assets:[{id:'asset',ubicacion:'Operación'}],blendingDeliveries:[{id:'loan',assetId:'asset',itemId:'item',quantity:1,deliveryType:'PRÉSTAMO',recipientId:'person',destination:'Operación',createdAt:'2026-10-01T00:00:00Z'}]},fail=true,syncs=0;
  const app={getData:()=>data,getUser:()=>({id:'operator',nombre:'Bodeguera'}),saveData(next){if(fail)throw Error('Sin espacio');data=next},refreshDelivery(){},updatePendingBadge(){},renderRecentQueries(){},sync(){syncs++}};
  const ctx=vm.createContext({window:{SKPlaza:app,addEventListener(){}},document:{querySelector(selector){if(!nodes.has(selector))nodes.set(selector,{});return nodes.get(selector)}},crypto:{randomUUID:()=> 'return'},alert:message=>alerts.push(message)});
  const source=read('plaza/asset-returns.js').replace(/\}\)\(\);\s*$/,'window.testing={save,select:id=>{selectedId=id}};})();');vm.runInContext(source,ctx);
@@ -50,4 +50,37 @@ test('el formulario conserva el préstamo si falla el almacenamiento y evita dob
  assert.equal(data.blendingDeliveries.length,1);assert.equal(data.assets[0].ubicacion,'Operación');assert.equal(form.hidden,false);assert.equal(syncs,0);
  fail=false;ctx.window.testing.save({preventDefault(){},currentTarget:form});ctx.window.testing.save({preventDefault(){},currentTarget:form});
  assert.equal(data.blendingDeliveries.length,2);assert.equal(data.assets[0].ubicacion,'Bodega de Superficie');assert.equal(syncs,1);assert.equal(form.hidden,true);
+});
+test('Prestar filtra por el permiso existente y Entregas mantiene su catálogo',()=>{
+ const h=harness();h.api.set({inventoryCriteria:[{id:'fixed',isFixedAsset:true,allowLoan:true},{id:'quantity',allowLoan:true},{id:'no',allowLoan:false},{id:'unspecified'},{id:'inactive',allowLoan:true,active:false}]});
+ h.api.mode('loan');assert.deepEqual(Array.from(h.api.deliveryCatalog(),row=>row.id).sort(),['fixed','quantity']);
+ h.api.mode('assignment');assert.equal(h.api.deliveryCatalog().length,4);
+});
+test('el modo determina préstamo o asignación sin selector y controla cantidades fraccionadas',()=>{
+ const h=harness(),criterion={id:'fixed',name:'Pulidora',isFixedAsset:true,allowLoan:true};
+ const data={inventoryCriteria:[criterion,{id:'quantity',name:'Herramienta',allowLoan:true}],assets:[{id:'asset',clase:'Pulidora',ubicacion:'Bodega de Superficie'}],inventoryStock:[{id:'stock',itemId:'quantity',quantity:10}]};
+ h.api.set(data);const fields={itemId:{value:'fixed'},assetId:{value:'asset'},quantity:{value:'2'},destination:{value:'Operación'},notes:{value:''}};h.nodes.set('#deliveryForm',{elements:fields});
+ h.api.mode('assignment');assert.equal(h.api.currentDeliveryItem().deliveryType,'ASIGNACIÓN');
+ h.api.mode('loan');assert.equal(h.api.currentDeliveryItem().deliveryType,'PRÉSTAMO');
+ criterion.allowLoan=false;assert.equal(h.api.currentDeliveryItem(),null);
+ fields.itemId.value='quantity';fields.quantity.value='2.5';assert.equal(h.api.currentDeliveryItem(),null);
+ data.inventoryCriteria[1].fractionable=true;const row=h.api.currentDeliveryItem();assert.equal(row.quantity,2.5);assert.equal(row.assetId,'');assert.equal(row.deliveryType,'PRÉSTAMO');
+ fields.quantity.value='11';assert.equal(h.api.currentDeliveryItem(),null);
+});
+test('el menú conserva dos registros y agrupa las acciones debajo de PRÉSTAMOS',()=>{
+ const h=harness();let overlay;
+ h.ctx.document.createElement=()=>({addEventListener(){}});h.ctx.document.body={append:node=>{overlay=node}};
+ h.api.setupRegisterMenu();
+ const sections=overlay.innerHTML.split('<section class="loanMenuSection"');
+ assert.equal(sections.length,2);assert.match(sections[0],/REGISTRAR INGRESOS/);assert.match(sections[0],/REGISTRAR ENTREGAS/);
+ assert.doesNotMatch(sections[0],/data-register-view="loan"|data-register-view="assetReturns"/);
+ assert.match(sections[1],/PRÉSTAMOS/);assert.match(sections[1],/PRESTAR ELEMENTOS/);assert.match(sections[1],/RETORNO DE ELEMENTOS/);
+});
+test('una devolución por cantidad creada durante la sincronización conserva el saldo local pendiente',async()=>{
+ const h=harness();h.api.set({assets:[],personal:[],inventoryStock:[{id:'stock',itemId:'tool',quantity:5}],blendingDeliveries:[],blendingIncomes:[]});
+ h.api.post(async()=>{
+  h.api.get().blendingDeliveries.push({id:'return-quantity',itemId:'tool',quantity:3,movementType:'DEVOLUCIÓN',syncState:'pending'});
+  return{ok:true,data:{assets:[],personal:[],inventoryStock:[{id:'stock',itemId:'tool',quantity:5}],blendingDeliveries:[],blendingIncomes:[]}};
+ });
+ assert.equal(await h.api.sync(true),true);assert.equal(h.api.get().inventoryStock[0].quantity,8);assert.equal(h.api.get().blendingDeliveries.length,1);
 });
