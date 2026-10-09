@@ -121,7 +121,7 @@ const numberOf=a=>txt(window.SKAssetFields?.numero(a)||a.numeroClase||a.numeroYT
   if(present(a.serial))parts.push('Serial: '+txt(a.serial));
   if(present(a.nuevaMarca))parts.push('Marca nueva: '+txt(a.nuevaMarca));
   const previous=txt(a.marcaPrevia||(!a.markingPolicy?a.marcaActual||a.marcaInterna:'')||a.marcaAnterior);
-  if(present(previous))parts.push('Marca anterior: '+previous);
+  if(present(previous))parts.push('Marca: '+previous);
  }
  return parts.filter(Boolean).join(' · ');
 }
