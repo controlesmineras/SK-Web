@@ -119,14 +119,14 @@ const numberOf=a=>txt(window.SKAssetFields?.numero(a)||a.numeroClase||a.numeroYT
  }else{
   if(present(a.fabricante))parts.push(txt(a.fabricante));
   if(present(a.serial))parts.push('Serial: '+txt(a.serial));
-  if(present(a.nuevaMarca))parts.push('Marca nueva: '+txt(a.nuevaMarca));
+  const marks=[];if(present(a.nuevaMarca))marks.push(txt(a.nuevaMarca));
   const previous=txt(a.marcaPrevia||(!a.markingPolicy?a.marcaActual||a.marcaInterna:'')||a.marcaAnterior);
-  if(present(previous))parts.push('Marca: '+previous);
+  if(present(previous)&&!marks.some(mark=>norm(mark)===norm(previous)))marks.push(previous);if(marks.length)parts.push('Marca: '+marks.join(' / '));
  }
  return parts.filter(Boolean).join(' · ');
 }
 window.SKAssetListLabel=cleanLabel;
-function assetCompare(a,b){if(external(a)!==external(b))return external(a)?1:-1;const c=txt(a.clase).localeCompare(txt(b.clase),'es',{numeric:true,sensitivity:'base'});return c||numberOf(a).localeCompare(numberOf(b),'es',{numeric:true,sensitivity:'base'})||cleanLabel(a).localeCompare(cleanLabel(b),'es',{numeric:true})}
+function assetCompare(a,b){if(external(a)!==external(b))return external(a)?1:-1;const c=txt(a.clase).localeCompare(txt(b.clase),'es',{numeric:true,sensitivity:'base'});return c||(!!numberOf(a)!==!!numberOf(b)?(numberOf(a)?-1:1):numberOf(a).localeCompare(numberOf(b),'es',{numeric:true,sensitivity:'base'}))||cleanLabel(a).localeCompare(cleanLabel(b),'es',{numeric:true})}
 function installAssetList(){window.assetLabel=cleanLabel;window.renderAssetList=function(rows){const host=document.querySelector('#assetAdminList');if(!host)return;const q=norm(document.querySelector('#assetSearch')?.value);const f=rows.filter(x=>!x.deleted&&Object.values(x).join(' ').toLowerCase().includes(q)).sort(assetCompare);host.innerHTML=f.map(x=>`<button class="assetRow" data-id="${x.id}"><b>${cleanLabel(x)}</b><small>Mina propietaria: ${x.mina||'Sin registrar'} · Ubicación: ${x.ubicacion||'Sin ubicación'} · ${x.estado||'Sin estado'}</small></button>`).join('')||'<p class="hint">No hay activos que coincidan.</p>'}}
 function fillAssignedArea(value){const form=document.querySelector('#assetForm'),control=form?.elements.areaAsignada;if(!control)return;const current=value??control.value,areas=window.SKFormOptions?.values?.('personal.area')||['Seguridad física','Desmin - Obras civiles','Producción','Producción - Selectivo (Corteros)','Administrativa'];control.replaceChildren(new Option('Seleccionar área…',''),...areas.map(area=>new Option(area,area)));if(current&&!areas.includes(current))control.add(new Option(current,current));control.value=current}
 async function fillPeople(selected=''){if(typeof db==='undefined'||!db||typeof all!=='function')return;const s=document.querySelector('#assetAssigned');if(!s)return;const rows=(await all('personal')).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));s.innerHTML='<option value="">Sin asignar</option>';for(const p of rows){const o=document.createElement('option');o.value=p.id;o.textContent=`${p.documento||''} - ${p.nombre||''}`;s.append(o)}s.value=selected||'';showAssigned()}async function showAssigned(){const s=document.querySelector('#assetAssigned');if(!s||typeof all!=='function')return;const p=(await all('personal')).find(x=>x.id===s.value);document.querySelector('#assetAssignedDoc').value=p?.documento||'';document.querySelector('#assetAssignedArea').value=p?.area||'';document.querySelector('#assetAssignedCargo').value=p?.cargo||''}
