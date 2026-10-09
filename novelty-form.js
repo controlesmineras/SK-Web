@@ -31,6 +31,15 @@ function updateActaField(form){
  form.elements.estado.value=isRescuer(selectedAsset)?'Dado de baja':'Dado/a de baja';
 }
 
+
+const isRetiredState=value=>/^dad[oa](?:\/[oa])? de baja$/.test(norm(value));
+function updateRetiredLocation(){
+ const form=document.querySelector('#noveltyForm'),location=form?.elements.ubicacion;if(!location)return;
+ const retired=isRetiredState(form.elements.estado.value);
+ if(retired){if(!location.readOnly)location.dataset.beforeRetirement=location.value;location.value='Desechado/a';location.readOnly=true;location.style.background='#eef2f5';}
+ else{if(location.readOnly&&location.dataset.beforeRetirement!==undefined)location.value=location.dataset.beforeRetirement;delete location.dataset.beforeRetirement;location.readOnly=false;location.style.background='';}
+}
+
 let selectedAsset=null,generation=0,saving=false;
 function fill(select,values,current,placeholder){
   select.replaceChildren();
@@ -43,7 +52,7 @@ function updateFields(){
   const active=selectedAsset?.id===form.elements.assetId.value&&isRescuer(selectedAsset)&&isVisorChange(form.elements.descripcion.value);
   const field=document.querySelector('#novVisorField'),select=form.elements.estadoVisor;
   field.hidden=!active;field.style.display=active?'':'none';select.disabled=!active;select.required=active;
-  if(!active)select.value='';updateActaField(form);
+  if(!active)select.value='';updateActaField(form);updateRetiredLocation();
 }
 function defaultEventTime(form){
   const parts=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
@@ -70,7 +79,7 @@ async function update(){
   fill(form.elements.estado,states,current,'Seleccionar estado…');
   const locations=document.querySelector('#novLocationOptions');
   if(locations){const values=window.SKFormOptions?.values('asset.location')||['Bodega de Superficie','Bodega de Producción-N. 4','Socavón','Extraviado'];const choices=[...new Set([...values,asset?.ubicacion].filter(Boolean))];locations.replaceChildren(...choices.map(value=>new Option(value,value)));}
-  if(changed)form.elements.ubicacion.value=asset?.ubicacion||'';
+  if(changed){form.elements.ubicacion.readOnly=false;delete form.elements.ubicacion.dataset.beforeRetirement;form.elements.ubicacion.value=asset?.ubicacion||'';}
   updateFields();
 }
 async function save(event){
@@ -81,6 +90,7 @@ async function save(event){
     const data=fd(form);data.descripcion=noveltyText(data.descripcion);if(!data.descripcion)throw new Error('Selecciona la novedad.');const asset=(await all('assets')).find(row=>row.id===data.assetId&&!row.deleted);
     if(!asset)throw new Error('Selecciona un activo.');
     if(isRetirement(data.descripcion)){const acta=(await all('actas')).find(row=>row.id===data.actaId&&validActa(row));if(!acta)throw new Error('Selecciona un acta de Registro de documentos.');data.actaNumero=acta.consecutivo;data.actaEnlace=safeActaUrl(acta.enlace);data.estado=isRescuer(asset)?'Dado de baja':'Dado/a de baja'}else{delete data.actaId;delete data.actaNumero;delete data.actaEnlace}
+    if(isRetiredState(data.estado))data.ubicacion='Desechado/a';
     const visor=isVisorChange(data.descripcion);
     if(visor&&!isRescuer(asset))throw new Error('El cambio de color del visor solo está disponible para autorrescatadores.');
     if(visor&&!colors().includes(data.estadoVisor))throw new Error('Selecciona el color del visor.');
@@ -144,6 +154,7 @@ function installNoveltyMenu(){
 }
 installNoveltyMenu();
 
+const noveltyForm=document.querySelector('#noveltyForm');if(noveltyForm){noveltyForm.elements.ubicacion.closest('label').before(noveltyForm.elements.estado.closest('label'));noveltyForm.elements.estado.addEventListener('change',updateRetiredLocation);noveltyForm.addEventListener('reset',()=>{noveltyForm.elements.ubicacion.readOnly=false;delete noveltyForm.elements.ubicacion.dataset.beforeRetirement;});}
 mountActaField();window.SKNoveltyForm={update,updateFields,save,actaHTML};window.addEventListener('skweb-synced',update);
 document.querySelector('#novDesc')?.addEventListener('change',updateFields);
 document.querySelector('#noveltyForm')?.addEventListener('reset',()=>setTimeout(update,0));
