@@ -26,6 +26,7 @@ async function migrate(){
   if(typeof all!=='function'||typeof put!=='function')return;
   const rows=await all('assets');let changed=false;
   for(const a of rows){
+    if(a.deleted)continue;
     const c=canonical(a),patch={};
     if(c.numeroClase&&a.numeroClase!==c.numeroClase)patch.numeroClase=c.numeroClase;
     if(c.marcaActual&&a.marcaActual!==c.marcaActual)patch.marcaActual=c.marcaActual;

@@ -82,3 +82,5 @@ body>main .homeAccessRegister{background:#214b63}
 
 /* Opciones de clase con peso normal. */
 #assetClassSuggestions button,#assetClassSuggestions button strong{font-weight:400}
+
+#assetDeleteBtn{background:#fff1f0;color:#a52323;border:1px solid #e8b2b2}#assetDeleteBtn[hidden]{display:none!important}#assetDeleteBtn:disabled{opacity:.6;cursor:wait}

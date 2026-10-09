@@ -53,3 +53,7 @@ test('autorrescatadores, YT y columnas conservan su tratamiento sin marca automÃ
 test('dar acceso a las altas no permite modificar criterios ni importar otros mÃ³dulos',()=>{
  const s=service();for(const table of ['inventoryCriteria','inventoryStock','parts','incomes'])assert.throws(()=>s.sync({[table]:[{id:'x',syncState:'pending'}]}),/Tu rol no permite/);assert.equal(s.writes(),0);
 });
+test('auxiliar tampoco puede repetir el serial de otra clase',()=>{
+ const s=service({assets:[asset('other',{clase:'Taladro',serial:'SN-GLOBAL',syncState:'synced'})]});
+ assert.throws(()=>s.sync({assets:[asset('1',{serial:' sn-global '})]}),/serial.*ya existe/);assert.equal(s.writes(),0);
+});

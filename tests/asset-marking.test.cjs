@@ -58,3 +58,27 @@ test('una novedad del auxiliar conserva la marca automática y las altas requier
  const s=service();s.admin({assets:[asset('1')]});const data={novelties:[{id:'n',assetId:'1',descripcion:'Revista física',ubicacion:'Mina',estado:'Operativo/a',createdAt:date,updatedAt:date,syncState:'pending'}]};
  const result=s.ctx.adminSyncAuthorized_(data,'',{role:'assistant',username:'aux'});assert.equal(result.data.assets[0].nuevaMarca,'AAA');assert.throws(()=>s.ctx.adminSyncAuthorized_({assets:[asset('2')]},'',{role:'assistant'}));
 });
+test('serial único entre clases, altas del dueño y Plaza; rechazo sin cambios parciales',()=>{
+ const s=service();s.admin({assets:[asset('1','Pulidora',{serial:'SN-AbC'})]});const before=s.cloud();
+ for(const save of [s.admin,s.plaza])assert.throws(()=>save({assets:[asset('2','Taladro',{serial:' sn-abc '})]}),/serial.*ya existe/);
+ assert.deepEqual(s.cloud(),before);
+ const batch=service();assert.throws(()=>batch.admin({assets:[asset('1','Pulidora',{serial:'S1'}),asset('2','Taladro',{serial:'s1'})]}),/serial.*ya existe/);assert.equal(batch.cloud().assets.length,0);
+});
+test('editar el mismo activo conserva su serial; cambiarlo al de otro se rechaza',()=>{
+ const s=service();s.admin({assets:[asset('1'),asset('2','Taladro')]});
+ s.admin({assets:[{...s.cloud().assets[0],estado:'Averiado/a',updatedAt:'2026-10-03T00:00:00Z',syncState:'pending'}]});
+ const before=s.cloud();assert.throws(()=>s.admin({assets:[{...before.assets[0],serial:'SERIAL-2',updatedAt:'2026-10-04T00:00:00Z',syncState:'pending'}]}),/serial.*ya existe/);assert.deepEqual(s.cloud(),before);
+});
+test('eliminar conserva historial y marca; los cambios de un equipo atrasado no reactivan el activo',()=>{
+ const history={novelties:[{id:'n1',assetId:'1'}],consumptions:[{id:'c1',assetId:'1'}],blendingIncomes:[{id:'i1',assetId:'1'}],blendingDeliveries:[{id:'d1',assetId:'1'}]};
+ const s=service(history);s.admin({assets:[asset('1')]});const old=s.cloud().assets[0];
+ s.admin({assets:[{...old,deleted:true,deletedAt:'2026-10-03T00:00:00Z',deletedBy:'admin',updatedAt:'2026-10-03T00:00:00Z',syncState:'pending'}]});
+ const removed=s.cloud().assets[0];assert.equal(removed.deleted,true);assert.equal(removed.deletedBy,'admin');assert.equal(removed.marcaInterna,old.marcaInterna);
+ for(const [table,rows] of Object.entries(history))assert.deepEqual(s.cloud()[table],rows);
+ s.admin({assets:[{...old,estado:'Operativo/a',updatedAt:'2026-10-04T00:00:00Z',syncState:'pending'}]});assert.equal(s.cloud().assets[0].deleted,true);
+ s.admin({assets:[asset('2','Taladro',{serial:old.serial,updatedAt:'2026-10-04T00:00:00Z'})]});assert.equal(s.cloud().assets.length,2);
+});
+test('sin serial no genera falsos duplicados y las bajas siguen reservando su serial',()=>{
+ const s=service();s.admin({assets:[asset('1','YT',{serial:''}),asset('2','Columna',{serial:'No aplica'}),asset('3','Taladro',{serial:'no aplica'})]});
+ s.admin({assets:[asset('4','Pulidora',{estado:'Dado de baja'})]});assert.throws(()=>s.admin({assets:[asset('5','Taladro',{serial:'SERIAL-4'})]}),/serial.*ya existe/);
+});
