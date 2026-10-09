@@ -234,9 +234,9 @@ function prepareAdminNovelties_(incoming,cloud,auth){
  });
  novelties.slice().sort((a,b)=>stamp_(a)-stamp_(b)).forEach(row=>{
   const asset=assetMap.get(row.assetId)||(!limited&&assets.find(item=>item.id===row.assetId));
-  const visor=visorChange(row.descripcion),previous=historical.get(row.id);
+  row.descripcion=String(row.descripcion||'').replace(/\s*\([^()]*\)\s*$/,'').trim();const visor=visorChange(row.descripcion),previous=historical.get(row.id);
   if(limited&&previous){
-   for(const key of ['assetId','descripcion','ubicacion','estado','estadoVisor','actaId'])if(String(previous[key]||'')!==String(row[key]||''))throw new Error('No puedes modificar una novedad ya registrada');
+   for(const key of ['assetId','descripcion','ubicacion','estado','estadoVisor','actaId'])if((key==='descripcion'?String(previous[key]||'').replace(/\s*\([^()]*\)\s*$/,'').trim():String(previous[key]||''))!==String(row[key]||''))throw new Error('No puedes modificar una novedad ya registrada');
    accepted.push(Object.assign({},previous,{syncState:'pending'}));return;
   }
   if((limited||visor)&&(!asset||asset.deleted))throw new Error('El activo de la novedad no existe en la base central. Sincroniza primero.');
