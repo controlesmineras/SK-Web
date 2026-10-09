@@ -135,7 +135,25 @@ function polishAdminUsersButton(){const button=$('#adminUsersBtn');if(!button)re
 window.addEventListener('skadmin-permissions',polishAdminUsersButton);
 document.addEventListener('click',event=>{const button=event.target.closest?.('[data-view],[data-home-view],[data-open],#quickYT');if(!button)return;const view=button.id==='quickYT'?'assets':button.dataset.view||button.dataset.homeView||button.dataset.open;if(button.classList.contains('homeAccessRegister'))return;if(view&&!canView(view)){event.preventDefault();event.stopImmediatePropagation()}},true);
 document.addEventListener('submit',event=>{const view=event.target.closest?.('main .view');if(view&&!canView(view.id)){event.preventDefault();event.stopImmediatePropagation()}},true);
-window.SKAdminAuth={token:()=>token,user:()=>user,ready,isOwner,canView,request,logout,openUsers};
+
+let renewalPromise=null;
+function renewForSync(){
+ if(renewalPromise)return renewalPromise;
+ if(!navigator.onLine)return Promise.resolve(false);
+ const account=user?.username,previousToken=token;
+ if(!account)return Promise.resolve(false);
+ renewalPromise=new Promise(resolve=>{
+  styles();const overlay=document.createElement('section');overlay.className='adminUsersOverlay';overlay.style.zIndex='50001';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','adminRenewTitle');
+  overlay.innerHTML='<div class="adminAuthCard"><h1 id="adminRenewTitle">RENOVAR SINCRONIZACIÓN</h1><p>Tu acceso local sigue disponible. Ingresa tu contraseña para renovar la conexión con la base central. Tus registros pendientes se conservan.</p><form><label>USUARIO<input name="username" readonly autocomplete="username"></label><label>CONTRASEÑA<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">RENOVAR Y SINCRONIZAR</button><button type="button" data-later>SEGUIR TRABAJANDO LOCALMENTE</button><p role="status" class="adminAuthStatus"></p></form></div>';
+  overlay.querySelector('[name="username"]').value=account;document.body.append(overlay);const finish=value=>{overlay.remove();resolve(value)};overlay.querySelector('[data-later]').onclick=()=>finish(false);
+  overlay.querySelector('form').onsubmit=async event=>{event.preventDefault();const button=overlay.querySelector('[type="submit"]'),status=overlay.querySelector('[role="status"]'),password=overlay.querySelector('[name="password"]').value;button.disabled=true;status.textContent='Renovando conexión…';
+   try{const result=await request('adminLogin',{username:account,password});if(token!==previousToken){finish(false);return;}checkSession(result,result.token);if(result.user.username!==account)throw new Error('La cuenta recibida no coincide.');saveSession(result);await deviceAccess.remember(account,password,result);finish(true);}
+   catch(error){status.textContent=accessErrorMessage(error);button.disabled=false;}
+  };overlay.querySelector('[name="password"]').focus();
+ }).finally(()=>{renewalPromise=null});return renewalPromise;
+}
+
+window.SKAdminAuth={renewForSync,token:()=>token,user:()=>user,ready,isOwner,canView,request,logout,openUsers};
 // El script se carga después de main: no esperar a Excel ni a los demás módulos.
 if(document.querySelector('#home'))init();else document.addEventListener('DOMContentLoaded',init,{once:true});
 })();
