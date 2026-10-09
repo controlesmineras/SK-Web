@@ -31,7 +31,7 @@ async function update(){
   defaultEventTime(form);
   const ticket=++generation,assetId=form.elements.assetId.value,assets=await all('assets');
   if(ticket!==generation||assetId!==form.elements.assetId.value)return;
-  const asset=assets.find(row=>row.id===assetId),changed=selectedAsset?.id!==asset?.id;
+  const asset=assets.find(row=>row.id===assetId&&!row.deleted),changed=selectedAsset?.id!==asset?.id;
   selectedAsset=asset||null;
   const catalog=window.SKFormOptions?.values('novelty.description')||['Revista física','Encontrada abandonada','Dada de baja mediante acta'];
   const descriptions=catalog.filter(value=>!isVisorChange(value));
@@ -53,7 +53,7 @@ async function save(event){
   const form=event.target;if(!window.SKAdminAuth?.canView?.('novelties'))return;
   saving=true;const button=form.querySelector('button[type="submit"],button:not([type])');if(button)button.disabled=true;
   try{
-    const data=fd(form),asset=(await all('assets')).find(row=>row.id===data.assetId);
+    const data=fd(form),asset=(await all('assets')).find(row=>row.id===data.assetId&&!row.deleted);
     if(!asset)throw new Error('Selecciona un activo.');
     const visor=isVisorChange(data.descripcion);
     if(visor&&!isRescuer(asset))throw new Error('El cambio de color del visor solo está disponible para autorrescatadores.');
