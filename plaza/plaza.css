@@ -11,8 +11,12 @@
 .loanMenuSection{margin-top:22px;padding-top:18px;border-top:1px solid #d5dfe6}
 .loanMenuSection h3{margin:0 0 12px;color:#173d59;font-size:1rem;letter-spacing:.05em}
 .loanMenuActions{display:flex;flex-direction:column;gap:10px}
-.loanMenuActions button{min-height:48px;background:#edf2f6;border:1px solid #c7d3dd;color:#173d59;text-align:left;padding:13px 16px}
-.loanMenuActions button:hover,.loanMenuActions button:focus-visible{background:#dfeaf2}
+.loanMenuActions button{min-height:64px;border:2px solid #235575;border-radius:12px;color:#fff;text-align:left;padding:17px 20px;font-size:1.1rem;font-weight:800;line-height:1.3;cursor:pointer;box-shadow:0 5px 12px #173d5926;transition:box-shadow .15s ease,filter .15s ease}
+.loanMenuActions [data-register-view="loan"]{background:linear-gradient(135deg,#245c80,#173d59)}
+.loanMenuActions [data-register-view="assetReturns"]{background:linear-gradient(135deg,#34765a,#214f3b);border-color:#286247}
+.loanMenuActions button:hover{filter:brightness(1.1);box-shadow:0 7px 16px #173d5933}
+.loanMenuActions button:focus-visible{outline:3px solid #e7ac27;outline-offset:3px}
+.loanMenuActions button:active{box-shadow:0 2px 6px #173d5926}
 #plazaRegisterMenu .registerMenu{max-height:calc(100dvh - 36px);overflow:auto}
 #assetReturnSyncError{color:#963c12;background:#fff3e6;padding:12px;border-radius:9px}
 @media(max-width:520px){.assetReturnFilters{grid-template-columns:1fr}#assetReturnForm .deliveryFormActions{grid-template-columns:1fr}}
