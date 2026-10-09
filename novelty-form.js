@@ -1,6 +1,8 @@
 // Novedades compartidas por administrador y auxiliares, con guardado local atómico.
 (()=>{
 'use strict';
+const noveltyText=value=>String(value||'').replace(/\s*\([^()]*\)\s*$/,'').trim();
+const noveltyHint=value=>String(value||'').match(/\([^()]*\)\s*$/)?.[0]||'';
 const VISOR_CHANGE='Cambio de color del visor';
 const norm=value=>String(value||'').trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
 const isRescuer=asset=>norm(asset?.clase)==='autorrescatador';
@@ -33,8 +35,8 @@ let selectedAsset=null,generation=0,saving=false;
 function fill(select,values,current,placeholder){
   select.replaceChildren();
   if(placeholder)option(select,'',placeholder);
-  values.forEach(value=>option(select,value,value));
-  if(values.includes(current))select.value=current;
+  values.forEach(value=>{if(select.id==='novDesc'){const item=new Option(noveltyText(value),noveltyText(value));item.dataset.hint=noveltyHint(value);select.add(item)}else option(select,value,value)});
+  if(select.id==='novDesc')select.value=noveltyText(current);else if(values.includes(current))select.value=current;
 }
 function updateFields(){
   const form=document.querySelector('#noveltyForm');if(!form)return;
@@ -76,7 +78,7 @@ async function save(event){
   const form=event.target;if(!window.SKAdminAuth?.canView?.('novelties'))return;
   saving=true;const button=form.querySelector('button[type="submit"],button:not([type])');if(button)button.disabled=true;
   try{
-    const data=fd(form),asset=(await all('assets')).find(row=>row.id===data.assetId&&!row.deleted);
+    const data=fd(form);data.descripcion=noveltyText(data.descripcion);if(!data.descripcion)throw new Error('Selecciona la novedad.');const asset=(await all('assets')).find(row=>row.id===data.assetId&&!row.deleted);
     if(!asset)throw new Error('Selecciona un activo.');
     if(isRetirement(data.descripcion)){const acta=(await all('actas')).find(row=>row.id===data.actaId&&validActa(row));if(!acta)throw new Error('Selecciona un acta de Registro de documentos.');data.actaNumero=acta.consecutivo;data.actaEnlace=safeActaUrl(acta.enlace);data.estado=isRescuer(asset)?'Dado de baja':'Dado/a de baja'}else{delete data.actaId;delete data.actaNumero;delete data.actaEnlace}
     const visor=isVisorChange(data.descripcion);
@@ -127,6 +129,20 @@ function installAssetPicker(){
  window.addEventListener('skweb-synced',()=>load().catch(console.error));window.addEventListener('skweb-db-ready',()=>load().catch(console.error));load().catch(console.error);
 }
 installAssetPicker();
+
+
+function installNoveltyMenu(){
+ const select=document.querySelector('#novDesc');if(!select||document.querySelector('#novDescriptionButton'))return;
+ const label=select.closest('label'),trigger=document.createElement('button'),menu=document.createElement('div');trigger.type='button';trigger.id='novDescriptionButton';trigger.setAttribute('aria-expanded','false');menu.id='novDescriptionMenu';menu.hidden=true;trigger.setAttribute('aria-controls',menu.id);select.hidden=true;select.required=false;label.append(trigger,menu);
+ const style=document.createElement('style');style.textContent='#novDescriptionButton{width:100%;text-align:left;background:#fff;color:#173d59;border:1px solid #ccd8e0;font-weight:500;padding:12px;min-height:44px}#novDescriptionMenu{display:grid;gap:4px;max-height:320px;overflow:auto;margin-top:5px;padding:5px;border:1px solid #ccd8e0;border-radius:8px;background:#fff}#novDescriptionMenu[hidden]{display:none}#novDescriptionMenu button{background:#f7f9fa;color:#173d59;text-align:left;font-weight:500;white-space:normal;padding:10px}#novDescriptionMenu .novDescriptionHint,#novDescriptionButton .novDescriptionHint{color:#7b8794;font-weight:400;font-size:.88em;margin-left:6px}';document.head.append(style);
+ const close=()=>{menu.hidden=true;trigger.setAttribute('aria-expanded','false')};
+ const content=(host,option)=>{host.replaceChildren(document.createTextNode(option?.textContent||'Seleccionar novedad…'));if(option?.dataset.hint){const small=document.createElement('span');small.className='novDescriptionHint';small.textContent=option.dataset.hint;host.append(small)}};
+ const sync=()=>{content(trigger,select.selectedOptions[0]);close()};
+ const draw=()=>{menu.replaceChildren();for(const option of [...select.options].filter(option=>option.value)){const button=document.createElement('button');button.type='button';content(button,option);button.addEventListener('click',()=>{select.value=option.value;select.dispatchEvent(new Event('change',{bubbles:true}));sync();trigger.focus()});menu.append(button)}menu.hidden=false;trigger.setAttribute('aria-expanded','true')};
+ trigger.addEventListener('click',()=>menu.hidden?draw():close());trigger.addEventListener('keydown',event=>{if(event.key==='ArrowDown'){event.preventDefault();draw();menu.querySelector('button')?.focus()}});
+ menu.addEventListener('keydown',event=>{if(event.key==='Escape'){close();trigger.focus()}});document.addEventListener('pointerdown',event=>{if(!label.contains(event.target))close()});select.addEventListener('change',sync);new MutationObserver(sync).observe(select,{childList:true});select.form.addEventListener('reset',()=>setTimeout(sync,0));sync();
+}
+installNoveltyMenu();
 
 mountActaField();window.SKNoveltyForm={update,updateFields,save,actaHTML};window.addEventListener('skweb-synced',update);
 document.querySelector('#novDesc')?.addEventListener('change',updateFields);
