@@ -234,7 +234,7 @@ function prepareAdminNovelties_(incoming,cloud,auth){
  });
  novelties.slice().sort((a,b)=>stamp_(a)-stamp_(b)).forEach(row=>{
   const asset=assetMap.get(row.assetId)||(!limited&&assets.find(item=>item.id===row.assetId));
-  row.descripcion=String(row.descripcion||'').replace(/\s*\([^()]*\)\s*$/,'').trim();const visor=visorChange(row.descripcion),previous=historical.get(row.id);
+  row.descripcion=String(row.descripcion||'').replace(/\s*\([^()]*\)\s*$/,'').trim();if(/^dad[oa](?:\/[oa])? de baja$/.test(cargoNorm_(row.estado)))row.ubicacion='Desechado/a';const visor=visorChange(row.descripcion),previous=historical.get(row.id);
   if(limited&&previous){
    for(const key of ['assetId','descripcion','ubicacion','estado','estadoVisor','actaId'])if((key==='descripcion'?String(previous[key]||'').replace(/\s*\([^()]*\)\s*$/,'').trim():String(previous[key]||''))!==String(row[key]||''))throw new Error('No puedes modificar una novedad ya registrada');
    accepted.push(Object.assign({},previous,{syncState:'pending'}));return;
@@ -304,7 +304,7 @@ function validateAssetSerials_(cloudAssets,changes){
  for(const row of changes||[]){
   if(!row?.id)continue;
   const saved=final.get(row.id),old=previous.get(row.id),serial=assetSerialKey_(saved?.serial);
-  if(saved?.deleted)continue;
+  if(saved?.deleted)continue;if(/^dad[oa](?:\/[oa])? de baja$/.test(cargoNorm_(saved.estado))){saved.ubicacion='Desechado/a';row.ubicacion='Desechado/a';}
   if((!old||hasAssetIdentity_(old))&&!hasAssetIdentity_(saved))throw new Error('Ingresa SERIAL o MARCA ANTERIOR. El activo debe tener al menos uno de los dos.');
   if(!old||assetSerialKey_(old.serial)!==serial||assetIdentityMark_(old)!==assetIdentityMark_(saved)){
    const identityDuplicate=duplicateAssetIdentity_(Array.from(final.values()),saved);if(identityDuplicate)throw new Error('El activo ya existe: serial o marca anterior repetidos.');
