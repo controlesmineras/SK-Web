@@ -222,6 +222,7 @@ function prepareAdminNovelties_(incoming,cloud,auth){
  const visorChange=value=>cargoNorm_(value)==='cambio de color del visor';
  const assetMap=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
  const historical=new Map((cloud.novelties||[]).filter(Boolean).map(row=>[row.id,row]));
+ const documents=new Map((cloud.actas||[]).filter(row=>row&&!row.deleted).map(row=>[row.id,row]));pending('actas').forEach(row=>{if(!row.deleted)documents.set(row.id,row)});
  const patches=new Map(),accepted=[],assetIds=new Set();
  if(limited)assets.forEach(row=>{
   if(assetIds.has(row.id))throw new Error('El lote contiene un activo repetido');
@@ -235,7 +236,7 @@ function prepareAdminNovelties_(incoming,cloud,auth){
   const asset=assetMap.get(row.assetId)||(!limited&&assets.find(item=>item.id===row.assetId));
   const visor=visorChange(row.descripcion),previous=historical.get(row.id);
   if(limited&&previous){
-   for(const key of ['assetId','descripcion','ubicacion','estado','estadoVisor'])if(String(previous[key]||'')!==String(row[key]||''))throw new Error('No puedes modificar una novedad ya registrada');
+   for(const key of ['assetId','descripcion','ubicacion','estado','estadoVisor','actaId'])if(String(previous[key]||'')!==String(row[key]||''))throw new Error('No puedes modificar una novedad ya registrada');
    accepted.push(Object.assign({},previous,{syncState:'pending'}));return;
   }
   if((limited||visor)&&(!asset||asset.deleted))throw new Error('El activo de la novedad no existe en la base central. Sincroniza primero.');
@@ -244,6 +245,7 @@ function prepareAdminNovelties_(incoming,cloud,auth){
    if(cargoNorm_(asset.clase)!=='autorrescatador')throw new Error('El cambio de color del visor solo está disponible para autorrescatadores');
    if(!String(row.estadoVisor||'').trim())throw new Error('Selecciona el color del visor');
   }else if(row.estadoVisor)throw new Error('El color del visor requiere la novedad Cambio de color del visor');
+  if(/^(?:dada|dado) de baja mediante acta$/.test(cargoNorm_(row.descripcion))&&!previous){const document=documents.get(row.actaId);if(!document||document.tipo==='OFICIO'||!String(document.consecutivo||'').trim())throw new Error('Selecciona un acta registrada para dar de baja el activo');row.actaNumero=document.consecutivo;row.actaEnlace=/^https?:\/\//i.test(String(document.enlace||''))?document.enlace:'';}else if(!/^(?:dada|dado) de baja mediante acta$/.test(cargoNorm_(row.descripcion))){delete row.actaId;delete row.actaNumero;delete row.actaEnlace;}
   if(!limited)return;
   const novelty=Object.assign({},row,{registeredBy:auth.username,registeredByName:auth.name||auth.username});
   accepted.push(novelty);
