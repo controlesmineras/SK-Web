@@ -43,6 +43,8 @@ async function update(){
   // Conservar el estado histórico aunque haya sido retirado del catálogo.
   if(current&&!states.includes(current))states.push(current);
   fill(form.elements.estado,states,current,'Seleccionar estado…');
+  const locations=document.querySelector('#novLocationOptions');
+  if(locations){const values=window.SKFormOptions?.values('asset.location')||['Bodega de Superficie','Bodega de Producción-N. 4','Socavón','Extraviado'];const choices=[...new Set([...values,asset?.ubicacion].filter(Boolean))];locations.replaceChildren(...choices.map(value=>new Option(value,value)));}
   if(changed)form.elements.ubicacion.value=asset?.ubicacion||'';
   updateFields();
 }
