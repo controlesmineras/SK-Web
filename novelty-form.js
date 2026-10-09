@@ -76,6 +76,34 @@ async function save(event){
   }catch(error){alert(error.message||'No se pudo guardar la novedad.');}
   finally{saving=false;if(button)button.disabled=false;}
 }
+
+function installAssetPicker(){
+ const form=document.querySelector('#noveltyForm'),select=document.querySelector('#novAsset');if(!form||!select||document.querySelector('#novAssetSearch'))return;
+ const assetField=select.closest('label'),classField=document.createElement('label'),classes=document.createElement('select');
+ classField.append('CLASE',classes);classes.id='novAssetClass';classes.add(new Option('Todas las clases',''));assetField.before(classField);
+ const input=document.createElement('input'),results=document.createElement('div'),status=document.createElement('small');
+ input.id='novAssetSearch';input.type='search';input.required=true;input.autocomplete='off';input.placeholder='Buscar por serial o marca…';input.setAttribute('role','combobox');input.setAttribute('aria-expanded','false');input.setAttribute('aria-controls','novAssetSearchResults');
+ results.id='novAssetSearchResults';results.hidden=true;status.id='novAssetSearchStatus';status.style.cssText='color:#667085;font-size:.86rem;font-weight:400';input.setAttribute('aria-describedby',status.id);
+ select.hidden=true;select.required=false;assetField.insertBefore(input,select);assetField.append(status,results);
+ const style=document.createElement('style');style.textContent='#noveltyForm #novAssetSearchResults{display:grid;gap:5px;max-height:280px;overflow:auto;margin-top:6px}#noveltyForm #novAssetSearchResults[hidden]{display:none}#novAssetSearchResults button{width:100%;text-align:left;white-space:normal;background:#f2f6f9;color:#173d59;border:1px solid #ccd8e0;padding:10px;font-weight:500}#novAssetSearchResults button:focus-visible{outline:3px solid #e7b45a}';document.head.append(style);
+ let rows=[],version=0;
+ const label=asset=>[asset.clase,asset.fabricante,asset.serial&&'Serial: '+asset.serial,asset.marcaPrevia&&'Marca: '+asset.marcaPrevia,asset.marcaActual||asset.marcaInterna,asset.nuevaMarca,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.mina].filter(Boolean).join(' · ');
+ const filtered=()=>rows.filter(asset=>(!classes.value||norm(asset.clase)===norm(classes.value))&&(!norm(input.value)||norm([asset.serial,asset.marcaPrevia,asset.marcaAnterior,asset.marcaActual,asset.marcaInterna,asset.nuevaMarca,asset.numeroClase,asset.numeroYT,asset.fabricante].filter(Boolean).join(' ')).includes(norm(input.value))));
+ const close=()=>{results.hidden=true;input.setAttribute('aria-expanded','false')};
+ const choose=asset=>{if(![...select.options].some(option=>option.value===asset.id))select.add(new Option(label(asset),asset.id));select.value=asset.id;classes.value=asset.clase;input.value=label(asset);input.setCustomValidity('');status.textContent='Activo seleccionado.';close();select.dispatchEvent(new Event('change',{bubbles:true}))};
+ const draw=()=>{const selected=rows.find(asset=>asset.id===select.value),matches=selected?rows.filter(asset=>!classes.value||norm(asset.clase)===norm(classes.value)):filtered();results.replaceChildren();for(const asset of matches.slice(0,30)){const button=document.createElement('button');button.type='button';button.textContent=label(asset);button.addEventListener('click',()=>choose(asset));results.append(button)}status.textContent=matches.length?matches.length+' activos encontrados. Selecciona uno.':'No hay coincidencias. Revisa la clase, el serial o la marca.';results.hidden=false;input.setAttribute('aria-expanded','true')};
+ const load=async()=>{if(typeof db==='undefined'||!db)return;const token=++version,next=(await all('assets')).filter(asset=>!asset.deleted);if(token!==version)return;rows=next;const current=classes.value,values=[...new Set(rows.map(asset=>asset.clase).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));classes.replaceChildren(new Option('Todas las clases',''),...values.map(value=>new Option(value,value)));classes.value=values.includes(current)?current:'';const selected=rows.find(asset=>asset.id===select.value);if(selected){input.value=label(selected);input.setCustomValidity('');status.textContent='Activo seleccionado.'}else if(!results.hidden)draw()};
+ classes.addEventListener('change',()=>{select.value='';input.value='';input.setCustomValidity('Selecciona un activo de la lista.');update();draw()});
+ input.addEventListener('input',()=>{select.value='';input.setCustomValidity('Selecciona un activo de la lista.');update();draw()});
+ input.addEventListener('focus',()=>{load().then(draw).catch(console.error)});input.addEventListener('click',draw);
+ input.addEventListener('keydown',event=>{if(event.key==='Escape')close();if(event.key==='ArrowDown'){event.preventDefault();draw();results.querySelector('button')?.focus()}if(event.key==='Enter'&&!select.value){event.preventDefault();const matches=filtered();if(matches.length===1)choose(matches[0])}});
+ results.addEventListener('pointerdown',event=>event.preventDefault());document.addEventListener('pointerdown',event=>{if(!assetField.contains(event.target))close()});
+ form.addEventListener('reset',()=>setTimeout(()=>{classes.value='';input.value='';input.setCustomValidity('');status.textContent='';close();load().catch(console.error)},0));
+ new MutationObserver(()=>load().catch(console.error)).observe(select,{childList:true});
+ window.addEventListener('skweb-synced',()=>load().catch(console.error));window.addEventListener('skweb-db-ready',()=>load().catch(console.error));load().catch(console.error);
+}
+installAssetPicker();
+
 window.SKNoveltyForm={update,updateFields,save};
 document.querySelector('#novDesc')?.addEventListener('change',updateFields);
 document.querySelector('#noveltyForm')?.addEventListener('reset',()=>setTimeout(update,0));
