@@ -12,7 +12,7 @@
     if (!loan.assetId) return 'PENDIENTE';
     const movements = (data.blendingDeliveries || []).filter(row => active(row) && row.assetId === loan.assetId);
     const asset = (data.assets || []).find(row => row.id === loan.assetId && !row.deleted);
-    if (movements.at(-1)?.id !== loan.id || !asset || norm(asset.ubicacion) === 'bodega de superficie' || norm(asset.ubicacion) !== norm(loan.destination || 'Operación')) return 'REVISAR';
+    if (movements.at(-1)?.id !== loan.id || !asset || /dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`) || norm(asset.ubicacion) === 'bodega de superficie' || norm(asset.ubicacion) !== norm(loan.destination || 'Operación')) return 'REVISAR';
     return 'PENDIENTE';
   }
   function loans(data) {
