@@ -6,6 +6,29 @@ const norm=value=>String(value||'').trim().toLocaleLowerCase('es').normalize('NF
 const isRescuer=asset=>norm(asset?.clase)==='autorrescatador';
 const isVisorChange=value=>norm(value)===norm(VISOR_CHANGE);
 const colors=()=>window.SKFormOptions?.values('asset.viewerColor')||['Marrón','Azul celeste','Blanco','Negro','Amarillo','Averiado'];
+
+const isRetirement=value=>/^(?:dada|dado) de baja mediante acta$/.test(norm(value));
+const validActa=row=>row&&!row.deleted&&row.tipo!=='OFICIO';
+const safeActaUrl=value=>{try{const url=new URL(String(value||'').trim());return ['https:','http:'].includes(url.protocol)?url.href:''}catch{return ''}};
+const escapeActa=value=>String(value??'').replace(/[&<>"']/g,char=>'&#'+char.charCodeAt(0)+';');
+let actaRows=[];
+function actaHTML(novelty,current){const document=current||{consecutivo:novelty.actaNumero,enlace:novelty.actaEnlace};if(!novelty.actaId)return '';const number='Acta N.º '+(document.consecutivo||novelty.actaNumero||'Sin número'),url=safeActaUrl(document.enlace);return '<small>'+escapeActa(number)+(url?' · <a href="'+escapeActa(url)+'" target="_blank" rel="noopener noreferrer">'+escapeActa(url)+'</a>':' · Sin enlace registrado')+'</small>'}
+function mountActaField(){
+ const form=document.querySelector('#noveltyForm');if(!form||document.querySelector('#novActaField'))return;
+ const label=document.createElement('label');label.id='novActaField';label.hidden=true;label.style.display='none';
+ label.append('ACTA');const select=document.createElement('select');select.name='actaId';select.id='novActaId';select.disabled=true;label.append(select);form.elements.descripcion.closest('label').after(label);
+ const preview=document.createElement('div');preview.id='novActaPreview';preview.className='hint';preview.style.cssText='grid-column:1/-1;overflow-wrap:anywhere';preview.hidden=true;label.after(preview);
+ select.addEventListener('change',()=>{const selected=actaRows.find(row=>row.id===select.value);preview.innerHTML=selected?actaHTML({actaId:selected.id,actaNumero:selected.consecutivo},selected):'Selecciona un acta registrada. Si no aparece, regístrala primero en Registro de documentos.'});
+}
+function updateActaField(form){
+ mountActaField();const active=isRetirement(form.elements.descripcion.value),select=form.elements.actaId,label=document.querySelector('#novActaField'),preview=document.querySelector('#novActaPreview');if(!select)return;
+ label.hidden=!active;label.style.display=active?'':'none';preview.hidden=!active;select.disabled=!active;select.required=active;
+ if(!active){select.value='';preview.replaceChildren();return}
+ const current=select.value;select.replaceChildren(new Option('Seleccionar acta registrada…',''),...actaRows.map(row=>new Option('Acta N.º '+row.consecutivo+' · '+(row.fecha||'Sin fecha')+' · '+(row.motivo||row.area||''),row.id)));select.value=current;
+ select.dispatchEvent(new Event('change'));
+ form.elements.estado.value=isRescuer(selectedAsset)?'Dado de baja':'Dado/a de baja';
+}
+
 let selectedAsset=null,generation=0,saving=false;
 function fill(select,values,current,placeholder){
   select.replaceChildren();
@@ -18,7 +41,7 @@ function updateFields(){
   const active=selectedAsset?.id===form.elements.assetId.value&&isRescuer(selectedAsset)&&isVisorChange(form.elements.descripcion.value);
   const field=document.querySelector('#novVisorField'),select=form.elements.estadoVisor;
   field.hidden=!active;field.style.display=active?'':'none';select.disabled=!active;select.required=active;
-  if(!active)select.value='';
+  if(!active)select.value='';updateActaField(form);
 }
 function defaultEventTime(form){
   const parts=new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date());
@@ -29,7 +52,7 @@ function defaultEventTime(form){
 async function update(){
   const form=document.querySelector('#noveltyForm');if(!form||typeof db==='undefined'||!db)return;
   defaultEventTime(form);
-  const ticket=++generation,assetId=form.elements.assetId.value,assets=await all('assets');
+  const ticket=++generation,assetId=form.elements.assetId.value,assets=await all('assets');actaRows=(await all('actas')).filter(validActa).sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo));
   if(ticket!==generation||assetId!==form.elements.assetId.value)return;
   const asset=assets.find(row=>row.id===assetId&&!row.deleted),changed=selectedAsset?.id!==asset?.id;
   selectedAsset=asset||null;
@@ -55,6 +78,7 @@ async function save(event){
   try{
     const data=fd(form),asset=(await all('assets')).find(row=>row.id===data.assetId&&!row.deleted);
     if(!asset)throw new Error('Selecciona un activo.');
+    if(isRetirement(data.descripcion)){const acta=(await all('actas')).find(row=>row.id===data.actaId&&validActa(row));if(!acta)throw new Error('Selecciona un acta de Registro de documentos.');data.actaNumero=acta.consecutivo;data.actaEnlace=safeActaUrl(acta.enlace);data.estado=isRescuer(asset)?'Dado de baja':'Dado/a de baja'}else{delete data.actaId;delete data.actaNumero;delete data.actaEnlace}
     const visor=isVisorChange(data.descripcion);
     if(visor&&!isRescuer(asset))throw new Error('El cambio de color del visor solo está disponible para autorrescatadores.');
     if(visor&&!colors().includes(data.estadoVisor))throw new Error('Selecciona el color del visor.');
@@ -104,7 +128,7 @@ function installAssetPicker(){
 }
 installAssetPicker();
 
-window.SKNoveltyForm={update,updateFields,save};
+mountActaField();window.SKNoveltyForm={update,updateFields,save,actaHTML};window.addEventListener('skweb-synced',update);
 document.querySelector('#novDesc')?.addEventListener('change',updateFields);
 document.querySelector('#noveltyForm')?.addEventListener('reset',()=>setTimeout(update,0));
 window.addEventListener('skweb-options-applied',update);
