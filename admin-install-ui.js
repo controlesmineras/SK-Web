@@ -131,10 +131,11 @@
       if(!search||!list||search.dataset.searchUx==='1')return false;
       search.dataset.searchUx='1';
       const update=()=>{
-        const hasText=search.value.trim().length>0;
+        const hasText=search.value.trim().length>0||document.querySelector('#inventoryItems')?.dataset.catalogKind==='spare';
         list.hidden=!hasText;
         if(count)count.hidden=!hasText;
       };
+      window.addEventListener('skweb-inventory-kind',update);
       search.addEventListener('input',()=>requestAnimationFrame(update));
       search.addEventListener('search',()=>requestAnimationFrame(update));
       document.querySelector('#newInventoryItem')?.addEventListener('click',()=>{search.value='';update()});

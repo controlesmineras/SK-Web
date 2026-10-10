@@ -10,7 +10,7 @@ function harness(){
  elements.isYtSpare.checked=true;elements.spareEquipment.value='YT 29';elements.spareItemNumber.value='27';elements.spareItemName.value='Pieza de prueba';
  const window={addEventListener(){},dispatchEvent(){}};
  const context={window,document:{querySelector:()=>status},all:async table=>rows.filter(r=>r.table===table).map(r=>r.row),put:async(table,row)=>rows.push({table,row}),uuid:()=>String(rows.length),setTimeout(){},Event:class{}};
- let source=fs.readFileSync('inventory-admin.js','utf8').replace('window.SKInventoryAdmin={mount,render}','window.SKInventoryAdmin={mount,render,save,syncSpareFields}');
+ let source=fs.readFileSync('inventory-admin.js','utf8').replace('window.SKInventoryAdmin={mount,render,openKind}','window.SKInventoryAdmin={mount,render,openKind,save,syncSpareFields}');
  vm.runInNewContext(source,context);
  return {api:window.SKInventoryAdmin,form:{elements,reportValidity(){}},rows};
 }
@@ -32,10 +32,14 @@ test('No hides fields, drops their saved values and keeps the ordinary name',asy
  const item=h.rows[0].row;assert.equal(item.name,'Guantes');assert.equal(item.spareItemName,'');assert.equal(item.spareEquipment,'');assert.equal(item.spareItemNumber,'');
  assert.equal(h.form.elements.spareItemName.closest().hidden,true);assert.equal(h.form.elements.spareItemName.disabled,true);
 });
-test('YT 28 and blank spare names cannot be saved',async()=>{
- for(const invalid of ['YT 28','']){
+test('unknown equipment and blank spare names cannot be saved',async()=>{
+ for(const invalid of ['Otro 29','']){
   const h=harness();if(invalid)h.form.elements.spareEquipment.value=invalid;else h.form.elements.spareItemName.value=' ';
   await h.api.save({currentTarget:h.form,preventDefault(){}});
   assert.equal(h.rows.length,0);
  }
+});
+
+test('both model 28 equipment types can be registered manually',async()=>{
+ for(const equipment of ['YT 28','Columna 28']){const h=harness();h.form.elements.spareEquipment.value=equipment;await h.api.save({currentTarget:h.form,preventDefault(){}});assert.equal(h.rows[0].row.spareEquipment,equipment)}
 });

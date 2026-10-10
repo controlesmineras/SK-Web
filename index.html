@@ -16,7 +16,7 @@
 <script src="admin-auth.js?v=20261009-session-renewal-1"></script>
 
 <script src="asset-record-rules.js?v=20261009-auto-number-1"></script>
-<script src="cargo-search.js?v=20260927-2"></script><script src="app.js?v=20261009-retirement-acta-1"></script><script src="admin-install-ui.js?v=20261007-2"></script>
+<script src="cargo-search.js?v=20260927-2"></script><script src="spare-catalog.js?v=20261010-1"></script><script src="app.js?v=20261010-spares-5"></script><script src="admin-install-ui.js?v=20261010-spares-5"></script>
 <script src="duplicate-person-guard.js?v=20260913-1"></script>
 <script src="active-asset-count.js?v=20260913-1"></script>
 
@@ -25,7 +25,7 @@
 <script src="plaza-movements-admin.js?v=20261008-loans-2"></script>
 <script src="asset-field-compat.js?v=20261009-assets-1"></script>
 <script src="asset-list-order.js?v=20261009-list-sort-1"></script>
-<script src="searchable-consumption.js?v=20261009-assets-1"></script>
+<script src="searchable-consumption.js?v=20261010-spares-5"></script>
 <script src="asset-marking.js?v=20261005-6"></script>
 <script src="asset-admin-ui.js?v=20261009-auto-number-1"></script>
 <script src="novelty-form.js?v=20261009-retired-location-1"></script>
@@ -33,20 +33,20 @@
 <script src="offline-navigation.js?v=20260925-2"></script>
 <script src="sync-latest.js?v=20260919-2"></script>
 <script src="sync-api.js?v=20261009-session-renewal-1"></script>
-<script src="consumption-manual-date.js?v=20260909-11"></script>
+<script src="consumption-manual-date.js?v=20261010-spares-5"></script>
 <script src="consumption-query-v2.js?v=20260911-3"></script>
 <script src="collaborator-contact-query.js?v=20260913-1"></script>
-<script src="income-module.js?v=20260920-2"></script>
-<script src="consumption-admin-delete.js?v=20260910-13"></script>
+<script src="income-module.js?v=20261010-spares-5"></script>
+<script src="consumption-admin-delete.js?v=20261010-spares-5"></script>
 <script src="personal-seed.js?v=20260908-2"></script>
 <script src="asset-seed-1.js?v=20260908-3"></script>
 <script src="asset-seed-2.js?v=20260908-3"></script>
 <script src="asset-seed-3.js?v=20260908-3"></script>
 <script src="asset-seed.js?v=20261009-assets-1"></script>
-<script src="inventory-admin.js?v=20261002-5"></script>
+<script src="inventory-admin.js?v=20261010-spares-5"></script>
 <script src="production-spares.js?v=20261010-1"></script>
 <script src="inventory-stock-query.js?v=20260914-1"></script>
-<script src="actas-admin.js?v=20260925-1"></script><script src="admin-home-navigation.js?v=20261004-1"></script>
+<script src="actas-admin.js?v=20260925-1"></script><script src="admin-home-navigation.js?v=20261010-spares-5"></script>
 <script src="form-option-catalog.js?v=20261006-4"></script>
 <script>{const button=document.querySelector('#adminHomeInfoToggle'),dialog=document.querySelector('#adminHomeInfoDialog'),close=document.querySelector('#adminHomeInfoClose');const dismiss=()=>{dialog.hidden=true;button.focus()};button?.addEventListener('click',()=>{dialog.hidden=false;close.focus()});dialog?.addEventListener('click',dismiss);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dialog.hidden)dismiss()})}window.addEventListener('load',()=>{let tries=0;const t=setInterval(async()=>{tries++;if(typeof db!=='undefined'&&db){clearInterval(t);try{await seedPersonal();await seedAssets();await refresh();document.querySelector('#syncStatus').textContent=window.skSyncApi?.configured()?'Base local lista · sincronización automática activa.':'Base local lista. Personal y activos cargados.'}catch(e){console.error(e)}}else if(tries>40)clearInterval(t)},250)})</script>
 </body></html>
