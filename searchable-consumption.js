@@ -3,9 +3,20 @@ const norm=v=>(v||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'')
 const assetNo=a=>window.SKAssetFields?.numero(a)||a.numeroClase||a.numeroYT||a.orden||'';
 const assetMark=a=>window.SKAssetFields?.marca(a)||a.marcaActual||a.marcaInterna||'';
 const machineLabel=(a,t)=>{const roman=assetMark(a),serial=a.serial&&norm(a.serial)!=='no aplica'?a.serial:'';if(t==='Columna')return[roman,serial].filter(Boolean).join(' - ');const no=assetNo(a);return[no&&`YT ${no}`,roman,serial].filter(Boolean).join(' - ')};
+function matchesItemSearch(text,number,query){
+ const q=norm(query),haystack=norm(text);
+ const requested=q.match(/\bitem\s*(\d+)\b/);
+ if(requested){
+  const actual=String(number??'').trim()||haystack.match(/\bitem\s*(\d+)\b/)?.[1]||'';
+  const rest=q.replace(requested[0],' ').replace(/\s+/g,' ').trim();
+  return actual===requested[1]&&(!rest||haystack.includes(rest));
+ }
+ if(/^\d+$/.test(q)&&String(number??'').trim())return String(number).trim()===q;
+ return !q||haystack.includes(q);
+}
 function box(input,id){let b=document.querySelector('#'+id);if(!b){b=document.createElement('div');b.id=id;b.className='liveSuggestions';input.parentElement.append(b)}return b}
 function closeBoxes(){document.querySelectorAll('.liveSuggestions').forEach(b=>b.classList.remove('open'))}
-function render(input,id,rows,onPick){const b=box(input,id),q=norm(input.value),hits=rows.filter(x=>!q||norm(x.label).includes(q)).slice(0,50);b.innerHTML=hits.map((x,i)=>`<button type="button" data-i="${i}">${x.label}</button>`).join('')||(q?'<div class="noSuggestion">Sin coincidencias</div>':'');b.classList.toggle('open',!!hits.length||!!q);b.onclick=e=>{const bt=e.target.closest('[data-i]');if(!bt)return;const x=hits[Number(bt.dataset.i)];onPick(x);b.classList.remove('open')}}
+function render(input,id,rows,onPick){const b=box(input,id),q=norm(input.value),hits=rows.filter(x=>x.p?matchesItemSearch(x.label,x.p.numero,q):!q||norm(x.label).includes(q)).slice(0,50);b.innerHTML=hits.map((x,i)=>`<button type="button" data-i="${i}">${x.label}</button>`).join('')||(q?'<div class="noSuggestion">Sin coincidencias</div>':'');b.classList.toggle('open',!!hits.length||!!q);b.onclick=e=>{const bt=e.target.closest('[data-i]');if(!bt)return;const x=hits[Number(bt.dataset.i)];onPick(x);b.classList.remove('open')}}
 async function rebuildMachines(clear=false){if(typeof all!=='function')return;const t=$('#equipmentType').value,input=$('#conAssetSearch');if(clear){input.value='';$('#conAsset').value='';$('#conModel').value='';$('#conSerial').value=''}$('#serialField').hidden=t==='Columna';input.disabled=!t;input.placeholder=t==='Columna'?'Marca interna romana de la Columna…':'Número de YT o marca interna romana…';machines=(await all('assets')).filter(a=>!a.deleted&&norm(a.clase)===norm(t)).map(a=>({a,label:machineLabel(a,t)})).filter(x=>x.label).sort((x,y)=>(Number(assetNo(x.a))||999999)-(Number(assetNo(y.a))||999999)||x.label.localeCompare(y.label,'es',{numeric:true}))}
 async function loadMachines(){await rebuildMachines(true);box($('#conAssetSearch'),'machineLive').innerHTML=''}
 function pickMachine(x){$('#conAssetSearch').value=x.label;const sel=$('#conAsset');sel.innerHTML='';option(sel,x.a.id,assetLabel(x.a));sel.value=x.a.id;$('#conModel').value=x.a.modelo||'';$('#conSerial').value=x.a.serial&&norm(x.a.serial)!=='no aplica'?x.a.serial:'';if(['28','29'].includes(String(x.a.modelo)))$('#origin').value='YT'+x.a.modelo;loadParts()}

@@ -2,6 +2,17 @@
 (()=>{
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const norm=s=>String(s||'').trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
+function matchesItemSearch(text,number,query){
+ const q=norm(query),haystack=norm(text);
+ const requested=q.match(/\bitem\s*(\d+)\b/);
+ if(requested){
+  const actual=String(number??'').trim()||haystack.match(/\bitem\s*(\d+)\b/)?.[1]||'';
+  const rest=q.replace(requested[0],' ').replace(/\s+/g,' ').trim();
+  return actual===requested[1]&&(!rest||haystack.includes(rest));
+ }
+ if(/^\d+$/.test(q)&&String(number??'').trim())return String(number).trim()===q;
+ return !q||haystack.includes(q);
+}
 const inventoryUnitValues=()=>{const units=window.SKFormOptions?.values('inventory.unit',['Unidad','Par','Rollo'])||['Unidad','Par','Rollo'];return units.some(unit=>norm(unit)===norm('Rollo'))?units:[...units,'Rollo']};
 const INVENTORY_UNITS={map:callback=>inventoryUnitValues().map(callback),find:callback=>inventoryUnitValues().find(callback)};
 const boolFields=['isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable'];
@@ -55,7 +66,7 @@ async function render(){
   if(!key||registeredNames.has(key)||registeredIds.has(asset.criteriaId)||q&&!key.includes(q))continue;
   if(!classes.has(key))classes.set(key,name);
  }
- const rows=active.filter(x=>!q||norm([itemName(x),itemSecondary(x),itemTertiary(x),itemUnit(x),x.id].filter(Boolean).join(' ')).includes(q)).map(item=>({name:itemName(item),item}));
+ const rows=active.filter(x=>matchesItemSearch([itemName(x),itemSecondary(x),itemTertiary(x),itemUnit(x),x.id].filter(Boolean).join(' '),x.spareItemNumber,q)).map(item=>({name:itemName(item),item}));
  for(const name of classes.values())rows.push({name});
  rows.sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true,sensitivity:'base'}));
  const count=document.querySelector('#inventoryItemCount'),list=document.querySelector('#inventoryItemList');
