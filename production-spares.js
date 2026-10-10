@@ -6,8 +6,8 @@
   const items=[],balances=[],names=new Set(criteria.map(item=>norm(item.name))),ids=new Set(criteria.map(item=>item.id)),stockIds=new Set(stocks.map(row=>row.itemId));
   const candidates=parts.filter(part=>!part.deleted&&part.active!==false&&String(part.detalle).trim()==='29'&&String(part.nombre||'').trim());
   for(const part of candidates){
-   // Consumo utiliza actualmente el catálogo del modelo 29 para ambos equipos.
-   const equipment=norm(part.clase)==='columna'?['Columna 29']:['YT 29','Columna 29'];
+   // La clase del catálogo es la fuente: compartir modelo no implica compartir repuestos.
+   const equipment=norm(part.clase)==='columna'?['Columna 29']:norm(part.clase)==='yt'?['YT 29']:[];
    for(const type of equipment){
     const number=String(part.numero??'').trim(),name=String(part.nombre).trim(),visible=label(type,number,name);
     const existing=criteria.find(item=>norm(item.name)===norm(visible)||(item.isYtSpare&&item.spareEquipment===type&&String(item.spareItemNumber??'').trim()===number&&norm(item.spareItemName)===norm(name)));
@@ -18,6 +18,18 @@
     names.add(norm(visible));ids.add(id);
     if(!stockIds.has(id)){balances.push({id:'stock-'+id,itemId:id,quantity:0,initialQuantity:0,active:true,initialRecordedAt:timestamp,createdAt:timestamp,updatedAt:timestamp,syncState:'pending'});stockIds.add(id)}
    }
+  }
+  // Retirar únicamente las copias Columna creadas automáticamente desde un repuesto YT.
+  // Conservar identificadores, saldos e historial; no tocar criterios manuales.
+  for(const item of criteria){
+   if(item.deleted||item.active===false||item.catalogMigration!=='production-spares-v1'||item.spareEquipment!=='Columna 29')continue;
+   const source=parts.find(part=>part.id===item.productionPartId);
+   if(!source||norm(source.clase)!=='yt'||String(source.detalle).trim()!=='29')continue;
+   const number=String(source.numero??'').trim(),name=String(source.nombre||'').trim();
+   const generatedId='plaza-production-spare-v1-'+encodeURIComponent('Columna 29|'+number+'|'+norm(name));
+   if(item.id!==generatedId||item.name!==label('Columna 29',number,name)||String(item.spareItemNumber??'').trim()!==number||norm(item.spareItemName)!==norm(name))continue;
+   items.push({...item,active:false,deleted:true,deactivatedAt:timestamp,updatedAt:timestamp,syncState:'pending',catalogCorrection:'production-spares-v2',correctionReason:'Copia Columna retirada: el catálogo original identifica este repuesto como YT 29.'});
+   for(const stock of stocks.filter(row=>row.itemId===item.id))balances.push({...stock,active:false,updatedAt:timestamp,syncState:'pending'});
   }
   return {items,balances};
  }
