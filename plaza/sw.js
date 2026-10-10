@@ -1,7 +1,8 @@
-const VERSION='20261008-loans-2';
+const VERSION='20261010-yt-spares-1';
 const CACHE=`plaza-blending-shell-${VERSION}`;
 const CORE=['./','./index.html','./plaza.css','./plaza-pending.css','./plaza-collaborator.css','./plaza-home.css','./plaza.js','./asset-returns.js','./plaza-collaborator.js','./asset-not-found.js','./install-ui.js','./manifest.webmanifest','../sync-config.js','../asset-marking.js','../form-option-catalog.js','../cargo-search.js','../cargo-search.css','./icon-volqueta-32.png','./icon-volqueta-48.png','./icon-volqueta.svg','./icon-volqueta-192.png','./icon-volqueta-512.png','./icon-volqueta-180.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(async cache=>{for(const url of CORE){try{await cache.add(new Request(url,{cache:'reload'}))}catch(error){console.warn('No se pudo precargar',url,error)}}}).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('plaza-blending-shell-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('message',event=>{if(event.data?.type==='PLAZA_SKIP_WAITING')self.skipWaiting()});
 self.addEventListener('fetch',event=>{const request=event.request,url=new URL(request.url);if(request.method!=='GET'||url.origin!==self.location.origin)return;event.respondWith(fetch(request,{cache:'no-store'}).then(response=>{if(response.ok)caches.open(CACHE).then(cache=>cache.put(request.mode==='navigate'?'./index.html':request,response.clone())).catch(()=>{});return response}).catch(async()=>{if(request.mode==='navigate')return(await caches.match('./index.html'))||Response.error();return(await caches.match(request))||(await caches.match(request,{ignoreSearch:true}))||Response.error()}))});
+
