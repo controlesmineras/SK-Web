@@ -97,7 +97,7 @@ function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const
 function repairIncomeClass_(value){return /^(yt(?:\b|\d)|columnas?\b)/i.test(String(value||'').trim())}
 function sandraKMine_(value){return cargoNorm_(value).replace(/[.\s-]/g,'')==='sandrak'}
 function externalMinePrefix_(mine){const prefixes={'providencia':'P','el silencio':'S','carla':'C','alianza':'L'};return prefixes[cargoNorm_(mine)]||''}
-function plazaIncomeCapabilities_(){return{inventoryLoansV1:true,loanReturnsV1:true,externalIncomeV1:true,externalMarkSeparator:'-',minePrefixes:{'Providencia':'P','El Silencio':'S','Carla':'C','Alianza':'L'}}}
+function plazaIncomeCapabilities_(){return{movementReceiptsV1:true,independentMovementGroupsV1:true,inventoryLoansV1:true,loanReturnsV1:true,externalIncomeV1:true,externalMarkSeparator:'-',minePrefixes:{'Providencia':'P','El Silencio':'S','Carla':'C','Alianza':'L'}}}
 function validatePlazaIncomeContext_(row,asset){
  if(!row.incomeType&&!row.originMine)return false; // Compatibilidad con registros anteriores.
  if(!repairIncomeClass_(asset.clase))throw new Error('El tipo de ingreso especial solo corresponde a YT y columnas');
@@ -361,39 +361,39 @@ function applyPlazaLoanReturn_(row,asset,movements,cloud,auth){
   row.unit=loan.unit||'Unidad';
   if(asset)asset.ubicacion='Bodega de Superficie';
 }
-function plazaSync_(q){
-  const auth=verifyToken_(q.token),incoming=q.data||{},lock=LockService.getScriptLock();
-  lock.waitLock(30000);
-  try{
-    const id=findFile_(),cloud=id?readFile_(id):{},recovered=completePendingAssetMarks_(cloud),hasPending=['assets'].concat(PLAZA_WRITE).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending'));
-    if(!hasPending){if(recovered)writeFile_(id,cloud);if(!recovered&&q.since&&cloud.updatedAt===q.since)return json_({ok:true,notModified:true,updatedAt:cloud.updatedAt,capabilities:plazaIncomeCapabilities_()});const unchanged={schema:cloud.schema,updatedAt:cloud.updatedAt};PLAZA_READ.forEach(name=>unchanged[name]=Array.isArray(cloud[name])?cloud[name]:[]);unchanged.personal=unchanged.personal.map(x=>publicPerson_(x));return json_({ok:true,data:unchanged,updatedAt:cloud.updatedAt,capabilities:plazaIncomeCapabilities_()})}
+// Cada grupo conserva atomicidad; un error no impide confirmar otros grupos.
+// El protocolo es optativo para no enviar resultados parciales a clientes antiguos.
+function plazaPendingGroups_(incoming){
+  const groups=new Map(),assets=(incoming.assets||[]).filter(row=>row&&row.syncState==='pending'),attached=new Set();
+  PLAZA_WRITE.forEach(name=>{
+    (Array.isArray(incoming[name])?incoming[name]:[]).filter(row=>row&&row.syncState==='pending').forEach(row=>{
+      const key=name+':'+(row.syncEventId||row.id||'missing');
+      if(!groups.has(key))groups.set(key,{assets:[],blendingIncomes:[],blendingDeliveries:[]});
+      const group=groups.get(key);group[name].push(row);
+      assets.filter(asset=>asset.id===row.assetId).forEach(asset=>{if(!group.assets.some(entry=>entry.id===asset.id))group.assets.push(asset);attached.add(asset.id)});
+    });
+  });
+  assets.filter(asset=>!attached.has(asset.id)).forEach(asset=>groups.set('asset:'+asset.id,{assets:[asset],blendingIncomes:[],blendingDeliveries:[]}));
+  return Array.from(groups.values());
+}
+function applyPlazaChanges_(cloud,incoming,auth){
     const allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)])),cloudAssets=Array.isArray(cloud.assets)?cloud.assets:[],pendingAssets=(Array.isArray(incoming.assets)?incoming.assets:[]).filter(x=>x&&x.id&&x.syncState==='pending'),assetIds=new Set(cloudAssets.map(x=>x.id).filter(Boolean)),acceptedAssets=[];
     pendingAssets.forEach(input=>{if(assetIds.has(input.id)){const existing=cloudAssets.find(asset=>asset.id===input.id);if(existing&&existing.markingPolicy==='letters-v1'&&existing.markStatus==='pending'&&usesAutomaticAssetMark_(existing))acceptedAssets.push(Object.assign({},existing));return;}const asset=stampActor_(input,auth);if(asset.classNumberPolicy==='auto-v1'&&automaticClassNumberEligible_(asset.clase)){asset.numeroClase=automaticClassNumber_(cloudAssets.concat(acceptedAssets),asset);asset.numeroYT=asset.numeroClase;}const criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===asset.criteriaId&&!item.deleted&&item.active!==false);if(!criterion||!truthy_(criterion.isFixedAsset??criterion.esActivoFijo??criterion.CI_ES_A_FIJO))throw new Error('La clase seleccionada no está configurada como activo fijo');preparePlazaIncomeAsset_(asset);if(!hasAssetIdentity_(asset))throw new Error('Ingresa SERIAL o MARCA ANTERIOR.');const required=[['usesSerial','serial','serial'],['usesLength','largo','largo'],['usesModel','modelo','modelo'],['usesManufacturer','fabricante','fabricante'],['requiresInternalMark','marcaInterna','marca interna']];if(!String(asset.numeroClase||asset.numeroYT||'').trim())throw new Error('Falta el número de clase del activo');required.forEach(rule=>{if(!['serial','marcaInterna'].includes(rule[1])&&truthy_(criterion[rule[0]])&&!(rule[1]==='marcaInterna'&&asset.markingPolicy==='letters-v1'&&usesAutomaticAssetMark_(asset))&&!String(asset[rule[1]]||'').trim())throw new Error('Falta '+rule[2]+' del activo')});const className=String(asset.clase||'').trim().toLowerCase(),number=String(asset.numeroClase||asset.numeroYT||'').trim().toLowerCase(),serial=String(asset.serial||'').trim().toLowerCase(),mark=String(asset.marcaInterna||asset.marcaActual||'').trim().toLowerCase(),duplicate=cloudAssets.concat(acceptedAssets).find(row=>row&&!row.deleted&&String(row.clase||'').trim().toLowerCase()===className&&((serial&&String(row.serial||'').trim().toLowerCase()===serial)||(number&&String(row.numeroClase||row.numeroYT||'').trim().toLowerCase()===number)||(mark&&String(row.marcaInterna||row.marcaActual||'').trim().toLowerCase()===mark)));if(duplicate)throw new Error('El activo ya existe en la tabla de Activos fijos');asset.ubicacion='Bodega de Superficie';asset.syncState='synced';acceptedAssets.push(asset);assetIds.add(asset.id)});
     validateAssetSerials_(cloud.assets||[],acceptedAssets);const marking=assignAssetMarks_(cloud,acceptedAssets);
     if(marking.assets.length)allowed.assets=marking.assets;
     const markedIds=new Set(marking.assets.map(asset=>asset.id)),workingAssets=cloudAssets.filter(asset=>!markedIds.has(asset.id)).concat(marking.assets),workingDeliveries=(cloud.blendingDeliveries||[]).slice();
     PLAZA_WRITE.forEach(name=>{
-      const existingRows=(cloud[name]||[]).filter(Boolean),existing=new Set(existingRows.map(x=>x.id).filter(Boolean)),existingEvents=new Set(existingRows.map(x=>x.syncEventId).filter(Boolean));
-      const seenIncomingIds=new Set(),blockedEvents=new Set();
-      // Última barrera de idempotencia: una misma operación lógica no puede volver a aplicarse
-      // aunque un cliente antiguo genere nuevos id/syncEventId durante un doble envío.
-      const duplicateWindowMs=15000;
-      const movementKey=row=>[name,row.actorDocument||'',row.recipientId||'',row.itemId||'',Number(row.quantity)||0,row.assetId||'',row.destination||'',row.movementType||'',row.loanId||'',row.deliveryType||''].join('|');
-      const recentKeys=new Map();
-      existingRows.forEach(row=>{const t=Date.parse(row.createdAt||row.updatedAt||'');if(Number.isFinite(t))recentKeys.set(movementKey(row),Math.max(recentKeys.get(movementKey(row))||0,t))});
+      const existingRows=(cloud[name]||[]).filter(Boolean),existing=new Set(existingRows.map(x=>x.id).filter(Boolean));
+      const seenIncomingIds=new Set();
       const pending=(Array.isArray(incoming[name])?incoming[name]:[]).filter(x=>x&&x.syncState==='pending');
-      pending.forEach(x=>{if(x.syncEventId&&existingEvents.has(x.syncEventId))blockedEvents.add(x.syncEventId)});
       allowed[name]=pending.filter(x=>{
-        if(!x.id||existing.has(x.id)||seenIncomingIds.has(x.id))return false;
+        if(!x.id)throw new Error('Movimiento sin identificador');
+        if(existing.has(x.id)||seenIncomingIds.has(x.id))return false;
         seenIncomingIds.add(x.id);
-        if(x.syncEventId&&blockedEvents.has(x.syncEventId))return false;
         return true;
       }).map(x=>{
-        const row=stampActor_(x,auth),qty=Number(row.quantity),movementTime=Date.parse(row.createdAt||row.updatedAt||'')||Date.now(),key=movementKey(row),lastTime=recentKeys.get(key)||0;
-        // Un activo puede prestarse de nuevo inmediatamente después de devolverlo.
-        // Sus identificadores y la ubicación validan duplicados sin descartar ese nuevo préstamo.
-        if(!row.assetId&&row.movementType!=='DEVOLUCIÓN'&&cargoNorm_(row.deliveryType)!=='prestamo'&&lastTime&&Math.abs(movementTime-lastTime)<=duplicateWindowMs)return null;
-        recentKeys.set(key,movementTime);
+        const row=stampActor_(x,auth),qty=Number(row.quantity);
+        delete row.syncError;
         if(!Number.isFinite(qty)||!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');
         const isReturn=row.movementType==='DEVOLUCIÓN';
         if(isReturn&&(name!=='blendingDeliveries'||!row.loanId))throw new Error('Retorno de elementos incompleto');
@@ -427,11 +427,42 @@ function plazaSync_(q){
       }).filter(Boolean);
     });
     allowed.inventoryStock=Array.from(stock.values());
-    const merged=merge_(cloud,allowed);if(marking.registry.length)merged.assetMarkRegistry=marking.registry;writeFile_(id,merged);const view={schema:merged.schema,updatedAt:merged.updatedAt};
-    PLAZA_READ.forEach(name=>view[name]=Array.isArray(merged[name])?merged[name]:[]);view.personal=view.personal.map(x=>publicPerson_(x));
-    return json_({ok:true,data:view,capabilities:plazaIncomeCapabilities_()});
+    const merged=merge_(cloud,allowed);if(marking.registry.length)merged.assetMarkRegistry=marking.registry;return merged;
+}
+function plazaSync_(q){
+  const auth=verifyToken_(q.token),incoming=q.data||{},lock=LockService.getScriptLock();
+  lock.waitLock(30000);
+  try{
+    const id=findFile_(),cloud=id?readFile_(id):{},recovered=completePendingAssetMarks_(cloud);
+    const names=['assets'].concat(PLAZA_WRITE),hasPending=names.some(name=>Array.isArray(incoming[name])&&incoming[name].some(row=>row&&row.syncState==='pending'));
+    const protocol=q.syncProtocol==='plaza-receipts-v1',acknowledgements={assets:[],blendingIncomes:[],blendingDeliveries:[]};
+    let merged=cloud,changed=recovered;
+    if(hasPending){
+      if(!protocol){merged=applyPlazaChanges_(JSON.parse(JSON.stringify(cloud)),incoming,auth);changed=true}
+      else{
+        const errors={assets:new Map(),blendingIncomes:new Map(),blendingDeliveries:new Map()};
+        plazaPendingGroups_(incoming).forEach(group=>{
+          try{merged=applyPlazaChanges_(JSON.parse(JSON.stringify(merged)),group,auth);changed=true}
+          catch(error){names.forEach(name=>(group[name]||[]).forEach(row=>errors[name].set(row.id,String(error.message||error))))}
+        });
+        names.forEach(name=>{
+          const before=new Set((cloud[name]||[]).map(row=>row.id)),after=new Set((merged[name]||[]).map(row=>row.id));
+          (Array.isArray(incoming[name])?incoming[name]:[]).filter(row=>row&&row.syncState==='pending').forEach(row=>{
+            acknowledgements[name].push(after.has(row.id)?{id:row.id,status:before.has(row.id)?'already-applied':'accepted'}:{id:row.id,status:'rejected',error:errors[name].get(row.id)||'No se confirmó este registro'});
+          });
+        });
+      }
+    }
+    // No se emite ningún recibo de éxito antes de confirmar la escritura central.
+    if(changed)writeFile_(id,merged);
+    const receipt=protocol?{syncProtocol:'plaza-receipts-v1',acknowledgements:acknowledgements}:{};
+    if(!hasPending&&!changed&&q.since&&merged.updatedAt===q.since)return json_(Object.assign({ok:true,notModified:true,updatedAt:merged.updatedAt,capabilities:plazaIncomeCapabilities_()},receipt));
+    const view={schema:merged.schema,updatedAt:merged.updatedAt};
+    PLAZA_READ.forEach(name=>view[name]=Array.isArray(merged[name])?merged[name]:[]);view.personal=view.personal.map(row=>publicPerson_(row));
+    return json_(Object.assign({ok:true,data:view,updatedAt:merged.updatedAt,capabilities:plazaIncomeCapabilities_()},receipt));
   }finally{lock.releaseLock()}
 }
+
 function stampActor_(x,auth){if(!x||!x.id)throw new Error('Movimiento sin identificador');const out=Object.assign({},x);out.actorDocument=auth.document;out.actorRole=auth.role;delete out.pinHash;delete out.plazaEnabled;delete out.plazaRole;return out}
 function truthy_(value){return value===true||['true','si','sí','1','yes'].indexOf(String(value||'').trim().toLowerCase())>=0}
 function hashPin_(document,pin){const salt=PropertiesService.getScriptProperties().getProperty('SK_AUTH_SALT');if(!salt)throw new Error('Falta configurar SK_AUTH_SALT');return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,document+'|'+pin+'|'+salt,Utilities.Charset.UTF_8))}
@@ -451,3 +482,4 @@ function findFile_(){const cache=CacheService.getScriptCache(),cached=cache.get(
 function readFile_(id){return JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8'))}
 function writeFile_(id,data){const body=JSON.stringify(data);if(id){DriveApp.getFileById(id).setContent(body);return id}return DriveApp.createFile(CLOUD_FILE,body,MimeType.PLAIN_TEXT).getId()}
 function json_(x){return ContentService.createTextOutput(JSON.stringify(x)).setMimeType(ContentService.MimeType.JSON)}
+

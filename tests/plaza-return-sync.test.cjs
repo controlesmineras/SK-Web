@@ -32,9 +32,9 @@ test('servidor actualizado confirma la devolución sin perder otra guardada dura
   if(calls===1)return{ok:true,capabilities:{inventoryLoansV1:true}};
   assert.equal(q.data.blendingDeliveries[0].id,'return');
   data.blendingDeliveries.push({id:'return2',syncEventId:'return2',movementType:'DEVOLUCIÓN',loanId:'loan2',syncState:'pending'});
-  return{ok:true,capabilities:{inventoryLoansV1:true},data:{personal:[],assets:[{id:'asset',ubicacion:'Bodega de Superficie',syncState:'synced'}],blendingIncomes:[],blendingDeliveries:[{...clone(q.data.blendingDeliveries[0]),syncState:'synced'}]}};
+  return{ok:true,capabilities:{inventoryLoansV1:true},data:{inventoryCriteria:[],inventoryStock:[],personal:[],assets:[{id:'asset',ubicacion:'Bodega de Superficie',syncState:'synced'}],blendingIncomes:[],blendingDeliveries:[{...clone(q.data.blendingDeliveries[0]),syncState:'synced'}]}};
  });
- assert.equal(await h.api.sync(true),true);assert.equal(calls,2);
+ assert.equal(await h.api.sync(true),false);assert.equal(calls,2);
  const rows=h.api.get().blendingDeliveries;assert.equal(rows.length,2);assert.equal(rows[0].syncState,'synced');assert.equal(rows[1].syncState,'pending');
  assert.equal(JSON.parse(h.storage.get('skPlazaData')).blendingDeliveries.length,2);
 });
@@ -59,7 +59,7 @@ test('Prestar filtra por el permiso existente y Entregas mantiene su catálogo',
 test('el modo determina préstamo o asignación sin selector y controla cantidades fraccionadas',()=>{
  const h=harness(),criterion={id:'fixed',name:'Pulidora',isFixedAsset:true,allowLoan:true};
  const data={inventoryCriteria:[criterion,{id:'quantity',name:'Herramienta',allowLoan:true}],assets:[{id:'asset',clase:'Pulidora',ubicacion:'Bodega de Superficie'}],inventoryStock:[{id:'stock',itemId:'quantity',quantity:10}]};
- h.api.set(data);const fields={itemId:{value:'fixed'},assetId:{value:'asset'},quantity:{value:'2'},destination:{value:'Operación'},notes:{value:''}};h.nodes.set('#deliveryForm',{elements:fields});
+ h.api.set(data);const fields={itemId:{value:'fixed'},assetId:{value:'asset'},quantity:{value:'2'},destination:{value:'Operación'},destinationLevel:{value:''},notes:{value:''}};h.nodes.set('#deliveryForm',{elements:fields});
  h.api.mode('assignment');assert.equal(h.api.currentDeliveryItem().deliveryType,'ASIGNACIÓN');
  h.api.mode('loan');assert.equal(h.api.currentDeliveryItem().deliveryType,'PRÉSTAMO');
  criterion.allowLoan=false;assert.equal(h.api.currentDeliveryItem(),null);
@@ -80,7 +80,8 @@ test('una devolución por cantidad creada durante la sincronización conserva el
  const h=harness();h.api.set({assets:[],personal:[],inventoryStock:[{id:'stock',itemId:'tool',quantity:5}],blendingDeliveries:[],blendingIncomes:[]});
  h.api.post(async()=>{
   h.api.get().blendingDeliveries.push({id:'return-quantity',itemId:'tool',quantity:3,movementType:'DEVOLUCIÓN',syncState:'pending'});
-  return{ok:true,data:{assets:[],personal:[],inventoryStock:[{id:'stock',itemId:'tool',quantity:5}],blendingDeliveries:[],blendingIncomes:[]}};
+  return{ok:true,data:{inventoryCriteria:[],assets:[],personal:[],inventoryStock:[{id:'stock',itemId:'tool',quantity:5}],blendingDeliveries:[],blendingIncomes:[]}};
  });
- assert.equal(await h.api.sync(true),true);assert.equal(h.api.get().inventoryStock[0].quantity,8);assert.equal(h.api.get().blendingDeliveries.length,1);
+ assert.equal(await h.api.sync(true),false);assert.equal(h.api.get().inventoryStock[0].quantity,8);assert.equal(h.api.get().blendingDeliveries.length,1);
 });
+
