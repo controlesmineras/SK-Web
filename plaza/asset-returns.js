@@ -21,7 +21,15 @@
   const localTime = date => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const personLabel = person => [person.documento, person.nombre].filter(Boolean).join(' · ');
   const dateLabel = value => value ? new Date(value).toLocaleString('es-CO') : 'No informada';
-  let selectedId = '', saving = false, syncError = '';
+  let selectedId = '', saving = false, syncError = '', readOnly = false;
+  function setReadOnly(value) {
+    readOnly = Boolean(value);
+    reset();
+    const title = $('#assetReturnsTitle'), hint = $('#assetReturnsHint');
+    if (title) title.textContent = readOnly ? 'PRÉSTAMOS Y DEVOLUCIONES' : 'RETORNO DE ELEMENTOS';
+    if (hint) hint.textContent = readOnly ? 'Consulta los préstamos pendientes, las devoluciones y su historial.' : 'Busca el préstamo y registra el regreso a bodega de los elementos prestados.';
+    refresh();
+  }
   function setSyncError(message) {
     syncError = message || '';
     const node = $('#assetReturnSyncError');
@@ -60,7 +68,7 @@
     $('#assetReturnCount').textContent = `${count} ${count === 1 ? 'préstamo pendiente' : 'préstamos pendientes'} · Sin límite de fecha`;
     host.innerHTML = rows.map(({loan, state}) => {
       const person = people.get(loan.recipientId), back = returned(data, loan);
-      return `<article class="assetReturnCard"><div><b>${esc(loan.assetLabel || loan.itemName || 'Elemento')}</b><span>Prestado a: ${esc(person?.nombre || loan.recipientName || 'No informado')}</span><span>Documento: ${esc(person?.documento || loan.recipientDocument || 'No informado')}</span><span>Préstamo: ${esc(dateLabel(loan.createdAt))}</span>${loan.assetId ? '' : `<span>Cantidad: ${esc(loan.quantity)} ${esc(loan.unit || 'Unidad')}</span>`}<strong class="loanState">${state}</strong>${back ? `<span>Devolución: ${esc(dateLabel(back.returnedAt || back.createdAt))}</span><span>Devuelve: ${esc(back.returnedByName || back.returnedByDocument)}</span><span>Recibe: ${esc(back.operatorName || back.actorDocument || back.operatorDocument)}</span>${back.notes ? `<span>Observaciones: ${esc(back.notes)}</span>` : ''}<span>${back.syncState === 'pending' ? 'Pendiente de sincronizar' : 'Sincronizado'}</span>` : state === 'REVISAR' ? '<span>El activo tiene otro movimiento o ubicación. Sincroniza y revisa su historial.</span>' : ''}</div>${state === 'PENDIENTE' ? `<button type="button" data-return-loan="${esc(loan.id)}">RETORNAR ELEMENTOS</button>` : ''}</article>`;
+      return `<article class="assetReturnCard"><div><b>${esc(loan.assetLabel || loan.itemName || 'Elemento')}</b><span>Prestado a: ${esc(person?.nombre || loan.recipientName || 'No informado')}</span><span>Documento: ${esc(person?.documento || loan.recipientDocument || 'No informado')}</span><span>Préstamo: ${esc(dateLabel(loan.createdAt))}</span>${loan.assetId ? '' : `<span>Cantidad: ${esc(loan.quantity)} ${esc(loan.unit || 'Unidad')}</span>`}<strong class="loanState">${state}</strong>${back ? `<span>Devolución: ${esc(dateLabel(back.returnedAt || back.createdAt))}</span><span>Devuelve: ${esc(back.returnedByName || back.returnedByDocument)}</span><span>Recibe: ${esc(back.operatorName || back.actorDocument || back.operatorDocument)}</span>${back.notes ? `<span>Observaciones: ${esc(back.notes)}</span>` : ''}<span>${back.syncState === 'pending' ? 'Pendiente de sincronizar' : 'Sincronizado'}</span>` : state === 'REVISAR' ? '<span>El activo tiene otro movimiento o ubicación. Sincroniza y revisa su historial.</span>' : ''}</div>${!readOnly && state === 'PENDIENTE' ? `<button type="button" data-return-loan="${esc(loan.id)}">RETORNAR ELEMENTOS</button>` : ''}</article>`;
     }).join('') || '<p class="permission">No hay préstamos que coincidan con esta búsqueda.</p>';
     if (selectedId) {
       const selected = loans(data).find(row => row.id === selectedId);
@@ -73,6 +81,7 @@
     if ($('#assetReturnForm')) $('#assetReturnForm').hidden = true;
   }
   function selectLoan(id) {
+    if (readOnly) return;
     const data = window.SKPlaza.getData(), loan = loans(data).find(row => row.id === id);
     if (!loan || loanState(data, loan) !== 'PENDIENTE') return refresh();
     selectedId = id;
@@ -87,7 +96,7 @@
   }
   function save(event) {
     event.preventDefault();
-    if (saving) return;
+    if (readOnly || saving) return;
     saving = true;
     const form = event.currentTarget, button = form.querySelector('[type="submit"]');
     button.disabled = true;
@@ -119,7 +128,7 @@
     if (!window.SKPlaza || $('#assetReturns')) return;
     const section = document.createElement('section');
     section.id = 'assetReturns'; section.className = 'view recentMovements';
-    section.innerHTML = `<h2>RETORNO DE ELEMENTOS</h2><p>Busca el préstamo y registra el regreso a bodega de la cantidad prestada.</p><div class="assetReturnFilters"><label>BUSCAR ELEMENTO O COLABORADOR<input id="assetReturnSearch" type="search" placeholder="Clase, marca, serial, nombre o documento…"></label><label>ESTADO<select id="assetReturnFilter"><option>PENDIENTE</option><option>DEVUELTO</option><option value="TODOS">TODOS</option></select></label></div><p id="assetReturnCount" class="permission" aria-live="polite"></p><form id="assetReturnForm" hidden><h3>REGISTRAR RETORNO</h3><b id="assetReturnSelected"></b><label>QUIÉN DEVUELVE<input name="returnedBy" type="search" list="assetReturnPeople" autocomplete="off" required placeholder="Buscar nombre o documento…"></label><datalist id="assetReturnPeople"></datalist><label>FECHA Y HORA DE DEVOLUCIÓN<input name="returnedAt" type="datetime-local" required></label><label>OBSERVACIONES<textarea name="notes"></textarea></label><div class="deliveryFormActions"><button type="submit">REGISTRAR RETORNO</button><button type="button" id="cancelAssetReturn">CANCELAR</button></div></form><div id="assetReturnList" class="recentMovementList"></div>`;
+    section.innerHTML = `<h2 id="assetReturnsTitle">RETORNO DE ELEMENTOS</h2><p id="assetReturnsHint">Busca el préstamo y registra el regreso a bodega de los elementos prestados.</p><div class="assetReturnFilters"><label>BUSCAR ELEMENTO O COLABORADOR<input id="assetReturnSearch" type="search" placeholder="Clase, marca, serial, nombre o documento…"></label><label>ESTADO<select id="assetReturnFilter"><option>PENDIENTE</option><option>DEVUELTO</option><option value="TODOS">TODOS</option></select></label></div><p id="assetReturnCount" class="permission" aria-live="polite"></p><form id="assetReturnForm" hidden><h3>REGISTRAR RETORNO</h3><b id="assetReturnSelected"></b><label>QUIÉN DEVUELVE<input name="returnedBy" type="search" list="assetReturnPeople" autocomplete="off" required placeholder="Buscar nombre o documento…"></label><datalist id="assetReturnPeople"></datalist><label>FECHA Y HORA DE DEVOLUCIÓN<input name="returnedAt" type="datetime-local" required></label><label>OBSERVACIONES<textarea name="notes"></textarea></label><div class="deliveryFormActions"><button type="submit">REGISTRAR RETORNO</button><button type="button" id="cancelAssetReturn">CANCELAR</button></div></form><div id="assetReturnList" class="recentMovementList"></div>`;
     $('#contacts').after(section);
     $('#assetReturnSearch').addEventListener('input', refresh);
     $('#assetReturnFilter').addEventListener('change', refresh);
@@ -136,6 +145,6 @@
     window.addEventListener('skplaza-synced', () => { setSyncError(''); refresh(); });
     refresh();
   }
-  window.SKPlazaReturns = {isReturn, returned, loans, loanState, createReturn, refresh, reset, setSyncError, hasUnsaved:() => Boolean(selectedId)};
+  window.SKPlazaReturns = {isReturn, returned, loans, loanState, createReturn, refresh, reset, setReadOnly, setSyncError, hasUnsaved:() => Boolean(selectedId)};
   window.addEventListener('load', setup);
 })();
