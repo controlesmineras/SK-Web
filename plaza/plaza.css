@@ -29,3 +29,20 @@
 
 /* Ayuda informativa: tono secundario, sin atenuar controles ni errores. */
 .deliveryAssetDetails .assetRegisterHint{color:#667085;font-size:.86rem;font-weight:400;line-height:1.45}
+
+/* Expand the deliveries behind each employee total in the stock query. */
+.queryPersonDeliveries{min-width:0;border:1px solid #d7e0e7;border-radius:10px;background:#fff;overflow-wrap:anywhere}
+.queryPersonDeliveries>summary{display:grid;gap:10px;padding:14px;cursor:pointer;list-style:none;border-radius:10px}
+.queryPersonDeliveries>summary::-webkit-details-marker{display:none}
+.queryPersonDeliveries>summary:focus-visible{outline:3px solid #397497;outline-offset:2px}
+.queryPersonDeliveries>summary:hover,.queryPersonDeliveries[open]>summary{background:#eaf1f6}
+.queryPersonSummary{display:grid;gap:6px;min-width:0}
+.queryPersonSummary>b{color:#21344b}
+.queryPersonDeliveries .queryDeliveryToggle,.queryPersonDeliveries .queryDeliveryToggle span{color:#173d59;font-size:.8rem;font-weight:800}
+.queryDeliveryToggle:after{content:' ▾'}
+.queryPersonDeliveries[open] .queryDeliveryToggle:after{content:' ▴'}
+.queryPersonDeliveries .queryDeliveryHide,.queryPersonDeliveries[open] .queryDeliveryShow{display:none}
+.queryPersonDeliveries[open] .queryDeliveryHide{display:inline}
+.queryDeliveryDetails{padding:0 12px 12px;border-top:1px solid #d7e0e7}
+.queryDeliveryDetails>p{margin:12px 0;color:#52687a;font-size:.86rem}
+.inventoryQuery .queryDeliveryDetails>.recentMovementList{margin:0}
