@@ -46,3 +46,12 @@
 .queryDeliveryDetails{padding:0 12px 12px;border-top:1px solid #d7e0e7}
 .queryDeliveryDetails>p{margin:12px 0;color:#52687a;font-size:.86rem}
 .inventoryQuery .queryDeliveryDetails>.recentMovementList{margin:0}
+
+/* Opciones compactas de empresa y reposición, con área táctil de 44 px. */
+#deliveryForm .recipientCompany{min-width:0;width:min(100%,320px);margin:0;padding:6px 8px 8px;gap:8px}
+#deliveryForm .recipientCompany legend{padding:0 4px;font-size:.86rem}
+#deliveryForm .recipientCompany label{flex-direction:row;justify-content:center;min-width:0;min-height:44px;padding:8px 12px;gap:8px}
+#deliveryForm .recipientCompany input[type="radio"]{flex:0 0 18px;width:18px;height:18px;min-height:0;margin:0;padding:0;accent-color:#173d59;cursor:pointer}
+#deliveryForm .recipientCompany label:has(input:focus-visible){outline:3px solid #397497;outline-offset:2px}
+#deliveryDraft:has(>.permission:only-child){border:0;border-radius:0;background:transparent;padding:0}
+#deliveryDraft>.permission:only-child{text-align:left;line-height:1.4}
