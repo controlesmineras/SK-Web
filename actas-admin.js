@@ -85,7 +85,7 @@ function mount(){
   <label class="actaPreviousNumber" hidden>NÚMERO ORIGINAL DEL ACTA<input name="numeroAnterior" type="number" min="1" step="1" inputmode="numeric" disabled placeholder="Ejemplo: 8"></label>
   <label>FECHA<input name="fecha" type="date" required></label>
   <label class="actaArea">ÁREA<select name="area"><option value="">SELECCIONAR…</option><option>ADMINISTRATIVA</option><option>BODEGA DE SUPERFICIE</option><option>DESMIN</option><option>DESMIN - OBRAS CIVILES</option><option>PRODUCCIÓN</option><option>SEGURIDAD FÍSICA</option></select></label>
-  <label class="actaMotivo">MOTIVO DEL ACTA<select name="motivo"><option value="">SELECCIONAR…</option><option>DE COMPROMISO</option><option>DAR DE BAJA HERRAMIENTAS</option><option>INVENTARIO GENERAL</option></select></label>
+  <label class="actaMotivo">MOTIVO DEL ACTA<select name="motivo"><option value="">Seleccionar…</option><option value="DE COMPROMISO">De compromiso</option><option value="DAR DE BAJA HERRAMIENTAS">Dar de baja herramientas</option><option value="INVENTARIO GENERAL">Inventario general</option><option value="ENTREGA DE ELEMENTOS">Entrega de elementos</option></select></label>
   <label class="oficioAsunto" hidden>ASUNTO<input name="asunto" type="text"></label>
   <label class="oficioDestinatario" hidden>DIRIGIDO A<input name="dirigidoA" type="text"></label>
   <label class="documentLinkLabel">ENLACE AL ACTA DIGITALIZADA (OPCIONAL)<input name="enlace" type="url" inputmode="url" placeholder="https://…"></label>
