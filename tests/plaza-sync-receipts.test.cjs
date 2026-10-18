@@ -12,6 +12,7 @@ function client(){
  const storage=new Map(),nodes=new Map();
  const node=()=>({value:'',hidden:false,textContent:'',dataset:{},classList:{add(){},remove(){}},setAttribute(){},removeAttribute(){},addEventListener(){}});
  const ctx=vm.createContext({document:{querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}},alert(){},window:{alert(){},addEventListener(){},dispatchEvent(){}},sessionStorage:{getItem(){return null}},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:require('node:crypto').webcrypto,setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
+ vm.runInContext(read('asset-history.js'),ctx);
  const start=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
  vm.runInContext(start+'\nrender=()=>{};window.audit={sync,get:()=>data,set:value=>{data=value;localStorage.setItem("skPlazaData",JSON.stringify(value))},post:fn=>{post=fn},saveDeliveryBatch,prepareDelivery:rows=>{deliveryDraft=rows;validateDeliveryRecipient=()=>true;discardDeliveryForm=()=>{};renderRecentQueries=()=>{}}};})();',ctx);
  return {api:ctx.window.audit,storage,ctx,nodes};
@@ -125,4 +126,25 @@ test('un alta de activo y su ingreso fallido permanecen juntos sin consumir una 
  const result=b.sync({assets:[asset],blendingIncomes:[row('bad-income',{assetId:'new-asset',itemId:'fixed',quantity:0}),row('good-income')]});
  assert.equal(b.cloud().assets.length,0);assert.equal((b.cloud().assetMarkRegistry||[]).length,0);
  assert.deepEqual(b.cloud().blendingIncomes.map(r=>r.id),['good-income']);assert.equal(result.acknowledgements.assets[0].status,'rejected');
+});
+
+test('asignación guarda el inventario manual y excluye el activo aunque la ficha antigua vuelva a bodega',async()=>{
+ const c=client();const initial={personal:[{id:'recipient',nombre:'Receptor',documento:'123',area:'Desmin - Obras civiles'}],inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true}],assets:[{id:'saw1',clase:'Motosierra',serial:'TEST',ubicacion:'Bodega de Superficie'}],blendingIncomes:[],blendingDeliveries:[]};c.api.set(initial);
+ const form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'SK'}},querySelector:()=>({})};
+ const draft={itemId:'saw',assetId:'saw1',quantity:1,deliveryType:'ASIGNACIÓN',destinationArea:'Producción',destinationAreaMode:'manual'};
+ c.api.prepareDelivery([draft]);assert.equal(await c.api.saveDeliveryBatch(form),true);
+ const data=c.api.get(),movement=data.blendingDeliveries[0];assert.equal(movement.destination,'Inventario de Producción');assert.equal(movement.recipientArea,'Desmin - Obras civiles');assert.equal(data.assets[0].ubicacion,'Inventario de Producción');assert.equal(data.personal[0].area,'Desmin - Obras civiles');
+ data.assets[0].ubicacion='Bodega de Superficie';c.api.prepareDelivery([draft]);assert.equal(await c.api.saveDeliveryBatch(form),false);assert.equal(data.blendingDeliveries.length,1);
+});
+test('el destino automático sigue el área del receptor al confirmar y valida todo el lote antes de escribir',async()=>{
+ const c=client();c.api.set({personal:[{id:'recipient',nombre:'Receptor',area:'Producción'}],inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true}],assets:[{id:'saw1',clase:'Motosierra',serial:'TEST',ubicacion:'Bodega de Superficie'}],blendingIncomes:[],blendingDeliveries:[]});
+ const form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'SK'}},querySelector:()=>({})},draft={itemId:'saw',assetId:'saw1',quantity:1,deliveryType:'ASIGNACIÓN',destinationArea:'Desmin - Obras civiles',destinationAreaMode:'recipient'};
+ c.api.prepareDelivery([draft,{...draft}]);assert.equal(await c.api.saveDeliveryBatch(form),false);assert.equal(c.api.get().blendingDeliveries.length,0);assert.equal(c.api.get().assets[0].ubicacion,'Bodega de Superficie');
+ c.api.prepareDelivery([draft]);assert.equal(await c.api.saveDeliveryBatch(form),true);assert.equal(c.api.get().blendingDeliveries[0].destination,'Inventario de Producción');
+});
+test('el backend actual conserva el área destino y rechaza otra asignación del mismo activo',()=>{
+ const b=backend({assets:[{id:'asset',clase:'Motosierra',ubicacion:'Bodega de Superficie'}]});
+ const assignment=row('assigned',{assetId:'asset',quantity:1,recipientId:'recipient',deliveryType:'ASIGNACIÓN',destinationArea:'Producción',destination:'Inventario de Producción'});
+ const result=b.sync({blendingDeliveries:[assignment]});assert.equal(result.ok,true);assert.equal(b.cloud().assets[0].ubicacion,'Inventario de Producción');assert.equal(b.cloud().blendingDeliveries[0].destinationArea,'Producción');
+ const second=b.sync({blendingDeliveries:[{...assignment,id:'another',syncEventId:'second'}]});assert.equal(b.cloud().blendingDeliveries.length,1);assert.equal(second.acknowledgements.blendingDeliveries[0].status,'rejected');assert.match(second.acknowledgements.blendingDeliveries[0].error,/ya no está disponible/);assert.equal(b.cloud().assets[0].ubicacion,'Inventario de Producción');
 });

@@ -8,6 +8,7 @@ function harness(){
  const document={querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}};
  const ctx=vm.createContext({document,alert:message=>alerts.push(message),window:{alert:message=>alerts.push(message),addEventListener(){},dispatchEvent(){},SKPlazaReturns:{setSyncError:message=>errors.push(message)}},sessionStorage:{getItem(){return null}},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:{},setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
  const source=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
+ vm.runInContext(read('asset-history.js'),ctx);
  vm.runInContext(source+`\nrender=()=>{};window.testing={sync,deliveryCatalog,currentDeliveryItem,setupRegisterMenu,mode:value=>{deliveryMode=value},get:()=>data,set:value=>{data=value},post:fn=>{post=fn},storage:next=>{localStorage.setItem('skPlazaData',JSON.stringify(next));data=next}};})();`,ctx);
  return {api:ctx.window.testing,storage,alerts,errors,ctx,nodes};
 }
@@ -59,9 +60,9 @@ test('Prestar filtra por el permiso existente y Entregas mantiene su catálogo',
 test('el modo determina préstamo o asignación sin selector y controla cantidades fraccionadas',()=>{
  const h=harness(),criterion={id:'fixed',name:'Pulidora',isFixedAsset:true,allowLoan:true};
  const data={inventoryCriteria:[criterion,{id:'quantity',name:'Herramienta',allowLoan:true}],assets:[{id:'asset',clase:'Pulidora',ubicacion:'Bodega de Superficie'}],inventoryStock:[{id:'stock',itemId:'quantity',quantity:10}]};
- h.api.set(data);const fields={itemId:{value:'fixed'},assetId:{value:'asset'},quantity:{value:'2'},destination:{value:'Operación'},destinationLevel:{value:''},notes:{value:''}};h.nodes.set('#deliveryForm',{elements:fields});
+ h.api.set(data);const fields={itemId:{value:'fixed'},assetId:{value:'asset'},quantity:{value:'2'},destination:{value:'Inventario de Producción',dataset:{}},destinationLevel:{value:''},notes:{value:''}};h.nodes.set('#deliveryForm',{elements:fields});
  h.api.mode('assignment');assert.equal(h.api.currentDeliveryItem().deliveryType,'ASIGNACIÓN');
- h.api.mode('loan');assert.equal(h.api.currentDeliveryItem().deliveryType,'PRÉSTAMO');
+ fields.destination.value='Operación';h.api.mode('loan');assert.equal(h.api.currentDeliveryItem().deliveryType,'PRÉSTAMO');
  criterion.allowLoan=false;assert.equal(h.api.currentDeliveryItem(),null);
  fields.itemId.value='quantity';fields.quantity.value='2.5';assert.equal(h.api.currentDeliveryItem(),null);
  data.inventoryCriteria[1].fractionable=true;const row=h.api.currentDeliveryItem();assert.equal(row.quantity,2.5);assert.equal(row.assetId,'');assert.equal(row.deliveryType,'PRÉSTAMO');

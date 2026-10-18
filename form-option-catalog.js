@@ -46,14 +46,15 @@ function apply(){
     options(asset.elements.fabricante,brands.map(row=>row.value),{preserveUnknown:!!asset.elements.id.value,attributes:value=>({classOnly:brands.find(row=>row.value===value)?.only||''})});
     options(asset.elements.estadoVisor,values('asset.viewerColor'));
     options(asset.elements.mina,values('asset.owner'));
-    options(asset.elements.ubicacion,values('asset.location'));
+    options(asset.elements.ubicacion,values('asset.location'),{preserveUnknown:!!asset.elements.id.value});
     const states=combined('asset.state.standard','asset.state.autorrescatador');options(asset.elements.estado,states.map(row=>row.value),{attributes:value=>{const row=states.find(item=>item.value===value);return{classOnly:row?.only||'',classExclude:row?.exclude||''}}});
     options(asset.elements.marcada,values('asset.physicallyMarked'));
     options(asset.elements.disponibleEntrega,values('asset.deliveryAvailable'));
     for(const name of ['modelo','fabricante','estado'])if(asset.elements[name])delete asset.elements[name]._classCatalog;
     asset.elements.clase?.dispatchEvent(new Event('change',{bubbles:true}));
   }
-  options(document.querySelector('#deliveryForm [name="destination"]'),values('delivery.destination'));
+  const destination=document.querySelector('#deliveryForm [name="destination"]');
+  if(destination?.dataset.assignmentArea!=='1')options(destination,values('delivery.destination'),{preserveUnknown:true});
   window.dispatchEvent(new CustomEvent('skweb-options-applied'));
 }
 async function load(){const raw=window.SKPlaza?plazaRecord():await adminRecord();config=normalized(raw);apply();return config}

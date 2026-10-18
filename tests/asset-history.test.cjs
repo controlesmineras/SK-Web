@@ -9,7 +9,23 @@ test('la entrega ya registrada en Plaza completa última novedad, bodeguera y re
  assert.equal(result.asset.fechaNovedad,'2026-10-18');assert.equal(result.asset.horaNovedad,'16:06');assert.equal(result.asset.descripcionNovedad,'Asignación');
  assert.equal(result.asset.nombreResponsable,people[0].nombre);assert.equal(result.asset.documentoResponsable,'10001');assert.equal(result.asset.nombreBodeguero,people[1].nombre);
  assert.equal(result.asset.asignadaId,'receiver');assert.equal(result.asset.areaAsignada,people[0].area);assert.equal(result.asset.serial,'DEMO-27');
+ assert.equal(result.asset.ubicacion,'Inventario de '+people[0].area);assert.equal(result.asset.disponibleEntrega,'No');
  assert.equal(result.events.length,1);assert.deepEqual(history.project(asset,data),result);assert.equal(JSON.stringify({asset,data}),before);
+});
+test('una ubicación antigua de bodega no permite entregar otra vez un activo asignado',()=>{
+ const stored={...asset,ubicacion:'Bodega de Superficie'},data=seed();
+ assert.equal(history.available(stored,data),false);assert.equal(history.project(stored,data).asset.ubicacion,'Inventario de '+people[0].area);
+ data.blendingIncomes=[{id:'back-to-warehouse',assetId:asset.id,createdAt:'2026-10-19T12:00:00Z'}];
+ assert.equal(history.available(stored,data),true);assert.equal(history.project(stored,data).asset.asignadaId,'');
+ data.blendingIncomes[0].incomeType='REPARACIÓN';assert.equal(history.available(stored,data),false);
+});
+test('el inventario del área elegida es independiente del área registrada del funcionario',()=>{
+ const data=seed();Object.assign(data.blendingDeliveries[0],{destination:'Inventario de Producción',destinationArea:'Producción',recipientArea:'Desmin - Obras civiles'});
+ const result=history.project(asset,data);assert.equal(result.asset.ubicacion,'Inventario de Producción');assert.equal(result.asset.areaAsignada,'Producción');assert.equal(result.assigned.area,'Producción');assert.equal(data.personal[0].area,'Desmin - Obras civiles');
+});
+test('préstamo, devolución y nuevo préstamo con igual hora conservan el orden registrado',()=>{
+ const data=seed();data.blendingDeliveries=[{...delivery,deliveryType:'PRÉSTAMO'},{...delivery,id:'return',movementType:'DEVOLUCIÓN',loanId:'delivery',returnedAt:delivery.createdAt},{...delivery,id:'loan2',deliveryType:'PRÉSTAMO'}];
+ assert.equal(history.timeline(data,asset.id)[0].raw.id,'loan2');assert.equal(history.available({...asset,ubicacion:'Bodega de Superficie'},data),false);
 });
 test('la hora del movimiento manda sobre la de sincronización y una novedad posterior conserva sus responsables',()=>{
  const data=seed();data.blendingDeliveries[0].updatedAt='2026-10-23T21:00:00Z';
