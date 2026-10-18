@@ -81,6 +81,7 @@ async function update(){
   if(locations){const values=window.SKFormOptions?.values('asset.location')||['Bodega de Superficie','Bodega de Producción-N. 4','Socavón','Extraviado'];const choices=[...new Set([...values,asset?.ubicacion].filter(Boolean))];locations.replaceChildren(...choices.map(value=>new Option(value,value)));}
   if(changed){form.elements.ubicacion.readOnly=false;delete form.elements.ubicacion.dataset.beforeRetirement;form.elements.ubicacion.value=asset?.ubicacion||'';}
   updateFields();
+  window.SKAssetHistoryUI?.select('novelty',assetId).catch(console.error);
 }
 async function save(event){
   event.preventDefault();if(saving)return;
@@ -136,6 +137,7 @@ function installAssetPicker(){
  results.addEventListener('pointerdown',event=>event.preventDefault());document.addEventListener('pointerdown',event=>{if(!assetField.contains(event.target))close()});
  form.addEventListener('reset',()=>setTimeout(()=>{classes.value='';input.value='';input.setCustomValidity('');status.textContent='';close();load().catch(console.error)},0));
  new MutationObserver(()=>load().catch(console.error)).observe(select,{childList:true});
+ select.addEventListener('change',()=>load().catch(console.error));
  window.addEventListener('skweb-synced',()=>load().catch(console.error));window.addEventListener('skweb-db-ready',()=>load().catch(console.error));load().catch(console.error);
 }
 installAssetPicker();

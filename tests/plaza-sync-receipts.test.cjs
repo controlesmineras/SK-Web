@@ -109,14 +109,15 @@ test('un rechazo corregido se confirma sin conservar el mensaje de error',async(
 });
 
 test('una segunda entrega deliberada es válida; volver a enviar el formulario vacío no duplica',async()=>{
- const c=client();c.api.set({personal:[{id:'recipient',nombre:'Persona'}],assets:[],inventoryCriteria:[{id:'gloves',name:'Guantes'}],inventoryStock:[{id:'stock-gloves',itemId:'gloves',quantity:100}],blendingIncomes:[],blendingDeliveries:[]});
- const button={disabled:false},form={elements:{itemId:{value:''},recipientId:{value:'recipient'}},querySelector:()=>button};
+ const c=client();c.api.set({personal:[{id:'recipient',nombre:'Persona',documento:'123',area:'Producción',cargo:'Operador'}],assets:[],inventoryCriteria:[{id:'gloves',name:'Guantes'}],inventoryStock:[{id:'stock-gloves',itemId:'gloves',quantity:100}],blendingIncomes:[],blendingDeliveries:[]});
+ const button={disabled:false},form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'SK'}},querySelector:()=>button};
  const draft=()=>[{itemId:'gloves',itemName:'Guantes',quantity:2,notes:''}];
  c.api.prepareDelivery(draft());assert.equal(await c.api.saveDeliveryBatch(form),true);
  assert.equal(await c.api.saveDeliveryBatch(form),false);assert.equal(c.api.get().blendingDeliveries.length,1);
  c.api.prepareDelivery(draft());assert.equal(await c.api.saveDeliveryBatch(form),true);
  const rows=c.api.get().blendingDeliveries;assert.equal(rows.length,2);assert.notEqual(rows[0].id,rows[1].id);assert.notEqual(rows[0].syncEventId,rows[1].syncEventId);
  assert.equal(JSON.parse(c.storage.get('skPlazaData')).blendingDeliveries.length,2);
+ assert.equal(rows[0].recipientName,'Persona');assert.equal(rows[0].recipientDocument,'123');assert.equal(rows[0].recipientArea,'Producción');assert.equal(rows[0].recipientCargo,'Operador');
 });
 test('un alta de activo y su ingreso fallido permanecen juntos sin consumir una marca',()=>{
  const b=backend({inventoryCriteria:[{id:'fixed',name:'Pulidora',isFixedAsset:true},{id:'gloves',name:'Guantes'}]});
