@@ -19,7 +19,7 @@
   form.before(box);return box;
  }
  function show(target,asset,events,actas=[]){
-  const box=panel(target);if(!box)return;if(!asset){box.hidden=true;box.replaceChildren();return;}
+  const box=typeof target==='string'?panel(target):target;if(!box)return;if(!asset){box.hidden=true;box.replaceChildren();return;}
   box.hidden=false;const actaMap=new Map(actas.map(row=>[row.id,row]));
   const draw=expanded=>{const shown=expanded?events:events.slice(0,10);box.innerHTML=`<h3>Últimas novedades del activo</h3><p class="hint">${escape(label(asset))}</p><p class="hint">${shown.length} de ${events.length} novedades · Más recientes primero.</p>${shown.map(entry=>eventHTML(entry,null,actaMap.get(entry.raw.actaId))).join('')||'<p class="hint">Este activo aún no tiene novedades registradas.</p>'}${events.length>10?`<button type="button" class="historyMore">${expanded?'Mostrar últimas 10':'Ver las '+events.length+' novedades'}</button>`:''}`;box.querySelector('.historyMore')?.addEventListener('click',()=>draw(!expanded));};draw(false);
  }
