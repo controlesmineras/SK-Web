@@ -7,7 +7,7 @@ const tick=()=>new Promise(resolve=>setImmediate(resolve));
 function app(seed=[]){
  const nodes={},events={};let records=structuredClone(seed),allowed=true,readError=false,reader=null,reads=0;
  const make=()=>({value:'',innerHTML:'',textContent:'',attrs:{},handlers:{},classList:{contains:()=>true},addEventListener(type,fn){this.handlers[type]=fn},setAttribute(key,value){this.attrs[key]=value},focus(){},querySelector(selector){return selector[0]==='#'?nodes[selector.slice(1)]:nodes.back}});
- const main={append(section){nodes[section.id]=section;for(const match of section.innerHTML.matchAll(/id="([^"]+)"/g))nodes[match[1]]=make();nodes.documentQueryType.value='Todos';nodes.back=make()}};
+ const main={append(section){nodes[section.id]=section;for(const match of section.innerHTML.matchAll(/id="([^"]+)"/g))nodes[match[1]]=make();nodes.documentQueryType.value=section.innerHTML.match(/<select id="documentQueryType"><option value="([^"]+)"/)[1];nodes.back=make()}};
  const document={getElementById:id=>nodes[id],querySelector:selector=>selector==='main'?main:null,createElement:make,head:{append(){}}};
  const window={SKAdminAuth:{canView:view=>{assert.equal(view,'documentQuery');return allowed}},SKAdminNav:{openQueryMenu(){}},addEventListener:(type,fn)=>events[type]=fn};
  const context={window,document,db:{},URL,console:{error(){}},all:async store=>{assert.equal(store,'actas');reads++;if(readError)throw Error('Read failed');return reader?reader():structuredClone(records)},put(){assert.fail('Consultas must never write records')},uuid(){assert.fail('Consultas must never create records')}};
@@ -21,24 +21,31 @@ const seed=[
  {id:'other',tipo:'OFICIO',consecutivo:20,fecha:'2026-10-12',asunto:'Consulta',dirigidoA:'Otra área'},
  {id:'deleted',tipo:'ACTA',consecutivo:99,fecha:'2026-10-20',deleted:true}
 ];
-test('consulta actas anteriores y oficios juntos sin modificar datos; conserva numeraciones independientes',async()=>{
- const s=app(seed);await s.render();assert.match(s.count(),/^4 documentos/);assert.match(s.html(),/Acta N.º 8/);assert.match(s.html(),/13\/08\/2025/);assert.doesNotMatch(s.html(),/N.º 99/);
- assert.ok(s.html().indexOf('Oficio N.º 12')<s.html().indexOf('Acta N.º 12'));assert.match(s.html(),/Pendiente de sincronizar/);
+test('selector ACTAS/OFICIOS separa tipos sin modificar datos ni mezclar numeraciones',async()=>{
+ const s=app(seed);await s.render();assert.equal(s.nodes.documentQueryType.value,'ACTA');assert.match(s.count(),/^2 documentos/);assert.match(s.html(),/Acta N.º 8/);assert.match(s.html(),/13\/08\/2025/);assert.doesNotMatch(s.html(),/N.º 99|Oficio/);
  assert.doesNotMatch(s.html(),/<form|<input|<select|<button|data-acta-id|Editar|Eliminar|Guardar/);
- s.filter('documentQuerySearch','12');assert.match(s.count(),/^2 documentos/);assert.doesNotMatch(s.html(),/Oficio N.º 20/);
- s.filter('documentQueryType','ACTA');assert.match(s.count(),/^1 documento/);assert.match(s.html(),/Acta N.º 12/);assert.doesNotMatch(s.html(),/Oficio/);assert.deepEqual(s.records(),seed);
+ s.filter('documentQuerySearch','12');assert.match(s.count(),/^1 documento/);assert.match(s.html(),/Acta N.º 12/);
+ s.filter('documentQueryType','OFICIO');assert.match(s.count(),/^1 documento/);assert.match(s.html(),/Oficio N.º 12/);assert.doesNotMatch(s.html(),/Acta N.º/);assert.match(s.html(),/Pendiente de sincronizar/);assert.deepEqual(s.records(),seed);
+});
+test('actas se ordenan por número descendente aunque sus fechas y fechas de carga difieran',async()=>{
+ const s=app([{id:'a',consecutivo:2,fecha:'2026-10-20'},{id:'b',consecutivo:'12',fecha:'2026-01-01'},{id:'c',consecutivo:8,fecha:'2026-10-19'}]);await s.render();
+ assert.deepEqual(Array.from(s.html().matchAll(/<h3>Acta N.º (\d+)<\/h3>/g),m=>m[1]),['12','8','2']);assert.match(s.count(),/Número de acta: de mayor a menor/);
+});
+test('oficios se ordenan por fecha de origen ascendente; sin fecha van al final',async()=>{
+ const s=app([{id:'a',tipo:'OFICIO',consecutivo:1,fecha:'2026-10-20',createdAt:'2025-01-01'},{id:'b',tipo:'OFICIO',consecutivo:12,fecha:'2025-01-01',createdAt:'2026-10-20'},{id:'c',tipo:'OFICIO',consecutivo:8,fecha:'2026-10-19'},{id:'d',tipo:'OFICIO',consecutivo:5}]);await s.render();s.filter('documentQueryType','OFICIO');
+ assert.deepEqual(Array.from(s.html().matchAll(/<h3>Oficio N.º (\d+)<\/h3>/g),m=>m[1]),['12','8','1','5']);assert.match(s.count(),/Fecha de origen: del más antiguo al más reciente/);assert.match(s.html(),/Sin fecha/);
 });
 test('búsqueda sin tildes, filtros por tipo/fecha inclusiva, validación y limpieza',async()=>{
  const s=app(seed);await s.render();s.filter('documentQuerySearch','produccion entrega');assert.match(s.count(),/^1 documento/);assert.match(s.html(),/Acta N.º 8/);
- s.filter('documentQuerySearch','dotacion gerencia');assert.match(s.count(),/^1 documento/);assert.match(s.html(),/Oficio N.º 12/);
- s.filter('documentQuerySearch','');s.filter('documentQueryFrom','2026-10-12');s.filter('documentQueryTo','2026-10-12');assert.match(s.count(),/^2 documentos/);
+ s.filter('documentQueryType','OFICIO');s.filter('documentQuerySearch','dotacion gerencia');assert.match(s.count(),/^1 documento/);assert.match(s.html(),/Oficio N.º 12/);
+ s.filter('documentQuerySearch','');s.filter('documentQueryFrom','2026-10-12');s.filter('documentQueryTo','2026-10-12');assert.match(s.count(),/^1 documento/);
  s.filter('documentQueryType','OFICIO');assert.match(s.count(),/^1 documento/);assert.match(s.html(),/Oficio N.º 20/);
  s.filter('documentQueryFrom','2026-10-13');assert.match(s.count(),/fecha inicial/);assert.equal(s.html(),'');
- s.nodes.documentQueryClear.onclick();assert.equal(s.nodes.documentQueryType.value,'Todos');assert.equal(s.nodes.documentQueryFrom.value,'');assert.match(s.count(),/^4 documentos/);
+ s.nodes.documentQueryClear.onclick();assert.equal(s.nodes.documentQueryType.value,'OFICIO');assert.equal(s.nodes.documentQueryFrom.value,'');assert.match(s.count(),/^2 documentos/);
 });
 test('enlaces HTTP(S) seguros, texto escapado y aviso cuando falta el archivo',async()=>{
  const s=app([{id:'a',consecutivo:1,area:'<img src=x onerror=alert(1)>',enlace:'javascript:alert(1)'},{id:'b',tipo:'OFICIO',consecutivo:2,enlace:'https://example.com/?q="x"&a=1'},{id:'c',consecutivo:3}]);await s.render();
- assert.match(s.html(),/Enlace no válido/);assert.match(s.html(),/Sin enlace digitalizado/);assert.doesNotMatch(s.html(),/<img|href="javascript:/);assert.match(s.html(),/&#60;img/);assert.match(s.html(),/target="_blank" rel="noopener noreferrer"/);assert.match(s.html(),/href="https:\/\/example.com\//);
+ assert.match(s.html(),/Enlace no válido/);assert.match(s.html(),/Sin enlace digitalizado/);assert.doesNotMatch(s.html(),/<img|href="javascript:/);assert.match(s.html(),/&#60;img/);s.filter('documentQueryType','OFICIO');assert.match(s.html(),/target="_blank" rel="noopener noreferrer"/);assert.match(s.html(),/href="https:\/\/example.com\//);
 });
 test('sincronización refresca la consulta y respeta filtros; falla de lectura permite reintentar',async()=>{
  const s=app(seed);await s.render();s.filter('documentQueryType','OFICIO');s.rows([...seed,{id:'new',tipo:'OFICIO',consecutivo:21,fecha:'2026-10-20'}]);s.events['skweb-synced']();await tick();assert.match(s.count(),/^3 documentos/);assert.match(s.html(),/Oficio N.º 21/);assert.doesNotMatch(s.html(),/Acta N.º/);

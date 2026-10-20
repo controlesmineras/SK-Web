@@ -5,6 +5,7 @@
  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
  const normalize=value=>text(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
  const typeOf=row=>row.tipo==='OFICIO'?'OFICIO':'ACTA';
+ const originDate=row=>/^\d{4}-\d{2}-\d{2}$/.test(text(row.fecha))?text(row.fecha):'';
  const displayDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(text(value))?value.split('-').reverse().join('/'):'Sin fecha';
  const documentUrl=value=>{try{const url=new URL(text(value));return ['http:','https:'].includes(url.protocol)?url.href:''}catch{return ''}};
  let records=[],version=0;
@@ -19,7 +20,7 @@
    <p class="hint">Consulta los documentos guardados en este dispositivo. Sincroniza para recibir los registros de otros equipos. Los enlaces digitalizados pueden requerir conexión.</p>
    <div class="documentQueryFilters">
     <label class="documentQuerySearchLabel" for="documentQuerySearch">Buscar documento<input id="documentQuerySearch" type="search" autocomplete="off" placeholder="Número, área, motivo, asunto o destinatario…"></label>
-    <label for="documentQueryType">Tipo<select id="documentQueryType"><option value="Todos">Todos</option><option value="ACTA">Actas</option><option value="OFICIO">Oficios</option></select></label>
+    <label for="documentQueryType">Tipo de documento<select id="documentQueryType"><option value="ACTA">ACTAS</option><option value="OFICIO">OFICIOS</option></select></label>
     <label for="documentQueryFrom">Fecha desde<input id="documentQueryFrom" type="date"></label>
     <label for="documentQueryTo">Fecha hasta<input id="documentQueryTo" type="date"></label>
     <button type="button" id="documentQueryClear">Limpiar filtros</button>
@@ -29,7 +30,7 @@
   main.append(section);
   section.querySelector('[data-document-query-back]').onclick=()=>window.SKAdminNav?.openQueryMenu?.();
   for(const id of ['documentQuerySearch','documentQueryType','documentQueryFrom','documentQueryTo'])node(id).addEventListener(id==='documentQuerySearch'?'input':'change',draw);
-  node('documentQueryClear').onclick=()=>{for(const id of ['documentQuerySearch','documentQueryFrom','documentQueryTo'])node(id).value='';node('documentQueryType').value='Todos';draw();node('documentQuerySearch').focus()};
+  node('documentQueryClear').onclick=()=>{for(const id of ['documentQuerySearch','documentQueryFrom','documentQueryTo'])node(id).value='';draw();node('documentQuerySearch').focus()};
   const style=document.createElement('style');style.textContent=`
    #documentQuery .sectionHead{gap:12px;flex-wrap:wrap}
    #documentQuery .documentQueryFilters{display:grid;grid-template-columns:minmax(230px,2fr) repeat(3,minmax(130px,1fr));gap:14px;align-items:end;margin:20px 0}
@@ -58,17 +59,19 @@
   const query=normalize(node('documentQuerySearch').value),type=node('documentQueryType').value,from=node('documentQueryFrom').value,to=node('documentQueryTo').value;
   if(from&&to&&from>to){host.innerHTML='';count.textContent='La fecha inicial no puede ser posterior a la fecha final.';return;}
   const rows=records.filter(row=>{
-   if(row.deleted||(type!=='Todos'&&typeOf(row)!==type))return false;
-   const date=text(row.fecha);if((from&&(!date||date<from))||(to&&(!date||date>to)))return false;
+   if(row.deleted||typeOf(row)!==type)return false;
+   const date=originDate(row);if((from&&(!date||date<from))||(to&&(!date||date>to)))return false;
    if(/^\d+$/.test(query))return Number(row.consecutivo)===Number(query);
    const haystack=normalize([typeOf(row),row.consecutivo,row.fecha,displayDate(row.fecha),row.area,row.motivo,row.asunto,row.dirigidoA].join(' '));
    return query.split(/\s+/).every(word=>haystack.includes(word));
-  }).sort((a,b)=>text(b.fecha).localeCompare(text(a.fecha))||(Number(b.consecutivo)||0)-(Number(a.consecutivo)||0)||typeOf(a).localeCompare(typeOf(b)));
-  count.textContent=`${rows.length} documento${rows.length===1?'':'s'} encontrado${rows.length===1?'':'s'} · Más recientes primero`;
+  }).sort((a,b)=>type==='ACTA'
+   ?(Number(b.consecutivo)||0)-(Number(a.consecutivo)||0)||originDate(b).localeCompare(originDate(a))
+   :(originDate(a)||'9999-12-31').localeCompare(originDate(b)||'9999-12-31')||(Number(a.consecutivo)||0)-(Number(b.consecutivo)||0));
+  count.textContent=`${rows.length} documento${rows.length===1?'':'s'} encontrado${rows.length===1?'':'s'} · ${type==='ACTA'?'Número de acta: de mayor a menor':'Fecha de origen: del más antiguo al más reciente'}`;
   host.innerHTML=rows.map(row=>{
    const type=typeOf(row),title=`${type==='ACTA'?'Acta':'Oficio'} N.º ${text(row.consecutivo)||'Sin número'}`,url=documentUrl(row.enlace);
    return `<article class="documentQueryCard"><div class="documentQueryCardHead"><h3>${esc(title)}</h3>${url?`<a class="documentQueryLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(title)}">Abrir ${type==='ACTA'?'acta':'oficio'} ↗</a>`:`<span class="documentQueryNoLink">${text(row.enlace)?'Enlace no válido':'Sin enlace digitalizado'}</span>`}</div>
-    <dl>${field('Fecha',displayDate(row.fecha))}${type==='ACTA'?field('Área',row.area)+field('Motivo',row.motivo):field('Dirigido a',row.dirigidoA)+field('Asunto',row.asunto)}</dl>
+    <dl>${field('Fecha de origen',displayDate(row.fecha))}${type==='ACTA'?field('Área',row.area)+field('Motivo',row.motivo):field('Dirigido a',row.dirigidoA)+field('Asunto',row.asunto)}</dl>
     ${row.syncState==='pending'?'<p class="documentQueryPending">Pendiente de sincronizar</p>':''}</article>`;
   }).join('')||'<p class="hint">No hay documentos que coincidan. Revisa los filtros o sincroniza para recibir registros de otros dispositivos.</p>';
  }
