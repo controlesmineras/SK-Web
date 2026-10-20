@@ -26,8 +26,8 @@
       await put('personal',{...current,...values,updatedAt:now(),syncState:'pending'});
       alert('Datos del colaborador actualizados.');
     }else{
-      await put('personal',{...mark(),...values,documento:documentNumber});
-      alert('Colaborador registrado.');
+      await put('personal',{...values,...mark(),documento:documentNumber});
+      alert('Colaborador guardado en este dispositivo. Pendiente de sincronizar con la base central.');
     }
     form.reset();
     form.elements.id.value='';
