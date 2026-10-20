@@ -23,3 +23,10 @@ Proyecto estudiado, diseñado y desarrollado por **Nelson Castellanos C.-Huy San
 ## Plaza Blending
 
 La aplicación operativa independiente vive en `/plaza/` y comparte `sk-web-central.json` con SK Web. El servidor limita Plaza a lectura operativa y escritura exclusiva de ingresos y entregas.
+
+
+## Consulta de documentos en Admin
+
+Hacer consultas → Consultar documentos · Actas y oficios muestra los registros existentes en una pantalla de solo lectura. Incluye Todos/Actas/Oficios, búsqueda por número (exacto), área, motivo, asunto o destinatario, y fechas desde/hasta opcionales e inclusivas. Abre sin filtros para incluir también documentos antiguos y muestra primero las fechas más recientes. Las actas anteriores sin campo tipo siguen apareciendo como actas.
+
+Cada resultado muestra número, fecha y los datos propios del tipo, además de Abrir acta/oficio cuando tiene un enlace HTTP(S) válido. Sin enlace o con enlace inválido se informa claramente. La consulta no permite editar ni crear documentos; el registro existente permanece en Hacer registros. Está disponible para el administrador principal y los auxiliares, con la sesión habitual. Lee la misma base local y se actualiza tras sincronizar; consultar registros funciona sin conexión, pero abrir enlaces externos puede requerir internet. No cambia la numeración, el almacenamiento ni Code.gs.
