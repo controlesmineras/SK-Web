@@ -81,7 +81,7 @@ test('una falla de servicio conserva el ID reparado para reintentar sin duplicar
 test('la recuperación conserva las eliminaciones y no inventa registros que ya no existen localmente',async()=>{
  const c=await client();assert.equal(await c.ctx.repairPersonalIds(),0);assert.deepEqual(await c.rows(),[]);await c.raw(person('',{deleted:true}));await c.ctx.repairPersonalIds();assert.equal((await c.rows())[0].deleted,true);assert.equal(await c.sync(),true);assert.equal(c.b.plaza().data.personal[0].deleted,true);
 });
-test('los demás registros mantienen la confirmación rápida sin descargar el catálogo completo',async()=>{
+test('los demás registros aceptan confirmación rápida, pero primero negocian revisiones fiables',async()=>{
  const c=await client({respond:()=>({ok:true,acknowledged:true,updatedAt:'new-cursor'})});await c.ctx.put('actas',{id:'acta-test',updatedAt:date,syncState:'pending'});
- assert.equal(await c.sync(),true);assert.equal(c.requests[0].since,date);assert.equal((await c.ctx.all('actas'))[0].syncState,'synced');assert.equal(c.storage.get('skWebServerUpdatedAt'),'new-cursor');
+ assert.equal(await c.sync(),true);assert.equal(c.requests[0].since,'');assert.equal((await c.ctx.all('actas'))[0].syncState,'synced');assert.equal(c.storage.get('skWebServerUpdatedAt'),'new-cursor');
 });

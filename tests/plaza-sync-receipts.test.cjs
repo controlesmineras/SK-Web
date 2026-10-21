@@ -4,14 +4,14 @@ const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8'),clone=x=>JSON.
 const source=read('backend/apps-script/Code.gs');
 function backend(seed={}){
  let cloud={assets:[],personal:[{id:'recipient',documento:'123'}],inventoryCriteria:[{id:'gloves',name:'Guantes'}],inventoryStock:[{id:'stock-gloves',itemId:'gloves',quantity:100}],blendingIncomes:[],blendingDeliveries:[],...clone(seed)},writes=0,locked=false;
- const ctx=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){assert.equal(locked,false);locked=true},releaseLock(){locked=false}})}});
+ const ctx=vm.createContext({Utilities:{getUuid:()=>require('node:crypto').randomUUID()},LockService:{getScriptLock:()=>({waitLock(){assert.equal(locked,false);locked=true},releaseLock(){locked=false}})}});
  vm.runInContext(source,ctx);ctx.findFile_=()=> 'file';ctx.readFile_=()=>clone(cloud);ctx.writeFile_=(_,data)=>{assert.ok(locked);cloud=clone(data);writes++};ctx.json_=clone;ctx.verifyToken_=()=>({document:'operator',role:'plaza_operator'});
  return {ctx,cloud:()=>clone(cloud),writes:()=>writes,sync:(data,protocol='plaza-receipts-v1')=>ctx.plazaSync_({token:'test',syncProtocol:protocol,data:clone(data)})};
 }
 function client(){
  const storage=new Map(),nodes=new Map();
  const node=()=>({value:'',hidden:false,textContent:'',dataset:{},classList:{add(){},remove(){}},setAttribute(){},removeAttribute(){},addEventListener(){}});
- const ctx=vm.createContext({document:{querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}},alert(){},window:{alert(){},addEventListener(){},dispatchEvent(){}},sessionStorage:{getItem(){return null}},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:require('node:crypto').webcrypto,setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
+ const ctx=vm.createContext({document:{querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}},alert(){},window:{SK_SYNC_CONFIG:{apiUrl:'https://script.google.com/macros/s/test/exec'},alert(){},addEventListener(){},dispatchEvent(){}},sessionStorage:{getItem(){return null}},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:require('node:crypto').webcrypto,setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
  vm.runInContext(read('asset-history.js'),ctx);
  const start=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
  vm.runInContext(start+'\nrender=()=>{};window.audit={sync,get:()=>data,set:value=>{data=value;localStorage.setItem("skPlazaData",JSON.stringify(value))},post:fn=>{post=fn},saveDeliveryBatch,prepareDelivery:rows=>{deliveryDraft=rows;validateDeliveryRecipient=()=>true;discardDeliveryForm=()=>{};renderRecentQueries=()=>{}}};})();',ctx);
@@ -147,4 +147,42 @@ test('el backend actual conserva el área destino y rechaza otra asignación del
  const assignment=row('assigned',{assetId:'asset',quantity:1,recipientId:'recipient',deliveryType:'ASIGNACIÓN',destinationArea:'Producción',destination:'Inventario de Producción'});
  const result=b.sync({blendingDeliveries:[assignment]});assert.equal(result.ok,true);assert.equal(b.cloud().assets[0].ubicacion,'Inventario de Producción');assert.equal(b.cloud().blendingDeliveries[0].destinationArea,'Producción');
  const second=b.sync({blendingDeliveries:[{...assignment,id:'another',syncEventId:'second'}]});assert.equal(b.cloud().blendingDeliveries.length,1);assert.equal(second.acknowledgements.blendingDeliveries[0].status,'rejected');assert.match(second.acknowledgements.blendingDeliveries[0].error,/ya no está disponible/);assert.equal(b.cloud().assets[0].ubicacion,'Inventario de Producción');
+});
+
+const collaborator={id:'person-1',documento:'TEST-123',primerNombre:'Persona',primerApellido:'Prueba',empresa:'SK 3.7',area:'Producción',cargo:'Operador minero',telefono:'111'};
+test('editar desde dos Plazas invalida las copias de otros dispositivos y de Admin',()=>{
+ const b=backend({updatedAt:'2026-10-21T00:00:00.000Z',personal:[collaborator]});
+ const cached=b.ctx.plazaSync_({token:'test',data:{}}).updatedAt;
+ b.ctx.plazaCollaborator_({token:'test',update:true,collaborator:{...collaborator,telefono:'222'}});
+ const first=b.ctx.plazaSync_({token:'test',since:cached,data:{}});
+ assert.equal(first.notModified,undefined);assert.equal(first.data.personal[0].telefono,'222');
+ b.ctx.plazaCollaborator_({token:'test',update:true,collaborator:{...collaborator,telefono:'333'}});
+ const second=b.ctx.adminSync_({},first.updatedAt,{role:'owner'});
+ assert.equal(second.notModified,undefined);assert.equal(second.data.personal[0].telefono,'333');
+ assert.notEqual(second.updatedAt,first.updatedAt);assert.equal(b.cloud().personal.length,1);
+});
+test('Plaza descarga colaboradores aunque un servidor antiguo no cambie su fecha global',async()=>{
+ const c=client(),b=backend({updatedAt:'old-revision',personal:[{...collaborator,telefono:'999'}]});
+ c.api.set({...snapshot([]),personal:[collaborator]});c.storage.set('skPlazaServerUpdatedAt','old-revision');
+ c.api.post(async q=>{assert.equal(q.since,'');const result=b.ctx.plazaSync_(q);delete result.capabilities.collaboratorRevisionsV1;return result});
+ assert.equal(await c.api.sync(true),true);assert.equal(c.api.get().personal[0].telefono,'999');
+});
+test('Plaza conserva una edición local que se hace mientras confirma la anterior',async()=>{
+ const c=client(),b=backend({personal:[collaborator]});
+ c.api.set({...snapshot([]),personal:[{...collaborator,telefono:'222',syncState:'pending',pendingOperation:'update'}]});
+ c.api.post(async q=>{if(q.action==='plazaCollaborator'){const result=b.ctx.plazaCollaborator_(q);c.api.get().personal[0].telefono='333';return result}return b.ctx.plazaSync_(q)});
+ assert.equal(await c.api.sync(true),false);assert.equal(c.api.get().personal[0].telefono,'333');assert.equal(c.api.get().personal[0].syncState,'pending');assert.equal(b.cloud().personal[0].telefono,'222');
+});
+
+test('la revisión del servidor crece incluso cuando dos ediciones comparten el mismo milisegundo',()=>{
+ const future='2099-01-01T00:00:00.000Z',b=backend({updatedAt:future,personal:[collaborator]});
+ b.ctx.plazaCollaborator_({token:'test',update:true,collaborator:{...collaborator,telefono:'222'}});const first=b.cloud().updatedAt;
+ b.ctx.plazaCollaborator_({token:'test',update:true,collaborator:{...collaborator,telefono:'333'}});
+ assert.ok(Date.parse(first)>Date.parse(future));assert.ok(Date.parse(b.cloud().updatedAt)>Date.parse(first));
+});
+test('Plaza usa la revisión solo después de confirmarla y la consulta manual siempre descarga',async()=>{
+ const c=client(),b=backend({updatedAt:'2026-10-21T00:00:00.000Z',personal:[collaborator]}),requests=[];
+ c.api.set(snapshot([]));c.api.post(async q=>{requests.push(q);return b.ctx.plazaSync_(q)});
+ assert.equal(await c.api.sync(true),true);assert.equal(await c.api.sync(true),true);assert.equal(await c.api.sync(false),true);
+ assert.equal(requests[0].since,'');assert.equal(requests[1].since,b.cloud().updatedAt);assert.equal(requests[2].since,'');
 });

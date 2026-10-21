@@ -35,3 +35,14 @@ Cada resultado muestra número, fecha y los datos propios del tipo, además de A
 ## Corrección de Consultar personal
 
 La consulta crea su pantalla al cargar el módulo por primera vez, incluso si el evento de carga de la página ya ocurrió. Usa la conexión local declarada por app.js, conserva búsqueda por nombre/documento y los demás datos del colaborador, excluye registros eliminados y sigue siendo de solo lectura. Muestra el estado de carga o un error con posibilidad de reintento; se actualiza al quedar lista la base o terminar la sincronización. Un fallo de descarga del módulo permite reintentar desde el menú. No requiere cambios en Code.gs ni modifica fichas.
+
+
+## Sincronización de colaboradores entre dispositivos
+
+Plaza envía automáticamente los colaboradores después de guardarlos localmente. Conserva las ediciones pendientes ante fallas de red y las sincroniza antes de enviar entregas o ingresos. Las consultas de personal y la pantalla de inicio comprueban cambios cada minuto mientras la aplicación está visible, al volver a ella y al abrir la consulta (con un mínimo de 30 segundos entre intentos). La actualización periódica no interrumpe formularios de entrega, ingreso o edición de colaboradores. Admin también vuelve a consultar al regresar a la pestaña.
+
+Los clientes solicitan una copia completa mientras el servicio no anuncie `collaboratorRevisionsV1`. Esto evita el antiguo «sin cambios» cuando una edición desde Plaza actualizaba una ficha sin cambiar la fecha global. La sincronización manual siempre solicita una copia completa. Por ello, la corrección del cliente funciona con el servicio Apps Script anterior.
+
+`backend/apps-script/Code.gs` incluye una mejora adicional: cada modificación de un colaborador o de su acceso incrementa la revisión compartida y devuelve su fecha de modificación. Admin y Plaza pueden entonces reutilizar revisiones de forma segura. Publicar GitHub Pages **no despliega Apps Script**: para activar esta optimización del servidor hay que actualizar Code.gs y su implementación web por separado. No se necesita ese despliegue para que los clientes corregidos vuelvan a recibir las fichas.
+
+Validación: pruebas automatizadas con bases sintéticas, ediciones desde dos Plazas, recepción en otra Plaza/Admin, compatibilidad con revisiones antiguas, revisión monotónica, conexión fallida, reintentos sin duplicar movimientos y edición local durante un envío. No se modificaron registros de producción para estas pruebas.
