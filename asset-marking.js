@@ -37,7 +37,7 @@ function show(assets,confirmed){
     const card=document.createElement('article');card.className='assetMarkCard';const name=clean(asset.clase)||'activo',description=document.createElement('p');
     description.textContent=confirmed?`Ponle esta marca ${/^(motosierra|pulidora|columna|sierra|pistola)\b/i.test(name)?'a la':'al'} ${name.toLocaleLowerCase('es')}${/^[A-Z]-[A-Z]{2}$/.test(asset.nuevaMarca||'')?', incluyendo el guion':''}:`:name;card.append(description);
     if(confirmed){const code=document.createElement('strong');code.className='assetMarkCode';code.textContent=asset.nuevaMarca;card.append(code)}
-    const detail=document.createElement('small');detail.textContent=[(asset.numeroClase||asset.numeroYT)&&`N.º de clase: ${asset.numeroClase||asset.numeroYT}`,asset.serial&&`Serial: ${asset.serial}`,asset.minaOrigen&&`Mina de origen: ${asset.minaOrigen}`,!confirmed&&'Marca pendiente de sincronización'].filter(Boolean).join(' · ');card.append(detail);cards.append(card);
+    const detail=document.createElement('small');detail.textContent=[(asset.numeroClase||asset.numeroYT)&&`N.º de clase: ${asset.numeroClase||asset.numeroYT}`,!window.SKAssetRules?.isColumn(asset)&&asset.serial&&`Serial: ${asset.serial}`,asset.minaOrigen&&`Mina de origen: ${asset.minaOrigen}`,!confirmed&&'Marca pendiente de sincronización'].filter(Boolean).join(' · ');card.append(detail);cards.append(card);
   }
   const confirmation=document.querySelector('#recordConfirmation');if(confirmation){confirmation.hidden=true;confirmation.classList.remove('visible')}
   if(!view.open){returnFocus=document.activeElement;view.showModal()}

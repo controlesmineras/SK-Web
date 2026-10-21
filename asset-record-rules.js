@@ -1,5 +1,36 @@
 // Un serial identifica un activo, independientemente de su clase.
 (() => {
+  const displayValue = value => {
+    const text = String(value ?? '').trim();
+    return /^no aplica$/i.test(text) ? '' : text;
+  };
+  const isColumn = value => /^columnas?\b/i.test(displayValue(typeof value === 'string' ? value : value?.clase));
+  const firstValue = (...values) => values.map(displayValue).find(Boolean) || '';
+  function columnIdentity(asset) {
+    const markNumber = firstValue(asset.numeroMarcaActual, asset.marcaAnterior);
+    const number = markNumber || firstValue(asset.numeroClase, asset.numeroYT, asset.orden);
+    const mark = firstValue(asset.marcaActual, asset.marcaInterna, asset.nuevaMarca);
+    return {number, mark, numberLabel:markNumber ? 'N.º de marca' : 'N.º de clase'};
+  }
+  function columnLabel(asset) {
+    const identity = columnIdentity(asset);
+    return [displayValue(asset.clase) || 'Columna',
+      identity.number && `${identity.numberLabel}: ${identity.number}`,
+      identity.mark && `Marca actual: ${identity.mark}`,
+      displayValue(asset.largo) && `${displayValue(asset.largo)} ft`,
+      displayValue(asset.minaOrigen) && `Origen: ${displayValue(asset.minaOrigen)}`
+    ].filter(Boolean).join(' · ');
+  }
+  // Renderizar la identidad vigente sin reescribir los movimientos históricos.
+  function movementLabel(row, assets = []) {
+    const asset = assets.find(asset => asset.id === row.assetId) || row.assetCandidate;
+    if (asset && isColumn(asset)) return columnLabel(asset);
+    const saved = displayValue(row.assetLabel);
+    if (isColumn(row.itemName) || isColumn(saved)) {
+      return saved.split(' · ').filter(part => !/^\s*serial\b/i.test(part)).join(' · ') || row.itemName || 'Columna';
+    }
+    return saved;
+  }
   const serialKey = value => {
     const key = String(value ?? '').trim().toLowerCase();
     return key === 'no aplica' ? '' : key;
@@ -30,7 +61,8 @@
   }
 
   function label(asset) {
+    if (isColumn(asset)) return columnLabel(asset);
     return [asset.clase, asset.numeroClase || asset.numeroYT, asset.marcaActual || asset.marcaInterna, asset.serial].filter(Boolean).join(' · ');
   }
-  window.SKAssetRules = {serialKey, duplicateSerial, identityMark, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label};
+  window.SKAssetRules = {serialKey, duplicateSerial, identityMark, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, isColumn, columnIdentity, columnLabel, movementLabel};
 })();

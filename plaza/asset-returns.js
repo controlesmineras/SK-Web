@@ -4,6 +4,7 @@
   const $ = selector => document.querySelector(selector);
   const norm = value => String(value || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
   const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  const loanLabel = (data, loan) => window.SKAssetRules?.movementLabel(loan, data.assets || []) || loan.assetLabel || loan.itemName || 'Elemento';
   const active = row => row && !row.deleted && !row.reversed && !row.reversado;
   const isReturn = row => row?.movementType === 'DEVOLUCIÓN';
   const returned = (data, loan) => (data.blendingDeliveries || []).find(row => active(row) && isReturn(row) && row.loanId === loan.id);
@@ -68,7 +69,7 @@
     $('#assetReturnCount').textContent = `${count} ${count === 1 ? 'préstamo pendiente' : 'préstamos pendientes'} · Sin límite de fecha`;
     host.innerHTML = rows.map(({loan, state}) => {
       const person = people.get(loan.recipientId), back = returned(data, loan);
-      return `<article class="assetReturnCard"><div><b>${esc(loan.assetLabel || loan.itemName || 'Elemento')}</b><span>Prestado a: ${esc(person?.nombre || loan.recipientName || 'No informado')}</span><span>Documento: ${esc(person?.documento || loan.recipientDocument || 'No informado')}</span><span>Préstamo: ${esc(dateLabel(loan.createdAt))}</span>${loan.assetId ? '' : `<span>Cantidad: ${esc(loan.quantity)} ${esc(loan.unit || 'Unidad')}</span>`}<strong class="loanState">${state}</strong>${back ? `<span>Devolución: ${esc(dateLabel(back.returnedAt || back.createdAt))}</span><span>Devuelve: ${esc(back.returnedByName || back.returnedByDocument)}</span><span>Recibe: ${esc(back.operatorName || back.actorDocument || back.operatorDocument)}</span>${back.notes ? `<span>Observaciones: ${esc(back.notes)}</span>` : ''}<span>${back.syncState === 'pending' ? 'Pendiente de sincronizar' : 'Sincronizado'}</span>` : state === 'REVISAR' ? '<span>El activo tiene otro movimiento o ubicación. Sincroniza y revisa su historial.</span>' : ''}</div>${!readOnly && state === 'PENDIENTE' ? `<button type="button" data-return-loan="${esc(loan.id)}">RETORNAR ELEMENTOS</button>` : ''}</article>`;
+      return `<article class="assetReturnCard"><div><b>${esc(loanLabel(data, loan))}</b><span>Prestado a: ${esc(person?.nombre || loan.recipientName || 'No informado')}</span><span>Documento: ${esc(person?.documento || loan.recipientDocument || 'No informado')}</span><span>Préstamo: ${esc(dateLabel(loan.createdAt))}</span>${loan.assetId ? '' : `<span>Cantidad: ${esc(loan.quantity)} ${esc(loan.unit || 'Unidad')}</span>`}<strong class="loanState">${state}</strong>${back ? `<span>Devolución: ${esc(dateLabel(back.returnedAt || back.createdAt))}</span><span>Devuelve: ${esc(back.returnedByName || back.returnedByDocument)}</span><span>Recibe: ${esc(back.operatorName || back.actorDocument || back.operatorDocument)}</span>${back.notes ? `<span>Observaciones: ${esc(back.notes)}</span>` : ''}<span>${back.syncState === 'pending' ? 'Pendiente de sincronizar' : 'Sincronizado'}</span>` : state === 'REVISAR' ? '<span>El activo tiene otro movimiento o ubicación. Sincroniza y revisa su historial.</span>' : ''}</div>${!readOnly && state === 'PENDIENTE' ? `<button type="button" data-return-loan="${esc(loan.id)}">RETORNAR ELEMENTOS</button>` : ''}</article>`;
     }).join('') || '<p class="permission">No hay préstamos que coincidan con esta búsqueda.</p>';
     if (selectedId) {
       const selected = loans(data).find(row => row.id === selectedId);
@@ -87,7 +88,7 @@
     selectedId = id;
     const form = $('#assetReturnForm'), people = (data.personal || []).filter(row => !row.deleted);
     form.reset(); form.hidden = false;
-    $('#assetReturnSelected').textContent = loan.assetId ? `${loan.assetLabel || loan.itemName}` : `${loan.itemName} · Cantidad a retornar: ${loan.quantity} ${loan.unit || 'Unidad'} (total del préstamo)`;
+    $('#assetReturnSelected').textContent = loan.assetId ? loanLabel(data, loan) : `${loan.itemName} · Cantidad a retornar: ${loan.quantity} ${loan.unit || 'Unidad'} (total del préstamo)`;
     $('#assetReturnPeople').innerHTML = people.map(person => `<option value="${esc(personLabel(person))}"></option>`).join('');
     const borrower = people.find(row => row.id === loan.recipientId);
     form.elements.returnedBy.value = borrower ? personLabel(borrower) : '';
