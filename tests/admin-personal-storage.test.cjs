@@ -6,15 +6,15 @@ const {IDBFactory}=require('fake-indexeddb');
 const read=file=>fs.readFileSync(path.join(__dirname,'..',file),'utf8'),clone=value=>JSON.parse(JSON.stringify(value));
 const date='2026-10-20T15:40:00.000Z';
 const person=(id,extra={})=>({id,documento:'TEST-100',nombre:'Persona Prueba',empresa:'SK 3.7',area:'Producción',cargo:'Operador minero',telefono:'555',createdAt:date,updatedAt:date,syncState:'pending',...extra});
-function backend(initial={}){
+function backend(initial={},role='assistant'){
  let cloud={updatedAt:date,personal:[],assets:[],inventoryCriteria:[],inventoryStock:[],blendingIncomes:[],blendingDeliveries:[],...clone(initial)};
  const ctx=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}});
  vm.runInContext(read('backend/apps-script/Code.gs'),ctx);
  ctx.findFile_=()=> 'test';ctx.readFile_=()=>clone(cloud);ctx.writeFile_=(_,value)=>{cloud=clone(value)};ctx.json_=clone;ctx.verifyToken_=()=>({document:'TEST-OPERATOR',role:'plaza_operator'});
- return{sync:q=>ctx.adminSyncAuthorized_(q.data,q.since,{role:'assistant',username:'test'}),cloud:()=>clone(cloud),plaza:()=>ctx.plazaSync_({token:'test',data:{}})};
+ return{sync:q=>ctx.adminSyncAuthorized_(q.data,q.since,{role,username:'test'}),cloud:()=>clone(cloud),plaza:()=>ctx.plazaSync_({token:'test',data:{}})};
 }
-async function client({respond,initialCloud}={}){
- const b=backend(initialCloud),storage=new Map([['skWebServerUpdatedAt',date]]),states=[],events=[],requests=[],scheduled=new Map();
+async function client({respond,initialCloud,role='assistant'}={}){
+ const b=backend(initialCloud,role),storage=new Map([['skWebServerUpdatedAt',date]]),states=[],events=[],requests=[],scheduled=new Map();
  const status={textContent:''};let timer=0;
  const window={SK_SYNC_CONFIG:{apiUrl:'https://script.google.com/macros/s/test/exec'},SKAdminAuth:{ready:()=>true,token:()=> 'test'},SKAdminSyncUI:{setState:value=>states.push(value)},addEventListener(){},dispatchEvent:event=>events.push(event)};
  const ctx=vm.createContext({window,indexedDB:new IDBFactory(),crypto:webcrypto,document:{querySelector:selector=>selector==='#syncStatus'?status:null},navigator:{onLine:true},
@@ -84,4 +84,40 @@ test('la recuperación conserva las eliminaciones y no inventa registros que ya 
 test('los demás registros aceptan confirmación rápida, pero primero negocian revisiones fiables',async()=>{
  const c=await client({respond:()=>({ok:true,acknowledged:true,updatedAt:'new-cursor'})});await c.ctx.put('actas',{id:'acta-test',updatedAt:date,syncState:'pending'});
  assert.equal(await c.sync(),true);assert.equal(c.requests[0].since,'');assert.equal((await c.ctx.all('actas'))[0].syncState,'synced');assert.equal(c.storage.get('skWebServerUpdatedAt'),'new-cursor');
+});
+
+for(const table of ['inventoryCriteria','inventoryStock','incomes']){
+ test(table+': conserva altas y ediciones hechas durante la descarga, incluso con igual fecha',async()=>{
+  const row={id:'test-'+table,name:'Original',quantity:5,updatedAt:date,syncState:'pending'};
+  const c=await client({role:'owner',initialCloud:{[table]:[]},respond:async(q,n,ctx,b)=>{const result=b.sync(q);if(n===1){await ctx.put(table,{...row,name:'Editado',quantity:8});await ctx.put(table,{...row,id:'second'});}return result}});
+  await c.ctx.put(table,row);assert.equal(await c.sync(),false);
+  const rows=await c.ctx.all(table);assert.equal(rows.length,2);assert.ok(rows.every(r=>r.syncState==='pending'));assert.equal(rows.find(r=>r.id===row.id).quantity,8);
+  assert.equal(await c.sync(),true);assert.equal(c.b.cloud()[table].length,2);assert.equal(c.b.cloud()[table].find(r=>r.id===row.id).name,'Editado');
+ });
+ test(table+': una respuesta que omite el registro no lo elimina ni lo confirma',async()=>{
+  const c=await client({respond:()=>({ok:true,data:{assets:[],[table]:[]}})});await c.ctx.put(table,{id:'local',updatedAt:date,syncState:'pending'});
+  assert.equal(await c.sync(),false);assert.equal((await c.ctx.all(table))[0].syncState,'pending');assert.ok(!c.states.includes('synced'));
+ });
+}
+test('confirmación rápida conserva una edición de saldo realizada durante el envío con la misma fecha',async()=>{
+ const row={id:'stock-test',quantity:3,updatedAt:date,syncState:'pending'};
+ const c=await client({respond:async(q,n,ctx)=>{if(n===1)await ctx.put('inventoryStock',{...row,quantity:9});return{ok:true,acknowledged:true}}});
+ await c.ctx.put('inventoryStock',row);assert.equal(await c.sync(),false);assert.equal((await c.ctx.all('inventoryStock'))[0].syncState,'pending');
+ assert.equal(await c.sync(),true);assert.equal(c.requests[1].data.inventoryStock[0].quantity,9);
+});
+test('offline y falla de servicio conservan criterio y saldo; al reconectar llegan sin duplicados',async()=>{
+ const c=await client({role:'owner',respond:(q,n,ctx,b)=>n===1?{ok:false,error:'Servicio temporalmente no disponible'}:b.sync(q)});
+ await c.ctx.put('inventoryCriteria',{id:'item-test',name:'Guantes',updatedAt:date,syncState:'pending'});
+ await c.ctx.put('inventoryStock',{id:'stock-test',itemId:'item-test',quantity:12,updatedAt:date,syncState:'pending'});
+ c.ctx.navigator.onLine=false;assert.equal(await c.sync(),false);assert.equal(c.requests.length,0);
+ c.ctx.navigator.onLine=true;assert.equal(await c.sync(),false);assert.equal((await c.ctx.all('inventoryStock'))[0].quantity,12);assert.equal((await c.ctx.all('inventoryCriteria'))[0].syncState,'pending');
+ assert.equal(await c.sync(),true);assert.equal(await c.sync(),true);assert.equal(c.b.cloud().inventoryCriteria.length,1);assert.equal(c.b.plaza().data.inventoryStock[0].quantity,12);
+});
+test('el contador mantiene el número pendiente sin conexión, con error y durante el envío',async()=>{
+ const c=await client(),badge={},doc=c.ctx.document;c.ctx.navigator.onLine=false;
+ doc.querySelector=s=>s==='#adminSyncBadge'?badge:null;
+ vm.runInContext(read('offline-navigation.js'),c.ctx);
+ await c.ctx.put('inventoryCriteria',{id:'item',syncState:'pending'});await c.ctx.put('inventoryStock',{id:'stock',quantity:4,syncState:'pending'});
+ await c.ctx.window.SKAdminSyncUI.refresh();assert.equal(badge.textContent,'2');assert.equal(badge.hidden,false);assert.match(badge.title,/sin conexión/);
+ for(const state of ['error','syncing']){c.ctx.window.SKAdminSyncUI.setState(state);await c.ctx.window.SKAdminSyncUI.refresh();assert.equal(badge.textContent,'2');assert.equal(badge.hidden,false);}
 });

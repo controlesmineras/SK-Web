@@ -87,7 +87,68 @@ function createClassCriterion(name){
 function openKind(kind){catalogKind=kind==='spare'?'spare':'common';mount();const spare=catalogKind==='spare',sec=document.querySelector('#inventoryItems');sec.dataset.catalogKind=catalogKind;document.querySelector('#inventoryCatalogTitle').textContent=spare?'Repuestos YT / Columna':'Elementos de inventario';document.querySelector('#inventoryFormTitle').textContent=spare?'Datos del repuesto':'Datos del elemento';document.querySelector('#newInventoryItem').textContent=spare?'+ Agregar repuesto':'+ Agregar elemento';document.querySelector('#spareCatalogFilter').hidden=!spare;document.querySelector('#spareCatalogFilter').value='';document.querySelector('#inventoryItemSearch').value='';sec.querySelectorAll('[data-catalog-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.catalogKind===catalogKind)));reset();render();window.dispatchEvent(new Event('skweb-inventory-kind'));}
 function reset(){const f=document.querySelector('#inventoryItemForm');delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;f.reset();f.elements.id.value='';f.elements.isYtSpare.checked=catalogKind==='spare';if(catalogKind==='spare')f.elements.unit.value='Unidad';f.elements.initialQuantity.disabled=false;f.elements.initialQuantity.value='0';f.elements.allowAssignment.checked=true;f.elements.allowLoan.checked=false;f.elements.allowTransfer.checked=true;f.elements.allowRemission.checked=true;syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);document.querySelector('#inventoryItemSave').textContent='Guardar elemento';document.querySelector('#inventoryItemDeactivate').hidden=true;document.querySelector('#inventoryItemStatus').hidden=true}
 async function edit(id){const [criteria,stock]=await Promise.all([all('inventoryCriteria'),all('inventoryStock')]),x=criteria.find(r=>r.id===id);if(!x)return;const f=document.querySelector('#inventoryItemForm'),st=stock.find(r=>r.itemId===id);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;for(const [n,v] of Object.entries({id:x.id,name:itemName(x),unit:itemUnit(x),secondaryName:itemSecondary(x),tertiaryName:itemTertiary(x),spareEquipment:x.spareEquipment||"YT 29",spareItemNumber:x.spareItemNumber||"",spareItemName:x.spareItemName||""}))if(f.elements[n])f.elements[n].value=v;f.elements.initialQuantity.value=Number(st?.quantity)||0;f.elements.initialQuantity.disabled=false;boolFields.forEach(n=>f.elements[n].checked=defaultEnabledOperations.has(n)?x[n]!==false:x[n]===true);syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);if(f.elements.fractionable.checked)f.elements.containerUnit.value=x.containerUnit||'';document.querySelector('#inventoryItemSave').textContent='Guardar cambios';document.querySelector('#inventoryItemDeactivate').hidden=false;document.querySelector('#inventoryItemDeactivate').textContent=x.isYtSpare?'Eliminar repuesto':'Retirar elemento';f.scrollIntoView({behavior:'smooth',block:'start'})}
-async function save(e){e.preventDefault();const f=e.currentTarget;syncSpareFields(f);if(f.elements.isYtSpare.checked&&(!["YT 29","Columna 29","YT 28","Columna 28"].includes(f.elements.spareEquipment.value)||!f.elements.spareItemName.value.trim())){f.reportValidity();return}const status=document.querySelector('#inventoryItemStatus'),id=f.elements.id.value,criteria=await all('inventoryCriteria'),name=f.elements.name.value.trim(),secondaryName=f.elements.secondaryName.value.trim(),tertiaryName=f.elements.tertiaryName.value.trim(),rawUnit=f.elements.unit.value.trim(),unit=f.elements.isFixedAsset.checked?'Unidad':INVENTORY_UNITS.find(x=>norm(x)===norm(rawUnit))||'',candidateNames=[{field:'name',label:'nombre del elemento',value:name},{field:'secondaryName',label:'nombre secundario',value:secondaryName},{field:'tertiaryName',label:'nombre terciario',value:tertiaryName}].filter(x=>x.value),seen=new Map();if(!unit){status.hidden=false;status.textContent='Selecciona una unidad de medida válida: Unidad, Par o Rollo.';f.elements.unit.value='';f.elements.unit.focus();return}f.elements.unit.value=unit;for(const candidate of candidateNames){const key=norm(candidate.value),previous=seen.get(key);if(previous){status.hidden=false;status.textContent=`“${candidate.value}” está repetido como ${previous.label} y ${candidate.label} en este registro.`;f.elements[candidate.field].focus();return}seen.set(key,candidate)}const activeCriteria=criteria.filter(x=>!x.deleted&&x.active!==false&&x.id!==id),existingNames=[];for(const item of activeCriteria){const official=itemName(item)||'Elemento sin nombre';for(const entry of [{label:'nombre del elemento',value:itemName(item)},{label:'nombre secundario',value:itemSecondary(item)},{label:'nombre terciario',value:itemTertiary(item)}])if(entry.value)existingNames.push({...entry,official})}for(const candidate of candidateNames){const duplicate=existingNames.find(entry=>norm(entry.value)===norm(candidate.value));if(duplicate){status.hidden=false;status.textContent=`El ${candidate.label} “${candidate.value}” ya está utilizado como ${duplicate.label} de “${duplicate.official}”. Escribe un nombre diferente.`;f.elements[candidate.field].focus();return}}const t=new Date().toISOString(),item=id?criteria.find(x=>x.id===id):{id:uuid(),createdAt:t};Object.assign(item,{deliveryWarehouse:f.elements.isYtSpare.checked?'Producción':'',isYtSpare:f.elements.isYtSpare.checked,spareEquipment:f.elements.isYtSpare.checked?f.elements.spareEquipment.value:"",spareItemNumber:f.elements.isYtSpare.checked?f.elements.spareItemNumber.value.trim():"",spareItemName:f.elements.isYtSpare.checked?f.elements.spareItemName.value.trim():"",name,unit,secondaryName,tertiaryName,containerUnit:f.elements.fractionable.checked?f.elements.containerUnit.value.trim():'',isFixedAsset:f.elements.isFixedAsset.checked,usesSerial:f.elements.usesSerial.checked,usesLength:f.elements.usesLength.checked,usesModel:f.elements.usesModel.checked,usesManufacturer:f.elements.usesManufacturer.checked,requiresInternalMark:f.elements.requiresInternalMark.checked,isEpp:f.elements.isEpp.checked,allowAssignment:f.elements.allowAssignment.checked,allowLoan:f.elements.allowLoan.checked,allowTransfer:f.elements.allowTransfer.checked,allowRemission:f.elements.allowRemission.checked,fractionable:f.elements.fractionable.checked,active:true,deleted:false,updatedAt:t,syncState:'pending'});await put('inventoryCriteria',item);if(id){const stocks=await all('inventoryStock'),st=stocks.find(x=>x.itemId===id),qty=Number(f.elements.initialQuantity.value);if(st&&Number.isFinite(qty)&&qty>=0&&qty!==Number(st.quantity||0)){st.quantity=qty;st.updatedAt=t;st.syncState='pending';await put('inventoryStock',st)}}else{const qty=Number(f.elements.initialQuantity.value)||0;await put('inventoryStock',{id:'stock-'+item.id,itemId:item.id,quantity:qty,initialQuantity:qty,active:true,initialRecordedAt:t,createdAt:t,updatedAt:t,syncState:'pending'});if(qty>0)await put('incomes',{id:uuid(),itemId:item.id,nombre:item.name,cantidad:qty,unidad:item.unit,tipo:'Existencia inicial',fechaLocal:new Date().toLocaleString('es-CO'),createdAt:t,updatedAt:t,syncState:'pending',source:'inventory-admin'}).catch(()=>{})}status.hidden=false;status.textContent=id?'Cambios guardados.':'Elemento creado y disponible para sincronizar con Plaza Blending.';await render();window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-inventory-refresh'));if(!id)setTimeout(reset,900)}
+// El criterio, su saldo y el ingreso inicial se confirman en una sola transacción.
+function persistInventory(item,quantity,isNew){return new Promise((resolve,reject)=>{
+ const tx=db.transaction(['inventoryCriteria','inventoryStock','incomes'],'readwrite');
+ const stocks=tx.objectStore('inventoryStock'),read=stocks.getAll();
+ tx.objectStore('inventoryCriteria').put(item);
+ read.onsuccess=()=>{
+  const current=read.result.find(row=>row.itemId===item.id),t=item.updatedAt;
+  if(isNew||!current){
+   stocks.put({id:'stock-'+item.id,itemId:item.id,quantity,initialQuantity:quantity,active:true,initialRecordedAt:t,createdAt:t,updatedAt:t,syncState:'pending'});
+  }else if(quantity!==Number(current.quantity||0)){
+   stocks.put({...current,quantity,updatedAt:t,syncState:'pending'});
+  }
+  if(isNew&&quantity>0)tx.objectStore('incomes').put({id:uuid(),itemId:item.id,nombre:item.name,cantidad:quantity,unidad:item.unit,tipo:'Existencia inicial',fechaLocal:new Date().toLocaleString('es-CO'),createdAt:t,updatedAt:t,syncState:'pending',source:'inventory-admin'});
+ };
+ tx.oncomplete=()=>{resolve();window.dispatchEvent(new Event('skweb-local-change'))};
+ tx.onerror=()=>reject(tx.error||new Error('No se pudo guardar el elemento en este dispositivo.'));
+ tx.onabort=()=>reject(tx.error||new Error('Se canceló el guardado local. No se guardó ningún cambio.'));
+})}
+let saving=false;
+async function save(e){
+ e.preventDefault();if(saving)return;
+ const f=e.currentTarget,status=document.querySelector('#inventoryItemStatus'),button=document.querySelector('#inventoryItemSave');
+ saving=true;button.disabled=true;let committed=false;
+ try{
+ syncSpareFields(f);
+ if(f.elements.isYtSpare.checked&&(!["YT 29","Columna 29","YT 28","Columna 28"].includes(f.elements.spareEquipment.value)||!f.elements.spareItemName.value.trim())){f.reportValidity();
+ return}const id=f.elements.id.value,criteria=await all('inventoryCriteria'),name=f.elements.name.value.trim(),secondaryName=f.elements.secondaryName.value.trim(),tertiaryName=f.elements.tertiaryName.value.trim(),rawUnit=f.elements.unit.value.trim(),unit=f.elements.isFixedAsset.checked?'Unidad':INVENTORY_UNITS.find(x=>norm(x)===norm(rawUnit))||'',candidateNames=[{field:'name',label:'nombre del elemento',value:name},{field:'secondaryName',label:'nombre secundario',value:secondaryName},{field:'tertiaryName',label:'nombre terciario',value:tertiaryName}].filter(x=>x.value),seen=new Map();
+ if(!unit){status.hidden=false;
+ status.textContent='Selecciona una unidad de medida válida: Unidad, Par o Rollo.';
+ f.elements.unit.value='';
+ f.elements.unit.focus();
+ return}f.elements.unit.value=unit;
+ for(const candidate of candidateNames){const key=norm(candidate.value),previous=seen.get(key);
+ if(previous){status.hidden=false;
+ status.textContent=`“${candidate.value}” está repetido como ${previous.label} y ${candidate.label} en este registro.`;
+ f.elements[candidate.field].focus();
+ return}seen.set(key,candidate)}const activeCriteria=criteria.filter(x=>!x.deleted&&x.active!==false&&x.id!==id),existingNames=[];
+ for(const item of activeCriteria){const official=itemName(item)||'Elemento sin nombre';
+ for(const entry of [{label:'nombre del elemento',value:itemName(item)},{label:'nombre secundario',value:itemSecondary(item)},{label:'nombre terciario',value:itemTertiary(item)}])if(entry.value)existingNames.push({...entry,official})}for(const candidate of candidateNames){const duplicate=existingNames.find(entry=>norm(entry.value)===norm(candidate.value));
+ if(duplicate){status.hidden=false;
+ status.textContent=`El ${candidate.label} “${candidate.value}” ya está utilizado como ${duplicate.label} de “${duplicate.official}”. Escribe un nombre diferente.`;
+ f.elements[candidate.field].focus();
+ return}}const t=new Date().toISOString(),item=id?criteria.find(x=>x.id===id):{id:uuid(),createdAt:t};
+ if(!item)throw new Error('No se encontró el criterio que estás editando. Vuelve a seleccionarlo.');
+ Object.assign(item,{deliveryWarehouse:f.elements.isYtSpare.checked?'Producción':'',isYtSpare:f.elements.isYtSpare.checked,spareEquipment:f.elements.isYtSpare.checked?f.elements.spareEquipment.value:"",spareItemNumber:f.elements.isYtSpare.checked?f.elements.spareItemNumber.value.trim():"",spareItemName:f.elements.isYtSpare.checked?f.elements.spareItemName.value.trim():"",name,unit,secondaryName,tertiaryName,containerUnit:f.elements.fractionable.checked?f.elements.containerUnit.value.trim():'',isFixedAsset:f.elements.isFixedAsset.checked,usesSerial:f.elements.usesSerial.checked,usesLength:f.elements.usesLength.checked,usesModel:f.elements.usesModel.checked,usesManufacturer:f.elements.usesManufacturer.checked,requiresInternalMark:f.elements.requiresInternalMark.checked,isEpp:f.elements.isEpp.checked,allowAssignment:f.elements.allowAssignment.checked,allowLoan:f.elements.allowLoan.checked,allowTransfer:f.elements.allowTransfer.checked,allowRemission:f.elements.allowRemission.checked,fractionable:f.elements.fractionable.checked,active:true,deleted:false,updatedAt:t,syncState:'pending'});
+
+ const quantity=f.elements.isFixedAsset.checked?0:Number(f.elements.initialQuantity.value);
+ if(!name)throw new Error('Escribe el nombre del elemento.');
+ if(!Number.isFinite(quantity)||quantity<0)throw new Error('La cantidad debe ser cero o mayor.');
+ await persistInventory(item,quantity,!id);committed=true;
+ reset();status.hidden=false;
+ status.textContent=(id?'Cambios guardados en este dispositivo.':'Elemento guardado en este dispositivo.')+' Pendiente de sincronizar; se enviará al tener conexión.';
+ window.dispatchEvent(new Event('skweb-inventory-refresh'));
+ window.skSyncApi?.schedule?.(300);
+ await render();
+ }catch(error){
+  status.hidden=false;
+  status.textContent=committed?'El elemento quedó guardado. No se pudo actualizar el listado; vuelve a abrirlo.':'No se pudo guardar: '+(error?.message||error);
+  console.error('SK Admin: guardar criterio',error);
+ }finally{saving=false;button.disabled=false}
+}
+
 async function deactivate(){
  const f=document.querySelector('#inventoryItemForm'),id=f.elements.id.value;if(!id)return;
  const criteria=await all('inventoryCriteria'),item=criteria.find(x=>x.id===id);if(!item)return;

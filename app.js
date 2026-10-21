@@ -13,7 +13,7 @@ function openDB(){return new Promise((ok,no)=>{const r=indexedDB.open(DB,VER);r.
    table.put(o);
   };
  }else table.put(o);
- tx.oncomplete=()=>ok(o);tx.onerror=()=>no(failure||tx.error);tx.onabort=()=>no(failure||tx.error||new Error('La escritura local fue cancelada'));
+ tx.oncomplete=()=>{ok(o);if(o?.syncState==='pending')window.dispatchEvent(new Event('skweb-local-change'))};tx.onerror=()=>no(failure||tx.error);tx.onabort=()=>no(failure||tx.error||new Error('La escritura local fue cancelada'));
 })}function clearStore(s){return new Promise((ok,no)=>{const r=db.transaction(s,'readwrite').objectStore(s).clear();r.onsuccess=()=>ok();r.onerror=()=>no(r.error)})}function replaceStoreRows(s,rows,sentRows){return new Promise((ok,no)=>{
  const tx=db.transaction(s,'readwrite'),store=tx.objectStore(s);
  const write=values=>{store.clear();for(const row of values)if(row?.id)store.put(row)};
@@ -38,7 +38,19 @@ function openDB(){return new Promise((ok,no)=>{const r=indexedDB.open(DB,VER);r.
    }
    write([...merged.values()]);
   };
- }else write(rows);
+ }else{
+  const read=store.getAll();read.onsuccess=()=>{
+   const merged=new Map(rows.filter(row=>row?.id).map(row=>[row.id,row]));
+   const sent=new Map((sentRows||[]).map(row=>[row.id,row]));
+   for(const local of read.result){
+    if(local.syncState!=='pending')continue;
+    const original=sent.get(local.id),remote=merged.get(local.id);
+    // Una respuesta anterior no confirma altas ni ediciones hechas durante el envío.
+    if(!original||JSON.stringify(original)!==JSON.stringify(local)||!remote)merged.set(local.id,local);
+   }
+   write([...merged.values()]);
+  };
+ }
  tx.oncomplete=()=>ok();tx.onerror=()=>no(tx.error||new Error('No se pudo actualizar la tabla local'));tx.onabort=()=>no(tx.error||new Error('La actualización local fue cancelada'));
 })}const fd=f=>Object.fromEntries(new FormData(f).entries());function mark(){return{id:uuid(),createdAt:now(),updatedAt:now(),syncState:'pending'}}function letters(n){let s='';do{s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)-1}while(n>=0);return s.padStart(3,'A')}async function nextMark(){const a=await all('assets');let n=0;for(const x of a)if(/^[A-Z]{3}$/.test(x.marcaInterna||'')){const v=[...x.marcaInterna].reduce((z,c)=>z*26+c.charCodeAt(0)-65,0);n=Math.max(n,v+1)}return letters(n)}function assetLabel(a){if(window.SKAssetRules?.isColumn(a))return window.SKAssetRules.columnLabel(a);return[a.clase,a.marcaAnterior&&`Ant. ${a.marcaAnterior}`,a.marcaInterna,a.serial,a.modelo&&`Mod. ${a.modelo}`,a.largo&&`${a.largo} ft`].filter(Boolean).join(' - ')}function option(s,v,t){if(!s)return;const o=document.createElement('option');o.value=v;o.textContent=t;s.append(o)}function showView(id){if(!window.SKAdminAuth?.canView?.(id))return;$('#nav button').forEach(x=>x.classList.toggle('active',x.dataset.view===id));$('.view').forEach(x=>x.classList.toggle('active',x.id===id));if(id==='novelties'&&navigator.onLine&&window.skSyncApi?.configured?.())window.skSyncApi.sync({silent:true,forceFull:true})}
 

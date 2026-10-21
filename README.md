@@ -46,3 +46,11 @@ Los clientes solicitan una copia completa mientras el servicio no anuncie `colla
 `backend/apps-script/Code.gs` incluye una mejora adicional: cada modificación de un colaborador o de su acceso incrementa la revisión compartida y devuelve su fecha de modificación. Admin y Plaza pueden entonces reutilizar revisiones de forma segura. Publicar GitHub Pages **no despliega Apps Script**: para activar esta optimización del servidor hay que actualizar Code.gs y su implementación web por separado. No se necesita ese despliegue para que los clientes corregidos vuelvan a recibir las fichas.
 
 Validación: pruebas automatizadas con bases sintéticas, ediciones desde dos Plazas, recepción en otra Plaza/Admin, compatibilidad con revisiones antiguas, revisión monotónica, conexión fallida, reintentos sin duplicar movimientos y edición local durante un envío. No se modificaron registros de producción para estas pruebas.
+
+## Guardado offline de criterios de inventario
+
+Al guardar un criterio, Admin confirma en una sola transacción local el criterio, su saldo y, si corresponde, el ingreso inicial. Después limpia el formulario tanto al crear como al editar. El doble toque no genera dos altas. Si falla la escritura, conserva el formulario, revierte la operación completa y muestra el error.
+
+El contador se actualiza después de confirmar el guardado, incluye nuevos registros y modificaciones y conserva el número visible sin conexión, durante el envío o ante un error de sincronización. Cuenta registros pendientes: un elemento con cantidad inicial puede producir tres pendientes (criterio, saldo e ingreso inicial).
+
+Los datos locales incluyen lo recibido en la última sincronización y lo registrado en ese dispositivo. Los cambios de otros dispositivos se reciben al sincronizar. Las altas y ediciones realizadas durante un envío se conservan pendientes; una respuesta anterior no las sobrescribe ni las da por enviadas. La reconexión inicia el envío automático con la sesión autorizada habitual. Esta corrección es del cliente y no requiere actualizar Code.gs.
