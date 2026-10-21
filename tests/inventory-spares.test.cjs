@@ -6,7 +6,7 @@ async function harness(){
  for(const key of ['id','name','secondaryName','tertiaryName','unit','initialQuantity','containerUnit','spareEquipment','spareItemNumber','spareItemName','isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable']){
   const label={hidden:false};elements[key]={value:'',checked:false,dataset:{},options:[{value:'Unidad'}],closest:()=>label,focus(){}};
  }
- const form={elements,reportValidity(){},scrollIntoView(){},closest:()=>form,querySelectorAll:()=>[],querySelector:()=>null,reset(){for(const field of Object.values(elements)){field.value='';field.checked=false;}}};
+ const form={elements,dataset:{},reportValidity(){},scrollIntoView(){},closest:()=>form,querySelectorAll:()=>[],querySelector:()=>null,reset(){for(const field of Object.values(elements)){field.value='';field.checked=false;}}};
  elements.unit.value='Unidad';elements.initialQuantity.value='0';
  elements.isYtSpare.checked=true;elements.spareEquipment.value='YT 29';elements.spareItemNumber.value='27';elements.spareItemName.value='Pieza de prueba';
  const window={addEventListener(){},dispatchEvent:e=>events.push(e.type)};
