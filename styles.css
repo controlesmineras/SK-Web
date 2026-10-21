@@ -84,3 +84,14 @@ body>main .homeAccessRegister{background:#214b63}
 #assetClassSuggestions button,#assetClassSuggestions button strong{font-weight:400}
 
 #assetDeleteBtn{background:#fff1f0;color:#a52323;border:1px solid #e8b2b2}#assetDeleteBtn[hidden]{display:none!important}#assetDeleteBtn:disabled{opacity:.6;cursor:wait}
+
+/* Novedades: misma paleta clara del listado de activos fijos. */
+#noveltyList{padding:12px;background:#fff;color:#465568;border:1px solid #dde3e8;border-radius:13px;box-shadow:0 2px 10px #18324b0b}
+#noveltyList .assetHistoryResult{background:#fff;border-color:#e3e7eb}
+#noveltyList .assetHistoryEntry{border-color:#e3e7eb}
+#noveltyList .assetHistoryEntry>b{color:#33475b}
+#noveltyList .assetHistoryEntry>small{color:#7b8794}
+#noveltyList .assetHistoryEntry.isReversed{border-left-color:#ab6a21}
+#noveltyList .assetHistoryResult button{background:#eef3f7;color:#173d59;border:1px solid #cbd7df}
+#noveltyList .assetHistoryResult button:hover{background:#f2f7fb}
+#noveltyList .assetHistoryResult button:focus-visible{outline:3px solid #2778a5;outline-offset:2px}
