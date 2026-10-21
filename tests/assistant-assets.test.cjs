@@ -57,3 +57,25 @@ test('auxiliar tampoco puede repetir el serial de otra clase',()=>{
  const s=service({assets:[asset('other',{clase:'Taladro',serial:'SN-GLOBAL',syncState:'synced'})]});
  assert.throws(()=>s.sync({assets:[asset('1',{serial:' sn-global '})]}),/serial.*ya existe/);assert.equal(s.writes(),0);
 });
+
+test('criterio sin serial permite altas de dueño y auxiliar sin marca anterior',()=>{
+ for(const role of ['owner','assistant']){
+  const s=service({inventoryCriteria:[{id:'ci',name:'Pulidora',isFixedAsset:true,usesSerial:false}]});
+  s.sync({assets:[asset('1',{serial:'',marcaPrevia:'',marcaInterna:''})]},'test',role);
+  const saved=s.cloud().assets[0];assert.equal(saved.serial,'');assert.ok(saved.id);assert.ok(saved.numeroClase);assert.equal(saved.syncState,'synced');
+  assert.equal(s.cloud().assets.length,1);
+ }
+});
+test('criterio cambiado a sin serial en el mismo envío permite guardar el activo',()=>{
+ const s=service();s.sync({inventoryCriteria:[{id:'ci',name:'Pulidora',isFixedAsset:true,usesSerial:false,updatedAt:date,syncState:'pending'}],assets:[asset('1',{serial:'',marcaPrevia:''})]},'admin','owner');
+ assert.equal(s.cloud().assets.length,1);assert.equal(s.cloud().inventoryCriteria[0].usesSerial,false);
+});
+test('criterio sin serial no elimina controles de duplicado cuando se proporciona serial',()=>{
+ const s=service({inventoryCriteria:[{id:'ci',name:'Pulidora',isFixedAsset:true,usesSerial:false}]});
+ s.sync({assets:[asset('1')]},'admin','owner');assert.throws(()=>s.sync({assets:[asset('2',{serial:'SERIAL-1'})]},'admin','owner'),/ya existe/);assert.equal(s.cloud().assets.length,1);
+});
+test('criterio con serial sigue exigiendo identificación y no acepta un criterio de otra clase',()=>{
+ for(const inventoryCriteria of [[{id:'ci',name:'Pulidora',isFixedAsset:true,usesSerial:true}],[{id:'ci',name:'Taladro',isFixedAsset:true,usesSerial:false}]]){
+  const s=service({inventoryCriteria});assert.throws(()=>s.sync({assets:[asset('1',{serial:'',criteriaId:'ci'})]},'admin','owner'),/SERIAL o MARCA ANTERIOR/);assert.equal(s.writes(),0);
+ }
+});

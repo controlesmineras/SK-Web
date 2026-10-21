@@ -54,3 +54,9 @@ Al guardar un criterio, Admin confirma en una sola transacción local el criteri
 El contador se actualiza después de confirmar el guardado, incluye nuevos registros y modificaciones y conserva el número visible sin conexión, durante el envío o ante un error de sincronización. Cuenta registros pendientes: un elemento con cantidad inicial puede producir tres pendientes (criterio, saldo e ingreso inicial).
 
 Los datos locales incluyen lo recibido en la última sincronización y lo registrado en ese dispositivo. Los cambios de otros dispositivos se reciben al sincronizar. Las altas y ediciones realizadas durante un envío se conservan pendientes; una respuesta anterior no las sobrescribe ni las da por enviadas. La reconexión inicia el envío automático con la sesión autorizada habitual. Esta corrección es del cliente y no requiere actualizar Code.gs.
+
+## Activos cuyo criterio no usa serial
+
+En Admin, si el criterio de la clase tiene «Usa serial» desactivado, el alta y la edición permiten dejar vacíos serial y marca anterior. Se mantienen el ID del registro, el número de clase y la identificación interna correspondiente. Si se proporciona un serial, sigue comprobándose que no esté duplicado.
+
+La misma condición se aplica al validar las altas del administrador y del auxiliar en el servidor. Para aceptar estos registros al sincronizar es necesario copiar la versión actual de `backend/apps-script/Code.gs` a Apps Script y actualizar su implementación web; la publicación de GitHub Pages por sí sola no despliega ese servidor. Las pruebas cubren criterios con/sin serial, el cambio de criterio y alta en un mismo envío, duplicados y rechazo de un criterio ajeno a la clase.

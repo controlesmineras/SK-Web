@@ -41,7 +41,11 @@
     return rows.find(row => !row.deleted && (!asset.id || row.id !== asset.id) && serialKey(row.serial) === key) || null;
   }
   const identityMark = asset => serialKey(asset.marcaPrevia || (!asset.markingPolicy ? asset.marcaActual || asset.marcaInterna : ''));
-  const hasIdentity = asset => !!(serialKey(asset.serial) || identityMark(asset));
+  const hasIdentity = (asset, criterion) => {
+    const usesSerial=criterion?.usesSerial??criterion?.CI_USA_SERIAL;
+    if(criterion&&!/^(true|1|si|sí|yes)$/i.test(String(usesSerial??'').trim()))return true;
+    return !!(serialKey(asset.serial) || identityMark(asset));
+  };
   function duplicateIdentity(rows, asset) {
     const serial = duplicateSerial(rows, asset);if(serial)return serial;
     const mark=identityMark(asset);if(!mark)return null;

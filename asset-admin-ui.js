@@ -169,7 +169,7 @@ async function saveAsset(e){
   if(!validClass(x.clase)||!criterion)return alert('Selecciona una CLASE activa de Criterios de inventario.');
   if(window.SKAssetRules.automaticNumberEligible(x.clase)){x.numeroYT=window.SKAssetRules.classNumber(rows,x);x.classNumberPolicy='auto-v1';}
   if(!txt(x.numeroYT))return alert('Ingresa el NÚMERO DE CLASE del activo.');
-  if(!window.SKAssetRules.hasIdentity(x))return alert('Ingresa SERIAL o MARCA ANTERIOR. El activo debe tener al menos uno de los dos.');
+  if(!window.SKAssetRules.hasIdentity(x,criterion))return alert('Ingresa SERIAL o MARCA ANTERIOR. El activo debe tener al menos uno de los dos.');
   for(const [flag,field,label] of [['usesSerial','serial','SERIAL'],['usesLength','largo','LARGO FT'],['usesModel','modelo','MODELO'],['usesManufacturer','fabricante','MARCA COMERCIAL'],['requiresInternalMark','marcaInterna','MARCA ACTUAL']])if(!['serial','marcaInterna'].includes(field)&&criterion[flag]&&!((automatic||f.dataset.autoMarkPolicy==='letters-v1')&&field==='marcaInterna')&&!txt(x[field]))return alert(`Ingresa ${label}. Este campo es obligatorio para la clase ${x.clase}.`);
   x.numeroClase=txt(x.numeroYT);x.marcaActual=txt(x.marcaInterna);x.numeroMarcaActual=txt(x.marcaAnterior);
   const dup=duplicateAsset(rows,x,editing);

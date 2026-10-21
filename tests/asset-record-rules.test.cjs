@@ -42,3 +42,10 @@ test('eliminar guarda la señal sincronizable y el autor, limpia la ficha y agen
 test('si falla la escritura, no anuncia éxito ni limpia la ficha',async()=>{
  const ui=deletionUI({fail:true});await ui.run();assert.equal(ui.rows()[0].deleted,undefined);assert.equal(ui.form.elements.id.value,'asset-1');assert.equal(ui.stats().scheduled,0);assert.match(ui.stats().alerts[0],/No se pudo eliminar/);
 });
+
+test('criterio sin serial permite identidad interna sin exigir serial ni marca anterior',()=>{
+ for(const usesSerial of [false,'false','No',0])assert.equal(window.SKAssetRules.hasIdentity({clase:'Pulidora',serial:'',marcaPrevia:''},{usesSerial}),true);
+ assert.equal(window.SKAssetRules.hasIdentity({},{CI_USA_SERIAL:false}),true);
+ for(const criterion of [{usesSerial:true},{usesSerial:'Sí'},undefined])assert.equal(window.SKAssetRules.hasIdentity({},criterion),false);
+ assert.equal(window.SKAssetRules.hasIdentity({serial:'SN-1'},{usesSerial:true}),true);
+});
