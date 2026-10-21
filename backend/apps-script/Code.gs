@@ -190,13 +190,14 @@ function completePendingAssetMarks_(cloud){
 
 // Las altas del auxiliar se validan en el servidor; las fichas existentes siguen
 // protegidas. La huella permite reintentar un alta sin sobrescribir cambios posteriores.
-function assistantAssetFingerprint_(row){
+function assistantAssetFingerprint_(row,includeAccessories=true){
  const fields=['id','clase','numeroYT','numeroClase','modelo','fabricante','serial','estadoVisor','largo','marcada','mina','fechaIngreso','fechaNovedad','horaNovedad','descripcionNovedad','documentoResponsable','nombreResponsable','documentoBodeguero','nombreBodeguero','ubicacion','estado','disponibleEntrega','asignadaId','observaciones','marcaAnterior','numeroMarcaActual','createdAt','deleted'];
  if(row.classNumberPolicy==='auto-v1'){for(const field of ['numeroYT','numeroClase']){const index=fields.indexOf(field);if(index>=0)fields.splice(index,1)}}
+ if(includeAccessories&&(Object.prototype.hasOwnProperty.call(row,'hasAccessories')||Object.prototype.hasOwnProperty.call(row,'accessories')))fields.push('hasAccessories','accessories');
  if(row.marcaPrevia)fields.push('marcaPrevia');if(row.areaAsignada)fields.push('areaAsignada');
  if(row.incomeMarking||row.tipoIngresoInicial)fields.push('incomeMarking','tipoIngresoInicial','minaOrigen','activoExterno');
  if(!usesAutomaticAssetMark_(row))fields.push('marcaInterna','marcaActual','nuevaMarca');
- return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(fields.map(key=>[key,String(row[key]||'')])),Utilities.Charset.UTF_8));
+ return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,JSON.stringify(fields.map(key=>[key,key==='accessories'?JSON.stringify(row[key]||[]):key==='hasAccessories'?JSON.stringify(row[key]??null):String(row[key]||'')])),Utilities.Charset.UTF_8));
 }
 function prepareAssistantAsset_(row,cloud,known,auth){
  if(row.classNumberPolicy==='auto-v1'&&automaticClassNumberEligible_(row.clase)){row.numeroClase=automaticClassNumber_(Array.from(known.values()),row);row.numeroYT=row.numeroClase;}
@@ -231,8 +232,11 @@ function prepareAdminNovelties_(incoming,cloud,auth){
   assetIds.add(row.id);
   const previous=assetMap.get(row.id);
   if(!previous){const created=prepareAssistantAsset_(row,cloud,assetMap,auth);assetMap.set(row.id,created);patches.set(row.id,created);return;}
-  if(previous.registeredBy===auth.username&&previous.registrationFingerprint&&previous.registrationFingerprint===assistantAssetFingerprint_(row))return;
-  else if(!novelties.some(novelty=>novelty.assetId===row.id))throw new Error('Tu rol solo permite agregar activos nuevos; modifica su estado mediante una novedad');
+  if(previous.registeredBy===auth.username&&previous.registrationFingerprint){
+   const sameAccessories=JSON.stringify([previous.hasAccessories??null,previous.accessories||[]])===JSON.stringify([row.hasAccessories??null,row.accessories||[]]);
+   if(previous.registrationFingerprint===assistantAssetFingerprint_(row)||(sameAccessories&&previous.registrationFingerprint===assistantAssetFingerprint_(row,false)))return;
+  }
+  if(!novelties.some(novelty=>novelty.assetId===row.id))throw new Error('Tu rol solo permite agregar activos nuevos; modifica su estado mediante una novedad');
  });
  novelties.slice().sort((a,b)=>stamp_(a)-stamp_(b)).forEach(row=>{
   const asset=assetMap.get(row.assetId)||(!limited&&assets.find(item=>item.id===row.assetId));

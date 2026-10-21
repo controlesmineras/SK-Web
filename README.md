@@ -60,3 +60,11 @@ Los datos locales incluyen lo recibido en la última sincronización y lo regist
 En Admin, si el criterio de la clase tiene «Usa serial» desactivado, el alta y la edición permiten dejar vacíos serial y marca anterior. Se mantienen el ID del registro, el número de clase y la identificación interna correspondiente. Si se proporciona un serial, sigue comprobándose que no esté duplicado.
 
 La misma condición se aplica al validar las altas del administrador y del auxiliar en el servidor. Para aceptar estos registros al sincronizar es necesario copiar la versión actual de `backend/apps-script/Code.gs` a Apps Script y actualizar su implementación web; la publicación de GitHub Pages por sí sola no despliega ese servidor. Las pruebas cubren criterios con/sin serial, el cambio de criterio y alta en un mismo envío, duplicados y rechazo de un criterio ajeno a la clase.
+
+## Accesorios opcionales de activos fijos
+
+En Criterios de inventario, «Permite registrar accesorios» aparece solo al activar «Es activo fijo». Se deja desactivado inicialmente. Para una clase habilitada, la ficha de cada activo muestra «¿Trae accesorios?» con Sin especificar / Sí / No. Responder y describir accesorios es opcional. Sí permite añadir descripciones independientes con «+ Agregar accesorio» y quitarlas. Las filas vacías se omiten. Cada descripción conserva un ID propio dentro del activo; no crea activos ni saldos adicionales.
+
+Funciona al crear y al editar activos existentes y se guarda en la misma operación local del activo. Consultar activos fijos muestra los accesorios registrados. Desactivar la opción del criterio oculta la captura sin borrar accesorios existentes; siguen disponibles en la consulta. Se mantienen los permisos actuales de edición de activos.
+
+Code.gs incluye los accesorios en la comprobación de reintentos de altas de auxiliares y admite huellas anteriores solo cuando las descripciones no cambiaron. Debe actualizarse la implementación web de Apps Script para activar esta comprobación; la publicación de Admin no despliega ese servidor.

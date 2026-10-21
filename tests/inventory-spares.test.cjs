@@ -3,7 +3,7 @@ const fs=require('node:fs'),vm=require('node:vm'),{webcrypto}=require('node:cryp
 const {IDBFactory}=require('fake-indexeddb');
 async function harness(){
  const status={},button={},elements={},events=[];
- for(const key of ['id','name','secondaryName','tertiaryName','unit','initialQuantity','containerUnit','spareEquipment','spareItemNumber','spareItemName','isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable']){
+ for(const key of ['allowAccessories','id','name','secondaryName','tertiaryName','unit','initialQuantity','containerUnit','spareEquipment','spareItemNumber','spareItemName','isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable']){
   const label={hidden:false};elements[key]={value:'',checked:false,dataset:{},options:[{value:'Unidad'}],closest:()=>label,focus(){}};
  }
  const form={elements,dataset:{},reportValidity(){},scrollIntoView(){},closest:()=>form,querySelectorAll:()=>[],querySelector:()=>null,reset(){for(const field of Object.values(elements)){field.value='';field.checked=false;}}};

@@ -15,7 +15,7 @@ let criteriaByClass=new Map(),assetSaving=false,classRefreshVersion=0;
 const criterionName=item=>txt(item?.name||item?.nombre||item?.element||item?.elemento||item?.CI_ELEMENTO||item?.ciElemento||item?.itemName);
 const criterionAliases=item=>[item?.secondaryName||item?.nombreSecundario||item?.CI_NOMBRE_SECUNDARIO||item?.CI_ALIAS_SECUNDARIO||item?.aliasSecundario,item?.tertiaryName||item?.nombreTerciario||item?.CI_NOMBRE_TERCIARIO||item?.CI_ALIAS_TERCIARIO||item?.aliasTerciario].map(txt).filter(Boolean);
 const criterionBoolean=value=>value===true||['true','si','sí','1','yes'].includes(norm(value));
-function normalizedCriterion(item){return{...item,name:criterionName(item),isFixedAsset:criterionBoolean(item.isFixedAsset??item.esActivoFijo??item.fixedAsset??item.CI_ES_A_FIJO),usesSerial:criterionBoolean(item.usesSerial??item.CI_USA_SERIAL),usesLength:criterionBoolean(item.usesLength??item.CI_USA_LARGO),usesModel:criterionBoolean(item.usesModel??item.CI_USA_MODELO),usesManufacturer:/^motosierras?$/i.test(criterionName(item))||criterionBoolean(item.usesManufacturer??item.CI_USA_FABRICANTE),requiresInternalMark:criterionBoolean(item.requiresInternalMark)}}
+function normalizedCriterion(item){return{...item,name:criterionName(item),allowAccessories:criterionBoolean(item.allowAccessories),isFixedAsset:criterionBoolean(item.isFixedAsset??item.esActivoFijo??item.fixedAsset??item.CI_ES_A_FIJO),usesSerial:criterionBoolean(item.usesSerial??item.CI_USA_SERIAL),usesLength:criterionBoolean(item.usesLength??item.CI_USA_LARGO),usesModel:criterionBoolean(item.usesModel??item.CI_USA_MODELO),usesManufacturer:/^motosierras?$/i.test(criterionName(item))||criterionBoolean(item.usesManufacturer??item.CI_USA_FABRICANTE),requiresInternalMark:criterionBoolean(item.requiresInternalMark)}}
 function installClassNumberHelp(){const input=document.querySelector('#assetForm [name="numeroYT"]'),label=input?.closest('label');if(!input||!label||label.querySelector('.assetFieldInfo'))return;label.classList.add('assetClassNumberField');const button=document.createElement('button');button.type='button';button.className='assetFieldInfo';button.textContent='i';button.setAttribute('aria-label','¿Qué es el número de clase?');button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();alert(CLASS_NUMBER_HELP)});label.insertBefore(button,input);if(!document.querySelector('#assetFieldInfoStyle')){const style=document.createElement('style');style.id='assetFieldInfoStyle';style.textContent='.assetClassNumberField{position:relative}.assetClassNumberField>.assetFieldInfo{position:absolute;top:-5px;right:0;width:28px!important;height:28px!important;min-height:28px!important;padding:0!important;border:1px solid #1a4a68!important;border-radius:50%!important;background:#eef6fa!important;color:#173d59!important;font:700 16px/26px system-ui,sans-serif!important;text-align:center!important;box-shadow:none!important}.assetClassNumberField>.assetFieldInfo:focus-visible{outline:3px solid #8bc7e8;outline-offset:2px}';document.head.append(style)}}
 function setAssetMode(editing){
  const form=document.querySelector('#assetForm'),readOnly=editing&&!window.SKAdminAuth?.isOwner?.();
@@ -25,6 +25,7 @@ function setAssetMode(editing){
  }
  const remove=document.querySelector('#assetDeleteBtn');if(remove){remove.hidden=!editing||!window.SKAdminAuth?.isOwner?.();remove.disabled=assetSaving;}
  const b=document.querySelector('#assetSaveBtn');if(b){b.textContent=readOnly?'SOLO CONSULTA':editing?'Guardar cambios':'Registrar activo';b.disabled=readOnly||assetSaving;}
+ if(form)window.SKAssetAccessories?.configure(form,criteriaByClass.get(norm(form.elements.clase?.value)),readOnly);
 }
 function isRepair(f){const t=[f.elements.descripcionNovedad?.value,f.elements.estado?.value,f.elements.observaciones?.value].join(' ').toLowerCase();return /reparaci[oó]n|reparar/.test(t)}
 function suggestedMark(f){return norm(f.elements.clase?.value)==='yt'&&norm(f.elements.mina?.value)==='providencia'&&isRepair(f)?'P-AAA':''}
@@ -151,7 +152,7 @@ async function hydrateEdit(){
  document.querySelector('#assetAssignedDoc').value=assigned?.document??p?.documento??'';
  document.querySelector('#assetAssignedArea').value=assigned?.area??p?.area??'';
  document.querySelector('#assetAssignedCargo').value=assigned?.cargo??p?.cargo??'';
- updateAssetFields();
+ window.SKAssetAccessories?.load(f,a);updateAssetFields();
  for(const name of ['modelo','fabricante','ubicacion','estado','disponibleEntrega'])restoreAssetValue(f.elements[name],a[name]);
  setAssetMode(true);
  window.SKAssetHistoryUI.show('asset',stored,projection.events,actas);
@@ -171,6 +172,7 @@ async function saveAsset(e){
   if(!txt(x.numeroYT))return alert('Ingresa el NÚMERO DE CLASE del activo.');
   if(!window.SKAssetRules.hasIdentity(x,criterion))return alert('Ingresa SERIAL o MARCA ANTERIOR. El activo debe tener al menos uno de los dos.');
   for(const [flag,field,label] of [['usesSerial','serial','SERIAL'],['usesLength','largo','LARGO FT'],['usesModel','modelo','MODELO'],['usesManufacturer','fabricante','MARCA COMERCIAL'],['requiresInternalMark','marcaInterna','MARCA ACTUAL']])if(!['serial','marcaInterna'].includes(field)&&criterion[flag]&&!((automatic||f.dataset.autoMarkPolicy==='letters-v1')&&field==='marcaInterna')&&!txt(x[field]))return alert(`Ingresa ${label}. Este campo es obligatorio para la clase ${x.clase}.`);
+  Object.assign(x,window.SKAssetAccessories?.read(f)||{});
   x.numeroClase=txt(x.numeroYT);x.marcaActual=txt(x.marcaInterna);x.numeroMarcaActual=txt(x.marcaAnterior);
   const dup=duplicateAsset(rows,x,editing);
   if(dup)return alert(`ESTE ACTIVO YA ESTÁ REGISTRADO\n\nYa existe un activo con ${dup.field}: ${dup.value}.\n\nRegistro existente: ${cleanLabel(dup.found)}.\n\nRevisa nuevamente el buscador de activos.`);

@@ -87,6 +87,7 @@
     field('Documento',assigned.document),field('Área del funcionario',assigned.area),field('Cargo',assigned.cargo)
    ].join(''))}
    ${group('Información adicional',field('Observaciones',a.observaciones,true))}
+   ${a.hasAccessories!=null||(Array.isArray(a.accessories)&&a.accessories.length)?group('Accesorios',field('¿Trae accesorios?',a.hasAccessories===false?'No':a.hasAccessories===true||a.accessories?.length?'Sí':'Sin especificar')+((Array.isArray(a.accessories)?a.accessories:[]).map((row,index)=>field('Accesorio '+(index+1),typeof row==='string'?row:row.description,true)).join(''))):''}
    <section class="assetHistory" id="assetQueryHistory" aria-label="Historial del activo"></section>
   </article>`;
   window.SKAssetHistoryUI.show(host.querySelector('#assetQueryHistory'),a,projection.events,actas);
