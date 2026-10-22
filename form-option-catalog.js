@@ -20,7 +20,7 @@ const defaults={
   'asset.physicallyMarked':['Sí','No','Desconocido'],
   'asset.deliveryAvailable':['Sí','No'],
   'novelty.description':['Se asigna (si es nueva)','Se entrega (cuando es usada)','Sale fuera de mina a reparación','Sale trasladada a otra mina','Revista física','Encontrada abandonada','Dada de baja mediante acta','Ingresa a bodega superficie de reparación','Se devuelve reparada a mina de procedencia'],
-  'delivery.destination':['Operación','Traslado','Reparación']
+  'delivery.destination':['Operación','Traslado','Reparación','A cargo de ARIS MINING']
 };
 const labels={
   'personal.company':'Personal · Empresa','personal.area':'Personal · Área','personal.role':'Personal · Cargo','inventory.unit':'Inventario · Unidad de medida',
@@ -30,7 +30,7 @@ const clean=value=>String(value||'').trim(),norm=value=>clean(value).toLocaleLow
 let config=null;
 function plazaRecord(){return(window.SKPlaza?.getData?.().inventoryCriteria||[]).find(row=>row.id===RECORD_ID||row.recordType==='formOptions')}
 async function adminRecord(){if(typeof all!=='function'||typeof db==='undefined'||!db)return null;return(await all('inventoryCriteria')).find(row=>row.id===RECORD_ID||row.recordType==='formOptions')}
-function normalized(raw){const out={};for(const [key,list] of Object.entries(defaults)){const supplied=raw?.options?.[key];out[key]=Array.isArray(supplied)?supplied.map(clean).filter(Boolean):[...list];if(key==='inventory.unit'&&!out[key].some(value=>norm(value)==='rollo'))out[key].push('Rollo')}return out}
+function normalized(raw){const out={};for(const [key,list] of Object.entries(defaults)){const supplied=raw?.options?.[key];out[key]=Array.isArray(supplied)?supplied.map(clean).filter(Boolean):[...list];if(key==='inventory.unit'&&!out[key].some(value=>norm(value)==='rollo'))out[key].push('Rollo');if(key==='delivery.destination'&&!out[key].some(value=>norm(value)===norm('A cargo de ARIS MINING')))out[key].push('A cargo de ARIS MINING')}return out}
 function values(key,fallback=[]){const list=[...(config?.[key]||defaults[key]||fallback)];return key==='personal.role'?list.sort((a,b)=>a.localeCompare(b,'es',{sensitivity:'base'})):list}
 function allowedPersonalAreas(company){return values('personal.area').filter(area=>!(norm(company)==='desmin'&&norm(area)==='produccion - selectivo (corteros)'))}
 function validPersonalArea(company,area){return allowedPersonalAreas(company).some(option=>norm(option)===norm(area))}

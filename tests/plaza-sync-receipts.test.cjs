@@ -150,6 +150,23 @@ test('el backend actual conserva el área destino y rechaza otra asignación del
 });
 
 const collaborator={id:'person-1',documento:'TEST-123',primerNombre:'Persona',primerApellido:'Prueba',empresa:'SK 3.7',area:'Producción',cargo:'Operador minero',telefono:'111'};
+test('ARIS MINING persists for both loans and assignments through the existing backend',async()=>{
+ for(const deliveryType of ['ASIGNACIÓN','PRÉSTAMO']){
+  const c=client(),destination='A cargo de ARIS MINING',initial={personal:[{id:'recipient',nombre:'Receptor',documento:'123',area:'Producción'}],inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true,isEpp:true,allowLoan:true}],assets:[{id:'saw1',clase:'Motosierra',serial:'TEST',ubicacion:'Bodega de Superficie'}],inventoryStock:[{id:'stock',itemId:'other',quantity:10}],blendingIncomes:[],blendingDeliveries:[]};
+  c.api.set(clone(initial));
+  const form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'SK'}},querySelector:()=>({})};
+  c.api.prepareDelivery([{itemId:'saw',assetId:'saw1',quantity:1,deliveryType,destination,destinationAreaMode:'manual',bringsReplacement:true}]);
+  assert.equal(await c.api.saveDeliveryBatch(form),true);
+  const local=c.api.get(),movement=local.blendingDeliveries[0];assert.equal(movement.destination,destination);
+  assert.equal(Object.hasOwn(movement,'bringsReplacement'),false);
+  assert.equal(local.assets[0].ubicacion,destination);assert.equal(local.personal[0].area,'Producción');
+  assert.equal(c.ctx.window.SKAssetHistory.project(local.assets[0],local).asset.ubicacion,destination);
+  assert.equal(c.ctx.window.SKAssetHistory.available(local.assets[0],local),false);
+  const b=backend(initial);b.sync({blendingDeliveries:local.blendingDeliveries});b.sync({blendingDeliveries:local.blendingDeliveries});
+  assert.equal(b.cloud().assets[0].ubicacion,destination);assert.equal(b.cloud().blendingDeliveries.length,1);
+  assert.equal(b.cloud().inventoryStock[0].quantity,10);assert.equal(b.cloud().personal[0].area,'Producción');
+ }
+});
 test('editar desde dos Plazas invalida las copias de otros dispositivos y de Admin',()=>{
  const b=backend({updatedAt:'2026-10-21T00:00:00.000Z',personal:[collaborator]});
  const cached=b.ctx.plazaSync_({token:'test',data:{}}).updatedAt;

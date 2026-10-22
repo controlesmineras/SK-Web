@@ -5,7 +5,7 @@ const read=file=>fs.readFileSync(path.join(__dirname,'..',file),'utf8');
 function formClient(){
   const nodes=new Map(),alerts=[];
   const node=()=>({value:'',dataset:{},style:{},childNodes:[{textContent:''}],options:[],events:[],addEventListener(){},
-    dispatchEvent(event){this.events.push(event.type)},querySelectorAll:()=>[],
+    dispatchEvent(event){this.events.push(event.type)},querySelectorAll:()=>[],add(option){this.options.push(option)},
     replaceChildren(...options){this.options=options}});
   const query=selector=>{if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)};
   const fields=Object.fromEntries(['itemId','quantity','destination','destinationLevel','notes'].map(name=>[name,node()]));
@@ -18,7 +18,7 @@ function formClient(){
     Event:class {constructor(type){this.type=type}},Option:class {constructor(text,value){this.text=text;this.value=value}},console});
   vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
   const prefix=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
-  vm.runInContext(prefix+`\nwindow.testing={set:value=>{data=value},mode:value=>{deliveryMode=value},update:updateDeliveryFields,capture:currentDeliveryItem,add:addDeliveryItem,draft:()=>deliveryDraft};})();`,ctx);
+  vm.runInContext(prefix+`\nwindow.testing={set:value=>{data=value},mode:value=>{deliveryMode=value},update:updateDeliveryFields,capture:currentDeliveryItem,add:addDeliveryItem,draft:()=>deliveryDraft,recipientChanged:recipientDestinationChanged};})();`,ctx);
   const api=ctx.window.testing,data={
     inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true,allowLoan:true},{id:'pliers',name:'Alicates',allowLoan:true},{id:'cable',name:'Cable',allowLoan:true,fractionable:true}],
     assets:[{id:'asset',clase:'Motosierra',serial:'TEST-57951',ubicacion:'Bodega de Superficie'}],
@@ -83,4 +83,19 @@ test('assignment also hides quantity for assets and preserves decimal delivery b
   c.select('pliers');assert.equal(c.fields.quantity.disabled,false);
   assert.equal(c.fields.quantity.min,'0.01');assert.equal(c.fields.quantity.step,'any');
   c.select('');assert.equal(c.fields.quantity.required,false);assert.equal(c.fields.quantity.disabled,true);
+});
+
+test('ARIS MINING is available for loans and assignments and survives a recipient area change',()=>{
+  const c=formClient(),destination='A cargo de ARIS MINING';c.select('saw');
+  assert.ok(c.fields.destination.options.some(option=>option.value===destination));
+  c.fields.destination.value=destination;c.fields.assetId.value='asset';
+  assert.equal(c.api.capture().destination,destination);
+  c.api.mode('assignment');c.api.update();
+  assert.ok(c.fields.destination.options.some(option=>option.value===destination));
+  c.fields.destination.value=destination;c.fields.destination.dataset.manualArea='1';c.fields.assetId.value='asset';
+  const row=c.api.capture();assert.equal(row.destination,destination);assert.equal(row.destinationAreaMode,'manual');
+  c.api.add();c.data.personal=[{id:'person',area:'Producción'}];c.nodes.set('#recipientId',{value:'person'});c.api.recipientChanged();
+  assert.equal(c.api.draft()[0].destination,destination);
+  c.select('saw');c.api.mode('loan');c.api.update();
+  assert.equal(c.fields.destination.options.filter(option=>option.value===destination).length,1);
 });

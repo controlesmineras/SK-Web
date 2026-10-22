@@ -11,8 +11,8 @@ function client(){
  nodes.set('#deliveryForm',form);nodes.set('#deliveryReplacementField',field);
  const ctx=vm.createContext({Blob,console,crypto:require('node:crypto').webcrypto,document:{querySelectorAll:()=>[],querySelector:key=>{if(!nodes.has(key))nodes.set(key,{value:'',hidden:false,textContent:'',addEventListener(){}});return nodes.get(key)}},alert:message=>alerts.push(message),window:{alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},setTimeout(){},clearTimeout(){}});
  const start=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
- vm.runInContext(read('asset-record-rules.js'),ctx);
- vm.runInContext(start+`\nvalidateDeliveryRecipient=()=>true;renderRecentQueries=()=>{};updatePendingBadge=()=>{};discardDeliveryForm=()=>{};sync=()=>{};clearItemSearch=form=>{form.elements.itemId.value=''};updateDeliveryFields=()=>updateDeliveryReplacementField(findItem($('#deliveryForm').elements.itemId.value));downloadBlob=(blob,name)=>window.lastDownload={blob,name};window.audit={get:()=>data,set:value=>{data=value},draft:()=>deliveryDraft,prepare:rows=>{deliveryDraft=rows},update:()=>updateDeliveryFields(),capture:currentDeliveryItem,add:addDeliveryItem,save:()=>saveDeliveryBatch($('#deliveryForm')),label:deliveryReplacementLabel,report:deliveryReportRow,card:queryMovementCard,excel:exportDeliveriesExcel,pdf:exportDeliveriesPdf};})();`,ctx);
+ vm.runInContext(read('asset-record-rules.js'),ctx);vm.runInContext(read('asset-history.js'),ctx);
+ vm.runInContext(start+`\nvalidateDeliveryRecipient=()=>true;renderRecentQueries=()=>{};updatePendingBadge=()=>{};discardDeliveryForm=()=>{};sync=()=>{};clearItemSearch=form=>{form.elements.itemId.value=''};updateDeliveryFields=()=>updateDeliveryReplacementField(findItem($('#deliveryForm').elements.itemId.value));downloadBlob=(blob,name)=>window.lastDownload={blob,name};window.audit={mode:value=>{deliveryMode=value},catalog:deliveryCatalog,get:()=>data,set:value=>{data=value},draft:()=>deliveryDraft,prepare:rows=>{deliveryDraft=rows},update:()=>updateDeliveryFields(),capture:currentDeliveryItem,add:addDeliveryItem,save:()=>saveDeliveryBatch($('#deliveryForm')),label:deliveryReplacementLabel,report:deliveryReportRow,card:queryMovementCard,excel:exportDeliveriesExcel,pdf:exportDeliveriesPdf};})();`,ctx);
  const api=ctx.window.audit;api.set(seed());
  return {api,ctx,form,field,inputs,storage,alerts,select(id){form.elements.itemId.value=id;api.update()},answer(value){inputs.forEach(input=>input.checked=input.value===value)}};
 }
@@ -52,4 +52,37 @@ test('old records stay unrecorded, and queries and exports preserve the answer',
  assert.deepEqual(rows.map(r=>c.api.report(r).reposicion),['SÍ','NO','Sin registrar']);for(const row of rows)assert.match(c.api.card({...row,queryType:'ENTREGA'}),/Trae reposición:/);
  c.api.excel();let text=await c.ctx.window.lastDownload.blob.text();assert.match(text,/TRAE REPOSICIÓN/);assert.match(text,/>NO<\/Data>/);assert.match(text,/>Sin registrar<\/Data>/);
  c.api.pdf();text=await c.ctx.window.lastDownload.blob.text();assert.match(text,/Trae reposici/);assert.match(text,/NO/);assert.equal(Object.hasOwn(rows[2],'bringsReplacement'),false);
+});
+
+test('loans hide and clear replacement controls and exclude EPP even if the criterion enables loans',()=>{
+ const c=client();c.api.get().inventoryCriteria.forEach(item=>item.allowLoan=true);
+ c.select('gloves');c.answer('yes');c.api.mode('loan');c.api.update();
+ assert.equal(c.field.hidden,true);assert.equal(c.field.disabled,true);assert.equal(c.field.style.display,'none');
+ assert.ok(c.inputs.every(input=>!input.checked&&!input.required));
+ assert.deepEqual(Array.from(c.api.catalog(),item=>item.id),['tool']);
+ assert.equal(c.api.capture(),null);
+ c.api.mode('assignment');c.api.update();assert.equal(c.field.hidden,false);
+ assert.equal(c.api.capture(),null);c.answer('no');assert.equal(c.api.capture().bringsReplacement,false);
+});
+
+test('fixed assets never require replacement even when also flagged EPP',async()=>{
+ const c=client(),criterion={id:'saw',name:'Motosierra',isFixedAsset:true,isEpp:true,allowLoan:true};
+ c.api.get().inventoryCriteria.push(criterion);c.api.get().assets.push({id:'saw-1',clase:'Motosierra',serial:'TEST',ubicacion:'Bodega de Superficie'});
+ c.select('gloves');c.answer('yes');c.select('saw');
+ assert.equal(c.field.hidden,true);assert.ok(c.inputs.every(input=>!input.required&&!input.checked));
+ c.form.elements.assetId.value='saw-1';c.form.elements.destination.value='A cargo de ARIS MINING';
+ assert.equal(Object.hasOwn(c.api.capture(),'bringsReplacement'),false);
+ c.api.mode('loan');c.api.update();assert.equal(c.field.hidden,true);
+ const loan=c.api.capture();assert.equal(loan.quantity,1);assert.equal(Object.hasOwn(loan,'bringsReplacement'),false);
+ c.api.prepare([{...loan,bringsReplacement:true}]);c.form.elements.itemId.value='';
+ assert.equal(await c.api.save(),true);
+ assert.equal(Object.hasOwn(c.api.get().blendingDeliveries[0],'bringsReplacement'),false);
+ assert.equal(c.api.get().assets[0].ubicacion,'A cargo de ARIS MINING');
+});
+
+test('consultations never request replacement for assets or loans with old replacement data',()=>{
+ const c=client();
+ for(const row of [{itemId:'gloves',assetId:'asset',bringsReplacement:true},{itemId:'gloves',deliveryType:'PRÉSTAMO',bringsReplacement:false},{itemId:'gloves',deliveryType:'PRÉSTAMO'}]){
+  const before=clone(row);assert.equal(c.api.label(row),'');assert.equal(c.api.report(row).reposicion,'No aplica');assert.deepEqual(row,before);
+ }
 });
