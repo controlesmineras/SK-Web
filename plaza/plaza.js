@@ -76,6 +76,60 @@ const deviceAccess=createDeviceAccess('sk-plaza');
     const previousMark=usesPreviousMark?[asset.marcaPrevia,asset.marcaAnterior,asset.numeroMarcaActual,asset.marcaActual,asset.marcaInterna].map(clean).find(Boolean):'';
     return[clean(asset.fabricante||asset.marcaComercial),window.SKAssetRules.isColumn(asset)?'':clean(asset.serial),newMark||previousMark,clean(asset.modelo)].filter(Boolean).join(' · ')||'Sin datos de identificación';
   }
+  function matchesAssetSearch(asset,query){
+    const text=norm([assetSelectionLabel(asset),asset.marcaPrevia,asset.marcaAnterior,asset.numeroMarcaActual].filter(Boolean).join(' '));
+    return norm(query).split(/\s+/).filter(Boolean).every(part=>text.includes(part));
+  }
+  function setupDeliveryAssetSearch(){
+    const form=$('#deliveryForm'),field=$('#deliveryAssetField'),select=$('#deliveryAssetId');
+    if(!field||field._refreshAssetSearch)return;
+    const input=document.createElement('input'),menu=document.createElement('div');
+    field.classList.add('itemSearchField');
+    input.id='deliveryAssetSearch';input.type='search';input.className='itemSearchInput';input.autocomplete='off';input.placeholder='Buscar por marca, serial o modelo…';
+    input.setAttribute('aria-label','Buscar y seleccionar el activo específico');input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls','deliveryAssetSearchMenu');input.setAttribute('aria-expanded','false');
+    menu.id='deliveryAssetSearchMenu';menu.className='itemSearchMenu';menu.hidden=true;menu.setAttribute('role','listbox');menu.setAttribute('aria-label','Activos disponibles');
+    select.hidden=true;select.required=false;field.insertBefore(input,select);field.append(menu);
+    let editing=false,typing=false,lastItemId='',visibleRows=[],activeIndex=-1;
+    const close=()=>{menu.hidden=true;field.classList.remove('isOpen');input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');activeIndex=-1};
+    const draw=()=>{
+      if(input.disabled)return close();
+      const item=findItem(form.elements.itemId.value),query=select.value?'':input.value,rows=availableAssets(item);
+      visibleRows=rows.filter(asset=>matchesAssetSearch(asset,query));activeIndex=-1;input.removeAttribute('aria-activedescendant');
+      menu.innerHTML=visibleRows.map((asset,index)=>`<button type="button" role="option" tabindex="-1" id="deliveryAssetOption-${index}" data-asset-id="${esc(asset.id)}" aria-selected="${asset.id===select.value}"><span class="itemSearchNames"><strong>${highlightMatch(assetSelectionLabel(asset),norm(query))}</strong></span></button>`).join('')||`<p role="status">${rows.length?'No hay activos que coincidan con la búsqueda.':'No hay activos disponibles de esta clase.'}</p>`;
+      menu.hidden=false;field.classList.add('isOpen');input.setAttribute('aria-expanded','true');
+    };
+    const refresh=()=>{
+      const item=findItem(form.elements.itemId.value),fixed=isFixedItem(item),changed=lastItemId!==form.elements.itemId.value;
+      lastItemId=form.elements.itemId.value;select.required=false;input.disabled=!fixed;input.required=fixed;
+      if(!fixed||changed){editing=false;input.value='';close()}
+      const asset=fixed?availableAssets(item).find(row=>row.id===select.value):null;
+      if(asset){input.value=assetSelectionLabel(asset);editing=false}else if(!editing)input.value='';
+      input.setCustomValidity(fixed&&!asset?'Selecciona un activo de la lista.':'');
+      if(!menu.hidden)draw();
+    };
+    const choose=id=>{
+      const item=findItem(form.elements.itemId.value),asset=availableAssets(item).find(row=>row.id===id);
+      if(!asset){refresh();draw();return}
+      if(!Array.from(select.options).some(option=>option.value===id))select.add(new Option(assetSelectionLabel(asset),id));
+      select.value=id;editing=false;select.dispatchEvent(new Event('change',{bubbles:true}));input.focus();close();
+    };
+    input.addEventListener('focus',()=>{if(select.value)input.select();draw()});input.addEventListener('click',draw);
+    input.addEventListener('input',()=>{editing=true;select.value='';typing=true;try{select.dispatchEvent(new Event('change',{bubbles:true}))}finally{typing=false}draw()});
+    select.addEventListener('change',()=>{if(!typing)editing=false;refresh();if(!typing)close()});
+    input.addEventListener('keydown',event=>{
+      if(event.key==='Escape'){event.preventDefault();close();return}
+      if(event.key==='Tab'){close();return}
+      if(event.key==='Enter'&&!menu.hidden){event.preventDefault();if(activeIndex>=0)choose(visibleRows[activeIndex].id);else if(visibleRows.length===1)choose(visibleRows[0].id);return}
+      if(!['ArrowDown','ArrowUp'].includes(event.key))return;
+      event.preventDefault();const opening=menu.hidden;if(opening)draw();if(!visibleRows.length)return;
+      activeIndex=opening||activeIndex<0?(event.key==='ArrowDown'?0:visibleRows.length-1):(activeIndex+(event.key==='ArrowDown'?1:-1)+visibleRows.length)%visibleRows.length;
+      menu.querySelectorAll('[data-asset-id]').forEach((button,index)=>{button.dataset.active=String(index===activeIndex)});
+      const button=menu.querySelector(`#deliveryAssetOption-${activeIndex}`);input.setAttribute('aria-activedescendant',button.id);button.scrollIntoView({block:'nearest'});
+    });
+    menu.addEventListener('click',event=>{const button=event.target.closest('[data-asset-id]');if(button)choose(button.dataset.assetId)});
+    document.addEventListener('click',event=>{if(!field.contains(event.target))close()});
+    field._refreshAssetSearch=refresh;refresh();
+  }
   function injectItemSearchStyle(){if(document.querySelector('#itemSearchStyle'))return;const style=document.createElement('style');style.id='itemSearchStyle';style.textContent='.itemSearchField{position:relative}.itemSearchField>select[hidden]{display:none}.itemSearchMenu{position:absolute;z-index:30;left:0;right:0;top:100%;max-height:360px;overflow:auto;margin-top:4px;padding:5px;background:#fff;border:1px solid #b9c6d1;border-radius:9px;box-shadow:0 12px 28px rgba(23,61,89,.18)}.itemSearchMenu[hidden]{display:none}.itemSearchMenu button{display:grid;width:100%;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;padding:11px 12px;border-radius:7px;background:#fff;color:#21344b;text-align:left;font-weight:600}.itemSearchMenu button:hover,.itemSearchMenu button:focus{background:#eaf1f6}.itemSearchMenu button:disabled{opacity:.72;cursor:not-allowed;background:#fff7f7}.itemSearchNames{display:grid;gap:2px;min-width:0}.itemSearchNames strong{font-size:.86rem}.itemSearchNames strong,.itemSearchNames span{overflow:hidden;text-overflow:ellipsis}.itemSearchNames span{font-size:.82rem;color:#7a8792;font-weight:500}.itemSearchNames mark{padding:0 2px;border-radius:3px;background:#ffe58a;color:#243746;font-weight:850}.itemStock{grid-column:2;grid-row:1/4;align-self:center;white-space:nowrap;font-size:.86rem;font-weight:850}.itemStock:before{content:"";display:inline-block;width:9px;height:9px;margin-right:5px;border-radius:50%;background:currentColor}.itemStock.available{color:#258653}.itemStock.low{color:#dc7924}.itemStock.empty{color:#c52c32}.itemSearchMenu p{margin:8px;color:#667085;font-weight:500}.itemSearchField.isOpen .itemSearchInput{border-color:#397497;box-shadow:0 0 0 3px rgba(57,116,151,.14)}';document.head.append(style)}
   function highlightMatch(value,query){const text=String(value||''),index=norm(text).indexOf(query);if(!query||index<0)return esc(text);return`${esc(text.slice(0,index))}<mark>${esc(text.slice(index,index+query.length))}</mark>${esc(text.slice(index+query.length))}`}
   function stockForItem(item){const rows=data.inventoryStock||[],id=String(item?.id||''),name=norm(itemName(item));return rows.find(row=>String(row.itemId||row.criteriaId||row.idElemento||'')===id)||rows.find(row=>name&&norm(row.nombre||row.name||row.elemento||row.itemName)===name)}
@@ -156,6 +210,7 @@ function matchesItemSearch(text,number,query){
     const assetSelect=$('#deliveryAssetId'),selectedAsset=assetSelect.value;assetSelect.required=fixed;assetSelect.disabled=!fixed;
     if(fixed){form.elements.quantity.value='1';const rows=availableAssets(item);assetSelect.innerHTML=options(rows,assetSelectionLabel);if(rows.some(asset=>asset.id===selectedAsset))assetSelect.value=selectedAsset;if(!rows.length)assetSelect.innerHTML='<option value="">No hay activos disponibles de esta clase</option>'}
     else{assetSelect.value='';assetSelect.dispatchEvent(new Event('change',{bubbles:true}));if(!loan)form.elements.notes.value='';if(!form.elements.quantity.value)form.elements.quantity.value='1'}
+    $('#deliveryAssetField')._refreshAssetSearch?.();
   }
   function openDeliveryMode(mode){
     if(deliveryMode!==mode){discardDeliveryForm();deliveryMode=mode;clearItemSearch($('#deliveryForm'))}
@@ -535,7 +590,7 @@ function matchesItemSearch(text,number,query){
     const style=document.createElement('style');style.textContent='.recipientCompany{display:flex;gap:12px;border:1px solid #b9c8d3;border-radius:10px;padding:12px;grid-column:1/-1}.recipientCompany legend{font-weight:800}.recipientCompany label{flex:1;display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #c4cacf;border-radius:8px;cursor:pointer}.recipientCompany input{width:20px;height:20px;margin:0}.recipientCompany label:has(input:checked){background:#e1eff8;border-color:#173d59}.inventoryQuery form{display:block}.inventoryQuery .recentMovementList{margin:16px 0}.stockBalance{font-weight:800;padding:16px;background:#eaf1f6;border-radius:10px}.inventoryQuery h3{margin-top:20px}';document.head.append(style);renderInventoryQueries();
   }
 
-  injectItemSearchStyle();setupDeliveryForm();setupIncomeForm();setupItemSearch($('#deliveryForm'),'Buscar elemento a entregar');setupItemSearch($('#incomeForm'),'Buscar elemento a ingresar');renderDeliveryDraft();renderIncomeDraft();setupRegisterMenu();setupQueryMenu();setupInventoryQueries();setupSessionHeader();$('#sessionWelcomeStart').addEventListener('click',closeWelcomeMessage);$('#sessionWelcome').addEventListener('click',event=>{if(event.target.id==='sessionWelcome')closeWelcomeMessage()});
+  injectItemSearchStyle();setupDeliveryForm();setupDeliveryAssetSearch();setupIncomeForm();setupItemSearch($('#deliveryForm'),'Buscar elemento a entregar');setupItemSearch($('#incomeForm'),'Buscar elemento a ingresar');renderDeliveryDraft();renderIncomeDraft();setupRegisterMenu();setupQueryMenu();setupInventoryQueries();setupSessionHeader();$('#sessionWelcomeStart').addEventListener('click',closeWelcomeMessage);$('#sessionWelcome').addEventListener('click',event=>{if(event.target.id==='sessionWelcome')closeWelcomeMessage()});
   window.SKPlaza={openPersonHistory,recipientDestinationChanged,post,getData:()=>data,getUser:()=>user,saveData:next=>{localStorage.setItem('skPlazaData',JSON.stringify(next));data=next},sync,renderRecentQueries,refreshDelivery:updateDeliveryFields,updatePendingBadge,renderRecipients:null,validateDeliveryRecipient,validateIncomeCollaborator,resumeDeliveryAfterCollaborator:async()=>{if(!pendingDeliveryAfterCollaborator)return false;pendingDeliveryAfterCollaborator=false;return saveDeliveryBatch($('#deliveryForm'))}};
   $('#incomeForm').addEventListener('submit',event=>{event.preventDefault();event.stopImmediatePropagation();saveIncomeBatch(event.currentTarget)});
   $('#incomeForm').addEventListener('submit',event=>{event.preventDefault();movement(event.currentTarget,'blendingIncomes')});$('#deliveryForm').addEventListener('submit',event=>{event.preventDefault();saveDeliveryBatch(event.currentTarget)});$('nav').addEventListener('click',event=>{const button=event.target.closest('[data-view]');if(!button)return;if(button.dataset.view==='home'){event.preventDefault();event.stopPropagation();discardAndGoHome()}else if(button.dataset.view==='contacts')window.openPlazaQueryMenu();else showView(button.dataset.view)});$('#home').addEventListener('click',event=>{const button=event.target.closest('[data-home-view]');if(!button)return;if(button.dataset.homeView==='income')window.openPlazaRegisterMenu();else if(button.dataset.homeView==='contacts')window.openPlazaQueryMenu();else showView(button.dataset.homeView)});$('#syncBtn').addEventListener('click',syncDataAndApp);$('#logoutBtn').addEventListener('click',logout);window.addEventListener('online',()=>sync(true));document.addEventListener('visibilitychange',refreshSharedPeople);window.addEventListener('focus',refreshSharedPeople);window.addEventListener('pageshow',refreshSharedPeople);setInterval(periodicSync,300000);showView('home');if(token&&user)openApp();

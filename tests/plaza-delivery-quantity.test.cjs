@@ -18,7 +18,7 @@ function formClient(){
     Event:class {constructor(type){this.type=type}},Option:class {constructor(text,value){this.text=text;this.value=value}},console});
   vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
   const prefix=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
-  vm.runInContext(prefix+`\nwindow.testing={selectionLabel:assetSelectionLabel,historyLabel:assetLabel,set:value=>{data=value},mode:value=>{deliveryMode=value},update:updateDeliveryFields,capture:currentDeliveryItem,add:addDeliveryItem,draft:()=>deliveryDraft,recipientChanged:recipientDestinationChanged};})();`,ctx);
+  vm.runInContext(prefix+`\nwindow.testing={matchesAssetSearch,selectionLabel:assetSelectionLabel,historyLabel:assetLabel,set:value=>{data=value},mode:value=>{deliveryMode=value},update:updateDeliveryFields,capture:currentDeliveryItem,add:addDeliveryItem,draft:()=>deliveryDraft,recipientChanged:recipientDestinationChanged};})();`,ctx);
   const api=ctx.window.testing,data={
     inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true,allowLoan:true},{id:'pliers',name:'Alicates',allowLoan:true},{id:'cable',name:'Cable',allowLoan:true,fractionable:true}],
     assets:[{id:'asset',clase:'Motosierra',serial:'TEST-57951',ubicacion:'Bodega de Superficie'}],
@@ -123,4 +123,12 @@ test('ARIS recipient company is visible only for loans and is cleared on switchi
   assert.equal(field.hidden,false);assert.equal(input.disabled,false);assert.equal(input.required,true);
   input.checked=true;c.api.mode('assignment');c.api.update();
   assert.equal(field.hidden,true);assert.equal(field.style.display,'none');assert.equal(input.disabled,true);assert.equal(input.checked,false);assert.equal(input.required,false);
+});
+
+test('specific asset searches match partial serials, marks, models and multiple words without case or accent differences',()=>{
+  const c=formClient(),asset={clase:'Motosierra',fabricante:'Makita',serial:'57951',nuevaMarca:'AAF',marcaPrevia:'Seguridad',modelo:'UC4051A'};
+  for(const query of ['', 'maki', '795', 'aaf', 'uc4051', '  MAKÍTA   57951 ', 'AAF uc4051a', 'seguridad'])assert.equal(c.api.matchesAssetSearch(asset,query),true,query);
+  for(const query of ['stihl','57952','Makita AAG'])assert.equal(c.api.matchesAssetSearch(asset,query),false,query);
+  assert.equal(c.api.matchesAssetSearch({clase:'Columna',serial:'HIDDEN-SERIAL',marcaPrevia:'15',modelo:'29'},'hidden-serial'),false);
+  assert.equal(c.api.matchesAssetSearch({clase:'Columna',marcaPrevia:'15',modelo:'29'},'15 29'),true);
 });
