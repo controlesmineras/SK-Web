@@ -134,6 +134,21 @@ function automaticAssetMarkCode_(index){
  if(!Number.isInteger(index)||index<0||index>=26*26*26)throw new Error('Se agotaron las marcas de tres letras. Contacta al administrador.');
  return String.fromCharCode(65+Math.floor(index/676),65+Math.floor(index/26)%26,65+index%26);
 }
+function validateNewAssetMarks_(cloud,rows,registry){
+ const code=value=>String(value??'').trim().toUpperCase(),previous=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row])),final=new Map(previous),owners=new Map();
+ const reserve=(value,id)=>{const mark=code(value);if(!id||!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark))return;if(!owners.has(mark))owners.set(mark,new Set());owners.get(mark).add(id)};
+ for(const row of rows){const old=previous.get(row.id);final.set(row.id,old?.deleted?old:choose_(row,old))}
+ // Conservar las reservas históricas, aunque el activo ya no esté en la lista visible.
+ for(const row of registry)reserve(row.code,row.id);
+ for(const row of [...previous.values(),...final.values()])for(const key of ['nuevaMarca','marcaActual','marcaInterna','marcaPrevia','marcaAnterior','numeroMarcaActual'])reserve(row[key],row.id);
+ for(const input of rows){
+  const row=final.get(input.id),old=previous.get(input.id),mark=code(row?.nuevaMarca);
+  if(!row||row.deleted||!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark)||old&&code(old.nuevaMarca)===mark)continue;
+  const otherId=Array.from(owners.get(mark)||[]).find(id=>id!==row.id);if(!otherId)continue;
+  const other=previous.get(otherId)||final.get(otherId),label=other?[other.clase,other.numeroClase||other.numeroYT,other.serial&&'Serial: '+other.serial].filter(Boolean).join(' · '):'otro activo del registro histórico';
+  throw new Error('La marca nueva '+mark+' ya pertenece a '+label+'. No se guardaron los cambios. Revisa la marca de la ficha; para obtener una nueva utiliza «Solicitar marca nueva».');
+ }
+}
 function assignAssetMarks_(cloud,rows,requestAuth){
  const registry=(Array.isArray(cloud.assetMarkRegistry)?cloud.assetMarkRegistry:[]).map(row=>Object.assign({},row));
  const byId=new Map(registry.map(row=>[row.id,row])),existing=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
@@ -190,6 +205,7 @@ function assignAssetMarks_(cloud,rows,requestAuth){
   }
   return asset;
  });
+ validateNewAssetMarks_(cloud,assets,registry);
  return{assets:assets,registry:registry,changed:changed};
 }
 

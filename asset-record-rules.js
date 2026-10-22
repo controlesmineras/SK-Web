@@ -45,6 +45,15 @@
     if (asset.deleted || !key) return null;
     return rows.find(row => !row.deleted && (!asset.id || row.id !== asset.id) && uniqueSerialKey(row.serial) === key) || null;
   }
+  // Una nueva marca de letras es única entre clases y queda reservada al dar de baja.
+  // Una colisión que ya existía no impide guardar novedades ajenas a la marcación.
+  function duplicateNewMark(rows, asset) {
+    const code=value=>String(value??'').trim().toUpperCase(),mark=code(asset.nuevaMarca);
+    if(asset.deleted||!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark))return null;
+    const old=rows.find(row=>row.id===asset.id);
+    if(old&&code(old.nuevaMarca)===mark)return null;
+    return rows.find(row=>row.id!==asset.id&&['nuevaMarca','marcaActual','marcaInterna','marcaPrevia','marcaAnterior','numeroMarcaActual'].some(key=>code(row[key])===mark))||null;
+  }
   const identityMark = asset => serialKey(asset.marcaPrevia || (!asset.markingPolicy ? asset.marcaActual || asset.marcaInterna : ''));
   const serialStatusLabel = asset => ({none:'Sin serial',unreadable:'Serial ilegible'})[asset.serialStatus] || '';
   const hasSerialException = asset => asset.serialStatus === 'none' || asset.serialStatus === 'unreadable';
@@ -87,5 +96,5 @@
     if (isColumn(asset)) return columnLabel(asset);
     return [asset.clase, asset.numeroClase || asset.numeroYT, asset.marcaActual || asset.marcaInterna, asset.serial].filter(Boolean).join(' · ');
   }
-  window.SKAssetRules = {assignmentAreas, serialKey, duplicateSerial, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, isColumn, columnIdentity, columnLabel, movementLabel};
+  window.SKAssetRules = {assignmentAreas, serialKey, duplicateSerial, duplicateNewMark, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, isColumn, columnIdentity, columnLabel, movementLabel};
 })();

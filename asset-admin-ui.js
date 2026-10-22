@@ -200,6 +200,8 @@ async function saveAsset(e){
   for(const [flag,field,label] of [['usesSerial','serial','SERIAL'],['usesLength','largo','LARGO FT'],['usesModel','modelo','MODELO'],['usesManufacturer','fabricante','MARCA COMERCIAL'],['requiresInternalMark','marcaInterna','MARCA ACTUAL']])if(!['serial','marcaInterna'].includes(field)&&criterion[flag]&&!((automatic||f.dataset.autoMarkPolicy==='letters-v1')&&field==='marcaInterna')&&!txt(x[field]))return alert(`Ingresa ${label}. Este campo es obligatorio para la clase ${x.clase}.`);
   Object.assign(x,window.SKAssetAccessories?.read(f)||{});
   x.numeroClase=txt(x.numeroYT);x.marcaActual=txt(x.marcaInterna);x.numeroMarcaActual=txt(x.marcaAnterior);
+  const markDuplicate=window.SKAssetRules.duplicateNewMark(rows,x);
+  if(markDuplicate)return alert(`MARCA NUEVA REPETIDA\n\nLa marca ${txt(x.nuevaMarca).toUpperCase()} ya pertenece a: ${cleanLabel(markDuplicate)}.\n\nNo se guardaron los cambios. Revisa la marca de esta ficha; para obtener una nueva utiliza «Solicitar marca nueva».`);
   const dup=duplicateAsset(rows,x,editing);
   if(dup)return alert(`ESTE ACTIVO YA ESTÁ REGISTRADO\n\nYa existe un activo con ${dup.field}: ${dup.value}.\n\nRegistro existente: ${cleanLabel(dup.found)}.\n\nRevisa nuevamente el buscador de activos.`);
   if(editing){
