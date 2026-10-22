@@ -34,11 +34,11 @@ test('un conflicto anterior no bloquea editar otros datos ni se remarca sin deci
  s.sync([edit(old,{ubicacion:'Mina'})]);assert.equal(s.cloud().assets[1].ubicacion,'Mina');assert.equal(s.cloud().assets[1].nuevaMarca,'AAS');
  assert.deepEqual(s.cloud().assetMarkRegistry,registry());assert.equal(s.cloud().novelties.length,1);
 });
-test('ignora una copia atrasada descartada por la revisión central y permite corregir la copia',()=>{
+test('ignora una copia atrasada y exige la corrección central para borrar una marca duplicada',()=>{
  const old=legacy('legacy',{nuevaMarca:'AAT',updatedAt:'2026-10-22T14:00:00.000Z'}),s=backend([issued(),old]);
  s.sync([edit(old,{nuevaMarca:'AAS'})]);assert.equal(s.cloud().assets[1].nuevaMarca,'AAT');
  const duplicate=legacy('legacy',{nuevaMarca:'AAS'}),r=backend([issued(),duplicate]);
- r.sync([edit(duplicate,{nuevaMarca:''})]);assert.equal(r.cloud().assets[1].nuevaMarca,'');assert.equal(r.cloud().assets[0].nuevaMarca,'AAS');
+ assert.throws(()=>r.sync([edit(duplicate,{nuevaMarca:''})]),/solo puede asignarla la base central/);assert.equal(r.writes,0);assert.equal(r.cloud().assets[1].nuevaMarca,'AAS');assert.equal(r.cloud().assets[0].nuevaMarca,'AAS');
 });
 test('la asignación central conserva AAS y entrega AAT y AAU a solicitudes nuevas y reintentos',()=>{
  const a=legacy('one'),b=legacy('two',{clase:'Motosierra'}),s=backend([issued(),a,b]);
@@ -51,9 +51,9 @@ test('Plaza comparte el rechazo de una marca copiada en altas antiguas sin polí
  assert.throws(()=>s.ctx.assignAssetMarks_(s.cloud(),[incoming]),/marca nueva AAS/);
 });
 test('P-AA y PAA son códigos distintos; una copia exacta del prefijo sí se rechaza',()=>{
- const other=legacy('issued',{nuevaMarca:'P-AA',marcaActual:'P-AA',marcaInterna:'P-AA'}),a=legacy('one'),s=backend([other,a],[]);
- s.sync([edit(a,{nuevaMarca:'PAA'})]);assert.equal(s.cloud().assets[1].nuevaMarca,'PAA');
- assert.throws(()=>s.sync([edit(a,{nuevaMarca:'p-aa',updatedAt:'2026-10-22T14:00:00.000Z'})]),/marca nueva P-AA/);
+ const other=legacy('issued',{nuevaMarca:'P-AA',marcaActual:'P-AA',marcaInterna:'P-AA'}),a=legacy('one'),s=backend([other,a],[{id:'reserved',code:'OZZ',sequence:10139}]);
+ s.sync([edit(a,{markRequest:'existing-v1',markingPolicy:'letters-v1',markStatus:'pending'})]);assert.equal(s.cloud().assets[1].nuevaMarca,'PAA');
+ assert.throws(()=>s.sync([edit(legacy('third'),{nuevaMarca:'p-aa',updatedAt:'2026-10-22T14:00:00.000Z'})]),/marca nueva P-AA/);
 });
 test('la ficha impide guardar una nueva marca repetida entre clases, incluso de un activo eliminado',()=>{
  const ctx={window:{}};vm.runInNewContext(read('asset-record-rules.js'),ctx);

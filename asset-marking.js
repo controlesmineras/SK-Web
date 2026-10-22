@@ -27,18 +27,19 @@ function mount(){
   });
   document.body.append(dialog);return dialog;
 }
-function show(assets,confirmed){
+function show(assets,confirmed,conflict=false){
   if(!assets.length)return;
   const view=mount(),title=view.querySelector('h2'),message=view.querySelector('#assetMarkMessage'),cards=view.querySelector('#assetMarkCards');
   title.textContent=confirmed?'MARCA EL ACTIVO':assets.length===1?'ACTIVO REGISTRADO':'ACTIVOS REGISTRADOS';
   message.textContent=confirmed?'Registro guardado correctamente.':navigator.onLine?'El registro está guardado. La marca se mostrará al confirmar la sincronización.':'El registro está guardado sin conexión. Al sincronizar aparecerá la marca para identificar el activo.';
   if(!confirmed&&assets.every(asset=>asset.markRequest==='existing-v1')){title.textContent='SOLICITUD GUARDADA';message.textContent=navigator.onLine?'La marca se mostrará cuando la base central confirme la solicitud.':'La solicitud está guardada sin conexión. Al sincronizar aparecerá la marca para identificar el activo.';}
+  if(conflict){title.textContent='MARCA EN REVISIÓN';message.textContent='Esta marca aparece en más de un activo. Revisa la ficha en SK Admin y usa «Corregir marca duplicada» antes de marcar físicamente el equipo.';}
   cards.replaceChildren();shown=confirmed?assets.map(asset=>asset.id):[];
   for(const asset of assets){
     const card=document.createElement('article');card.className='assetMarkCard';const name=clean(asset.clase)||'activo',description=document.createElement('p');
     description.textContent=confirmed?`Ponle esta marca ${/^(motosierra|pulidora|columna|sierra|pistola)\b/i.test(name)?'a la':'al'} ${name.toLocaleLowerCase('es')}${/^[A-Z]-[A-Z]{2}$/.test(asset.nuevaMarca||'')?', incluyendo el guion':''}:`:name;card.append(description);
     if(confirmed){const code=document.createElement('strong');code.className='assetMarkCode';code.textContent=asset.nuevaMarca;card.append(code)}
-    const detail=document.createElement('small');detail.textContent=[(asset.numeroClase||asset.numeroYT)&&`N.º de clase: ${asset.numeroClase||asset.numeroYT}`,!window.SKAssetRules?.isColumn(asset)&&asset.serial&&`Serial: ${asset.serial}`,asset.minaOrigen&&`Mina de origen: ${asset.minaOrigen}`,!confirmed&&'Marca pendiente de sincronización'].filter(Boolean).join(' · ');card.append(detail);cards.append(card);
+    const detail=document.createElement('small');detail.textContent=[(asset.numeroClase||asset.numeroYT)&&`N.º de clase: ${asset.numeroClase||asset.numeroYT}`,!window.SKAssetRules?.isColumn(asset)&&asset.serial&&`Serial: ${asset.serial}`,asset.minaOrigen&&`Mina de origen: ${asset.minaOrigen}`,!confirmed&&(conflict?'Marca repetida: '+asset.nuevaMarca:'Marca pendiente de sincronización')].filter(Boolean).join(' · ');card.append(detail);cards.append(card);
   }
   const confirmation=document.querySelector('#recordConfirmation');if(confirmation){confirmation.hidden=true;confirmation.classList.remove('visible')}
   if(!view.open){returnFocus=document.activeElement;view.showModal()}
@@ -60,14 +61,38 @@ async function syncSaved(asset){
   await scan();return true;
 }
 async function scan(){
-  const ids=tracked();if(!ids.length)return;
+  const ids=tracked();
   const version=++scanVersion;
   let assets=[];
   if(scope==='plaza')assets=window.SKPlaza?.getData?.().assets||[];
   else if(typeof db!=='undefined'&&db&&typeof all==='function')assets=await all('assets');
   if(version!==scanVersion)return;
-  const ready=assets.filter(asset=>ids.includes(asset.id)&&asset.markingPolicy===POLICY&&asset.markStatus==='assigned'&&/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(asset.nuevaMarca||''));
+  const conflicts=markConflicts(assets);renderIntegrityNotice(conflicts);if(!ids.length)return;
+  const conflictingIds=new Set(conflicts.flatMap(row=>row.assetIds));
+  const blocked=assets.filter(asset=>ids.includes(asset.id)&&!asset.deleted&&conflictingIds.has(asset.id));
+  if(blocked.length){show(blocked,false,true);return;}
+  const ready=assets.filter(asset=>ids.includes(asset.id)&&!asset.deleted&&asset.syncState==='synced'&&asset.markingPolicy===POLICY&&asset.markStatus==='assigned'&&/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(asset.nuevaMarca||''));
   if(ready.length)show(ready,true);
+}
+function markConflicts(assets){
+ const codes=new Map();
+ for(const asset of assets){
+  if(!asset?.id)continue;
+  for(const field of ['nuevaMarca','marcaActual','marcaInterna']){
+   const code=clean(asset[field]).toUpperCase();if(!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(code))continue;
+   if(!codes.has(code))codes.set(code,new Map());codes.get(code).set(asset.id,asset);
+  }
+ }
+ return [...codes].filter(([,rows])=>rows.size>1&&[...rows.values()].some(row=>!row.deleted)).map(([code,rows])=>({code,assetIds:[...rows.keys()]}));
+}
+function renderIntegrityNotice(conflicts){
+ if(typeof document==='undefined')return;
+ for(const target of scope==='admin'?['home','assets']:['home']){
+  const host=document.querySelector('#'+target);if(!host)continue;
+  const id='assetMarkIntegrity-'+target;let note=document.querySelector('#'+id);
+  if(!note){note=document.createElement('p');note.id=id;note.setAttribute('role','status');note.style.cssText='padding:12px;border:1px solid #b77b1d;border-radius:10px;background:#fff6dd;color:#654208;line-height:1.45';host.append(note);}
+  note.hidden=!conflicts.length;note.textContent=conflicts.length?'Marcas repetidas: '+conflicts.map(row=>row.code).join(', ')+'. Revisa las fichas en SK Admin. Si la repetición está en «Nueva marca», pulsa «Corregir marca duplicada» en la ficha que corresponda.':'';
+ }
 }
 let requesting=false,requestViewVersion=0;
 function hasDuplicateMark(assets,asset){
@@ -138,7 +163,7 @@ async function requestExisting(id){
   }catch(error){console.error(error);alert('No se pudo completar la solicitud de marca: '+(error?.message||error));return false;}
   finally{requesting=false;refreshRequestButton().catch(console.error);}
 }
-window.SKAssetMarking={eligible,prepare,saved,scan,syncSaved,refreshRequestButton,requestExisting,correctDuplicate,hasDuplicateMark};
+window.SKAssetMarking={eligible,prepare,saved,scan,syncSaved,refreshRequestButton,requestExisting,correctDuplicate,hasDuplicateMark,markConflicts};
 if(scope==='admin')for(const event of ['skweb-synced','skadmin-permissions'])window.addEventListener(event,()=>refreshRequestButton().catch(console.error));
 window.addEventListener('skweb-synced',scan);window.addEventListener('skplaza-synced',scan);
 window.addEventListener('load',()=>setTimeout(scan,800));window.addEventListener('focus',scan);

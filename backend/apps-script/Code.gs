@@ -142,20 +142,23 @@ function validateNewAssetMarks_(cloud,rows,registry){
  for(const row of registry)reserve(row.code,row.id);
  for(const row of [...previous.values(),...final.values()])for(const key of ['nuevaMarca','marcaActual','marcaInterna','marcaPrevia','marcaAnterior','numeroMarcaActual'])reserve(row[key],row.id);
  for(const input of rows){
-  const row=final.get(input.id),old=previous.get(input.id),mark=code(row?.nuevaMarca);
-  if(!row||row.deleted||!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark)||old&&code(old.nuevaMarca)===mark)continue;
-  const otherId=Array.from(owners.get(mark)||[]).find(id=>id!==row.id);if(!otherId)continue;
-  const other=previous.get(otherId)||final.get(otherId),label=other?[other.clase,other.numeroClase||other.numeroYT,other.serial&&'Serial: '+other.serial].filter(Boolean).join(' · '):'otro activo del registro histórico';
-  throw new Error('La marca nueva '+mark+' ya pertenece a '+label+'. No se guardaron los cambios. Revisa la marca de la ficha; para obtener una nueva utiliza «Solicitar marca nueva».');
+  const row=final.get(input.id),old=previous.get(input.id);if(!row||row.deleted)continue;
+  for(const field of ['nuevaMarca','marcaActual','marcaInterna']){
+   const mark=code(row[field]);if(!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark)||old&&code(old[field])===mark)continue;
+   const otherId=Array.from(owners.get(mark)||[]).find(id=>id!==row.id);if(!otherId)continue;
+   const other=previous.get(otherId)||final.get(otherId),label=other?[other.clase,other.numeroClase||other.numeroYT,other.serial&&'Serial: '+other.serial].filter(Boolean).join(' · '):'otro activo del registro histórico';
+   throw new Error('La marca '+(field==='nuevaMarca'?'nueva ':'')+mark+' ya pertenece a '+label+'. No se guardaron los cambios. Revisa la marca de la ficha; para obtener una nueva utiliza «Solicitar marca nueva».');
+  }
  }
 }
 function assignAssetMarks_(cloud,rows,requestAuth){
- const registry=(Array.isArray(cloud.assetMarkRegistry)?cloud.assetMarkRegistry:[]).map(row=>Object.assign({},row));
+ const registry=(Array.isArray(cloud.assetMarkRegistry)?cloud.assetMarkRegistry:[]).map(row=>Object.assign({},row,{code:String(row.code||'').trim().toUpperCase()}));
  const byId=new Map(registry.map(row=>[row.id,row])),existing=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
  const used=new Set(registry.map(row=>row.code));
  // Reservar también marcas físicas anteriores, incluso de activos dados de baja.
  (cloud.assets||[]).concat(rows).forEach(asset=>{if(!asset)return;['marcaInterna','marcaActual','nuevaMarca','marcaPrevia','marcaAnterior','numeroMarcaActual'].forEach(key=>{const value=String(asset[key]||'').trim().toUpperCase();if(/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(value))used.add(value)})});
- let next=Math.max(-1,...registry.map(row=>row.scheme!=='mine-prefix-v1'&&Number.isInteger(row.sequence)?row.sequence:-1))+1,changed=false;
+ const sequenceOf=row=>row.scheme==='mine-prefix-v1'?-1:Math.max(Number.isInteger(row.sequence)?row.sequence:-1,/^[A-Z]{3}$/.test(row.code)?[...row.code].reduce((n,c)=>n*26+c.charCodeAt(0)-65,0):-1);
+ let next=Math.max(-1,...registry.map(sequenceOf))+1,changed=false;
  const assets=rows.map(input=>{
   const asset=Object.assign({},input),old=existing.get(asset.id);
   // El registro de correcciones solo lo escribe la operación central autorizada.
@@ -165,7 +168,7 @@ function assignAssetMarks_(cloud,rows,requestAuth){
   const existingRequest=!!(old&&asset.markRequest==='existing-v1'&&requestAuth&&requestAuth.role==='owner'&&!old.deleted&&!String(old.nuevaMarca||'').trim()&&usesAutomaticAssetMark_(old)&&eligible);
   // Un cliente antiguo o una edición no puede borrar/cambiar una marca ya emitida.
   if(!entry&&old&&old.markingPolicy==='letters-v1'&&old.markStatus==='assigned'&&/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(old.nuevaMarca||'')){
-   entry={id:old.id,code:old.nuevaMarca,sequence:old.markSequence,issuedAt:old.markAssignedAt,...(old.markScheme==='mine-prefix-v1'?{scheme:old.markScheme,prefix:old.markPrefix,mine:old.markMine}:{})};registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);if(entry.scheme!=='mine-prefix-v1'&&Number.isInteger(entry.sequence))next=Math.max(next,entry.sequence+1);
+   entry={id:old.id,code:old.nuevaMarca,sequence:old.markSequence,issuedAt:old.markAssignedAt,...(old.markScheme==='mine-prefix-v1'?{scheme:old.markScheme,prefix:old.markPrefix,mine:old.markMine}:{})};registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);next=Math.max(next,sequenceOf(entry)+1);
   }
   if(!entry&&requested&&eligible&&(!old||old.markingPolicy==='letters-v1'&&old.markStatus==='pending'||existingRequest)){
    const external=asset.incomeMarking===true&&asset.activoExterno===true&&repairIncomeClass_(asset.clase),prefix=external?externalMinePrefix_(asset.mina):'';
@@ -208,6 +211,13 @@ function assignAssetMarks_(cloud,rows,requestAuth){
   return asset;
  });
  validateNewAssetMarks_(cloud,assets,registry);
+ // La ficha y los clientes antiguos no pueden emitir ni borrar una marca nueva.
+ // Las asignaciones válidas proceden de una entrada central, incluida la corrección.
+ for(const asset of assets){
+  const old=existing.get(asset.id),effective=old?.deleted?old:choose_(asset,old);
+  if(!effective||effective.deleted||byId.has(asset.id))continue;
+  if(String(effective.nuevaMarca||'').trim().toUpperCase()!==String(old?.nuevaMarca||'').trim().toUpperCase())throw new Error('La marca nueva solo puede asignarla la base central. Actualiza la app y usa «Solicitar marca nueva» o «Corregir marca duplicada».');
+ }
  return{assets:assets,registry:registry,changed:changed};
 }
 

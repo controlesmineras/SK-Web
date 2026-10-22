@@ -28,22 +28,9 @@
   async function writeMergedLocal(data,sentSnapshot){for(const store of stores){if(!Array.isArray(data[store]))continue;if(typeof replaceStoreRows==='function')await replaceStoreRows(store,data[store],sentSnapshot?.[store]);else{await clearStore(store);for(const x of data[store])await put(store,x)}}}
   window.writeSyncedSnapshot=writeMergedLocal;
   async function syncLatest(){
-    const b=document.querySelector('#syncBtn'),s=document.querySelector('#syncStatus');if(!b||b.disabled)return;
-    try{
-      b.disabled=true;b.textContent='☁ Sincronizando…';buzz(18);if(s)s.textContent='Autorizando Google Drive…';
-      // PRIMERA operación: autorización. No poner ningún await antes de esta llamada.
-      await timeout(getToken(),45000,'Google no respondió a la autorización en 45 segundos.');
-      if(s)s.textContent='Conectado a Google · protegiendo datos locales…';
-      const localAssetIds=new Set((await all('assets')).map(x=>x.id).filter(Boolean));
-      const id=await timeout(cloudFileId(),45000,'Google Drive tardó demasiado en localizar la base central.');let cloud={};
-      if(s)s.textContent='Comparando con la base central…';
-      if(id){const r=await timeout(driveFetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`),45000,'Google Drive tardó demasiado en descargar la base central.');cloud=await timeout(r.json(),15000,'La base central tardó demasiado en procesarse.')}
-      const merged=await mergeLatest(cloud),mergedAssetIds=new Set((merged.assets||[]).map(x=>x.id));
-      for(const assetId of localAssetIds)if(!mergedAssetIds.has(assetId))throw new Error('Protección local: un activo iba a perderse durante la conciliación. Sincronización cancelada.');
-      if(s)s.textContent='Guardando copia central protegida…';await timeout(uploadCloud(id,merged),60000,'Google Drive tardó demasiado en guardar la base central.');
-      await writeMergedLocal(merged);await seedParts();await refresh();if(s)s.textContent=`Sincronizado · cambios locales protegidos · ${new Date().toLocaleString('es-CO')}`;buzz([22,45,22]);alert(id?'Sincronización completada. Los registros locales fueron conservados.':'Base central creada y sincronizada.');location.reload();
-    }catch(e){console.error('SK Web sync v5:',e);buzz([45,35,45]);if(s)s.textContent='Sin sincronizar · '+(e?.message||e);alert('No se pudo sincronizar: '+(e?.message||e))}
-    finally{b.disabled=false;b.textContent='☁ Sincronizar'}
+    if(window.skSyncApi?.configured())return window.skSyncApi.sync();
+    const message='No se cargó el servicio central de sincronización. Pulsa ACTUALIZAR APP y vuelve a intentarlo. Los registros locales se conservan.';
+    const status=document.querySelector('#syncStatus');if(status)status.textContent=message;alert(message);return false;
   }
   window.addEventListener('load',()=>{if(window.skSyncApi?.configured())return;const old=document.querySelector('#syncBtn');if(!old)return;const fresh=old.cloneNode(true);old.replaceWith(fresh);fresh.addEventListener('click',syncLatest)});
 })();
