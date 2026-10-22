@@ -48,7 +48,21 @@ function validUser(value){return Boolean(value&&typeof value==='object'&&typeof 
 function checkSession(result,sessionToken){if(typeof sessionToken!=='string'||!sessionToken.trim()||!validUser(result?.user))throw new Error('El servidor no devolvió una sesión completa. Reintenta la comprobación de acceso.');return {...result.user,name:result.user.name||result.user.username}}
 const assistantViews=new Set(['home','queries','assetQuery','documentQuery','personQuery','plazaMovements','personal','assets','novelties','actas','consumption','optionCatalog']);
 const api=()=>window.SK_SYNC_CONFIG?.apiUrl||'';
-async function request(action,body={},withKey=false){if(!api())throw new Error('El servicio central no está configurado');const payload={action,...body};if(token)payload.token=token;if(withKey)payload.key=window.SK_SYNC_CONFIG?.apiKey||'';const response=await fetch(api(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),redirect:'follow',cache:'no-store',credentials:'omit'}),text=await response.text();let result;try{result=JSON.parse(text)}catch(_){throw new Error('El servidor no devolvió una respuesta válida')}if(!result.ok)throw new Error(result.error||'Solicitud rechazada');return result}
+async function request(action,body={},withKey=false){
+ if(!api())throw new Error('El servicio central no está configurado');
+ const payload={action,...body};if(token)payload.token=token;if(withKey)payload.key=window.SK_SYNC_CONFIG?.apiKey||'';
+ const controller=new AbortController();let timer;
+ const expired=new Promise((_,reject)=>{timer=setTimeout(()=>{reject(new Error('El servicio no respondió en 30 segundos. Reintenta la conexión; los registros locales se conservan.'));controller.abort()},30000)});
+ try{
+  const exchange=(async()=>{
+   const response=await fetch(api(),{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify(payload),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
+   if(!response.ok)throw new Error('El servicio respondió '+response.status+'. Reintenta la conexión.');
+   const text=await response.text();let result;try{result=JSON.parse(text)}catch(_){throw new Error('El servidor no devolvió una respuesta válida. Reintenta la conexión.');}
+   if(!result?.ok)throw new Error(result?.error||'Solicitud rechazada');return result;
+  })();
+  return await Promise.race([exchange,expired]);
+ }finally{clearTimeout(timer)}
+}
 function ready(){return Boolean(validated&&token&&validUser(user))}
 function isOwner(){return ready()&&user.role==='owner'}
 function canView(view){return view!=='inventoryStockAdmin'&&ready()&&(isOwner()||assistantViews.has(view))}
@@ -154,10 +168,10 @@ function renewForSync(){
  renewalPromise=new Promise(resolve=>{
   styles();const overlay=document.createElement('section');overlay.className='adminUsersOverlay';overlay.style.zIndex='50001';overlay.setAttribute('role','dialog');overlay.setAttribute('aria-modal','true');overlay.setAttribute('aria-labelledby','adminRenewTitle');
   overlay.innerHTML='<div class="adminAuthCard"><h1 id="adminRenewTitle">RENOVAR SINCRONIZACIÓN</h1><p>Tu acceso local sigue disponible. Ingresa tu contraseña para renovar la conexión con la base central. Tus registros pendientes se conservan.</p><form><label>USUARIO<input name="username" readonly autocomplete="username"></label><label>CONTRASEÑA<input name="password" type="password" autocomplete="current-password" required></label><button type="submit">RENOVAR Y SINCRONIZAR</button><button type="button" data-later>SEGUIR TRABAJANDO LOCALMENTE</button><p role="status" class="adminAuthStatus"></p></form></div>';
-  overlay.querySelector('[name="username"]').value=account;document.body.append(overlay);const finish=value=>{overlay.remove();resolve(value)};overlay.querySelector('[data-later]').onclick=()=>finish(false);
+  overlay.querySelector('[name="username"]').value=account;document.body.append(overlay);let closed=false;const finish=value=>{if(closed)return;closed=true;overlay.remove();resolve(value)};overlay.querySelector('[data-later]').onclick=()=>finish(false);
   overlay.querySelector('form').onsubmit=async event=>{event.preventDefault();const button=overlay.querySelector('[type="submit"]'),status=overlay.querySelector('[role="status"]'),password=overlay.querySelector('[name="password"]').value;button.disabled=true;status.textContent='Renovando conexión…';
-   try{const result=await request('adminLogin',{username:account,password});if(token!==previousToken){finish(false);return;}checkSession(result,result.token);if(result.user.username!==account)throw new Error('La cuenta recibida no coincide.');saveSession(result);await deviceAccess.remember(account,password,result);finish(true);}
-   catch(error){status.textContent=accessErrorMessage(error);button.disabled=false;}
+   try{const result=await request('adminLogin',{username:account,password});if(closed)return;if(token!==previousToken){finish(false);return;}checkSession(result,result.token);if(result.user.username!==account)throw new Error('La cuenta recibida no coincide.');saveSession(result);await deviceAccess.remember(account,password,result);finish(true);}
+   catch(error){if(!closed){status.textContent=accessErrorMessage(error);button.disabled=false;}}
   };overlay.querySelector('[name="password"]').focus();
  }).finally(()=>{renewalPromise=null});return renewalPromise;
 }
