@@ -72,6 +72,15 @@
    if(movement.kind==='assignment'&&!retired(asset)&&!backInWarehouse){assigned={...movement.responsible,area:assignmentArea(movement.raw,movement.responsible)};result.asignadaId=assigned.id;result.areaAsignada=assigned.area||asset.areaAsignada||'';}
    else if(['income','return'].includes(movement.kind)||retired(asset)||backInWarehouse){assigned={id:'',document:'',name:'',area:'',cargo:''};result.asignadaId='';result.areaAsignada='';}
   }
+  // La asignación explícita de una novedad prevalece hasta el siguiente movimiento.
+  // Se deriva del historial también cuando un auxiliar sincroniza con un servidor anterior.
+  const areaEvent=active.find(event=>['assignment','income','return'].includes(event.kind)||(event.kind==='novelty'&&text(event.raw.areaAsignada)));
+  if(areaEvent?.kind==='novelty'&&areaEvent.epoch>=snapshotTime&&!retired(result)){
+   result.areaAsignada=text(areaEvent.raw.areaAsignada);
+  }
+  // Guardar una edición de la ficha no debe recuperar después un área histórica.
+  const areaRevision=asset.areaAsignadaRevision;
+  if(areaRevision&&millis(areaRevision.at)>0&&millis(areaRevision.at)>=(areaEvent?.epoch||0)&&!retired(result))result.areaAsignada=text(areaRevision.value);
   return {asset:result,events,latest,assigned};
  }
  function available(asset,data){const current=project(asset,data).asset;return !current.deleted&&!retired(current)&&norm(current.ubicacion)==='bodega de superficie'&&norm(current.disponibleEntrega)!=='no';}

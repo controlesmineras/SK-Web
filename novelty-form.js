@@ -63,10 +63,14 @@ function defaultEventTime(form){
 async function update(){
   const form=document.querySelector('#noveltyForm');if(!form||typeof db==='undefined'||!db)return;
   defaultEventTime(form);
-  const ticket=++generation,assetId=form.elements.assetId.value,assets=await all('assets');actaRows=(await all('actas')).filter(validActa).sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo));
+  const ticket=++generation,assetId=form.elements.assetId.value,[assets,historyData]=await Promise.all([all('assets'),window.SKAssetHistoryUI.read()]);actaRows=(await all('actas')).filter(validActa).sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo));
   if(ticket!==generation||assetId!==form.elements.assetId.value)return;
   const asset=assets.find(row=>row.id===assetId&&!row.deleted),changed=selectedAsset?.id!==asset?.id;
   selectedAsset=asset||null;
+  const assigned=form.elements.areaAsignada,currentArea=changed?(asset?window.SKAssetHistory.project(asset,historyData).asset.areaAsignada||'':''):assigned.value;
+  const areas=window.SKAssetRules.assignmentAreas(window.SKFormOptions?.values?.('personal.area'));
+  if(currentArea&&!areas.includes(currentArea))areas.push(currentArea);
+  fill(assigned,areas,currentArea,'Conservar asignación actual');
   const catalog=window.SKFormOptions?.values('novelty.description')||['Revista física','Encontrada abandonada','Dada de baja mediante acta'];
   const descriptions=catalog.filter(value=>!isVisorChange(value));
   if(isRescuer(asset))descriptions.push(VISOR_CHANGE);
@@ -101,6 +105,8 @@ async function save(event){
     const novelty={...meta,...data,occurredAt:date.toISOString(),fechaLocal:date.toLocaleDateString('es-CO',{timeZone:'America/Bogota'}),horaLocal:date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota'})};
     if(visor)novelty.estadoVisorAnterior=asset.estadoVisor||'';
     const updated={...asset,ubicacion:data.ubicacion,estado:data.estado,updatedAt:meta.updatedAt,syncState:'pending'};
+    if(data.areaAsignada)updated.areaAsignada=data.areaAsignada;
+    else delete novelty.areaAsignada; // Una novedad antigua o sin selección conserva su asignación.
     if(visor)updated.estadoVisor=data.estadoVisor;
     await new Promise((resolve,reject)=>{
       const tx=db.transaction(['novelties','assets'],'readwrite');

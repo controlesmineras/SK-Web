@@ -76,9 +76,16 @@
     return String(Math.max(peers.length,0,...used)+1);
   }
 
+  // Áreas de asignación de activos; la bodega no es un área de personal.
+  function assignmentAreas(configured) {
+    const areas=Array.isArray(configured)?configured:['Seguridad física','Desmin - Obras civiles','Producción','Producción - Selectivo (Corteros)','Administrativa'];
+    const warehouse='Bodega Plaza Blending',seen=new Set();
+    return [...areas,warehouse].map(value=>String(value??'').trim()).filter(Boolean).map(value=>value.toLocaleLowerCase('es')===warehouse.toLocaleLowerCase('es')?warehouse:value).filter(value=>{const key=value.toLocaleLowerCase('es');if(seen.has(key))return false;seen.add(key);return true});
+  }
+
   function label(asset) {
     if (isColumn(asset)) return columnLabel(asset);
     return [asset.clase, asset.numeroClase || asset.numeroYT, asset.marcaActual || asset.marcaInterna, asset.serial].filter(Boolean).join(' · ');
   }
-  window.SKAssetRules = {serialKey, duplicateSerial, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, isColumn, columnIdentity, columnLabel, movementLabel};
+  window.SKAssetRules = {assignmentAreas, serialKey, duplicateSerial, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, isColumn, columnIdentity, columnLabel, movementLabel};
 })();

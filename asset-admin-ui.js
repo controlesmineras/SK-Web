@@ -144,7 +144,7 @@ const numberOf=a=>txt(window.SKAssetFields?.numero(a)||a.numeroClase||a.numeroYT
 window.SKAssetListLabel=cleanLabel;
 function assetCompare(a,b){if(external(a)!==external(b))return external(a)?1:-1;const c=txt(a.clase).localeCompare(txt(b.clase),'es',{numeric:true,sensitivity:'base'});return c||(!!numberOf(a)!==!!numberOf(b)?(numberOf(a)?-1:1):numberOf(a).localeCompare(numberOf(b),'es',{numeric:true,sensitivity:'base'}))||cleanLabel(a).localeCompare(cleanLabel(b),'es',{numeric:true})}
 function installAssetList(){window.assetLabel=cleanLabel;window.renderAssetList=function(rows){const host=document.querySelector('#assetAdminList');if(!host)return;const q=norm(document.querySelector('#assetSearch')?.value);const f=rows.filter(x=>!x.deleted&&Object.values(x).join(' ').toLowerCase().includes(q)).sort(assetCompare);host.innerHTML=f.map(x=>`<button class="assetRow" data-id="${x.id}"><b>${cleanLabel(x)}</b><small>Mina propietaria: ${x.mina||'Sin registrar'} · Ubicación: ${x.ubicacion||'Sin ubicación'} · ${x.estado||'Sin estado'}</small></button>`).join('')||'<p class="hint">No hay activos que coincidan.</p>'}}
-function fillAssignedArea(value){const form=document.querySelector('#assetForm'),control=form?.elements.areaAsignada;if(!control)return;const current=value??control.value,areas=window.SKFormOptions?.values?.('personal.area')||['Seguridad física','Desmin - Obras civiles','Producción','Producción - Selectivo (Corteros)','Administrativa'];control.replaceChildren(new Option('Seleccionar área…',''),...areas.map(area=>new Option(area,area)));if(current&&!areas.includes(current))control.add(new Option(current,current));control.value=current}
+function fillAssignedArea(value){const form=document.querySelector('#assetForm'),control=form?.elements.areaAsignada;if(!control)return;const current=value??control.value,areas=window.SKAssetRules.assignmentAreas(window.SKFormOptions?.values?.('personal.area'));control.replaceChildren(new Option('Seleccionar área…',''),...areas.map(area=>new Option(area,area)));if(current&&!areas.includes(current))control.add(new Option(current,current));control.value=current}
 async function fillPeople(selected=''){if(typeof db==='undefined'||!db||typeof all!=='function')return;const s=document.querySelector('#assetAssigned');if(!s)return;const rows=(await all('personal')).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es'));s.innerHTML='<option value="">Sin asignar</option>';for(const p of rows){const o=document.createElement('option');o.value=p.id;o.textContent=`${p.documento||''} - ${p.nombre||''}`;s.append(o)}s.value=selected||'';showAssigned()}async function showAssigned(){const s=document.querySelector('#assetAssigned');if(!s||typeof all!=='function')return;const p=(await all('personal')).find(x=>x.id===s.value);document.querySelector('#assetAssignedDoc').value=p?.documento||'';document.querySelector('#assetAssignedArea').value=p?.area||'';document.querySelector('#assetAssignedCargo').value=p?.cargo||''}
 function openNewAsset(prefillYT=false,className=''){const f=document.querySelector('#assetForm');if(!f||!window.SKAdminAuth?.canView?.('assets'))return;f.reset();delete f.dataset.autoMarkPolicy;f.elements.id.value='';setAssetMode(false);refreshClassOptions().catch(console.error);if(navigator.onLine&&window.skSyncApi?.configured?.())window.skSyncApi.sync({silent:true,forceFull:true});f.elements.ubicacion.value='Bodega de Superficie';f.elements.estado.value='Operativo/a';if(className)f.elements.clase.value=className;else if(prefillYT)f.elements.clase.value='YT';updateAssetFields();fillPeople();document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='assets'));document.querySelectorAll('#nav [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view==='assets'));setAssetMode(false);setTimeout(()=>f.scrollIntoView({behavior:'smooth',block:'start'}),0)}
 async function hydrateEdit(){
@@ -160,7 +160,7 @@ async function hydrateEdit(){
  if(f.elements.hasPreviousMark)f.elements.hasPreviousMark.checked=!!txt(a.marcaPrevia);
  // Las excepciones guardadas antes se presentan como texto al editar la ficha.
  if(f.elements.serial&&!txt(a.serial))f.elements.serial.value=({none:'No trae',unreadable:'No visible'})[a.serialStatus]||'';
- fillAssignedArea(a.areaAsignada||'');
+ fillAssignedArea(a.areaAsignada||'');f.dataset.assignedAreaBefore=a.areaAsignada||'';
  const select=f.elements.asignadaId,people=data.personal.slice().sort((x,y)=>(x.nombre||'').localeCompare(y.nombre||'','es'));
  select.replaceChildren(new Option('Sin asignar',''),...people.map(person=>new Option([person.documento,person.nombre].filter(Boolean).join(' - '),person.id)));
  const assigned=projection.assigned,p=people.find(person=>person.id===a.asignadaId);
@@ -202,9 +202,12 @@ async function saveAsset(e){
   if(dup)return alert(`ESTE ACTIVO YA ESTÁ REGISTRADO\n\nYa existe un activo con ${dup.field}: ${dup.value}.\n\nRegistro existente: ${cleanLabel(dup.found)}.\n\nRevisa nuevamente el buscador de activos.`);
   if(editing){
    const old=rows.find(a=>a.id===x.id&&!a.deleted);if(!old)return alert('No se encontró el activo.');
-   await put('assets',{...old,...x,updatedAt:now(),syncState:'pending'});alert('Activo actualizado.');
+   const savedAt=now();
+   if(txt(x.areaAsignada)!==txt(f.dataset.assignedAreaBefore??old.areaAsignada))x.areaAsignadaRevision={value:txt(x.areaAsignada),at:savedAt};
+   await put('assets',{...old,...x,updatedAt:savedAt,syncState:'pending'});alert('Activo actualizado.');
   }else{
    delete x.id;const record=window.SKAssetMarking.prepare({...x,...mark(),ubicacion:x.ubicacion||'Bodega de Superficie'});
+   if(record.areaAsignada)record.areaAsignadaRevision={value:record.areaAsignada,at:record.createdAt};
    await put('assets',record);
    if(!(await all('assets')).find(a=>a.id===record.id))return alert('No fue posible confirmar el registro local del activo. Intenta nuevamente.');
    createdAsset=record;

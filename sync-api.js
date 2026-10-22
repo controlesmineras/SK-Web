@@ -116,5 +116,21 @@
     activePromise=performSync(options).finally(()=>{activePromise=null;if(queued){queued=false;schedule(300)}});return activePromise;
   }
   function schedule(delay=1500){if(!configured()||!window.SKAdminAuth?.ready?.())return;clearTimeout(timer);timer=setTimeout(()=>sync({silent:true}),Math.max(delay,retryAfter-Date.now()))}
-  window.skSyncApi={configured,sync,schedule};document.addEventListener?.('visibilitychange',()=>{if(!document.hidden)schedule(300)});window.addEventListener('skweb-local-change',()=>schedule());window.addEventListener('online',()=>schedule(1200));window.addEventListener('offline',()=>ui('error'));window.addEventListener('load',()=>{if(!configured())return;schedule(2500);setInterval(()=>schedule(0),Math.max(60000,Number(config().intervalMs)||300000));document.addEventListener('submit',()=>schedule(3500),true)});
+  function resumeSync(){if(!document.hidden&&!activePromise)schedule(300)}
+  let readyToken='';
+  function accessReady(){const next=window.SKAdminAuth?.ready?.()?window.SKAdminAuth.token():'';if(next!==readyToken){readyToken=next;if(next)resumeSync()}}
+  window.skSyncApi={configured,sync,schedule};
+  document.addEventListener?.('visibilitychange',resumeSync);
+  for(const event of ['pageshow','focus'])window.addEventListener(event,resumeSync);
+  window.addEventListener('skadmin-permissions',accessReady);
+  window.addEventListener('skweb-db-ready',resumeSync);
+  window.addEventListener('skweb-local-change',()=>schedule());
+  window.addEventListener('online',()=>schedule(300));
+  window.addEventListener('offline',()=>ui('error'));
+  window.addEventListener('load',()=>{
+    if(!configured())return;accessReady();schedule(300);
+    // Cinco minutos como máximo, incluso si quedó una configuración antigua mayor.
+    setInterval(()=>{if(!activePromise)schedule(0)},Math.min(300000,Math.max(60000,Number(config().intervalMs)||300000)));
+    document.addEventListener('submit',()=>schedule(3500),true);
+  });
 })();

@@ -11,10 +11,10 @@ function backend(seed={}){
 function client(){
  const storage=new Map(),nodes=new Map();
  const node=()=>({value:'',hidden:false,textContent:'',dataset:{},classList:{add(){},remove(){}},setAttribute(){},removeAttribute(){},addEventListener(){}});
- const ctx=vm.createContext({document:{querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}},alert(){},window:{SK_SYNC_CONFIG:{apiUrl:'https://script.google.com/macros/s/test/exec'},alert(){},addEventListener(){},dispatchEvent(){}},sessionStorage:{getItem(){return null}},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:require('node:crypto').webcrypto,setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
- vm.runInContext(read('asset-history.js'),ctx);
+ const ctx=vm.createContext({document:{querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}},alert(){},window:{SK_SYNC_CONFIG:{apiUrl:'https://script.google.com/macros/s/test/exec'},alert(){},addEventListener(){},dispatchEvent(){}},sessionStorage:{getItem:key=>key==='skPlazaToken'?'test':key==='skPlazaUser'?JSON.stringify({id:'operator',documento:'operator'}):null},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:require('node:crypto').webcrypto,setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
+ vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
  const start=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
- vm.runInContext(start+'\nrender=()=>{};window.audit={sync,get:()=>data,set:value=>{data=value;localStorage.setItem("skPlazaData",JSON.stringify(value))},post:fn=>{post=fn},saveDeliveryBatch,prepareDelivery:rows=>{deliveryDraft=rows;validateDeliveryRecipient=()=>true;discardDeliveryForm=()=>{};renderRecentQueries=()=>{}}};})();',ctx);
+ vm.runInContext(start+'\nrender=()=>{};window.audit={sync,get:()=>data,set:value=>{data=value;localStorage.setItem("skPlazaData",JSON.stringify(value))},post:fn=>{post=fn},periodicSync,refreshSharedPeople,refreshSyncedView,setView:view=>{currentView=view},expireAttempt:()=>{lastSyncAttempt=0},saveDeliveryBatch,prepareDelivery:rows=>{deliveryDraft=rows;validateDeliveryRecipient=()=>true;discardDeliveryForm=()=>{};renderRecentQueries=()=>{}}};})();',ctx);
  return {api:ctx.window.audit,storage,ctx,nodes};
 }
 const row=(id,extra={})=>({id,syncEventId:'event-'+id,itemId:'gloves',quantity:2,createdAt:'2026-10-14T07:00:00.000Z',updatedAt:'2026-10-14T07:00:00.000Z',syncState:'pending',...extra});
@@ -185,4 +185,28 @@ test('Plaza usa la revisión solo después de confirmarla y la consulta manual s
  c.api.set(snapshot([]));c.api.post(async q=>{requests.push(q);return b.ctx.plazaSync_(q)});
  assert.equal(await c.api.sync(true),true);assert.equal(await c.api.sync(true),true);assert.equal(await c.api.sync(false),true);
  assert.equal(requests[0].since,'');assert.equal(requests[1].since,b.cloud().updatedAt);assert.equal(requests[2].since,'');
+});
+
+test('Plaza asigna a Bodega Plaza Blending, conserva al receptor y sincroniza sin duplicar',async()=>{
+ const area='Bodega Plaza Blending',c=client();const initial={personal:[{id:'recipient',nombre:'Receptor',documento:'123',area:'Producción'}],inventoryCriteria:[{id:'tool',name:'Taladro',isFixedAsset:true}],assets:[{id:'tool1',clase:'Taladro',serial:'TEST',ubicacion:'Bodega de Superficie'}],blendingIncomes:[],blendingDeliveries:[]};c.api.set(initial);
+ const form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'SK'}},querySelector:()=>({})};
+ c.api.prepareDelivery([{itemId:'tool',assetId:'tool1',quantity:1,deliveryType:'ASIGNACIÓN',destinationArea:area,destinationAreaMode:'manual'}]);
+ assert.equal(await c.api.saveDeliveryBatch(form),true);assert.equal(c.api.get().personal[0].area,'Producción');
+ const b=backend({...initial,assets:[{id:'tool1',clase:'Taladro',serial:'TEST',ubicacion:'Bodega de Superficie'}],blendingDeliveries:[]});c.api.post(q=>b.sync(q.data));assert.equal(await c.api.sync(true),true,c.nodes.get('#syncStatus')?.textContent);assert.equal(await c.api.sync(true),true);
+ assert.equal(b.cloud().blendingDeliveries.length,1);assert.equal(b.cloud().blendingDeliveries[0].destinationArea,area);
+ assert.equal(c.ctx.window.SKAssetHistory.project(b.cloud().assets[0],b.cloud()).asset.areaAsignada,area);
+});
+test('Plaza sincroniza desde un formulario sin redibujar ni borrar lo que se está diligenciando',async()=>{
+ const c=client(),b=backend();c.api.set(snapshot([]));let calls=0;c.api.post(q=>{calls++;return b.sync(q.data)});
+ const values={recipientCompany:'SK',itemId:'gloves',recipientId:'recipient',destination:'',notes:'Texto sin guardar',quantity:'5'};
+ c.nodes.set('#deliveryForm',{elements:Object.fromEntries(Object.entries(values).map(([key,value])=>[key,{value}]))});
+ c.api.setView('delivery');c.api.periodicSync();await new Promise(resolve=>setImmediate(resolve));
+ assert.equal(calls,1);assert.ok(c.storage.has('skPlazaLastSync'));assert.equal(c.nodes.get('#deliveryForm').elements.notes.value,values.notes);assert.equal(c.nodes.get('#deliveryForm').elements.quantity.value,'5');
+ c.api.expireAttempt();c.api.refreshSharedPeople();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,2);
+});
+test('Plaza no superpone la consulta periódica y la de volver a la app',async()=>{
+ const c=client();c.api.set(snapshot([]));let calls=0,finish;c.api.post(()=>{calls++;return new Promise(resolve=>finish=resolve)});
+ c.api.periodicSync();await new Promise(resolve=>setImmediate(resolve));c.api.periodicSync();c.api.refreshSharedPeople();assert.equal(calls,1);
+ finish({ok:true,notModified:true});await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,1);
+ c.ctx.navigator.onLine=false;c.api.periodicSync();assert.equal(calls,1);
 });
