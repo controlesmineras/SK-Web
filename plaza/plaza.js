@@ -129,19 +129,20 @@ function matchesItemSearch(text,number,query){
     field.dataset.itemId=itemId;
   }
   function updateDeliveryFields(){
-    const form=$('#deliveryForm'),item=findItem(form.elements.itemId.value),fixed=Boolean(item&&isFixedItem(item)),loan=deliveryMode==='loan';
+    const form=$('#deliveryForm'),item=findItem(form.elements.itemId.value),fixed=Boolean(item&&isFixedItem(item)),loan=deliveryMode==='loan',needsQuantity=Boolean(item&&!fixed),wholeUnits=loan&&item?.fractionable!==true;
     $('#delivery>h2').textContent=loan?'PRESTAR ELEMENTOS':'REGISTRAR ENTREGA';
     $('#deliveryItemField').childNodes[0].textContent=loan?'SELECCIONE ELEMENTO A PRESTAR':'SELECCIONE ELEMENTO A ENTREGAR';
     form.querySelector('button[type="submit"],button:not([type])').textContent=loan?'REGISTRAR PRÉSTAMO':'REGISTRAR ENTREGA';
-    for(const [selector,visible] of [['#deliveryAssetField',fixed],['#deliveryQuantityField',!fixed],['#deliveryDestinationField',fixed],['#deliveryNotesField',fixed||loan]]){const field=$(selector);field.hidden=!visible;field.style.display=visible?'flex':'none'}
-    form.elements.quantity.required=!fixed;form.elements.destination.required=fixed;
+    for(const [selector,visible] of [['#deliveryAssetField',fixed],['#deliveryQuantityField',needsQuantity],['#deliveryDestinationField',fixed],['#deliveryNotesField',fixed||loan]]){const field=$(selector);field.hidden=!visible;field.style.display=visible?'flex':'none'}
+    // A selected asset always represents one unit; an added draft needs no extra quantity.
+    form.elements.quantity.required=needsQuantity;form.elements.quantity.disabled=!needsQuantity;form.elements.destination.required=fixed;
     updateDeliveryReplacementField(item);
     configureDeliveryDestination();
-    form.elements.quantity.step=loan&&item?.fractionable!==true?'1':'any';
+    form.elements.quantity.min=wholeUnits?'1':'0.01';form.elements.quantity.step=wholeUnits?'1':'any';
     updateDestinationLevel();
-    const assetSelect=$('#deliveryAssetId'),selectedAsset=assetSelect.value;assetSelect.required=fixed;
+    const assetSelect=$('#deliveryAssetId'),selectedAsset=assetSelect.value;assetSelect.required=fixed;assetSelect.disabled=!fixed;
     if(fixed){form.elements.quantity.value='1';const rows=availableAssets(item);assetSelect.innerHTML=options(rows,assetLabel);if(rows.some(asset=>asset.id===selectedAsset))assetSelect.value=selectedAsset;if(!rows.length)assetSelect.innerHTML='<option value="">No hay activos disponibles de esta clase</option>'}
-    else{assetSelect.value='';if(!loan)form.elements.notes.value='';if(!form.elements.quantity.value)form.elements.quantity.value='1'}
+    else{assetSelect.value='';assetSelect.dispatchEvent(new Event('change',{bubbles:true}));if(!loan)form.elements.notes.value='';if(!form.elements.quantity.value)form.elements.quantity.value='1'}
   }
   function openDeliveryMode(mode){
     if(deliveryMode!==mode){discardDeliveryForm();deliveryMode=mode;clearItemSearch($('#deliveryForm'))}
