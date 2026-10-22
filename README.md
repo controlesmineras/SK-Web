@@ -78,3 +78,9 @@ La “i” junto al campo despliega la explicación. «No trae» indica ausencia
 No se modifican los registros almacenados automáticamente. Al editar una ficha con la antigua excepción serialStatus, el formulario presenta «No trae» o «No visible» para guardarlo como texto. Los registros históricos permanecen consultables; las altas y ediciones deben cumplir la regla vigente.
 
 Code.gs aplica la misma validación para administrador, auxiliar e ingresos de Plaza. Para activarla en el servidor hay que copiar `backend/apps-script/Code.gs` a Apps Script y actualizar la implementación web existente; publicar GitHub Pages no despliega ese servidor.
+
+## Confirmación de marca anterior
+
+La ficha incluye «¿Tiene marca anterior?», desmarcada al crear un activo. Al marcarla muestra MARCA ANTERIOR y exige un valor no vacío; al desmarcarla oculta el campo y permite guardar sin marca anterior. Desmarcar y volver a marcar conserva el texto en curso; guardar desmarcado elimina ese valor de la ficha. Al editar, una marca anterior existente activa la casilla automáticamente. Los auxiliares conservan la consulta sin edición.
+
+Se utiliza el campo existente `marcaPrevia`; el estado de la casilla se deduce de su contenido y no agrega campos al servidor. No altera el número de marca actual de YT/columnas ni la regla del serial. Esta casilla no requiere otro cambio en Code.gs; sigue pendiente aplicar la versión del servidor indicada en el ajuste anterior de serial.
