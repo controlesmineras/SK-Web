@@ -26,15 +26,15 @@
 <script src="asset-field-compat.js?v=20261009-assets-1"></script>
 <script src="asset-list-order.js?v=20261021-column-identity-1"></script>
 <script src="searchable-consumption.js?v=20261010-spares-5"></script>
-<script src="asset-marking.js?v=20261021-column-identity-1"></script>
+<script src="asset-marking.js?v=20261022-existing-mark-1"></script>
 <script src="asset-accessories.js?v=20261021-asset-accessories-1"></script>
-<script src="asset-admin-ui.js?v=20261022-bodega-autosync-1"></script>
+<script src="asset-admin-ui.js?v=20261022-existing-mark-1"></script>
 <script src="asset-query.js?v=20261022-previous-mark-check-1"></script>
 <script src="novelty-form.js?v=20261022-bodega-autosync-1"></script>
 <script src="novelty-transport.js?v=20261020-responsible-search-1"></script>
 <script src="offline-navigation.js?v=20261021-admin-offline-1"></script>
 <script src="sync-latest.js?v=20261020-personal-sync-1"></script>
-<script src="sync-api.js?v=20261022-bodega-autosync-1"></script>
+<script src="sync-api.js?v=20261022-existing-mark-1"></script>
 <script src="consumption-manual-date.js?v=20261010-spares-5"></script>
 <script src="consumption-query-v2.js?v=20260911-3"></script>
 <script src="collaborator-contact-query.js?v=20260913-1"></script>
@@ -52,3 +52,4 @@
 <script src="form-option-catalog.js?v=20261018-assignment-area-1"></script>
 <script>{const button=document.querySelector('#adminHomeInfoToggle'),dialog=document.querySelector('#adminHomeInfoDialog'),close=document.querySelector('#adminHomeInfoClose');const dismiss=()=>{dialog.hidden=true;button.focus()};button?.addEventListener('click',()=>{dialog.hidden=false;close.focus()});dialog?.addEventListener('click',dismiss);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dialog.hidden)dismiss()})}window.addEventListener('load',()=>{let tries=0;const t=setInterval(async()=>{tries++;if(typeof db!=='undefined'&&db){clearInterval(t);try{await seedPersonal();await seedAssets();await refresh();document.querySelector('#syncStatus').textContent=window.skSyncApi?.configured()?'Base local lista · sincronización automática activa.':'Base local lista. Personal y activos cargados.'}catch(e){console.error(e)}}else if(tries>40)clearInterval(t)},250)})</script>
 </body></html>
+

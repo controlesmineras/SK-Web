@@ -134,7 +134,7 @@ function automaticAssetMarkCode_(index){
  if(!Number.isInteger(index)||index<0||index>=26*26*26)throw new Error('Se agotaron las marcas de tres letras. Contacta al administrador.');
  return String.fromCharCode(65+Math.floor(index/676),65+Math.floor(index/26)%26,65+index%26);
 }
-function assignAssetMarks_(cloud,rows){
+function assignAssetMarks_(cloud,rows,requestAuth){
  const registry=(Array.isArray(cloud.assetMarkRegistry)?cloud.assetMarkRegistry:[]).map(row=>Object.assign({},row));
  const byId=new Map(registry.map(row=>[row.id,row])),existing=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
  const used=new Set(registry.map(row=>row.code));
@@ -145,11 +145,12 @@ function assignAssetMarks_(cloud,rows){
   const asset=Object.assign({},input),old=existing.get(asset.id);
   let entry=byId.get(asset.id);
   const requested=asset.markingPolicy==='letters-v1',eligible=usesAutomaticAssetMark_(asset);
+  const existingRequest=!!(old&&asset.markRequest==='existing-v1'&&requestAuth&&requestAuth.role==='owner'&&!old.deleted&&!String(old.nuevaMarca||'').trim()&&usesAutomaticAssetMark_(old)&&eligible);
   // Un cliente antiguo o una edición no puede borrar/cambiar una marca ya emitida.
   if(!entry&&old&&old.markingPolicy==='letters-v1'&&old.markStatus==='assigned'&&/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(old.nuevaMarca||'')){
    entry={id:old.id,code:old.nuevaMarca,sequence:old.markSequence,issuedAt:old.markAssignedAt,...(old.markScheme==='mine-prefix-v1'?{scheme:old.markScheme,prefix:old.markPrefix,mine:old.markMine}:{})};registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);if(entry.scheme!=='mine-prefix-v1'&&Number.isInteger(entry.sequence))next=Math.max(next,entry.sequence+1);
   }
-  if(!entry&&requested&&eligible&&(!old||old.markingPolicy==='letters-v1'&&old.markStatus==='pending')){
+  if(!entry&&requested&&eligible&&(!old||old.markingPolicy==='letters-v1'&&old.markStatus==='pending'||existingRequest)){
    const external=asset.incomeMarking===true&&asset.activoExterno===true&&repairIncomeClass_(asset.clase),prefix=external?externalMinePrefix_(asset.mina):'';
    if(external){
     if(!prefix)throw new Error('La mina de origen no tiene un prefijo de marcación configurado');
@@ -166,10 +167,24 @@ function assignAssetMarks_(cloud,rows){
    registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);changed=true;
   }
   if(entry){
+   if(old&&old.markPreviousValues&&!existingRequest){
+    for(const key of ['markPreviousValues','markRequestedBy','markRequestedByName','markRequestedAt'])asset[key]=old[key];
+    if(asset.markRequest==='existing-v1'&&asset.markStatus==='pending')asset.marcaPrevia=old.marcaPrevia||'';
+   }
+   if(existingRequest){
+    const previous=String(old.marcaActual||old.marcaInterna||'').trim();
+    if(previous&&!String(asset.marcaPrevia||'').trim())asset.marcaPrevia=previous;
+    asset.markPreviousValues={marcaActual:old.marcaActual||'',marcaInterna:old.marcaInterna||'',marcaPrevia:old.marcaPrevia||''};
+    asset.markRequestedBy=requestAuth.username||'';asset.markRequestedByName=requestAuth.name||'';
+    asset.updatedAt=nextRevision_(Date.parse(asset.updatedAt||'')>Date.parse(old.updatedAt||'')?asset.updatedAt:old.updatedAt);
+   }
    const prior=String(asset.marcaActual||asset.marcaInterna||'').trim();
    if(!old&&prior&&prior!==entry.code&&!asset.marcaAnterior)asset.marcaAnterior=prior;
    Object.assign(asset,{marcaInterna:entry.code,marcaActual:entry.code,nuevaMarca:entry.code,markingPolicy:'letters-v1',markStatus:'assigned',markSequence:entry.sequence,markAssignedAt:entry.issuedAt,...(entry.scheme==='mine-prefix-v1'?{markScheme:entry.scheme,markPrefix:entry.prefix,markMine:entry.mine}:{})});
   }else if(requested){
+   if(asset.markRequest==='existing-v1'&&old&&String(old.nuevaMarca||'').trim()){
+    for(const key of ['marcaInterna','marcaActual','nuevaMarca','marcaPrevia'])asset[key]=old[key]||'';
+   }
    // Solo las altas que pidan la nueva secuencia se marcan; no se remarca el inventario existente.
    for(const key of ['markingPolicy','markStatus','markSequence','markAssignedAt']){if(old&&Object.prototype.hasOwnProperty.call(old,key))asset[key]=old[key];else delete asset[key]}
   }
@@ -336,11 +351,19 @@ function adminSync_(incoming,since,auth){
    return json_({ok:true,capabilities:collaboratorSyncCapabilities_(),data:cloud,updatedAt:cloud.updatedAt||''});
   }
   Object.keys(incoming||{}).forEach(name=>{if(name==='schema'||name==='updatedAt'||!Array.isArray(incoming[name]))return;changes[name]=incoming[name].filter(x=>x&&x.id&&x.syncState==='pending').map(x=>Object.assign({},x,{syncState:'synced'}))});
+  // Una solicitud de marca solo cambia la marcación. Un dispositivo atrasado no
+  // puede reemplazar ubicación, serial u otros datos más recientes de la ficha.
+  if(auth&&auth.role==='owner'&&changes.assets)changes.assets=changes.assets.map(row=>{
+   if(row.markRequest!=='existing-v1'||row.markStatus!=='pending')return row;
+   const old=(cloud.assets||[]).find(asset=>asset&&asset.id===row.id);
+   if(!old)throw new Error('Sincroniza primero el activo registrado antes de solicitar su marca.');
+   return Object.assign({},old,{markRequest:'existing-v1',markRequestedAt:old.markRequestedAt||row.markRequestedAt||new Date().toISOString(),markingPolicy:'letters-v1',markStatus:'pending',updatedAt:nextRevision_(old.updatedAt||old.createdAt),syncState:'synced'});
+  });
   const numberingRows=(cloud.assets||[]).slice();for(const row of changes.assets||[]){if(row.classNumberPolicy==='auto-v1'&&automaticClassNumberEligible_(row.clase)&&!row.deleted){row.numeroClase=automaticClassNumber_(numberingRows,row);row.numeroYT=row.numeroClase;const index=numberingRows.findIndex(old=>old.id===row.id);if(index>=0)numberingRows[index]=row;else numberingRows.push(row)}}
   const criterionRows=new Map((cloud.inventoryCriteria||[]).map(row=>[row.id,row]));
   for(const row of changes.inventoryCriteria||[])criterionRows.set(row.id,choose_(row,criterionRows.get(row.id)));
   validateAssetSerials_(cloud.assets||[],changes.assets||[],Array.from(criterionRows.values()));
-  const marking=assignAssetMarks_(cloud,changes.assets||[]);if(changes.assets)changes.assets=marking.assets;delete changes.assetMarkRegistry;
+  const marking=assignAssetMarks_(cloud,changes.assets||[],auth);if(changes.assets)changes.assets=marking.assets;delete changes.assetMarkRegistry;
   const merged=merge_(cloud,changes);if(marking.registry.length)merged.assetMarkRegistry=marking.registry;writeFile_(id,merged);
   if(!recovered&&since&&baseUpdatedAt===since&&!marking.changed&&!marking.assets.some(asset=>asset.markingPolicy==='letters-v1'))return json_({ok:true,capabilities:collaboratorSyncCapabilities_(),acknowledged:true,updatedAt:merged.updatedAt});
   return json_({ok:true,capabilities:collaboratorSyncCapabilities_(),data:merged,updatedAt:merged.updatedAt});
@@ -494,3 +517,4 @@ function findFile_(){const cache=CacheService.getScriptCache(),cached=cache.get(
 function readFile_(id){return JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8'))}
 function writeFile_(id,data){const body=JSON.stringify(data);if(id){DriveApp.getFileById(id).setContent(body);return id}return DriveApp.createFile(CLOUD_FILE,body,MimeType.PLAIN_TEXT).getId()}
 function json_(x){return ContentService.createTextOutput(JSON.stringify(x)).setMimeType(ContentService.MimeType.JSON)}
+

@@ -67,6 +67,12 @@
     const missing=snapshot.personal.find(row=>!central.some(remote=>remote?.id&&remote.syncState!=='pending'&&(remote.id===row.id||(String(row.documento||'').trim()&&String(remote.documento||'').trim()===String(row.documento).trim()))));
     if(missing)throw new Error('La base central no confirmó al colaborador '+(missing.nombre||missing.documento||'registrado')+'. Se conserva pendiente; pulsa la nube para reintentar.');
   }
+  function confirmAssetMarkRequests(snapshot,result){
+    const requested=(snapshot.assets||[]).filter(row=>row.markRequest==='existing-v1'&&row.markStatus==='pending');
+    if(!requested.length)return;
+    const central=result.data?.assets||[];
+    if(requested.some(row=>!central.some(remote=>remote?.id===row.id&&(remote.deleted||String(remote.nuevaMarca||'').trim()))))throw new Error('La base central aún no confirmó la marca solicitada. Actualiza Code.gs y su implementación, y vuelve a sincronizar. La solicitud se conserva pendiente.');
+  }
   async function performSync({silent=false,forceFull=false}={}){
     const b=buttonStart(),s=document.querySelector('#syncStatus');
     try{
@@ -76,13 +82,14 @@
       // document already exists centrally. A generic ACK cannot prove that.
       // Older servers do not change their shared revision after a Plaza person edit.
       // Negotiate that guarantee before trusting an unchanged snapshot.
-      forceFull=forceFull||!silent||Boolean(snapshot.personal?.length);
+      forceFull=forceFull||!silent||Boolean(snapshot.personal?.length)||(snapshot.assets||[]).some(row=>row.markRequest==='existing-v1'&&row.markStatus==='pending');
       let result=await send(snapshot,forceFull,!silent);
       const valid=result=>result&&(result.notModified||result.acknowledged||(result.data&&typeof result.data==='object'&&!Array.isArray(result.data)));
       if(!valid(result)||(result.notModified&&hasPending)){localStorage.removeItem('skWebServerUpdatedAt');result=await send(snapshot,true,!silent)}
       if(!valid(result))throw new Error('El servicio no devolvió la confirmación de sincronización');
       if(result.notModified&&hasPending)throw new Error('El servicio no confirmó los cambios pendientes');
       confirmPersonal(snapshot,result);
+      confirmAssetMarkRequests(snapshot,result);
       collaboratorRevisionApi=result.capabilities?.collaboratorRevisionsV1===true?config().apiUrl:'';
       const serverUpdatedAt=result.updatedAt||result.data?.updatedAt||'';
       if(result.notModified){
@@ -134,3 +141,4 @@
     document.addEventListener('submit',()=>schedule(3500),true);
   });
 })();
+

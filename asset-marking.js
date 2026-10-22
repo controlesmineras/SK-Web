@@ -32,6 +32,7 @@ function show(assets,confirmed){
   const view=mount(),title=view.querySelector('h2'),message=view.querySelector('#assetMarkMessage'),cards=view.querySelector('#assetMarkCards');
   title.textContent=confirmed?'MARCA EL ACTIVO':assets.length===1?'ACTIVO REGISTRADO':'ACTIVOS REGISTRADOS';
   message.textContent=confirmed?'Registro guardado correctamente.':navigator.onLine?'El registro está guardado. La marca se mostrará al confirmar la sincronización.':'El registro está guardado sin conexión. Al sincronizar aparecerá la marca para identificar el activo.';
+  if(!confirmed&&assets.every(asset=>asset.markRequest==='existing-v1')){title.textContent='SOLICITUD GUARDADA';message.textContent=navigator.onLine?'La marca se mostrará cuando la base central confirme la solicitud.':'La solicitud está guardada sin conexión. Al sincronizar aparecerá la marca para identificar el activo.';}
   cards.replaceChildren();shown=confirmed?assets.map(asset=>asset.id):[];
   for(const asset of assets){
     const card=document.createElement('article');card.className='assetMarkCard';const name=clean(asset.clase)||'activo',description=document.createElement('p');
@@ -68,7 +69,42 @@ async function scan(){
   const ready=assets.filter(asset=>ids.includes(asset.id)&&asset.markingPolicy===POLICY&&asset.markStatus==='assigned'&&/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(asset.nuevaMarca||''));
   if(ready.length)show(ready,true);
 }
-window.SKAssetMarking={eligible,prepare,saved,scan,syncSaved};
+let requesting=false,requestViewVersion=0;
+async function refreshRequestButton(){
+  const form=document.querySelector('#assetForm'),label=form?.elements.nuevaMarca?.closest('label');if(scope!=='admin'||!label)return;
+  let button=document.querySelector('#assetRequestMarkBtn');
+  if(!button){button=document.createElement('button');button.id='assetRequestMarkBtn';button.type='button';button.textContent='Solicitar marca nueva';button.style.marginTop='8px';button.hidden=true;button.addEventListener('click',()=>requestExisting(form.elements.id.value));label.append(button);}
+  button.hidden=true;const version=++requestViewVersion,id=form.elements.id.value;
+  if(!id||!window.SKAdminAuth?.isOwner?.()||typeof all!=='function')return;
+  const asset=(await all('assets')).find(row=>row.id===id);
+  if(version!==requestViewVersion||form.elements.id.value!==id||!asset||asset.deleted||!eligible(asset)||clean(asset.nuevaMarca))return;
+  label.classList.remove('criterion-disabled-field');
+  const pending=asset.markRequest==='existing-v1'&&asset.markStatus==='pending';
+  button.hidden=false;button.disabled=requesting||pending;
+  button.textContent=requesting?'Guardando solicitud…':pending?'Marca pendiente de sincronización':'Solicitar marca nueva';
+}
+async function requestExisting(id){
+  if(requesting||!id||!window.SKAdminAuth?.isOwner?.())return false;
+  const form=document.querySelector('#assetForm');
+  if(form?.dataset.historyEditRevision){alert('Guarda primero los cambios de la ficha y vuelve a abrir el activo para solicitar su marca.');return false;}
+  requesting=true;
+  try{
+    const asset=(await all('assets')).find(row=>row.id===id);
+    if(!asset||asset.deleted||!eligible(asset)||clean(asset.nuevaMarca))return false;
+    if(asset.markRequest==='existing-v1'&&asset.markStatus==='pending')return false;
+    if(asset.syncState==='pending'){alert('Sincroniza primero los cambios guardados de este activo y luego solicita su marca nueva.');window.skSyncApi?.schedule?.(300);return false;}
+    const timestamp=new Date(Math.max(Date.now(),(Date.parse(asset.updatedAt||asset.createdAt)||0)+1)).toISOString();
+    const request={...asset,markRequest:'existing-v1',markRequestedAt:timestamp,markingPolicy:POLICY,markStatus:'pending',updatedAt:timestamp,syncState:'pending'};
+    await put('assets',request);saved([request]);
+    if(form?.elements.id.value===id){form.dataset.autoMarkPolicy=POLICY;form.elements.marcaInterna.readOnly=true;}
+    await refreshRequestButton();window.skSyncApi?.schedule?.(300);
+    await syncSaved(request);return true;
+  }catch(error){console.error(error);alert('No se pudo completar la solicitud de marca: '+(error?.message||error));return false;}
+  finally{requesting=false;refreshRequestButton().catch(console.error);}
+}
+window.SKAssetMarking={eligible,prepare,saved,scan,syncSaved,refreshRequestButton,requestExisting};
+if(scope==='admin')for(const event of ['skweb-synced','skadmin-permissions'])window.addEventListener(event,()=>refreshRequestButton().catch(console.error));
 window.addEventListener('skweb-synced',scan);window.addEventListener('skplaza-synced',scan);
 window.addEventListener('load',()=>setTimeout(scan,800));window.addEventListener('focus',scan);
 })();
+
