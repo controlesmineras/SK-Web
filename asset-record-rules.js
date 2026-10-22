@@ -41,7 +41,10 @@
     return rows.find(row => !row.deleted && (!asset.id || row.id !== asset.id) && serialKey(row.serial) === key) || null;
   }
   const identityMark = asset => serialKey(asset.marcaPrevia || (!asset.markingPolicy ? asset.marcaActual || asset.marcaInterna : ''));
+  const serialStatusLabel = asset => ({none:'Sin serial',unreadable:'Serial ilegible'})[asset.serialStatus] || '';
+  const hasSerialException = asset => asset.serialStatus === 'none' || asset.serialStatus === 'unreadable';
   const hasIdentity = (asset, criterion) => {
+    if(hasSerialException(asset))return true;
     const usesSerial=criterion?.usesSerial??criterion?.CI_USA_SERIAL;
     if(criterion&&!/^(true|1|si|sí|yes)$/i.test(String(usesSerial??'').trim()))return true;
     return !!(serialKey(asset.serial) || identityMark(asset));
@@ -68,5 +71,5 @@
     if (isColumn(asset)) return columnLabel(asset);
     return [asset.clase, asset.numeroClase || asset.numeroYT, asset.marcaActual || asset.marcaInterna, asset.serial].filter(Boolean).join(' · ');
   }
-  window.SKAssetRules = {serialKey, duplicateSerial, identityMark, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, isColumn, columnIdentity, columnLabel, movementLabel};
+  window.SKAssetRules = {serialKey, duplicateSerial, identityMark, serialStatusLabel, hasSerialException, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, isColumn, columnIdentity, columnLabel, movementLabel};
 })();

@@ -190,10 +190,11 @@ function completePendingAssetMarks_(cloud){
 
 // Las altas del auxiliar se validan en el servidor; las fichas existentes siguen
 // protegidas. La huella permite reintentar un alta sin sobrescribir cambios posteriores.
-function assistantAssetFingerprint_(row,includeAccessories=true){
+function assistantAssetFingerprint_(row,includeAccessories=true,includeSerialStatus=true){
  const fields=['id','clase','numeroYT','numeroClase','modelo','fabricante','serial','estadoVisor','largo','marcada','mina','fechaIngreso','fechaNovedad','horaNovedad','descripcionNovedad','documentoResponsable','nombreResponsable','documentoBodeguero','nombreBodeguero','ubicacion','estado','disponibleEntrega','asignadaId','observaciones','marcaAnterior','numeroMarcaActual','createdAt','deleted'];
  if(row.classNumberPolicy==='auto-v1'){for(const field of ['numeroYT','numeroClase']){const index=fields.indexOf(field);if(index>=0)fields.splice(index,1)}}
  if(includeAccessories&&(Object.prototype.hasOwnProperty.call(row,'hasAccessories')||Object.prototype.hasOwnProperty.call(row,'accessories')))fields.push('hasAccessories','accessories');
+ if(includeSerialStatus&&row.serialStatus)fields.push('serialStatus');
  if(row.marcaPrevia)fields.push('marcaPrevia');if(row.areaAsignada)fields.push('areaAsignada');
  if(row.incomeMarking||row.tipoIngresoInicial)fields.push('incomeMarking','tipoIngresoInicial','minaOrigen','activoExterno');
  if(!usesAutomaticAssetMark_(row))fields.push('marcaInterna','marcaActual','nuevaMarca');
@@ -234,7 +235,8 @@ function prepareAdminNovelties_(incoming,cloud,auth){
   if(!previous){const created=prepareAssistantAsset_(row,cloud,assetMap,auth);assetMap.set(row.id,created);patches.set(row.id,created);return;}
   if(previous.registeredBy===auth.username&&previous.registrationFingerprint){
    const sameAccessories=JSON.stringify([previous.hasAccessories??null,previous.accessories||[]])===JSON.stringify([row.hasAccessories??null,row.accessories||[]]);
-   if(previous.registrationFingerprint===assistantAssetFingerprint_(row)||(sameAccessories&&previous.registrationFingerprint===assistantAssetFingerprint_(row,false)))return;
+   const sameSerialStatus=String(previous.serialStatus||'')===String(row.serialStatus||'');
+   if(previous.registrationFingerprint===assistantAssetFingerprint_(row)||(sameAccessories&&previous.registrationFingerprint===assistantAssetFingerprint_(row,false))||(sameSerialStatus&&(previous.registrationFingerprint===assistantAssetFingerprint_(row,true,false)||(sameAccessories&&previous.registrationFingerprint===assistantAssetFingerprint_(row,false,false)))))return;
   }
   if(!novelties.some(novelty=>novelty.assetId===row.id))throw new Error('Tu rol solo permite agregar activos nuevos; modifica su estado mediante una novedad');
  });
@@ -299,7 +301,7 @@ function adminCargoAdd_(q,auth){
 // Valida el estado final del lote bajo el mismo bloqueo que escribe la base central.
 function assetSerialKey_(value){const key=String(value??'').trim().toLowerCase();return key==='no aplica'?'':key;}
 function assetIdentityMark_(asset){return assetSerialKey_(asset.marcaPrevia||(!asset.markingPolicy?asset.marcaActual||asset.marcaInterna:''));}
-function hasAssetIdentity_(asset,criterion){if(criterion&&!truthy_(criterion.usesSerial??criterion.CI_USA_SERIAL))return true;return !!(assetSerialKey_(asset.serial)||assetIdentityMark_(asset));}
+function hasAssetIdentity_(asset,criterion){if(asset.serialStatus==='none'||asset.serialStatus==='unreadable')return true;if(criterion&&!truthy_(criterion.usesSerial??criterion.CI_USA_SERIAL))return true;return !!(assetSerialKey_(asset.serial)||assetIdentityMark_(asset));}
 function assetCriterion_(criteria,asset){return (criteria||[]).find(item=>item&&!item.deleted&&item.active!==false&&truthy_(item.isFixedAsset??item.esActivoFijo??item.CI_ES_A_FIJO)&&cargoNorm_(item.name||item.nombre||item.elemento||item.CI_ELEMENTO)===cargoNorm_(asset.clase));}
 function duplicateAssetIdentity_(rows,asset){
  const serial=assetSerialKey_(asset.serial),mark=assetIdentityMark_(asset),type=assetSerialKey_(asset.clase),mine=assetSerialKey_(asset.minaOrigen||asset.mina||'Sandra K');

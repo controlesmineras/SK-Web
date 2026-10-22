@@ -68,3 +68,11 @@ En Criterios de inventario, «Permite registrar accesorios» aparece solo al act
 Funciona al crear y al editar activos existentes y se guarda en la misma operación local del activo. Consultar activos fijos muestra los accesorios registrados. Desactivar la opción del criterio oculta la captura sin borrar accesorios existentes; siguen disponibles en la consulta. Se mantienen los permisos actuales de edición de activos.
 
 Code.gs incluye los accesorios en la comprobación de reintentos de altas de auxiliares y admite huellas anteriores solo cuando las descripciones no cambiaron. Debe actualizarse la implementación web de Apps Script para activar esta comprobación; la publicación de Admin no despliega ese servidor.
+
+## Excepción de serial por activo
+
+En la ficha de Admin, «Situación del serial» permite elegir «Sin serial» o «Serial ilegible» para ese equipo. Ambas opciones permiten guardar sin serial ni marca anterior, aunque su criterio use serial. La elección se conserva como `serialStatus` (`none` / `unreadable`) y la consulta muestra el motivo. No se modifica el criterio de los demás equipos ni se usan seriales ficticios. El ID, número de clase y marcación automática siguen su flujo habitual.
+
+Al seleccionar la excepción se oculta el campo de serial y se avisa que se guardará sin ese valor. Cambiar de opción antes de guardar conserva el texto en el formulario; guardar la excepción deja `serial` vacío. «Sin indicar excepción» restaura la validación normal del criterio. Una ficha nueva restablece la selección y las fichas anteriores sin este campo mantienen su comportamiento.
+
+La excepción viaja con el activo en el guardado local y en la sincronización. El servidor valida la misma regla para administrador y auxiliar, conserva los controles de duplicados y protege la excepción en los reintentos de altas de auxiliares. Hay que actualizar `backend/apps-script/Code.gs` y la implementación web de Apps Script para que el servidor acepte las excepciones; GitHub Pages solo publica Admin.
