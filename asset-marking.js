@@ -70,18 +70,54 @@ async function scan(){
   if(ready.length)show(ready,true);
 }
 let requesting=false,requestViewVersion=0;
+function hasDuplicateMark(assets,asset){
+ const code=value=>clean(value).toUpperCase(),mark=code(asset?.nuevaMarca);
+ return /^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark)&&assets.some(row=>row.id!==asset.id&&['nuevaMarca','marcaActual','marcaInterna'].some(key=>code(row[key])===mark));
+}
 async function refreshRequestButton(){
   const form=document.querySelector('#assetForm'),label=form?.elements.nuevaMarca?.closest('label');if(scope!=='admin'||!label)return;
   let button=document.querySelector('#assetRequestMarkBtn');
-  if(!button){button=document.createElement('button');button.id='assetRequestMarkBtn';button.type='button';button.textContent='Solicitar marca nueva';button.style.marginTop='8px';button.hidden=true;button.addEventListener('click',()=>requestExisting(form.elements.id.value));label.append(button);}
+  if(!button){button=document.createElement('button');button.id='assetRequestMarkBtn';button.type='button';button.textContent='Solicitar marca nueva';button.style.marginTop='8px';button.hidden=true;button.addEventListener('click',()=>button.dataset.mode==='correct'?correctDuplicate(form.elements.id.value):requestExisting(form.elements.id.value));label.append(button);}
+  let note=document.querySelector('#assetMarkCorrectionNote');if(!note){note=document.createElement('small');note.id='assetMarkCorrectionNote';note.style.whiteSpace='pre-line';label.append(note);}note.textContent='';note.hidden=true;
   button.hidden=true;const version=++requestViewVersion,id=form.elements.id.value;
   if(!id||!window.SKAdminAuth?.isOwner?.()||typeof all!=='function')return;
-  const asset=(await all('assets')).find(row=>row.id===id);
-  if(version!==requestViewVersion||form.elements.id.value!==id||!asset||asset.deleted||!eligible(asset)||clean(asset.nuevaMarca))return;
+  const assets=await all('assets'),asset=assets.find(row=>row.id===id);
+  if(version!==requestViewVersion||form.elements.id.value!==id||!asset||asset.deleted||!eligible(asset))return;
+  if(asset.markCorrections?.length){note.textContent=asset.markCorrections.map(row=>`Corrección: ${row.from} → ${row.to} · ${new Date(row.at).toLocaleString('es-CO')} · ${row.byName||row.by}`).join('\n');note.hidden=false;}
+  const correcting=!!clean(asset.nuevaMarca);if(correcting&&!hasDuplicateMark(assets,asset))return;
   label.classList.remove('criterion-disabled-field');
   const pending=asset.markRequest==='existing-v1'&&asset.markStatus==='pending';
-  button.hidden=false;button.disabled=requesting||pending;
-  button.textContent=requesting?'Guardando solicitud…':pending?'Marca pendiente de sincronización':'Solicitar marca nueva';
+  button.hidden=false;button.disabled=requesting||pending;button.dataset.mode=correcting?'correct':'request';
+  button.textContent=requesting?'Procesando solicitud…':pending?'Marca pendiente de sincronización':correcting?'Corregir marca duplicada':'Solicitar marca nueva';
+}
+async function correctDuplicate(id){
+  if(requesting||!id||!window.SKAdminAuth?.isOwner?.())return false;
+  const form=document.querySelector('#assetForm');
+  if(form?.dataset.historyEditRevision){alert('Guarda los cambios de la ficha y vuelve a abrirla antes de corregir la marca.');return false;}
+  if(!navigator.onLine||!window.skSyncApi?.configured?.()){alert('Conéctate a internet para que la base central compruebe y corrija la marca duplicada.');return false;}
+  requesting=true;
+  try{
+    await refreshRequestButton();
+    if(!await window.skSyncApi.sync({silent:true,forceFull:true}))throw new Error('No se pudo sincronizar. Resuelve el aviso de la nube y vuelve a intentar la corrección.');
+    if(form?.elements.id.value!==id||form?.dataset.historyEditRevision)return false;
+    const assets=await all('assets'),asset=assets.find(row=>row.id===id);
+    if(!asset||asset.deleted||!eligible(asset)||!hasDuplicateMark(assets,asset)){alert('No se encontró una marca duplicada en esta ficha después de sincronizar.');return false;}
+    if(asset.syncState==='pending')throw new Error('Este activo tiene cambios pendientes. Sincronízalos antes de corregir su marca.');
+    const expectedMark=clean(asset.nuevaMarca).toUpperCase(),identity=[asset.clase,asset.fabricante,asset.serial&&'Serial: '+asset.serial].filter(Boolean).join(' · ');
+    if(!confirm(`¿Corregir la marca duplicada ${expectedMark} de este activo?\n\n${identity}\n\nSe asignará la siguiente marca libre y se conservará el historial del mismo activo.`))return false;
+    let result;
+    try{result=await window.SKAdminAuth.request('adminCorrectAssetMark',{assetId:id,expectedMark});}
+    catch(error){if(/Solicitud no válida/i.test(error?.message||''))throw new Error('Actualiza Code.gs y publica una nueva versión de la implementación existente para habilitar esta corrección.');throw error;}
+    if(result?.asset?.id!==id||result?.correction?.from!==expectedMark||!result.asset.nuevaMarca||result.asset.nuevaMarca===expectedMark)throw new Error('La base central no confirmó la corrección. Sincroniza para comprobar el resultado antes de volver a intentarlo.');
+    remember(tracked().filter(assetId=>assetId!==id));
+    // No sobrescribir desde una respuesta parcial: la conciliación descarga la ficha vigente.
+    const synced=await window.skSyncApi.sync({silent:true,forceFull:true});
+    if(synced&&form?.elements.id.value===id&&!form.dataset.historyEditRevision)await window.SKAssetAdminUI?.hydrateEdit?.();
+    show([result.asset],true);
+    if(!synced)alert('La base central confirmó la marca '+result.asset.nuevaMarca+'. Pulsa la nube para actualizar la ficha de este dispositivo.');
+    return true;
+  }catch(error){console.error(error);alert('No se pudo completar la corrección: '+(error?.message||error)+'. Si se perdió la conexión, sincroniza y vuelve a intentar; no se asignará otra marca por repetir la misma solicitud.');return false;}
+  finally{requesting=false;refreshRequestButton().catch(console.error);}
 }
 async function requestExisting(id){
   if(requesting||!id||!window.SKAdminAuth?.isOwner?.())return false;
@@ -102,7 +138,7 @@ async function requestExisting(id){
   }catch(error){console.error(error);alert('No se pudo completar la solicitud de marca: '+(error?.message||error));return false;}
   finally{requesting=false;refreshRequestButton().catch(console.error);}
 }
-window.SKAssetMarking={eligible,prepare,saved,scan,syncSaved,refreshRequestButton,requestExisting};
+window.SKAssetMarking={eligible,prepare,saved,scan,syncSaved,refreshRequestButton,requestExisting,correctDuplicate,hasDuplicateMark};
 if(scope==='admin')for(const event of ['skweb-synced','skadmin-permissions'])window.addEventListener(event,()=>refreshRequestButton().catch(console.error));
 window.addEventListener('skweb-synced',scan);window.addEventListener('skplaza-synced',scan);
 window.addEventListener('load',()=>setTimeout(scan,800));window.addEventListener('focus',scan);

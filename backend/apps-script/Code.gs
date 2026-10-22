@@ -14,7 +14,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='adminUsersList'){requireOwner_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireOwner_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireOwner_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireOwner_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireOwner_(auth);return plazaUserAdmin_(q)}if(q.action==='adminReverseMovement'){requireOwner_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireOwner_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='adminUsersList'){requireOwner_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireOwner_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireOwner_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireOwner_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireOwner_(auth);return plazaUserAdmin_(q)}if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'){requireOwner_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireOwner_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Invitaciones de un solo uso: el enlace contiene un secreto aleatorio, nunca una contraseña.
 function invitationKey_(token){return 'SK_INVITE_'+hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token),Utilities.Charset.UTF_8))}
@@ -158,6 +158,8 @@ function assignAssetMarks_(cloud,rows,requestAuth){
  let next=Math.max(-1,...registry.map(row=>row.scheme!=='mine-prefix-v1'&&Number.isInteger(row.sequence)?row.sequence:-1))+1,changed=false;
  const assets=rows.map(input=>{
   const asset=Object.assign({},input),old=existing.get(asset.id);
+  // El registro de correcciones solo lo escribe la operación central autorizada.
+  if(old&&Array.isArray(old.markCorrections))asset.markCorrections=old.markCorrections;else delete asset.markCorrections;
   let entry=byId.get(asset.id);
   const requested=asset.markingPolicy==='letters-v1',eligible=usesAutomaticAssetMark_(asset);
   const existingRequest=!!(old&&asset.markRequest==='existing-v1'&&requestAuth&&requestAuth.role==='owner'&&!old.deleted&&!String(old.nuevaMarca||'').trim()&&usesAutomaticAssetMark_(old)&&eligible);
@@ -207,6 +209,39 @@ function assignAssetMarks_(cloud,rows,requestAuth){
  });
  validateNewAssetMarks_(cloud,assets,registry);
  return{assets:assets,registry:registry,changed:changed};
+}
+
+function adminCorrectAssetMark_(q,auth){
+ requireOwner_(auth);
+ const assetId=String(q.assetId||'').trim(),expectedMark=String(q.expectedMark||'').trim().toUpperCase();
+ if(!assetId||!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(expectedMark))throw new Error('Selecciona el activo y la marca duplicada que deseas corregir.');
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const fileId=findFile_(),cloud=fileId?readFile_(fileId):{},assets=cloud.assets||[],old=assets.find(row=>row&&row.id===assetId&&!row.deleted);
+  if(!old)throw new Error('El activo no está disponible en la base central. Sincroniza y vuelve a abrir su ficha.');
+  const history=Array.isArray(old.markCorrections)?old.markCorrections:[],previous=history.find(row=>row.from===expectedMark);
+  // La marca anterior nunca se recicla: identifica esta corrección también entre dispositivos.
+  if(previous)return json_({ok:true,asset:old,correction:previous,alreadyCorrected:true,updatedAt:cloud.updatedAt});
+  const code=value=>String(value||'').trim().toUpperCase(),registry=cloud.assetMarkRegistry||[];
+  if(code(old.nuevaMarca)!==expectedMark)throw new Error('La marca del activo cambió. Sincroniza y revisa la ficha antes de corregirla.');
+  if(!usesAutomaticAssetMark_(old))throw new Error('Esta clase no usa la secuencia automática de marcas.');
+  const duplicate=assets.some(row=>row&&row.id!==assetId&&['nuevaMarca','marcaActual','marcaInterna'].some(key=>code(row[key])===expectedMark))||registry.some(row=>row&&(row.reservedForAssetId||row.id)!==assetId&&code(row.code)===expectedMark);
+  if(!duplicate)throw new Error('La base central no encontró otra asignación de esta marca. Se conserva la marca actual.');
+  const timestamp=nextRevision_(old.updatedAt||old.createdAt),archiveId='mark-correction:'+assetId+':'+expectedMark;
+  const priorEntries=registry.filter(row=>row.id===assetId),keptRegistry=registry.filter(row=>row.id!==assetId).map(row=>Object.assign({},row));
+  const reserved=new Map();for(const entry of priorEntries)reserved.set(code(entry.code),entry);
+  for(const key of ['nuevaMarca','marcaActual','marcaInterna']){const value=code(old[key]);if(/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(value)&&!reserved.has(value))reserved.set(value,{code:value,sequence:old.markSequence,issuedAt:old.markAssignedAt,...(old.markScheme==='mine-prefix-v1'?{scheme:old.markScheme,prefix:old.markPrefix,mine:old.markMine}:{})});}
+  for(const [value,entry] of reserved)keptRegistry.push(Object.assign({},entry,{id:archiveId+':'+value,code:value,reservedForAssetId:assetId,retiredAt:timestamp,reason:'Corrección de marca duplicada'}));
+  // Se reutiliza el mismo asignador y el mismo bloqueo que Admin y Plaza.
+  const candidate=Object.assign({},old,{marcaInterna:'',marcaActual:'',nuevaMarca:'',markingPolicy:'letters-v1',markStatus:'pending',updatedAt:timestamp,syncState:'synced'});
+  for(const key of ['markSequence','markAssignedAt','markScheme','markPrefix','markMine','markRequest'])delete candidate[key];
+  const working=Object.assign({},cloud,{assets:assets.filter(row=>row.id!==assetId),assetMarkRegistry:keptRegistry});
+  const marking=assignAssetMarks_(working,[candidate],auth),corrected=marking.assets[0];
+  const correction={id:archiveId,from:expectedMark,to:corrected.nuevaMarca,at:timestamp,by:auth.username||'',byName:auth.name||auth.username||'',reason:'Corrección de marca duplicada',previousValues:{marcaInterna:old.marcaInterna||'',marcaActual:old.marcaActual||'',nuevaMarca:old.nuevaMarca||''}};
+  corrected.markCorrections=history.concat(correction);
+  cloud.assets=assets.map(row=>row.id===assetId?corrected:row);cloud.assetMarkRegistry=marking.registry;cloud.updatedAt=nextRevision_(cloud.updatedAt);
+  writeFile_(fileId,cloud);return json_({ok:true,asset:corrected,correction:correction,updatedAt:cloud.updatedAt});
+ }finally{lock.releaseLock()}
 }
 
 // Recupera altas hechas con el cliente nuevo antes de actualizar este servicio.
