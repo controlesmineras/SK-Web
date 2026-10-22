@@ -4,96 +4,83 @@ const {IDBFactory}=require('fake-indexeddb');
 const read=file=>readFileSync(join(__dirname,'..',file),'utf8'),clone=value=>JSON.parse(JSON.stringify(value));
 const window={};vm.runInNewContext(read('asset-record-rules.js'),{window});
 const rules=window.SKAssetRules,date='2026-10-22T00:00:00Z';
-const asset=(id,extra={})=>({id,clase:'Taladro',fabricante:'Black & Decker',numeroYT:id,numeroClase:id,serial:'',marcaPrevia:'',serialStatus:'none',ubicacion:'Bodega de Superficie',createdAt:date,updatedAt:date,syncState:'pending',markingPolicy:'letters-v1',markStatus:'pending',...extra});
-function service(){
- let cloud={assets:[],inventoryCriteria:[{id:'drill',name:'Taladro',isFixedAsset:true,usesSerial:true}]};
+const asset=(id,extra={})=>({id,clase:'Taladro',fabricante:'Black & Decker',numeroYT:id,numeroClase:id,serial:'No trae',marcaPrevia:'',serialStatus:'',ubicacion:'Bodega de Superficie',createdAt:date,updatedAt:date,syncState:'pending',markingPolicy:'letters-v1',markStatus:'pending',...extra});
+function service(initial={}){
+ let cloud={assets:[],inventoryCriteria:[{id:'drill',name:'Taladro',isFixedAsset:true,usesSerial:true}],...clone(initial)};
  const context=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},Utilities:{DigestAlgorithm:{SHA_256:'sha256'},Charset:{UTF_8:'utf8'},computeDigest:(algorithm,value)=>[...createHash(algorithm).update(value).digest()]}});
  vm.runInContext(read('backend/apps-script/Code.gs'),context);context.findFile_=()=> 'file';context.readFile_=()=>clone(cloud);context.writeFile_=(_,data)=>cloud=clone(data);context.json_=clone;
  return{cloud:()=>clone(cloud),sync:(rows,role='owner')=>context.adminSyncAuthorized_({assets:clone(rows)},'',{role,username:'test',name:'Test'}),legacyFingerprint:row=>{cloud.assets.find(a=>a.id===row.id).registrationFingerprint=context.assistantAssetFingerprint_(row,true,false)}};
 }
-test('solo las dos excepciones explícitas permiten omitir identificación cuando el criterio usa serial',()=>{
- for(const serialStatus of ['none','unreadable'])assert.equal(rules.hasIdentity(asset('1',{serialStatus}),{usesSerial:true}),true);
- for(const serialStatus of ['',undefined,'unknown','false'])assert.equal(rules.hasIdentity(asset('1',{serialStatus}),{usesSerial:true}),false);
- assert.equal(rules.hasIdentity(asset('1',{serialStatus:'',serial:'SN-1'}),{usesSerial:true}),true);
- assert.equal(rules.hasIdentity(asset('1',{serialStatus:'',marcaPrevia:'FÍSICA'}),{usesSerial:true}),true);
- assert.equal(rules.hasIdentity(asset('1',{serialStatus:''}),{usesSerial:false}),true);
- assert.equal(rules.serialStatusLabel({serialStatus:'none'}),'Sin serial');assert.equal(rules.serialStatusLabel({serialStatus:'unreadable'}),'Serial ilegible');
-});
-test('dueño y auxiliar sincronizan equipos sin serial ni marca anterior con identidad interna propia',()=>{
- for(const role of ['owner','assistant']){
-  const s=service(),rows=[asset('1'),asset('2',{serialStatus:'unreadable'})];s.sync(rows,role);s.sync(rows,role);
-  const saved=s.cloud();assert.equal(saved.assets.length,2);assert.equal(saved.inventoryCriteria[0].usesSerial,true);
-  assert.deepEqual(saved.assets.map(a=>a.serialStatus),['none','unreadable']);
-  assert.ok(saved.assets.every(a=>a.id&&a.numeroClase&&a.nuevaMarca&&a.serial===''&&a.marcaPrevia===''&&a.syncState==='synced'));
-  assert.notEqual(saved.assets[0].nuevaMarca,saved.assets[1].nuevaMarca);
-  assert.throws(()=>s.sync([asset('3',{serialStatus:''})],role),/SERIAL o MARCA ANTERIOR/);assert.equal(s.cloud().assets.length,2);
+
+test('el serial requerido no se sustituye con marca anterior ni con la antigua excepción',()=>{
+ for(const serial of ['',undefined,'   ','No aplica','No trae serial','No es visible','Sin serial','Serial ilegible','Ilegible','Legible','No tiene','No tiene serial']){
+  for(const serialStatus of ['', 'none','unreadable'])assert.equal(rules.hasIdentity(asset('1',{serial,serialStatus,marcaPrevia:'MARCA-ANTERIOR'}),{usesSerial:true}),false);
  }
-});
-test('editar permite declarar la excepción y quitarla vuelve a exigir identificación sin cambiar número ni marca',()=>{
- const s=service();s.sync([asset('1',{serialStatus:'',serial:'SN-1'})]);const first=s.cloud().assets[0];
- s.sync([{...first,serial:'',serialStatus:'none',updatedAt:'2026-10-22T01:00:00Z',syncState:'pending'}]);
- const saved=s.cloud().assets[0];assert.equal(saved.serialStatus,'none');assert.equal(saved.serial,'');assert.equal(saved.nuevaMarca,first.nuevaMarca);assert.equal(saved.numeroClase,first.numeroClase);
- assert.throws(()=>s.sync([{...saved,serialStatus:'',updatedAt:'2026-10-22T02:00:00Z',syncState:'pending'}]),/SERIAL o MARCA ANTERIOR/);
- s.sync([{...saved,serialStatus:'',serial:'SN-CORREGIDO',updatedAt:'2026-10-22T02:00:00Z',syncState:'pending'}]);assert.equal(s.cloud().assets[0].serial,'SN-CORREGIDO');assert.equal(s.cloud().assets[0].serialStatus,'');
-});
-test('la excepción no permite repetir serial, marca anterior ni número de clase',()=>{
- const existing=asset('1',{serialStatus:'',serial:'SN-1',marcaPrevia:'PREVIA'});
- assert.equal(rules.duplicateSerial([existing],asset('2',{serial:'sn-1'})),existing);
- for(const role of ['owner','assistant'])for(const fields of [{serial:'SN-1'},{marcaPrevia:'PREVIA'}]){
-  const s=service();s.sync([existing],role);assert.throws(()=>s.sync([asset('2',fields)],role),/ya existe/);assert.equal(s.cloud().assets.length,1);
- }
- const s=service();s.sync([asset('1')],'assistant');assert.throws(()=>s.sync([asset('2',{numeroYT:'1',numeroClase:'1'})],'assistant'),/ya existe/);
-});
-test('el auxiliar reintenta sin duplicar, pero no cambia ni quita el motivo de una ficha existente',()=>{
- const s=service(),row=asset('1');s.sync([row],'assistant');s.sync([row],'assistant');const before=s.cloud();
- for(const serialStatus of ['unreadable',''])assert.throws(()=>s.sync([{...row,serialStatus}],'assistant'),/solo permite agregar/);
- assert.deepEqual(s.cloud(),before);
- s.legacyFingerprint(row);s.sync([row],'assistant');assert.throws(()=>s.sync([{...row,serialStatus:'unreadable'}],'assistant'),/solo permite agregar/);
-});
-test('fichas anteriores sin situación de serial mantienen reintentos y permisos',()=>{
- const s=service(),row=asset('1',{serial:'LEGACY'});delete row.serialStatus;s.sync([row],'assistant');s.sync([row],'assistant');
- assert.throws(()=>s.sync([{...row,serialStatus:'none'}],'assistant'),/solo permite agregar/);
- assert.equal(s.cloud().assets.length,1);assert.equal(s.cloud().assets[0].serialStatus,undefined);
-});
-test('el guardado offline conserva la excepción pendiente y la recibe después de sincronizar',async()=>{
- const localWindow={SKAssetRules:rules,dispatchEvent(){}},context=vm.createContext({indexedDB:new IDBFactory(),window:localWindow,Event:class{constructor(type){this.type=type}},CustomEvent:class{constructor(type){this.type=type}},console});
- vm.runInContext(read('app.js').split('const PARTS=')[0],context);await context.openDB();
- await context.put('assets',asset('1'));const pending=clone(await context.all('assets'));assert.equal(pending[0].serialStatus,'none');assert.equal(pending[0].syncState,'pending');
- const s=service();s.sync(pending);await context.replaceStoreRows('assets',s.cloud().assets,pending);
- const [synced]=await context.all('assets');assert.equal(synced.serialStatus,'none');assert.equal(synced.serial,'');assert.equal(synced.syncState,'synced');assert.ok(synced.nuevaMarca);
+ for(const serial of ['SN-1','ABC','No trae','No visible',' no trae ','NO  VISIBLE'])assert.equal(rules.hasIdentity(asset('1',{serial}),{usesSerial:true}),true);
 });
 
-test('las descripciones libres de serial se conservan y pueden repetirse sin desactivar los duplicados reales',()=>{
- for(const serial of ['No trae',' No trae serial ','No visible','NO  VISIBLE','No es visible','Sin serial','Serial ilegible','Ilegible','No tiene','No tiene serial']){
-  const first=asset('1',{serialStatus:'',serial}),second=asset('2',{serialStatus:'',serial});
-  assert.equal(rules.hasIdentity(first,{usesSerial:true}),true);
-  assert.equal(rules.duplicateSerial([first],second),null);
-  for(const role of ['owner','assistant']){
-   const s=service();s.sync([first,second],role);s.sync([first,second],role);
-   assert.deepEqual(s.cloud().assets.map(a=>a.serial),[serial,serial]);
-   assert.ok(s.cloud().assets.every(a=>a.serialStatus===''&&a.marcaPrevia===''));
-  }
+test('columnas y criterios sin serial conservan el campo opcional',()=>{
+ for(const usesSerial of [false,'false','No',0])assert.equal(rules.hasIdentity(asset('1',{serial:'',marcaPrevia:''}),{usesSerial}),true);
+ for(const clase of ['Columna','Columnas'])assert.equal(rules.hasIdentity(asset('1',{clase,serial:'',marcaPrevia:''}),{usesSerial:true}),true);
+ for(const role of ['owner','assistant']){
+  const s=service({inventoryCriteria:[{id:'col',name:'Columna',isFixedAsset:true,usesSerial:true}]});s.sync([asset('1',{clase:'Columna',serial:''})],role);assert.equal(s.cloud().assets[0].serial,'');
  }
- for(const serial of ['SN-123','No visible-123','No trae 123']){
-  const first=asset('1',{serialStatus:'',serial}),second=asset('2',{serialStatus:'',serial});
-  assert.equal(rules.duplicateSerial([first],second),first);
+});
+
+test('los dos textos permitidos se sincronizan repetidos y conservan una identidad interna por equipo',()=>{
+ for(const serial of ['No trae','No visible'])for(const role of ['owner','assistant']){
+  const s=service(),rows=[asset('1',{serial}),asset('2',{serial})];s.sync(rows,role);s.sync(rows,role);
+  const saved=s.cloud().assets;assert.equal(saved.length,2);assert.deepEqual(saved.map(a=>a.serial),[serial,serial]);
+  assert.ok(saved.every(a=>a.marcaPrevia===''&&a.serialStatus===''&&a.syncState==='synced'));assert.notEqual(saved[0].nuevaMarca,saved[1].nuevaMarca);
+ }
+ assert.equal(rules.serialDescription(' no  trae '),'No trae');assert.equal(rules.serialDescription('NO VISIBLE'),'No visible');assert.equal(rules.serialDescription('Ilegible'),'');
+});
+
+test('el servidor rechaza vacíos y otras descripciones aunque exista marca anterior',()=>{
+ for(const serial of ['', '   ','No aplica','Sin serial','Serial ilegible','Ilegible','No tiene','No trae serial'])for(const role of ['owner','assistant']){
+  const s=service();assert.throws(()=>s.sync([asset('1',{serial,marcaPrevia:'PREVIA',serialStatus:'none'})],role),/Ingresa el SERIAL/);assert.equal(s.cloud().assets.length,0);
+ }
+});
+
+test('los seriales reales y las marcas anteriores siguen siendo únicos',()=>{
+ for(const serial of ['SN-123','ABC','No visible-123','No trae 123']){
+  const first=asset('1',{serial}),second=asset('2',{serial});assert.equal(rules.duplicateSerial([first],second),first);
   for(const role of ['owner','assistant']){const s=service();s.sync([first],role);assert.throws(()=>s.sync([second],role),/ya existe/);}
  }
+ for(const role of ['owner','assistant']){const s=service();s.sync([asset('1',{marcaPrevia:'PREVIA'})],role);assert.throws(()=>s.sync([asset('2',{marcaPrevia:'PREVIA',serial:'No visible'})],role),/ya existe/);}
 });
 
-test('editar una excepción anterior como texto conserva marca, número y accesorios',()=>{
- const s=service();s.sync([asset('1',{hasAccessories:true,accessories:[{id:'acc-1',description:'Batería marcada AAA'}]})]);
- const first=s.cloud().assets[0];
- s.sync([{...first,serial:'No visible',serialStatus:'',updatedAt:'2026-10-22T02:00:00Z',syncState:'pending'}]);
- const saved=s.cloud().assets[0];assert.equal(saved.serial,'No visible');assert.equal(saved.serialStatus,'');
- assert.equal(saved.nuevaMarca,first.nuevaMarca);assert.equal(saved.numeroClase,first.numeroClase);assert.deepEqual(saved.accessories,first.accessories);
+test('una ficha anterior se conserva y al editar exige serial, manteniendo número, marca y accesorios',()=>{
+ const legacy=asset('1',{serial:'',serialStatus:'unreadable',syncState:'synced',markStatus:'assigned',numeroClase:'1',nuevaMarca:'AAA',accessories:[{id:'acc',description:'Batería'}]}),s=service({assets:[legacy]});
+ assert.deepEqual(s.cloud().assets[0],legacy);
+ assert.throws(()=>s.sync([{...legacy,marcaPrevia:'ANTERIOR',updatedAt:'2026-10-22T02:00:00Z',syncState:'pending'}]),/Ingresa el SERIAL/);
+ s.sync([{...legacy,serial:'No visible',serialStatus:'',updatedAt:'2026-10-22T02:00:00Z',syncState:'pending'}]);
+ const saved=s.cloud().assets[0];assert.equal(saved.serial,'No visible');assert.equal(saved.serialStatus,'');assert.equal(saved.numeroClase,legacy.numeroClase);assert.equal(saved.nuevaMarca,legacy.nuevaMarca);assert.deepEqual(saved.accessories,legacy.accessories);
+ assert.throws(()=>s.sync([{...saved,serial:'',marcaPrevia:'ANTERIOR',updatedAt:'2026-10-22T03:00:00Z',syncState:'pending'}]),/Ingresa el SERIAL/);
 });
 
-test('dos activos con el mismo texto de ausencia se guardan offline y sincronizan conservando el texto',async()=>{
+test('el auxiliar puede reintentar su alta pero no cambiar el texto ni editar la ficha',()=>{
+ const s=service(),row=asset('1');s.sync([row],'assistant');s.sync([row],'assistant');const before=s.cloud();
+ for(const serial of ['No visible','', 'SN-123'])assert.throws(()=>s.sync([{...row,serial}],'assistant'),/solo permite agregar/);assert.deepEqual(s.cloud(),before);
+});
+
+test('los dos textos se guardan offline y sincronizan sin duplicar registros',async()=>{
  const localWindow={SKAssetRules:rules,dispatchEvent(){}},context=vm.createContext({indexedDB:new IDBFactory(),window:localWindow,Event:class{},CustomEvent:class{},console});
  vm.runInContext(read('app.js').split('const PARTS=')[0],context);await context.openDB();
- for(const id of ['1','2'])await context.put('assets',asset(id,{serial:'No trae',serialStatus:''}));
- const pending=clone(await context.all('assets'));assert.equal(pending.length,2);assert.ok(pending.every(a=>a.syncState==='pending'));
+ for(const id of ['1','2','3'])await context.put('assets',asset(id,{serial:id==='3'?'No visible':'No trae'}));
+ const pending=clone(await context.all('assets'));assert.equal(pending.length,3);assert.ok(pending.every(a=>a.syncState==='pending'));
  const s=service();s.sync(pending);await context.replaceStoreRows('assets',s.cloud().assets,pending);
- const saved=await context.all('assets');assert.equal(saved.length,2);assert.ok(saved.every(a=>a.serial==='No trae'&&a.syncState==='synced'));
+ const saved=await context.all('assets');assert.equal(saved.length,3);assert.ok(saved.every(a=>['No trae','No visible'].includes(a.serial)&&a.syncState==='synced'));
+});
+
+test('el formulario exige serial según criterio y conserva ayuda, columnas y permisos',async()=>{
+ let hidden,focused=0,writes=0;const hint={},alerts=[],serial={value:'',focus(){focused++},closest:()=>({classList:{toggle:(name,value)=>hidden=value}})},form={elements:{id:{value:''},clase:{value:'Taladro'},serial},querySelector:()=>hint};
+ const localWindow={SKAssetRules:rules,SKAdminAuth:{canView:()=>true,isOwner:()=>true},addEventListener(){}};
+ const context=vm.createContext({window:localWindow,document:{querySelector:()=>null,querySelectorAll:()=>[{value:'Taladro'}]},all:async()=>[],fd:()=>({id:'',clase:'Taladro',serial:'   ',marcaPrevia:'PREVIA'}),put:async()=>{writes++},alert:m=>alerts.push(m),console});
+ vm.runInContext(read('asset-admin-ui.js').replace('window.SKAssetAdminUI={hydrateEdit};',"window.SKAssetAdminUI={hydrateEdit,updateSerialFields,saveAsset};criteriaByClass.set('taladro',{usesSerial:true});"),context);
+ const ui=localWindow.SKAssetAdminUI;ui.updateSerialFields(form,{usesSerial:true},false);assert.equal(serial.required,true);assert.equal(serial.disabled,false);assert.equal(hidden,false);assert.match(hint.textContent,/No trae.*No visible/);
+ await ui.saveAsset({currentTarget:form,preventDefault(){},stopImmediatePropagation(){}});assert.equal(writes,0);assert.equal(focused,1);assert.match(alerts[0],/Ingresa el SERIAL/);
+ ui.updateSerialFields(form,{usesSerial:false},false);assert.equal(serial.required,false);
+ ui.updateSerialFields(form,{usesSerial:true},true);assert.equal(serial.disabled,true);
+ form.elements.clase.value='Columna';ui.updateSerialFields(form,{usesSerial:true},false);assert.equal(serial.required,false);assert.equal(hidden,true);assert.equal(serial.disabled,true);
 });

@@ -48,11 +48,15 @@
   const identityMark = asset => serialKey(asset.marcaPrevia || (!asset.markingPolicy ? asset.marcaActual || asset.marcaInterna : ''));
   const serialStatusLabel = asset => ({none:'Sin serial',unreadable:'Serial ilegible'})[asset.serialStatus] || '';
   const hasSerialException = asset => asset.serialStatus === 'none' || asset.serialStatus === 'unreadable';
+  const requiresSerial = (asset, criterion) => !isColumn(asset) && (!criterion || /^(true|1|si|sí|yes)$/i.test(String(criterion.usesSerial??criterion.CI_USA_SERIAL??'').trim()));
+  const serialDescription = value => {
+    const key=String(value??'').trim().toLowerCase().replace(/\s+/g,' ');
+    return key==='no trae'?'No trae':key==='no visible'?'No visible':'';
+  };
   const hasIdentity = (asset, criterion) => {
-    if(hasSerialException(asset))return true;
-    const usesSerial=criterion?.usesSerial??criterion?.CI_USA_SERIAL;
-    if(criterion&&!/^(true|1|si|sí|yes)$/i.test(String(usesSerial??'').trim()))return true;
-    return !!(serialKey(asset.serial) || identityMark(asset));
+    if(!requiresSerial(asset,criterion))return true;
+    const key=String(asset.serial??'').trim().toLowerCase().replace(/\s+/g,' ');
+    return !!key&&!/^(?:no aplica|no trae serial|no es visible|sin serial|serial ilegible|ilegible|legible|no (?:es )?legible|no tiene(?: serial)?)$/.test(key);
   };
   function duplicateIdentity(rows, asset) {
     const serial = duplicateSerial(rows, asset);if(serial)return serial;
@@ -76,5 +80,5 @@
     if (isColumn(asset)) return columnLabel(asset);
     return [asset.clase, asset.numeroClase || asset.numeroYT, asset.marcaActual || asset.marcaInterna, asset.serial].filter(Boolean).join(' · ');
   }
-  window.SKAssetRules = {serialKey, duplicateSerial, identityMark, serialStatusLabel, hasSerialException, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, isColumn, columnIdentity, columnLabel, movementLabel};
+  window.SKAssetRules = {serialKey, duplicateSerial, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, isColumn, columnIdentity, columnLabel, movementLabel};
 })();

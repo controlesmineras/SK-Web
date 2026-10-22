@@ -69,12 +69,12 @@ Funciona al crear y al editar activos existentes y se guarda en la misma operaci
 
 Code.gs incluye los accesorios en la comprobación de reintentos de altas de auxiliares y admite huellas anteriores solo cuando las descripciones no cambiaron. Debe actualizarse la implementación web de Apps Script para activar esta comprobación; la publicación de Admin no despliega ese servidor.
 
-## Serial como texto libre
+## Serial obligatorio y ayuda en la ficha
 
-La ficha de Admin vuelve a tener únicamente el campo Serial, sin el selector «Situación del serial». Permite escribir el serial real o una descripción como «No trae» o «No visible». Estas descripciones se guardan tal como se escriben y no exigen marca anterior. Si el criterio no usa serial, ambos campos siguen siendo opcionales.
+Cuando el criterio usa serial, Admin exige completar Serial aunque se ingrese marca anterior. Admite el serial real o, como únicas descripciones de ausencia o ilegibilidad, «No trae» y «No visible». No acepta dejarlo vacío, espacios, «No aplica» ni las descripciones anteriores como «Sin serial» o «Serial ilegible». Los seriales reales conservan su formato libre y el control de duplicados; los dos textos permitidos pueden repetirse entre equipos. Mayúsculas y espacios de esos dos textos se normalizan al guardar desde Admin.
 
-Las descripciones de ausencia o ilegibilidad («No trae», «No trae serial», «No visible», «No es visible», «Sin serial», «Serial ilegible», «Ilegible», «No tiene» y «No tiene serial») pueden repetirse entre equipos sin tratarse como seriales únicos. Los seriales reales y las marcas anteriores conservan sus controles de duplicados.
+La “i” junto al campo despliega la explicación. «No trae» indica ausencia de serial; «No visible» incluye que no se vea o no se pueda leer. La marca anterior es opcional y no sustituye el serial. Las columnas y las clases cuyo criterio no usa serial pueden dejar ambos campos vacíos.
 
-Los registros y pendientes creados con el selector anterior se conservan compatibles. Al abrir uno de esos activos, su motivo aparece como texto editable; al guardar se conserva en Serial y se limpia la antigua excepción. No se cambia la información almacenada hasta guardar la ficha.
+No se modifican los registros almacenados automáticamente. Al editar una ficha con la antigua excepción serialStatus, el formulario presenta «No trae» o «No visible» para guardarlo como texto. Los registros históricos permanecen consultables; las altas y ediciones deben cumplir la regla vigente.
 
-El retiro del selector queda disponible con la actualización de Admin. Para que el servidor admita estas descripciones repetidas al sincronizar, hay que copiar `backend/apps-script/Code.gs` a Apps Script y actualizar la implementación web; publicar GitHub Pages no despliega ese servidor.
+Code.gs aplica la misma validación para administrador, auxiliar e ingresos de Plaza. Para activarla en el servidor hay que copiar `backend/apps-script/Code.gs` a Apps Script y actualizar la implementación web existente; publicar GitHub Pages no despliega ese servidor.

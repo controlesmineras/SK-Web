@@ -76,6 +76,6 @@ test('criterio sin serial no elimina controles de duplicado cuando se proporcion
 });
 test('criterio con serial sigue exigiendo identificación y no acepta un criterio de otra clase',()=>{
  for(const inventoryCriteria of [[{id:'ci',name:'Pulidora',isFixedAsset:true,usesSerial:true}],[{id:'ci',name:'Taladro',isFixedAsset:true,usesSerial:false}]]){
-  const s=service({inventoryCriteria});assert.throws(()=>s.sync({assets:[asset('1',{serial:'',criteriaId:'ci'})]},'admin','owner'),/SERIAL o MARCA ANTERIOR/);assert.equal(s.writes(),0);
+  const s=service({inventoryCriteria});assert.throws(()=>s.sync({assets:[asset('1',{serial:'',criteriaId:'ci'})]},'admin','owner'),/Ingresa el SERIAL/);assert.equal(s.writes(),0);
  }
 });
