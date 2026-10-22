@@ -62,3 +62,38 @@ test('el guardado offline conserva la excepción pendiente y la recibe después 
  const s=service();s.sync(pending);await context.replaceStoreRows('assets',s.cloud().assets,pending);
  const [synced]=await context.all('assets');assert.equal(synced.serialStatus,'none');assert.equal(synced.serial,'');assert.equal(synced.syncState,'synced');assert.ok(synced.nuevaMarca);
 });
+
+test('las descripciones libres de serial se conservan y pueden repetirse sin desactivar los duplicados reales',()=>{
+ for(const serial of ['No trae',' No trae serial ','No visible','NO  VISIBLE','No es visible','Sin serial','Serial ilegible','Ilegible','No tiene','No tiene serial']){
+  const first=asset('1',{serialStatus:'',serial}),second=asset('2',{serialStatus:'',serial});
+  assert.equal(rules.hasIdentity(first,{usesSerial:true}),true);
+  assert.equal(rules.duplicateSerial([first],second),null);
+  for(const role of ['owner','assistant']){
+   const s=service();s.sync([first,second],role);s.sync([first,second],role);
+   assert.deepEqual(s.cloud().assets.map(a=>a.serial),[serial,serial]);
+   assert.ok(s.cloud().assets.every(a=>a.serialStatus===''&&a.marcaPrevia===''));
+  }
+ }
+ for(const serial of ['SN-123','No visible-123','No trae 123']){
+  const first=asset('1',{serialStatus:'',serial}),second=asset('2',{serialStatus:'',serial});
+  assert.equal(rules.duplicateSerial([first],second),first);
+  for(const role of ['owner','assistant']){const s=service();s.sync([first],role);assert.throws(()=>s.sync([second],role),/ya existe/);}
+ }
+});
+
+test('editar una excepción anterior como texto conserva marca, número y accesorios',()=>{
+ const s=service();s.sync([asset('1',{hasAccessories:true,accessories:[{id:'acc-1',description:'Batería marcada AAA'}]})]);
+ const first=s.cloud().assets[0];
+ s.sync([{...first,serial:'No visible',serialStatus:'',updatedAt:'2026-10-22T02:00:00Z',syncState:'pending'}]);
+ const saved=s.cloud().assets[0];assert.equal(saved.serial,'No visible');assert.equal(saved.serialStatus,'');
+ assert.equal(saved.nuevaMarca,first.nuevaMarca);assert.equal(saved.numeroClase,first.numeroClase);assert.deepEqual(saved.accessories,first.accessories);
+});
+
+test('dos activos con el mismo texto de ausencia se guardan offline y sincronizan conservando el texto',async()=>{
+ const localWindow={SKAssetRules:rules,dispatchEvent(){}},context=vm.createContext({indexedDB:new IDBFactory(),window:localWindow,Event:class{},CustomEvent:class{},console});
+ vm.runInContext(read('app.js').split('const PARTS=')[0],context);await context.openDB();
+ for(const id of ['1','2'])await context.put('assets',asset(id,{serial:'No trae',serialStatus:''}));
+ const pending=clone(await context.all('assets'));assert.equal(pending.length,2);assert.ok(pending.every(a=>a.syncState==='pending'));
+ const s=service();s.sync(pending);await context.replaceStoreRows('assets',s.cloud().assets,pending);
+ const saved=await context.all('assets');assert.equal(saved.length,2);assert.ok(saved.every(a=>a.serial==='No trae'&&a.syncState==='synced'));
+});

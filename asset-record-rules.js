@@ -35,10 +35,15 @@
     const key = String(value ?? '').trim().toLowerCase();
     return key === 'no aplica' ? '' : key;
   };
+  // Estas descripciones se conservan en la ficha, pero no identifican un equipo.
+  const uniqueSerialKey = value => {
+    const key = serialKey(value);
+    return /^(?:no trae(?: serial)?|no (?:es )?visible|sin serial|serial ilegible|ilegible|no tiene(?: serial)?)$/.test(key.replace(/\s+/g,' ')) ? '' : key;
+  };
   function duplicateSerial(rows, asset) {
-    const key = serialKey(asset.serial);
+    const key = uniqueSerialKey(asset.serial);
     if (asset.deleted || !key) return null;
-    return rows.find(row => !row.deleted && (!asset.id || row.id !== asset.id) && serialKey(row.serial) === key) || null;
+    return rows.find(row => !row.deleted && (!asset.id || row.id !== asset.id) && uniqueSerialKey(row.serial) === key) || null;
   }
   const identityMark = asset => serialKey(asset.marcaPrevia || (!asset.markingPolicy ? asset.marcaActual || asset.marcaInterna : ''));
   const serialStatusLabel = asset => ({none:'Sin serial',unreadable:'Serial ilegible'})[asset.serialStatus] || '';

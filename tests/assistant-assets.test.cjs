@@ -55,7 +55,7 @@ test('dar acceso a las altas no permite modificar criterios ni importar otros mÃ
 });
 test('auxiliar tampoco puede repetir el serial de otra clase',()=>{
  const s=service({assets:[asset('other',{clase:'Taladro',serial:'SN-GLOBAL',syncState:'synced'})]});
- assert.throws(()=>s.sync({assets:[asset('1',{serial:' sn-global '})]}),/serial.*ya existe/);assert.equal(s.writes(),0);
+ assert.throws(()=>s.sync({assets:[asset('1',{serial:' sn-global '})]}),/(?:serial.*ya existe|ya existe.*serial)/);assert.equal(s.writes(),0);
 });
 
 test('criterio sin serial permite altas de dueÃ±o y auxiliar sin marca anterior',()=>{

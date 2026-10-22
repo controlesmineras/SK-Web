@@ -69,10 +69,12 @@ Funciona al crear y al editar activos existentes y se guarda en la misma operaci
 
 Code.gs incluye los accesorios en la comprobación de reintentos de altas de auxiliares y admite huellas anteriores solo cuando las descripciones no cambiaron. Debe actualizarse la implementación web de Apps Script para activar esta comprobación; la publicación de Admin no despliega ese servidor.
 
-## Excepción de serial por activo
+## Serial como texto libre
 
-En la ficha de Admin, «Situación del serial» permite elegir «Sin serial» o «Serial ilegible» para ese equipo. Ambas opciones permiten guardar sin serial ni marca anterior, aunque su criterio use serial. La elección se conserva como `serialStatus` (`none` / `unreadable`) y la consulta muestra el motivo. No se modifica el criterio de los demás equipos ni se usan seriales ficticios. El ID, número de clase y marcación automática siguen su flujo habitual.
+La ficha de Admin vuelve a tener únicamente el campo Serial, sin el selector «Situación del serial». Permite escribir el serial real o una descripción como «No trae» o «No visible». Estas descripciones se guardan tal como se escriben y no exigen marca anterior. Si el criterio no usa serial, ambos campos siguen siendo opcionales.
 
-Al seleccionar la excepción se oculta el campo de serial y se avisa que se guardará sin ese valor. Cambiar de opción antes de guardar conserva el texto en el formulario; guardar la excepción deja `serial` vacío. «Sin indicar excepción» restaura la validación normal del criterio. Una ficha nueva restablece la selección y las fichas anteriores sin este campo mantienen su comportamiento.
+Las descripciones de ausencia o ilegibilidad («No trae», «No trae serial», «No visible», «No es visible», «Sin serial», «Serial ilegible», «Ilegible», «No tiene» y «No tiene serial») pueden repetirse entre equipos sin tratarse como seriales únicos. Los seriales reales y las marcas anteriores conservan sus controles de duplicados.
 
-La excepción viaja con el activo en el guardado local y en la sincronización. El servidor valida la misma regla para administrador y auxiliar, conserva los controles de duplicados y protege la excepción en los reintentos de altas de auxiliares. Hay que actualizar `backend/apps-script/Code.gs` y la implementación web de Apps Script para que el servidor acepte las excepciones; GitHub Pages solo publica Admin.
+Los registros y pendientes creados con el selector anterior se conservan compatibles. Al abrir uno de esos activos, su motivo aparece como texto editable; al guardar se conserva en Serial y se limpia la antigua excepción. No se cambia la información almacenada hasta guardar la ficha.
+
+El retiro del selector queda disponible con la actualización de Admin. Para que el servidor admita estas descripciones repetidas al sincronizar, hay que copiar `backend/apps-script/Code.gs` a Apps Script y actualizar la implementación web; publicar GitHub Pages no despliega ese servidor.
