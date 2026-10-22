@@ -14,7 +14,7 @@ function client(){
  const ctx=vm.createContext({document:{querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}},alert(){},window:{SK_SYNC_CONFIG:{apiUrl:'https://script.google.com/macros/s/test/exec'},alert(){},addEventListener(){},dispatchEvent(){}},sessionStorage:{getItem:key=>key==='skPlazaToken'?'test':key==='skPlazaUser'?JSON.stringify({id:'operator',documento:'operator'}):null},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:require('node:crypto').webcrypto,setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
  vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
  const start=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
- vm.runInContext(start+'\nrender=()=>{};window.audit={sync,get:()=>data,set:value=>{data=value;localStorage.setItem("skPlazaData",JSON.stringify(value))},post:fn=>{post=fn},periodicSync,refreshSharedPeople,refreshSyncedView,setView:view=>{currentView=view},expireAttempt:()=>{lastSyncAttempt=0},saveDeliveryBatch,prepareDelivery:rows=>{deliveryDraft=rows;validateDeliveryRecipient=()=>true;discardDeliveryForm=()=>{};renderRecentQueries=()=>{}}};})();',ctx);
+ vm.runInContext(start+'\nrender=()=>{};window.audit={sync,mode:value=>{deliveryMode=value},get:()=>data,set:value=>{data=value;localStorage.setItem("skPlazaData",JSON.stringify(value))},post:fn=>{post=fn},periodicSync,refreshSharedPeople,refreshSyncedView,setView:view=>{currentView=view},expireAttempt:()=>{lastSyncAttempt=0},saveDeliveryBatch,prepareDelivery:rows=>{deliveryDraft=rows;validateDeliveryRecipient=()=>true;discardDeliveryForm=()=>{};renderRecentQueries=()=>{}}};})();',ctx);
  return {api:ctx.window.audit,storage,ctx,nodes};
 }
 const row=(id,extra={})=>({id,syncEventId:'event-'+id,itemId:'gloves',quantity:2,createdAt:'2026-10-14T07:00:00.000Z',updatedAt:'2026-10-14T07:00:00.000Z',syncState:'pending',...extra});
@@ -166,6 +166,21 @@ test('ARIS MINING persists for both loans and assignments through the existing b
   assert.equal(b.cloud().assets[0].ubicacion,destination);assert.equal(b.cloud().blendingDeliveries.length,1);
   assert.equal(b.cloud().inventoryStock[0].quantity,10);assert.equal(b.cloud().personal[0].area,'Producción');
  }
+});
+
+test('ARIS recipient company is rejected outside loans and persists on a loan through sync',async()=>{
+ const c=client(),initial={personal:[{id:'recipient',nombre:'Receptor',documento:'123',area:'Producción',empresa:'SK 3.7'}],inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true,allowLoan:true}],assets:[{id:'saw1',clase:'Motosierra',serial:'TEST',ubicacion:'Bodega de Superficie'}],inventoryStock:[],blendingIncomes:[],blendingDeliveries:[]};
+ c.api.set(clone(initial));
+ const form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'ARIS MINING'}},querySelector:()=>({})};
+ const draft={itemId:'saw',assetId:'saw1',quantity:1,deliveryType:'PRÉSTAMO',loanProtocol:1,destination:'A cargo de ARIS MINING'};
+ c.api.prepareDelivery([draft]);assert.equal(await c.api.saveDeliveryBatch(form),false);assert.equal(c.api.get().blendingDeliveries.length,0);
+ c.api.mode('loan');c.api.prepareDelivery([{...draft,deliveryType:'ASIGNACIÓN'}]);assert.equal(await c.api.saveDeliveryBatch(form),false);assert.equal(c.api.get().assets[0].ubicacion,'Bodega de Superficie');
+ c.api.prepareDelivery([draft]);assert.equal(await c.api.saveDeliveryBatch(form),true);
+ assert.equal(c.api.get().blendingDeliveries[0].recipientCompany,'ARIS MINING');
+ assert.equal(c.api.get().personal[0].empresa,'SK 3.7');
+ const b=backend(initial);c.api.post(async q=>b.sync(q.data));assert.equal(await c.api.sync(true),true);
+ assert.equal(b.cloud().blendingDeliveries[0].recipientCompany,'ARIS MINING');
+ assert.equal(b.cloud().blendingDeliveries[0].recipientId,'recipient');assert.equal(b.cloud().personal[0].empresa,'SK 3.7');
 });
 test('editar desde dos Plazas invalida las copias de otros dispositivos y de Admin',()=>{
  const b=backend({updatedAt:'2026-10-21T00:00:00.000Z',personal:[collaborator]});

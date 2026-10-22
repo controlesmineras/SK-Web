@@ -49,6 +49,9 @@
 
 /* Opciones compactas de empresa y reposición, con área táctil de 44 px. */
 #deliveryReplacementField[hidden]{display:none!important}
+#deliveryForm .recipientCompany label[hidden]{display:none!important}
+#deliveryForm .recipientCompany:has(#loanRecipientCompanyInput:not(:disabled)){width:min(100%,480px);flex-wrap:wrap}
+#deliveryForm .recipientCompany:has(#loanRecipientCompanyInput:not(:disabled)) label{flex:1 0 100px}
 #deliveryForm .recipientCompany{min-width:0;width:min(100%,320px);margin:0;padding:6px 8px 8px;gap:8px}
 #deliveryForm .recipientCompany legend{padding:0 4px;font-size:.86rem}
 #deliveryForm .recipientCompany label{flex-direction:row;justify-content:center;min-width:0;min-height:44px;padding:8px 12px;gap:8px}

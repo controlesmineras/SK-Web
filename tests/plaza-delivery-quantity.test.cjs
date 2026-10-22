@@ -18,7 +18,7 @@ function formClient(){
     Event:class {constructor(type){this.type=type}},Option:class {constructor(text,value){this.text=text;this.value=value}},console});
   vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
   const prefix=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
-  vm.runInContext(prefix+`\nwindow.testing={set:value=>{data=value},mode:value=>{deliveryMode=value},update:updateDeliveryFields,capture:currentDeliveryItem,add:addDeliveryItem,draft:()=>deliveryDraft,recipientChanged:recipientDestinationChanged};})();`,ctx);
+  vm.runInContext(prefix+`\nwindow.testing={selectionLabel:assetSelectionLabel,historyLabel:assetLabel,set:value=>{data=value},mode:value=>{deliveryMode=value},update:updateDeliveryFields,capture:currentDeliveryItem,add:addDeliveryItem,draft:()=>deliveryDraft,recipientChanged:recipientDestinationChanged};})();`,ctx);
   const api=ctx.window.testing,data={
     inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true,allowLoan:true},{id:'pliers',name:'Alicates',allowLoan:true},{id:'cable',name:'Cable',allowLoan:true,fractionable:true}],
     assets:[{id:'asset',clase:'Motosierra',serial:'TEST-57951',ubicacion:'Bodega de Superficie'}],
@@ -98,4 +98,29 @@ test('ARIS MINING is available for loans and assignments and survives a recipien
   assert.equal(c.api.draft()[0].destination,destination);
   c.select('saw');c.api.mode('loan');c.api.update();
   assert.equal(c.fields.destination.options.filter(option=>option.value===destination).length,1);
+});
+
+test('the specific asset selector shows manufacturer, serial, new mark and model without the class',()=>{
+  const c=formClient(),asset={id:'asset',clase:'Motosierra',numeroClase:'28',fabricante:'Makita',serial:'57951',nuevaMarca:'AAF',marcaPrevia:'SK 3.7',modelo:'UC4051A',ubicacion:'Bodega de Superficie'};
+  assert.equal(c.api.selectionLabel(asset),'Makita · 57951 · AAF · UC4051A');
+  c.data.assets=[asset];c.select('saw');assert.match(c.fields.assetId.innerHTML,/Makita · 57951 · AAF · UC4051A/);
+  assert.doesNotMatch(c.fields.assetId.innerHTML,/Motosierra|N.º|Marca nueva|Marca anterior/);
+  assert.match(c.api.historyLabel(asset),/Motosierra/);
+});
+
+test('YT, columns and self rescuers fall back to previous marks without inventing a new mark',()=>{
+  const c=formClient();
+  assert.equal(c.api.selectionLabel({clase:'YT 29',fabricante:'Gisi',serial:'24022637',marcaPrevia:'42',modelo:'29'}),'Gisi · 24022637 · 42 · 29');
+  assert.equal(c.api.selectionLabel({clase:'Columna',serial:'SHOULD-NOT-SHOW',marcaAnterior:'15',modelo:'29'}),'15 · 29');
+  assert.equal(c.api.selectionLabel({clase:'Autorrescatador',fabricante:'Steel pro',serial:'00123',marcaPrevia:'SK-27',modelo:'Oxypro 50'}),'Steel pro · 00123 · SK-27 · Oxypro 50');
+  assert.equal(c.api.selectionLabel({clase:'YT',marcaPrevia:'37',nuevaMarca:'P-AB',modelo:'29'}),'P-AB · 29');
+  assert.equal(c.api.selectionLabel({clase:'Pulidora',fabricante:'DEWALT',serial:'No trae',marcaPrevia:'OLD',modelo:'DWE'}),'DEWALT · No trae · DWE');
+});
+
+test('ARIS recipient company is visible only for loans and is cleared on switching to assignment',()=>{
+  const c=formClient();c.select('saw');
+  const field=c.nodes.get('#loanRecipientCompanyField'),input=c.nodes.get('#loanRecipientCompanyInput');
+  assert.equal(field.hidden,false);assert.equal(input.disabled,false);assert.equal(input.required,true);
+  input.checked=true;c.api.mode('assignment');c.api.update();
+  assert.equal(field.hidden,true);assert.equal(field.style.display,'none');assert.equal(input.disabled,true);assert.equal(input.checked,false);assert.equal(input.required,false);
 });
