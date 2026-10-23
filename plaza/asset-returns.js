@@ -26,6 +26,7 @@
   function setReadOnly(value) {
     readOnly = Boolean(value);
     reset();
+    document.querySelectorAll('#assetReturnFilter input').forEach(input => { input.checked = input.value === 'PENDIENTE'; });
     const title = $('#assetReturnsTitle'), hint = $('#assetReturnsHint');
     if (title) title.textContent = readOnly ? 'PRÉSTAMOS Y DEVOLUCIONES' : 'RETORNO DE ELEMENTOS';
     if (hint) hint.textContent = readOnly ? 'Consulta los préstamos pendientes, las devoluciones y su historial.' : 'Busca el préstamo y registra el regreso a bodega de los elementos prestados.';
@@ -59,7 +60,7 @@
   function refresh() {
     const host = $('#assetReturnList');
     if (!host || !window.SKPlaza) return;
-    const data = window.SKPlaza.getData(), query = norm($('#assetReturnSearch').value), filter = $('#assetReturnFilter').value;
+    const data = window.SKPlaza.getData(), query = norm($('#assetReturnSearch').value), filter = $('#assetReturnFilter input:checked')?.value || 'PENDIENTE';
     const people = new Map((data.personal || []).map(person => [person.id, person]));
     const rows = loans(data).map(loan => ({loan, state:loanState(data, loan)})).filter(({loan, state}) => {
       const person = people.get(loan.recipientId), asset = (data.assets || []).find(row => row.id === loan.assetId);
@@ -129,7 +130,7 @@
     if (!window.SKPlaza || $('#assetReturns')) return;
     const section = document.createElement('section');
     section.id = 'assetReturns'; section.className = 'view recentMovements';
-    section.innerHTML = `<h2 id="assetReturnsTitle">RETORNO DE ELEMENTOS</h2><p id="assetReturnsHint">Busca el préstamo y registra el regreso a bodega de los elementos prestados.</p><div class="assetReturnFilters"><label>BUSCAR ELEMENTO O COLABORADOR<input id="assetReturnSearch" type="search" placeholder="Clase, marca, serial, nombre o documento…"></label><label>ESTADO<select id="assetReturnFilter"><option>PENDIENTE</option><option>DEVUELTO</option><option value="TODOS">TODOS</option></select></label></div><p id="assetReturnCount" class="permission" aria-live="polite"></p><form id="assetReturnForm" hidden><h3>REGISTRAR RETORNO</h3><b id="assetReturnSelected"></b><label>QUIÉN DEVUELVE<input name="returnedBy" type="search" list="assetReturnPeople" autocomplete="off" required placeholder="Buscar nombre o documento…"></label><datalist id="assetReturnPeople"></datalist><label>FECHA Y HORA DE DEVOLUCIÓN<input name="returnedAt" type="datetime-local" required></label><label>OBSERVACIONES<textarea name="notes"></textarea></label><div class="deliveryFormActions"><button type="submit">REGISTRAR RETORNO</button><button type="button" id="cancelAssetReturn">CANCELAR</button></div></form><div id="assetReturnList" class="recentMovementList"></div>`;
+    section.innerHTML = `<h2 id="assetReturnsTitle">RETORNO DE ELEMENTOS</h2><p id="assetReturnsHint">Busca el préstamo y registra el regreso a bodega de los elementos prestados.</p><div class="assetReturnFilters"><label>BUSCAR ELEMENTO O COLABORADOR<input id="assetReturnSearch" type="search" placeholder="Clase, marca, serial, nombre o documento…"></label><fieldset id="assetReturnFilter" class="assetReturnState"><legend>ESTADO</legend><div class="assetReturnStateOptions"><label><input type="radio" name="assetReturnState" value="TODOS"><span>TODOS</span></label><label><input type="radio" name="assetReturnState" value="PENDIENTE" checked><span>PENDIENTES</span></label><label><input type="radio" name="assetReturnState" value="DEVUELTO"><span>DEVUELTOS</span></label></div></fieldset></div><p id="assetReturnCount" class="permission" aria-live="polite"></p><form id="assetReturnForm" hidden><h3>REGISTRAR RETORNO</h3><b id="assetReturnSelected"></b><label>QUIÉN DEVUELVE<input name="returnedBy" type="search" list="assetReturnPeople" autocomplete="off" required placeholder="Buscar nombre o documento…"></label><datalist id="assetReturnPeople"></datalist><label>FECHA Y HORA DE DEVOLUCIÓN<input name="returnedAt" type="datetime-local" required></label><label>OBSERVACIONES<textarea name="notes"></textarea></label><div class="deliveryFormActions"><button type="submit">REGISTRAR RETORNO</button><button type="button" id="cancelAssetReturn">CANCELAR</button></div></form><div id="assetReturnList" class="recentMovementList"></div>`;
     $('#contacts').after(section);
     $('#assetReturnSearch').addEventListener('input', refresh);
     $('#assetReturnFilter').addEventListener('change', refresh);
@@ -149,3 +150,4 @@
   window.SKPlazaReturns = {isReturn, returned, loans, loanState, createReturn, refresh, reset, setReadOnly, setSyncError, hasUnsaved:() => Boolean(selectedId)};
   window.addEventListener('load', setup);
 })();
+
