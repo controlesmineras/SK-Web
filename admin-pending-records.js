@@ -66,6 +66,6 @@
     if(!window.SKAdminAuth?.ready?.())return;
     mount();status.textContent='';if(!dialog.open)dialog.showModal();render();
   });
-  for(const event of ['skweb-synced','skweb-local-change','skweb-inventory-refresh'])window.addEventListener(event,()=>{if(!busy)render();});
+  for(const event of ['skweb-synced','skweb-local-change','skweb-inventory-refresh'])window.addEventListener(event,()=>{if(event==='skweb-synced'&&dialog?.open)status.textContent='Sincronización completada.';if(!busy)render();});
   window.addEventListener('skadmin-permissions',()=>{if(!window.SKAdminAuth?.ready?.())dialog?.close();});
 })();
