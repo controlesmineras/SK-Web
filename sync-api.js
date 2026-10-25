@@ -1,11 +1,46 @@
 // Sincronización automática local-first. Una falla de red nunca impide registrar.
 (()=>{
-  const config=()=>window.SK_SYNC_CONFIG||{};let running=false,timer=0,activePromise=null,queued=false,collaboratorRevisionApi='',retryAfter=0;
+  const config=()=>window.SK_SYNC_CONFIG||{};let running=false,timer=0,activePromise=null,queued=false,collaboratorRevisionApi='',retryAfter=0,discarding=false;
   const configured=()=>/^https:\/\/script\.google\.com\/macros\/s\/.+\/exec(?:\?.*)?$/.test(config().apiUrl||'');
   const ui=state=>window.SKAdminSyncUI?.setState?.(state);const buttonText=value=>{const button=document.querySelector('#updateAppBtn');if(button){button.setAttribute('aria-label',value);button.title=value}};
   function buttonStart(){const b=document.querySelector('#updateAppBtn');if(!b||b.dataset.busy==='true')return null;b.disabled=true;b.dataset.autoSync='true';b.classList.add('isSyncing');buttonText('Sincronizando datos');return b}
   function buttonStop(b){if(!b||b.dataset.busy==='true')return;delete b.dataset.autoSync;b.disabled=false;b.classList.remove('isSyncing');buttonText('Sincronizar datos')}
   async function pendingSnapshot(){if(typeof repairPersonalIds==='function')await repairPersonalIds();const snapshot={schema:6,updatedAt:new Date().toISOString()};const rows=await Promise.all(stores.map(all));stores.forEach((store,index)=>{snapshot[store]=rows[index].filter(row=>row?.syncState==='pending')});return snapshot}
+  async function pendingRecords(){
+    if(!window.SKAdminAuth?.ready?.())throw new Error('Ingresa a SK Web Admin para consultar los pendientes.');
+    if(typeof db==='undefined'||!db)throw new Error('El almacenamiento local todavía está iniciando. Intenta nuevamente.');
+    const rows=await Promise.all(stores.map(all));
+    return stores.flatMap((store,index)=>rows[index].filter(row=>row?.syncState==='pending').map(row=>({store,row})));
+  }
+  async function discardPending(store,row){
+    if(!window.SKAdminAuth?.ready?.())throw new Error('Ingresa a SK Web Admin para descartar un pendiente.');
+    if(!stores.includes(store)||!row||row.syncState!=='pending')throw new Error('Selecciona un registro pendiente válido.');
+    if(discarding)throw new Error('Ya se está descartando un registro. Espera un momento.');
+    discarding=true;clearTimeout(timer);queued=false;
+    try{
+      // Let the current response finish before removing anything it may confirm.
+      // Block new sends until the local transaction has completed.
+      if(activePromise)await activePromise;
+      if(!window.SKAdminAuth?.ready?.())throw new Error('Tu sesión cambió. Vuelve a ingresar para revisar los pendientes.');
+      await new Promise((resolve,reject)=>{
+        const tx=db.transaction(store,'readwrite'),table=tx.objectStore(store),read=table.get(row.id);let failure;
+        read.onsuccess=()=>{
+          const current=read.result;
+          if(current?.syncState!=='pending'||JSON.stringify(current)!==JSON.stringify(row)){
+            failure=new Error('El registro cambió o ya se sincronizó. Revisa la lista actualizada antes de descartarlo.');tx.abort();return;
+          }
+          // Local discard only: never send a deletion to the central database.
+          table.delete(row.id);
+        };
+        tx.oncomplete=resolve;tx.onerror=()=>reject(failure||tx.error);tx.onabort=()=>reject(failure||tx.error||new Error('No se pudo descartar el registro.'));
+      });
+      // Fetch the central version again if this was an edit of an existing row.
+      collaboratorRevisionApi='';localStorage.removeItem('skWebServerUpdatedAt');retryAfter=0;
+      phase('Registro pendiente descartado · falta comprobar la sincronización con la base central.');ui('error');
+      window.dispatchEvent(new Event('skweb-local-change'));
+      return true;
+    }finally{discarding=false;schedule(300)}
+  }
   async function markSnapshotSynced(snapshot){await Promise.all(stores.map(store=>new Promise((resolve,reject)=>{const rows=snapshot[store]||[];if(!rows.length)return resolve();const tx=db.transaction(store,'readwrite'),table=tx.objectStore(store);for(const row of rows){const read=table.get(row.id);read.onsuccess=()=>{const current=read.result;if(current?.syncState==='pending'&&JSON.stringify(current)===JSON.stringify(row))table.put({...current,syncState:'synced'})}}tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('No se confirmó el registro local'))}))) }
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   function isTransient(error){const msg=String(error?.message||error||'').toLowerCase();return error?.name==='AbortError'||msg.includes('load failed')||msg.includes('failed to fetch')||msg.includes('network')||msg.includes('respondió 429')||msg.includes('respondió 5')}
@@ -117,6 +152,7 @@
     }finally{running=false;buttonStop(b)}
   }
   function sync(options={}){
+    if(discarding)return Promise.resolve(false);
     if(!configured()||!navigator.onLine||!window.SKAdminAuth?.ready?.())return Promise.resolve(false);
     if(activePromise){queued=true;return activePromise}
     clearTimeout(timer);if(!options.silent)retryAfter=0;
@@ -126,7 +162,7 @@
   function resumeSync(){if(!document.hidden&&!activePromise)schedule(300)}
   let readyToken='';
   function accessReady(){const next=window.SKAdminAuth?.ready?.()?window.SKAdminAuth.token():'';if(next!==readyToken){readyToken=next;if(next)resumeSync()}}
-  window.skSyncApi={configured,sync,schedule};
+  window.skSyncApi={configured,sync,schedule,pendingRecords,discardPending};
   document.addEventListener?.('visibilitychange',resumeSync);
   for(const event of ['pageshow','focus'])window.addEventListener(event,resumeSync);
   window.addEventListener('skadmin-permissions',accessReady);
