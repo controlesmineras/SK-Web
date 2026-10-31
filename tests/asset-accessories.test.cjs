@@ -22,15 +22,15 @@ test('dueño puede completar, quitar o dejar sin especificar accesorios de un ac
  const s=service();s.sync([asset('1')]);s.sync([{...s.cloud().assets[0],hasAccessories:true,accessories:[{id:'b',description:'Batería'}],updatedAt:'2026-10-21T21:00:00Z',syncState:'pending'}]);assert.equal(s.cloud().assets[0].accessories[0].description,'Batería');
  s.sync([{...s.cloud().assets[0],hasAccessories:false,accessories:[],updatedAt:'2026-10-21T22:00:00Z',syncState:'pending'}]);assert.equal(s.cloud().assets[0].accessories.length,0);assert.equal(s.cloud().assets[0].serial,'SN-1');
 });
-test('auxiliar puede registrar accesorios y reintentar, pero no editar fichas mediante reintentos',()=>{
+test('auxiliar puede registrar, reintentar y editar accesorios sin crear otro activo',()=>{
  const s=service(),row=asset('1',{hasAccessories:true,accessories:[{id:'b',description:'Batería ABC'}]});s.sync([row],'assistant');s.sync([row],'assistant');assert.equal(s.cloud().assets.length,1);
- assert.throws(()=>s.sync([{...row,accessories:[{id:'b',description:'Otra batería'}]}],'assistant'),/solo permite agregar/);assert.equal(s.cloud().assets[0].accessories[0].description,'Batería ABC');
+ s.sync([{...s.cloud().assets[0],accessories:[{id:'b',description:'Otra batería'}],updatedAt:'2026-10-22T00:00:00Z',syncState:'pending'}],'assistant');assert.equal(s.cloud().assets[0].accessories[0].description,'Otra batería');assert.equal(s.cloud().assets.length,1);
 });
 test('las altas anteriores sin campos de accesorios conservan sus reintentos',()=>{
  const s=service(),row=asset('1');s.sync([row],'assistant');s.sync([row],'assistant');assert.equal(s.cloud().assets.length,1);
 });
 
-test('al actualizar el servidor acepta reintentos del formato anterior solo si los accesorios no cambiaron',()=>{
+test('al actualizar el servidor distingue reintentos anteriores de ediciones de accesorios',()=>{
  const s=service(),row=asset('1',{hasAccessories:true,accessories:[{id:'b',description:'Batería'}]});s.sync([row],'assistant');s.legacyFingerprint(row);s.sync([row],'assistant');assert.equal(s.cloud().assets.length,1);
- assert.throws(()=>s.sync([{...row,accessories:[{id:'b',description:'Cambiada'}]}],'assistant'),/solo permite agregar/);
+ s.sync([{...s.cloud().assets[0],accessories:[{id:'b',description:'Cambiada'}],updatedAt:'2026-10-22T00:00:00Z',syncState:'pending'}],'assistant');assert.equal(s.cloud().assets[0].accessories[0].description,'Cambiada');
 });

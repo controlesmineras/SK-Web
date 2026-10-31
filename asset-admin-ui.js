@@ -18,13 +18,13 @@ const criterionBoolean=value=>value===true||['true','si','sí','1','yes'].includ
 function normalizedCriterion(item){return{...item,name:criterionName(item),allowAccessories:criterionBoolean(item.allowAccessories),isFixedAsset:criterionBoolean(item.isFixedAsset??item.esActivoFijo??item.fixedAsset??item.CI_ES_A_FIJO),usesSerial:criterionBoolean(item.usesSerial??item.CI_USA_SERIAL),usesLength:criterionBoolean(item.usesLength??item.CI_USA_LARGO),usesModel:criterionBoolean(item.usesModel??item.CI_USA_MODELO),usesManufacturer:/^motosierras?$/i.test(criterionName(item))||criterionBoolean(item.usesManufacturer??item.CI_USA_FABRICANTE),requiresInternalMark:criterionBoolean(item.requiresInternalMark)}}
 function installClassNumberHelp(){const input=document.querySelector('#assetForm [name="numeroYT"]'),label=input?.closest('label');if(!input||!label||label.querySelector('.assetFieldInfo'))return;label.classList.add('assetClassNumberField');const button=document.createElement('button');button.type='button';button.className='assetFieldInfo';button.textContent='i';button.setAttribute('aria-label','¿Qué es el número de clase?');button.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();alert(CLASS_NUMBER_HELP)});label.insertBefore(button,input);if(!document.querySelector('#assetFieldInfoStyle')){const style=document.createElement('style');style.id='assetFieldInfoStyle';style.textContent='.assetClassNumberField,.assetSerialField{position:relative}.assetClassNumberField>.assetFieldInfo,.assetSerialField>.assetFieldInfo{position:absolute;top:-5px;right:0;width:28px!important;height:28px!important;min-height:28px!important;padding:0!important;border:1px solid #1a4a68!important;border-radius:50%!important;background:#eef6fa!important;color:#173d59!important;font:700 16px/26px system-ui,sans-serif!important;text-align:center!important;box-shadow:none!important}.assetClassNumberField>.assetFieldInfo:focus-visible,.assetSerialField>.assetFieldInfo:focus-visible{outline:3px solid #8bc7e8;outline-offset:2px}';document.head.append(style)}}
 function setAssetMode(editing){
- const form=document.querySelector('#assetForm'),readOnly=editing&&!window.SKAdminAuth?.isOwner?.();
+ const form=document.querySelector('#assetForm'),readOnly=editing&&!window.SKAdminAuth?.canManageAssets?.();
  if(form)for(const control of form.elements){
   if(control.id==='assetSerialInfo')continue;
   if(readOnly){if(!Object.prototype.hasOwnProperty.call(control.dataset,'assetPermissionDisabled'))control.dataset.assetPermissionDisabled=String(control.disabled);control.disabled=true;}
   else if(Object.prototype.hasOwnProperty.call(control.dataset,'assetPermissionDisabled')){control.disabled=control.dataset.assetPermissionDisabled==='true';delete control.dataset.assetPermissionDisabled;}
  }
- const remove=document.querySelector('#assetDeleteBtn');if(remove){remove.hidden=!editing||!window.SKAdminAuth?.isOwner?.();remove.disabled=assetSaving;}
+ const remove=document.querySelector('#assetDeleteBtn');if(remove){remove.hidden=!editing||!window.SKAdminAuth?.canManageAssets?.();remove.disabled=assetSaving;}
  const b=document.querySelector('#assetSaveBtn');if(b){b.textContent=readOnly?'SOLO CONSULTA':editing?'Guardar cambios':'Registrar activo';b.disabled=readOnly||assetSaving||!!form?.dataset.assetLoading;}
  if(form){const criterion=criteriaByClass.get(norm(form.elements.clase?.value));updateSerialFields(form,criterion,readOnly);updatePreviousMarkFields(form,readOnly);window.SKAssetAccessories?.configure(form,criterion,readOnly);}
  window.SKAssetMarking?.refreshRequestButton?.().catch(console.error);
@@ -183,7 +183,7 @@ async function saveAsset(e){
  e.preventDefault();e.stopImmediatePropagation();if(assetSaving)return;
  if(e.currentTarget.dataset?.assetLoading)return alert('Espera a que termine de cargar la ficha antes de guardar. Si no carga, vuelve a abrir el activo.');
  if(!window.SKAdminAuth?.canView?.('assets'))return;
- if(e.currentTarget.elements.id.value&&!window.SKAdminAuth.isOwner())return alert('Puedes agregar activos nuevos. Las fichas existentes son de solo consulta; registra sus cambios de estado en Novedades de activos.');
+ if(!window.SKAdminAuth?.canManageAssets?.())return;
  assetSaving=true;let createdAsset=null;const f=e.currentTarget,button=document.querySelector('#assetSaveBtn');if(button)button.disabled=true;
  try{
   const x=fd(f),rows=await all('assets'),editing=!!x.id,type=norm(x.clase),criterion=criteriaByClass.get(type),automatic=!editing&&window.SKAssetMarking?.eligible(x.clase);
@@ -223,13 +223,13 @@ async function saveAsset(e){
  finally{assetSaving=false;if(button)button.disabled=false;}
 }
 async function deleteAsset(){
- if(assetSaving||!window.SKAdminAuth?.isOwner?.())return;
+ if(assetSaving||!window.SKAdminAuth?.canManageAssets?.())return;
  const form=document.querySelector('#assetForm'),id=form?.elements.id.value;if(!id)return;
  assetSaving=true;setAssetMode(true);let saved=false;
  try{
   const asset=(await all('assets')).find(row=>row.id===id&&!row.deleted);if(!asset)return;
   if(!confirm(`¿Eliminar este activo fijo?\n\n${cleanLabel(asset)}\n\nDejará de aparecer en el listado y en las opciones para nuevos registros. Se conservarán sus novedades, ingresos, entregas y consumos.\n\nLa eliminación se enviará a los demás dispositivos al sincronizar.`))return;
-  if(!window.SKAdminAuth?.isOwner?.())return;
+  if(!window.SKAdminAuth?.canManageAssets?.())return;
   const timestamp=new Date(Math.max(Date.now(),(Date.parse(asset.updatedAt||asset.createdAt)||0)+1)).toISOString(),user=window.SKAdminAuth.user?.();
   await put('assets',{...asset,deleted:true,deletedAt:timestamp,deletedBy:user?.username||'admin',deletedByName:user?.name||'',updatedAt:timestamp,syncState:'pending'});
   saved=true;form.reset();form.elements.id.value='';delete form.dataset.autoMarkPolicy;updateAssetFields();

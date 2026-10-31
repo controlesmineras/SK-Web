@@ -23,10 +23,21 @@ test('el reintento conserva ediciones posteriores del administrador',()=>{
  s.sync({assets:[{...s.cloud().assets[0],serial:'CORREGIDO',updatedAt:'2026-10-05T12:00:00Z',syncState:'pending'}]},'admin','owner');
  const result=s.sync({assets:[original]});assert.equal(result.data.assets[0].serial,'CORREGIDO');assert.equal(s.cloud().assets.length,1);
 });
-test('auxiliar no edita ni elimina fichas propias o ajenas, ni se apropia de un alta existente',()=>{
- const s=service();s.sync({assets:[asset('1')]});const before=s.cloud();
- for(const update of [{serial:'MODIFICADO'},{deleted:true},{fechaIngreso:'2000-01-01'}])assert.throws(()=>s.sync({assets:[{...before.assets[0],...update,syncState:'pending'}]}),/solo permite agregar/);
- assert.throws(()=>s.sync({assets:[asset('1')]},'otro'),/solo permite agregar/);assert.deepEqual(s.cloud(),before);
+test('auxiliar edita fichas propias y ajenas, corrige fecha y elimina con el mismo historial',()=>{
+ for(const creator of ['aux','admin']){
+  const s=service();s.sync({assets:[asset('1')]},creator,creator==='admin'?'owner':'assistant');
+  let current=s.cloud().assets[0];
+  s.sync({assets:[{...current,serial:'MODIFICADO',fechaIngreso:'2000-01-01',updatedAt:'2026-10-06T12:00:00Z',syncState:'pending'}]});
+  current=s.cloud().assets[0];assert.equal(current.serial,'MODIFICADO');assert.equal(current.fechaIngreso,'2000-01-01');assert.equal(current.nuevaMarca,'AAA');assert.equal(current.id,'1');
+  s.sync({assets:[{...current,deleted:true,deletedBy:'aux',updatedAt:'2026-10-07T12:00:00Z',syncState:'pending'}]});
+  assert.equal(s.cloud().assets[0].deleted,true);assert.equal(s.cloud().assets[0].deletedBy,'aux');assert.equal(s.cloud().assets.length,1);assert.equal(s.cloud().assetMarkRegistry.length,1);
+ }
+});
+test('auxiliar puede corregir de nuevo un campo a su valor inicial sin confundirlo con un reintento',()=>{
+ const s=service();s.sync({assets:[asset('1')]});
+ s.sync({assets:[{...s.cloud().assets[0],serial:'CORREGIDO',updatedAt:'2026-10-05T12:00:00Z',syncState:'pending'}]});
+ s.sync({assets:[{...s.cloud().assets[0],serial:'SERIAL-1',updatedAt:'2026-10-06T12:00:00Z',syncState:'pending'}]});
+ assert.equal(s.cloud().assets[0].serial,'SERIAL-1');assert.equal(s.cloud().assetMarkRegistry.length,1);
 });
 test('dos dispositivos y un mismo lote no pueden crear seriales o números duplicados',()=>{
  const s=service();s.sync({assets:[asset('1')]});const before=s.cloud();
@@ -39,10 +50,10 @@ test('altas incompletas, eliminadas o sin criterio activo se rechazan sin escrib
  for(const extra of [{numeroClase:'',numeroYT:''},{serial:''},{ubicacion:''},{clase:'Desconocida'},{deleted:true},{createdAt:''}]){const s=service();assert.throws(()=>s.sync({assets:[asset('1',extra)]}));assert.equal(s.writes(),0);}
  const s=service({inventoryCriteria:[{id:'ci',name:'Pulidora',isFixedAsset:true,active:false}]});assert.throws(()=>s.sync({assets:[asset('1')]}),/CLASE activa/);
 });
-test('alta y novedad offline viajan juntas; las novedades no permiten cambiar la ficha',()=>{
+test('alta y novedad offline viajan juntas; una edición de ficha conserva el cambio de estado',()=>{
  const s=service(),novelty={id:'n',assetId:'1',descripcion:'Revista física',ubicacion:'Socavón',estado:'Averiado/a',createdAt:'2026-10-04T13:00:00Z',updatedAt:'2026-10-04T13:00:00Z',syncState:'pending'};
  s.sync({assets:[asset('1')],novelties:[novelty]});assert.equal(s.cloud().assets[0].ubicacion,'Socavón');assert.equal(s.cloud().assets[0].fechaIngreso,'2026-10-01');
- s.sync({assets:[{...s.cloud().assets[0],serial:'NO CAMBIAR',syncState:'pending'}],novelties:[{...novelty,id:'n2',updatedAt:'2026-10-04T14:00:00Z'}]});assert.equal(s.cloud().assets[0].serial,'SERIAL-1');
+ s.sync({assets:[{...s.cloud().assets[0],serial:'NO CAMBIAR',syncState:'pending'}],novelties:[{...novelty,id:'n2',updatedAt:'2026-10-04T14:00:00Z'}]});assert.equal(s.cloud().assets[0].serial,'NO CAMBIAR');assert.equal(s.cloud().novelties.length,2);
 });
 test('autorrescatadores, YT y columnas conservan su tratamiento sin marca automática',()=>{
  for(const clase of ['Autorrescatador','YT','Columna']){
@@ -78,4 +89,21 @@ test('criterio con serial sigue exigiendo identificación y no acepta un criteri
  for(const inventoryCriteria of [[{id:'ci',name:'Pulidora',isFixedAsset:true,usesSerial:true}],[{id:'ci',name:'Taladro',isFixedAsset:true,usesSerial:false}]]){
   const s=service({inventoryCriteria});assert.throws(()=>s.sync({assets:[asset('1',{serial:'',criteriaId:'ci'})]},'admin','owner'),/Ingresa el SERIAL/);assert.equal(s.writes(),0);
  }
+});
+
+test('los permisos completos de activos no permiten gestionar usuarios ni revertir movimientos',()=>{
+ const ctx=vm.createContext({PropertiesService:{getScriptProperties:()=>({getProperty:()=> 'configured'})}});vm.runInContext(source,ctx);
+ ctx.adminUsers_=()=>[{role:'owner'}];ctx.verifyAdminToken_=()=>({role:'assistant',username:'aux'});ctx.json_=clone;
+ for(const action of ['adminUsersList','accessInvitationCreate','adminUserSave','adminUserDisable','plazaUserAdmin','adminReverseMovement','adminReverseMovementV2','adminDeleteMovement']){
+  const result=ctx.doPost({postData:{contents:JSON.stringify({action,token:'test'})}});assert.equal(result.ok,false,action);assert.match(result.error,/rol Administrador principal/,action);
+ }
+ for(const role of ['plaza_operator','plaza_supervisor','',null])assert.equal(ctx.canManageAssets_({role}),false);
+ assert.equal(ctx.canManageAssets_(null),false);
+});
+
+test('eliminar una ficha con una novedad offline conserva ambos registros y su historial',()=>{
+ const s=service();s.sync({assets:[asset('1')]});
+ const deleted={...s.cloud().assets[0],deleted:true,deletedBy:'aux',updatedAt:'2026-10-07T12:00:00Z',syncState:'pending'};
+ const novelty={id:'n-offline',assetId:'1',descripcion:'Revista física',ubicacion:'Socavón',estado:'Operativo/a',createdAt:'2026-10-06T12:00:00Z',updatedAt:'2026-10-06T12:00:00Z',syncState:'pending'};
+ s.sync({assets:[deleted],novelties:[novelty]});assert.equal(s.cloud().assets[0].deleted,true);assert.equal(s.cloud().novelties[0].id,'n-offline');assert.equal(s.cloud().assetMarkRegistry.length,1);
 });

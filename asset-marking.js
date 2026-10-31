@@ -105,7 +105,7 @@ async function refreshRequestButton(){
   if(!button){button=document.createElement('button');button.id='assetRequestMarkBtn';button.type='button';button.textContent='Solicitar marca nueva';button.style.marginTop='8px';button.hidden=true;button.addEventListener('click',()=>button.dataset.mode==='correct'?correctDuplicate(form.elements.id.value):requestExisting(form.elements.id.value));label.append(button);}
   let note=document.querySelector('#assetMarkCorrectionNote');if(!note){note=document.createElement('small');note.id='assetMarkCorrectionNote';note.style.whiteSpace='pre-line';label.append(note);}note.textContent='';note.hidden=true;
   button.hidden=true;const version=++requestViewVersion,id=form.elements.id.value;
-  if(!id||!window.SKAdminAuth?.isOwner?.()||typeof all!=='function')return;
+  if(!id||!window.SKAdminAuth?.canManageAssets?.()||typeof all!=='function')return;
   const assets=await all('assets'),asset=assets.find(row=>row.id===id);
   if(version!==requestViewVersion||form.elements.id.value!==id||!asset||asset.deleted||!eligible(asset))return;
   if(asset.markCorrections?.length){note.textContent=asset.markCorrections.map(row=>`Corrección: ${row.from} → ${row.to} · ${new Date(row.at).toLocaleString('es-CO')} · ${row.byName||row.by}`).join('\n');note.hidden=false;}
@@ -116,7 +116,7 @@ async function refreshRequestButton(){
   button.textContent=requesting?'Procesando solicitud…':pending?'Marca pendiente de sincronización':correcting?'Corregir marca duplicada':'Solicitar marca nueva';
 }
 async function correctDuplicate(id){
-  if(requesting||!id||!window.SKAdminAuth?.isOwner?.())return false;
+  if(requesting||!id||!window.SKAdminAuth?.canManageAssets?.())return false;
   const form=document.querySelector('#assetForm');
   if(form?.dataset.historyEditRevision){alert('Guarda los cambios de la ficha y vuelve a abrirla antes de corregir la marca.');return false;}
   if(!navigator.onLine||!window.skSyncApi?.configured?.()){alert('Conéctate a internet para que la base central compruebe y corrija la marca duplicada.');return false;}
@@ -145,7 +145,7 @@ async function correctDuplicate(id){
   finally{requesting=false;refreshRequestButton().catch(console.error);}
 }
 async function requestExisting(id){
-  if(requesting||!id||!window.SKAdminAuth?.isOwner?.())return false;
+  if(requesting||!id||!window.SKAdminAuth?.canManageAssets?.())return false;
   const form=document.querySelector('#assetForm');
   if(form?.dataset.historyEditRevision){alert('Guarda primero los cambios de la ficha y vuelve a abrir el activo para solicitar su marca.');return false;}
   requesting=true;

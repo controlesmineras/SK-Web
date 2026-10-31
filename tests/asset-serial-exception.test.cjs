@@ -59,9 +59,10 @@ test('una ficha anterior se conserva y al editar exige serial, manteniendo núme
  assert.throws(()=>s.sync([{...saved,serial:'',marcaPrevia:'ANTERIOR',updatedAt:'2026-10-22T03:00:00Z',syncState:'pending'}]),/Ingresa el SERIAL/);
 });
 
-test('el auxiliar puede reintentar su alta pero no cambiar el texto ni editar la ficha',()=>{
- const s=service(),row=asset('1');s.sync([row],'assistant');s.sync([row],'assistant');const before=s.cloud();
- for(const serial of ['No visible','', 'SN-123'])assert.throws(()=>s.sync([{...row,serial}],'assistant'),/solo permite agregar/);assert.deepEqual(s.cloud(),before);
+test('el auxiliar puede reintentar el alta y editar el serial conservando su validación',()=>{
+ const s=service(),row=asset('1');s.sync([row],'assistant');s.sync([row],'assistant');
+ for(const serial of ['No visible','SN-123']){s.sync([{...s.cloud().assets[0],serial,updatedAt:'2026-10-23T00:00:00Z',syncState:'pending'}],'assistant');assert.equal(s.cloud().assets[0].serial,serial);}
+ const before=s.cloud();assert.throws(()=>s.sync([{...before.assets[0],serial:'',syncState:'pending'}],'assistant'),/Ingresa el SERIAL/);assert.deepEqual(s.cloud(),before);
 });
 
 test('los dos textos se guardan offline y sincronizan sin duplicar registros',async()=>{
@@ -75,7 +76,7 @@ test('los dos textos se guardan offline y sincronizan sin duplicar registros',as
 
 test('el formulario exige serial según criterio y conserva ayuda, columnas y permisos',async()=>{
  let hidden,focused=0,writes=0;const hint={},alerts=[],serial={value:'',focus(){focused++},closest:()=>({classList:{toggle:(name,value)=>hidden=value}})},form={elements:{id:{value:''},clase:{value:'Taladro'},serial},querySelector:()=>hint};
- const localWindow={SKAssetRules:rules,SKAdminAuth:{canView:()=>true,isOwner:()=>true},addEventListener(){}};
+ const localWindow={SKAssetRules:rules,SKAdminAuth:{canView:()=>true,canManageAssets:()=>true},addEventListener(){}};
  const context=vm.createContext({window:localWindow,document:{querySelector:()=>null,querySelectorAll:()=>[{value:'Taladro'}]},all:async()=>[],fd:()=>({id:'',clase:'Taladro',serial:'   ',marcaPrevia:'PREVIA'}),put:async()=>{writes++},alert:m=>alerts.push(m),console});
  vm.runInContext(read('asset-admin-ui.js').replace('window.SKAssetAdminUI={hydrateEdit};',"window.SKAssetAdminUI={hydrateEdit,updateSerialFields,saveAsset};criteriaByClass.set('taladro',{usesSerial:true});"),context);
  const ui=localWindow.SKAssetAdminUI;ui.updateSerialFields(form,{usesSerial:true},false);assert.equal(serial.required,true);assert.equal(serial.disabled,false);assert.equal(hidden,false);assert.match(hint.textContent,/No trae.*No visible/);

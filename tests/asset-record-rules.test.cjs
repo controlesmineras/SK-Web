@@ -18,20 +18,20 @@ test('bajas conservan su serial; eliminados, vacíos y No aplica no bloquean otr
  assert.equal(duplicateSerial([{...row,deleted:true}],{id:'2',serial:'SN-1'}),null);
  for(const serial of ['',undefined,'No aplica',' no aplica '])assert.equal(duplicateSerial([{id:'1',serial}],{id:'2',serial}),null);
 });
-function deletionUI({owner=true,confirmed=true,fail=false}={}){
+function deletionUI({owner=true,confirmed=true,fail=false,auth=null}={}){
  const fields={id:{value:'asset-1'}},form={elements:fields,dataset:{autoMarkPolicy:'letters-v1'},reset(){fields.id.value=''}},remove={},save={};
  let rows=[{id:'asset-1',clase:'Pulidora',serial:'SN-1',updatedAt:'2026-10-01T00:00:00Z'}],prompts=0,writes=0,scheduled=0,refreshed=0;const alerts=[];
  const document={querySelector:selector=>({'#assetForm':form,'#assetDeleteBtn':remove,'#assetSaveBtn':save}[selector])||null};
  // Read-only mode iterates the actual form controls.
  fields[Symbol.iterator]=function*(){yield fields.id};fields.id.dataset={};
- const ctx={document,console,window:{addEventListener(){},SKAdminAuth:{isOwner:()=>owner,user:()=>({username:'admin',name:'Administrador'})},skSyncApi:{schedule(){scheduled++}}},all:async()=>rows,put:async(_,row)=>{writes++;if(fail)throw new Error('Storage failed');rows=[row]},refresh:async()=>{refreshed++},confirm:()=>{prompts++;return confirmed},alert:message=>alerts.push(message)};
+ const ctx={document,console,window:{addEventListener(){},SKAdminAuth:auth||{canManageAssets:()=>owner,user:()=>({username:'admin',name:'Administrador'})},skSyncApi:{schedule(){scheduled++}}},all:async()=>rows,put:async(_,row)=>{writes++;if(fail)throw new Error('Storage failed');rows=[row]},refresh:async()=>{refreshed++},confirm:()=>{prompts++;return confirmed},alert:message=>alerts.push(message)};
  let source=fs.readFileSync(path.join(__dirname,'../asset-admin-ui.js'),'utf8');
  source=source.replace('window.addEventListener(\'load\',',"window.__test={deleteAsset,setAssetMode};window.addEventListener('load',");
  source=source.replace('saved=true;form.reset();form.elements.id.value=\'\';delete form.dataset.autoMarkPolicy;updateAssetFields();',"saved=true;form.reset();form.elements.id.value='';delete form.dataset.autoMarkPolicy;");
  vm.runInNewContext(source,ctx);
  return{run:ctx.window.__test.deleteAsset,mode:ctx.window.__test.setAssetMode,remove,form,rows:()=>rows,stats:()=>({prompts,writes,scheduled,refreshed,alerts})};
 }
-test('eliminar requiere dueño y confirmación; cancelar no cambia datos',async()=>{
+test('eliminar requiere permiso de activos y confirmación; cancelar no cambia datos',async()=>{
  for(const options of [{owner:false},{confirmed:false}]){const ui=deletionUI(options);await ui.run();assert.equal(ui.stats().writes,0);assert.equal(ui.rows()[0].deleted,undefined);}
  const assistant=deletionUI({owner:false});assistant.mode(true);assert.equal(assistant.remove.hidden,true);
  const owner=deletionUI();owner.mode(false);assert.equal(owner.remove.hidden,true);owner.mode(true);assert.equal(owner.remove.hidden,false);
@@ -48,4 +48,26 @@ test('criterio sin serial permite identidad interna sin exigir serial ni marca a
  assert.equal(window.SKAssetRules.hasIdentity({},{CI_USA_SERIAL:false}),true);
  for(const criterion of [{usesSerial:true},{usesSerial:'Sí'},undefined])assert.equal(window.SKAssetRules.hasIdentity({},criterion),false);
  assert.equal(window.SKAssetRules.hasIdentity({serial:'SN-1'},{usesSerial:true}),true);
+});
+
+function adminPermissions(role,{validated=true,token=true}={}){
+ const authWindow={addEventListener(){}},storage={getItem:()=>null,removeItem(){}};
+ const source=fs.readFileSync(path.join(__dirname,'../admin-auth.js'),'utf8').replace('window.SKAdminAuth={',"window.setTestSession=(role,checked,hasToken)=>{user={role,username:'test',name:'Prueba'};validated=checked;token=hasToken?'test':''};window.SKAdminAuth={");
+ vm.runInNewContext(source,{window:authWindow,document:{querySelector:()=>null,addEventListener(){}},sessionStorage:storage,localStorage:storage});
+ authWindow.setTestSession(role,validated,token);return authWindow.SKAdminAuth;
+}
+test('dueño y auxiliar comparten edición y eliminación de activos con sesión válida',async()=>{
+ for(const role of ['owner','assistant']){
+  const auth=adminPermissions(role),ui=deletionUI({auth});assert.equal(auth.canManageAssets(),true);assert.equal(auth.isOwner(),role==='owner');
+  ui.mode(true);assert.equal(ui.remove.hidden,false);assert.notEqual(ui.form.elements.id.disabled,true);
+  await ui.run();assert.equal(ui.stats().writes,1);assert.equal(ui.rows()[0].deletedBy,'test');
+ }
+});
+test('el permiso de activos no cambia el rol ni abre otros módulos; sesiones incompletas no editan',()=>{
+ const auth=adminPermissions('assistant');
+ for(const view of ['inventoryItems','importData','incomes'])assert.equal(auth.canView(view),false,view);
+ assert.equal(auth.canView('assets'),true);assert.equal(auth.isOwner(),false);
+ for(const [role,options] of [['assistant',{validated:false}],['assistant',{token:false}],['plaza_operator',{}],['',{}]]){
+  const access=adminPermissions(role,options),ui=deletionUI({auth:access});assert.equal(access.canManageAssets(),false);ui.mode(true);assert.equal(ui.remove.hidden,true);assert.equal(ui.form.elements.id.disabled,true);
+ }
 });

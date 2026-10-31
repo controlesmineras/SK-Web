@@ -58,7 +58,7 @@ test('la transacción local impide alterar o borrar marcas incluso si falta el m
 });
 function editor(){
  const pending=[],form={dataset:{},elements:Object.fromEntries(['id','nuevaMarca','marcaInterna','marcaAnterior','serial','modelo','fabricante','ubicacion','clase'].map(key=>[key,{value:'anterior'}])),reset(){for(const field of Object.values(this.elements))field.value=''}},button={};
- const ctx=vm.createContext({$:id=>id==='#assetForm'?form:button,all:()=>new Promise(resolve=>pending.push(resolve)),window:{SKAssetAdminUI:{hydrateEdit:async()=>{}},SKAdminAuth:{isOwner:()=>true}}});
+ const ctx=vm.createContext({$:id=>id==='#assetForm'?form:button,all:()=>new Promise(resolve=>pending.push(resolve)),window:{SKAssetAdminUI:{hydrateEdit:async()=>{}},SKAdminAuth:{canManageAssets:()=>true}}});
  const app=read('app.js');vm.runInContext(app.slice(app.indexOf('async function editAsset(id){'),app.indexOf('async function updateNoveltyOptions(){')),ctx);return{ctx,form,button,pending};
 }
 test('abrir fichas rápidamente limpia la identidad y descarta la carga anterior',async()=>{

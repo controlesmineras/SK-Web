@@ -32,16 +32,16 @@ test('una copia antigua no restaura AAS ni elimina o falsifica el registro de co
  s.sync([{...stale,updatedAt:'2099-01-01T00:00:00.000Z',syncState:'pending',markCorrections:[{from:'XXX',to:'YYY'}]}]);
  assert.equal(s.cloud().assets[1].nuevaMarca,'AAU');assert.deepEqual(s.cloud().assets[1].markCorrections,correction);
 });
-test('auxiliares y peticiones con marca desactualizada se rechazan sin escribir',()=>{
- for(const [q,auth] of [[{}, {role:'assistant'}],[{expectedMark:'AAT'},owner],[{expectedMark:''},owner],[{assetId:'missing'},owner]]){
+test('roles ajenos y peticiones con marca desactualizada se rechazan sin escribir',()=>{
+ for(const [q,auth] of [[{}, {role:'plaza_operator'}],[{expectedMark:'AAT'},owner],[{expectedMark:''},owner],[{assetId:'missing'},owner]]){
   const s=backend(),before=s.cloud();assert.throws(()=>s.correct(q,auth));assert.equal(s.writes,0);assert.deepEqual(s.cloud(),before);
  }
 });
 test('la ruta publicada verifica el rol antes de ejecutar la corrección central',()=>{
- const s=backend();s.ctx.PropertiesService={getScriptProperties:()=>({getProperty:()=> 'configured'})};s.ctx.adminUsers_=()=>[owner];s.ctx.verifyAdminToken_=()=>({role:'assistant'});
+ const s=backend();s.ctx.PropertiesService={getScriptProperties:()=>({getProperty:()=> 'configured'})};s.ctx.adminUsers_=()=>[owner];s.ctx.verifyAdminToken_=()=>({role:'plaza_operator'});
  const event={postData:{contents:JSON.stringify({action:'adminCorrectAssetMark',assetId:'makita-120800',expectedMark:'AAS',token:'test'})}};
  assert.equal(s.ctx.doPost(event).ok,false);assert.equal(s.writes,0);
- s.ctx.verifyAdminToken_=()=>owner;assert.equal(s.ctx.doPost(event).asset.nuevaMarca,'AAU');assert.equal(s.writes,1);
+ s.ctx.verifyAdminToken_=()=>({role:'assistant',username:'aux',name:'Auxiliar'});const result=s.ctx.doPost(event);assert.equal(result.asset.nuevaMarca,'AAU');assert.equal(result.correction.by,'aux');assert.equal(s.writes,1);
 });
 test('no remarca un activo único, eliminado o de una clase excluida',()=>{
  for(const seed of [{assets:[target()],assetMarkRegistry:[mark('makita-120800','AAS',18)]},{assets:[other(),{...target(),deleted:true}]},{assets:[other(),{...target(),clase:'Autorrescatador'}]}]){
@@ -72,7 +72,7 @@ function client({ownerAccess=true,online=true,dirty=false,duplicate=true,confirm
  const label=element(),form={elements:{id:{value:'makita-120800'},nuevaMarca:{closest:()=>label},marcaInterna:{}},dataset:dirty?{historyEditRevision:'1'}:{}};
  nodes.set('#assetForm',form);
  const document={head:element(),body:element(),querySelector:key=>nodes.get(key)||null,createElement(tag){const node=element();if(tag==='dialog'){const parts=new Map(['h2','#assetMarkMessage','#assetMarkCards','button'].map(key=>[key,element()]));node.querySelector=key=>parts.get(key)}return node}};
- const window={SKAdminAuth:{isOwner:()=>ownerAccess,request:async(action,q)=>{calls.push({action,q});if(oldBackend)throw Error('Solicitud no válida');if(lostResponse)throw Error('Tiempo de espera');const correction={from:'AAS',to:'AAU',at:date,by:'test'};const asset={...rows[1],id:'makita-120800',nuevaMarca:'AAU',marcaActual:'AAU',marcaInterna:'AAU',markCorrections:[correction]};rows=rows.map(row=>row.id===asset.id?asset:row);return {ok:true,asset,correction}}},skSyncApi:{configured:()=>true,sync:async()=>{syncs++;return !(failRefresh&&syncs===2)},schedule(){}},addEventListener(){}};
+ const window={SKAdminAuth:{canManageAssets:()=>ownerAccess,request:async(action,q)=>{calls.push({action,q});if(oldBackend)throw Error('Solicitud no válida');if(lostResponse)throw Error('Tiempo de espera');const correction={from:'AAS',to:'AAU',at:date,by:'test'};const asset={...rows[1],id:'makita-120800',nuevaMarca:'AAU',marcaActual:'AAU',marcaInterna:'AAU',markCorrections:[correction]};rows=rows.map(row=>row.id===asset.id?asset:row);return {ok:true,asset,correction}}},skSyncApi:{configured:()=>true,sync:async()=>{syncs++;return !(failRefresh&&syncs===2)},schedule(){}},addEventListener(){}};
  const ctx={window,document,location:{pathname:'/SK-Web/'},navigator:{onLine:online},localStorage:{getItem:()=>null,setItem(){}},all:async()=>clone(rows),put:async()=>{throw Error('La corrección no debe escribir copias locales parciales')},alert:message=>alerts.push(message),confirm:message=>{confirmations.push(message);return confirmed},console:{error(){}}};
  vm.runInNewContext(read('asset-marking.js'),ctx);
  return{api:window.SKAssetMarking,button:()=>nodes.get('#assetRequestMarkBtn'),note:()=>nodes.get('#assetMarkCorrectionNote'),calls,alerts,confirmations,get syncs(){return syncs}};
@@ -82,7 +82,7 @@ test('el dueño ve Corregir marca duplicada con el campo protegido y la correcci
  assert.equal(await c.api.correctDuplicate('makita-120800'),true);await c.api.refreshRequestButton();
  assert.deepEqual(clone(c.calls),[{action:'adminCorrectAssetMark',q:{assetId:'makita-120800',expectedMark:'AAS'}}]);assert.match(c.confirmations[0],/MAKITA.*120800/);assert.equal(c.syncs,2);assert.equal(c.button().hidden,true);assert.match(c.note().textContent,/AAS → AAU/);
 });
-test('no ofrece la corrección sin duplicado ni a auxiliares',async()=>{
+test('no ofrece la corrección sin duplicado ni sin permiso de activos',async()=>{
  for(const options of [{duplicate:false},{ownerAccess:false}]){const c=client(options);await c.api.refreshRequestButton();assert.equal(c.button().hidden,true);assert.equal(await c.api.correctDuplicate('makita-120800'),false);assert.equal(c.calls.length,0)}
 });
 test('sin conexión, cambios sin guardar o cancelación no modifican el registro central',async()=>{

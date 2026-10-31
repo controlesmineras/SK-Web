@@ -84,3 +84,9 @@ Code.gs aplica la misma validación para administrador, auxiliar e ingresos de P
 La ficha incluye «¿Tiene marca anterior?», desmarcada al crear un activo. Al marcarla muestra MARCA ANTERIOR y exige un valor no vacío; al desmarcarla oculta el campo y permite guardar sin marca anterior. Desmarcar y volver a marcar conserva el texto en curso; guardar desmarcado elimina ese valor de la ficha. Al editar, una marca anterior existente activa la casilla automáticamente. Los auxiliares conservan la consulta sin edición.
 
 Se utiliza el campo existente `marcaPrevia`; el estado de la casilla se deduce de su contenido y no agrega campos al servidor. No altera el número de marca actual de YT/columnas ni la regla del serial. Esta casilla no requiere otro cambio en Code.gs; sigue pendiente aplicar la versión del servidor indicada en el ajuste anterior de serial.
+
+## Permisos de auxiliares en Activos fijos
+
+Administrador y auxiliares pueden crear, editar y eliminar fichas, corregir la fecha de ingreso, gestionar accesorios, solicitar marca nueva y corregir marcas duplicadas. Las validaciones de seriales, marcas, duplicados y conservación de historial se mantienen. Los permisos de otros módulos y la administración de usuarios siguen siendo los existentes.
+
+Para activar los permisos centrales, reemplazar `backend/apps-script/Code.gs` y publicar una nueva versión de la implementación existente de Apps Script, conservando la URL. Publicar GitHub Pages solo actualiza el cliente. Después, usar **Actualizar app** en los dispositivos.

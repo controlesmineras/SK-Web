@@ -58,6 +58,8 @@ function adminBootstrap_(q){const lock=LockService.getScriptLock();lock.waitLock
 function adminLogin_(q){const username=validAdminUsername_(q.username),password=String(q.password||''),user=adminUsers_().find(x=>x.username===username&&x.enabled!==false);if(!user||!safeEqual_(String(user.passwordHash||''),hashPin_(username,password)))throw new Error('Usuario o contraseña incorrectos');return adminSession_(user)}
 function adminSession_(user){const expires=Date.now()+12*60*60*1000,payload=[user.username,user.role==='owner'?'owner':'assistant',expires].join('|'),token=Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload);return json_({ok:true,token:token,user:publicAdminUser_(user),expiresAt:new Date(expires).toISOString()})}
 function verifyAdminToken_(token){const bits=String(token||'').split('.');if(bits.length!==2)throw new Error('Inicia sesión en Web Admin');const payload=Utilities.newBlob(Utilities.base64DecodeWebSafe(bits[0])).getDataAsString(),parts=payload.split('|');if(parts.length!==3||!safeEqual_(bits[1],sign_(payload))||Number(parts[2])<Date.now())throw new Error('La sesión de Web Admin venció');const user=adminUsers_().find(x=>x.username===parts[0]&&x.enabled!==false);if(!user||!['owner','assistant'].includes(parts[1])||parts[1]!==user.role)throw new Error('La cuenta ya no tiene acceso a Web Admin');return{username:user.username,name:user.name||user.username,role:user.role}}
+function canManageAssets_(auth){return Boolean(auth&&['owner','assistant'].includes(auth.role))}
+function requireAssetManager_(auth){if(!canManageAssets_(auth))throw new Error('Inicia sesión en Web Admin para administrar activos fijos')}
 function requireOwner_(auth){if(!auth||auth.role!=='owner')throw new Error('Esta operación requiere el rol Administrador principal')}
 function adminUsersList_(){return json_({ok:true,users:adminUsers_().map(publicAdminUser_)})}
 function adminUserSave_(q){
@@ -165,7 +167,7 @@ function assignAssetMarks_(cloud,rows,requestAuth){
   if(old&&Array.isArray(old.markCorrections))asset.markCorrections=old.markCorrections;else delete asset.markCorrections;
   let entry=byId.get(asset.id);
   const requested=asset.markingPolicy==='letters-v1',eligible=usesAutomaticAssetMark_(asset);
-  const existingRequest=!!(old&&asset.markRequest==='existing-v1'&&requestAuth&&requestAuth.role==='owner'&&!old.deleted&&!String(old.nuevaMarca||'').trim()&&usesAutomaticAssetMark_(old)&&eligible);
+  const existingRequest=!!(old&&asset.markRequest==='existing-v1'&&canManageAssets_(requestAuth)&&!old.deleted&&!String(old.nuevaMarca||'').trim()&&usesAutomaticAssetMark_(old)&&eligible);
   // Un cliente antiguo o una edición no puede borrar/cambiar una marca ya emitida.
   if(!entry&&old&&old.markingPolicy==='letters-v1'&&old.markStatus==='assigned'&&/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(old.nuevaMarca||'')){
    entry={id:old.id,code:old.nuevaMarca,sequence:old.markSequence,issuedAt:old.markAssignedAt,...(old.markScheme==='mine-prefix-v1'?{scheme:old.markScheme,prefix:old.markPrefix,mine:old.markMine}:{})};registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);next=Math.max(next,sequenceOf(entry)+1);
@@ -222,7 +224,7 @@ function assignAssetMarks_(cloud,rows,requestAuth){
 }
 
 function adminCorrectAssetMark_(q,auth){
- requireOwner_(auth);
+ requireAssetManager_(auth);
  const assetId=String(q.assetId||'').trim(),expectedMark=String(q.expectedMark||'').trim().toUpperCase();
  if(!assetId||!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(expectedMark))throw new Error('Selecciona el activo y la marca duplicada que deseas corregir.');
  const lock=LockService.getScriptLock();lock.waitLock(30000);
@@ -264,8 +266,8 @@ function completePendingAssetMarks_(cloud){
  return true;
 }
 
-// Las altas del auxiliar se validan en el servidor; las fichas existentes siguen
-// protegidas. La huella permite reintentar un alta sin sobrescribir cambios posteriores.
+// Las altas del auxiliar se validan en el servidor. La huella permite reintentar
+// un alta sin sobrescribir cambios posteriores; las ediciones se aceptan por separado.
 function assistantAssetFingerprint_(row,includeAccessories=true,includeSerialStatus=true){
  const fields=['id','clase','numeroYT','numeroClase','modelo','fabricante','serial','estadoVisor','largo','marcada','mina','fechaIngreso','fechaNovedad','horaNovedad','descripcionNovedad','documentoResponsable','nombreResponsable','documentoBodeguero','nombreBodeguero','ubicacion','estado','disponibleEntrega','asignadaId','observaciones','marcaAnterior','numeroMarcaActual','createdAt','deleted'];
  if(row.classNumberPolicy==='auto-v1'){for(const field of ['numeroYT','numeroClase']){const index=fields.indexOf(field);if(index>=0)fields.splice(index,1)}}
@@ -295,7 +297,8 @@ function prepareAssistantAsset_(row,cloud,known,auth){
  return asset;
 }
 
-// El auxiliar puede crear activos; actualiza el estado de los existentes mediante novedades.
+// El auxiliar administra las fichas de activos. Las restricciones de novedades
+// existentes se conservan y sus cambios de estado se aplican sobre la ficha enviada.
 function prepareAdminNovelties_(incoming,cloud,auth){
  const pending=name=>(Array.isArray(incoming[name])?incoming[name]:[]).filter(row=>row&&row.id&&row.syncState==='pending');
  const novelties=pending('novelties'),assets=pending('assets'),limited=auth&&auth.role!=='owner';
@@ -309,12 +312,12 @@ function prepareAdminNovelties_(incoming,cloud,auth){
   assetIds.add(row.id);
   const previous=assetMap.get(row.id);
   if(!previous){const created=prepareAssistantAsset_(row,cloud,assetMap,auth);assetMap.set(row.id,created);patches.set(row.id,created);return;}
-  if(previous.registeredBy===auth.username&&previous.registrationFingerprint){
+  if(row.markRequest!=='existing-v1'&&stamp_(row)<=stamp_(previous)&&previous.registeredBy===auth.username&&previous.registrationFingerprint){
    const sameAccessories=JSON.stringify([previous.hasAccessories??null,previous.accessories||[]])===JSON.stringify([row.hasAccessories??null,row.accessories||[]]);
    const sameSerialStatus=String(previous.serialStatus||'')===String(row.serialStatus||'');
    if(previous.registrationFingerprint===assistantAssetFingerprint_(row)||(sameAccessories&&previous.registrationFingerprint===assistantAssetFingerprint_(row,false))||(sameSerialStatus&&(previous.registrationFingerprint===assistantAssetFingerprint_(row,true,false)||(sameAccessories&&previous.registrationFingerprint===assistantAssetFingerprint_(row,false,false)))))return;
   }
-  if(!novelties.some(novelty=>novelty.assetId===row.id))throw new Error('Tu rol solo permite agregar activos nuevos; modifica su estado mediante una novedad');
+  patches.set(row.id,row);
  });
  novelties.slice().sort((a,b)=>stamp_(a)-stamp_(b)).forEach(row=>{
   const asset=assetMap.get(row.assetId)||(!limited&&assets.find(item=>item.id===row.assetId));
@@ -414,7 +417,7 @@ function adminSync_(incoming,since,auth){
   Object.keys(incoming||{}).forEach(name=>{if(name==='schema'||name==='updatedAt'||!Array.isArray(incoming[name]))return;changes[name]=incoming[name].filter(x=>x&&x.id&&x.syncState==='pending').map(x=>Object.assign({},x,{syncState:'synced'}))});
   // Una solicitud de marca solo cambia la marcación. Un dispositivo atrasado no
   // puede reemplazar ubicación, serial u otros datos más recientes de la ficha.
-  if(auth&&auth.role==='owner'&&changes.assets)changes.assets=changes.assets.map(row=>{
+  if(canManageAssets_(auth)&&changes.assets)changes.assets=changes.assets.map(row=>{
    if(row.markRequest!=='existing-v1'||row.markStatus!=='pending')return row;
    const old=(cloud.assets||[]).find(asset=>asset&&asset.id===row.id);
    if(!old)throw new Error('Sincroniza primero el activo registrado antes de solicitar su marca.');

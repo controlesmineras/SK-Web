@@ -41,9 +41,10 @@ test('una solicitud desde un equipo atrasado conserva la ficha más reciente de 
  s.sync([request(stale)]);const saved=s.cloud().assets[0];
  assert.equal(saved.nuevaMarca,'AAA');assert.equal(saved.serial,current.serial);assert.equal(saved.ubicacion,'Mina');assert.equal(saved.observaciones,current.observaciones);
 });
-test('solicitudes de auxiliares no pueden alterar fichas existentes ni asignar marcas',()=>{
- const old=legacy(),s=backend([old]),before=s.cloud();
- assert.throws(()=>s.sync([request(old)],'assistant'));assert.deepEqual(s.cloud(),before);
+test('auxiliar solicita marca sin reemplazar la ficha más reciente y el reintento no consume otra marca',()=>{
+ const old=legacy(),current={...old,serial:'CORREGIDO',updatedAt:'2026-10-22T14:00:00Z'},s=backend([current]);
+ s.sync([request(old)],'assistant');s.sync([request(old)],'assistant');
+ assert.equal(s.cloud().assets[0].nuevaMarca,'AAA');assert.equal(s.cloud().assets[0].serial,'CORREGIDO');assert.equal(s.cloud().assetMarkRegistry.length,1);
 });
 test('las excepciones de clase y los activos eliminados no reciben marca',()=>{
  for(const extra of [{clase:'YT'},{clase:'Columna',serial:''},{clase:'Autorrescatador'},{deleted:true}]){
@@ -82,7 +83,7 @@ function markClient(initial=legacy(),{owner=true,dirty=false}={}){
  const label=element(),form={elements:{id:{value:row.id},nuevaMarca:{closest:()=>label},marcaInterna:{}},dataset:dirty?{historyEditRevision:'1'}:{}};
  nodes.set('#assetForm',form);
  const document={head:element(),body:element(),querySelector:q=>nodes.get(q)||null,createElement(tag){const node=element();if(tag==='dialog'){const parts=new Map(['h2','#assetMarkMessage','#assetMarkCards','button'].map(key=>[key,element()]));node.querySelector=q=>parts.get(q);}return node}};
- const window={SKAdminAuth:{isOwner:()=>owner},skSyncApi:{configured:()=>false,schedule(){}},addEventListener(){}};
+ const window={SKAdminAuth:{canManageAssets:()=>owner},skSyncApi:{configured:()=>false,schedule(){}},addEventListener(){}};
  const context={window,document,location:{pathname:'/SK-Web/'},navigator:{onLine:false},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},all:async()=>[clone(row)],put:async(_,value)=>{writes++;row=clone(value)},alert:value=>alerts.push(value),console};
  vm.runInNewContext(read('asset-marking.js'),context);
  return{api:window.SKAssetMarking,alerts,form,rows:()=>row,get writes(){return writes},button:()=>nodes.get('#assetRequestMarkBtn')};

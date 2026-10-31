@@ -11,18 +11,18 @@ function service(){
  return{sync:(data,role='assistant')=>context.adminSyncAuthorized_(clone(data),cloud.updatedAt,{role,username:'tester',name:'Prueba'}),cloud:()=>clone(cloud)};
 }
 const novelty=(extra={})=>({id:'n1',assetId:'ar',descripcion:'Cambio de color del visor',estadoVisor:'Negro',estadoVisorAnterior:'Azul celeste',ubicacion:'Bodega',estado:'Pendiente de inspección',createdAt:'2026-10-02T10:00:00Z',updatedAt:'2026-10-02T10:00:00Z',syncState:'pending',...extra});
-test('auxiliar sincroniza color e historial sin permiso general sobre la ficha',()=>{
+test('auxiliar sincroniza color e historial junto con una edición de ficha autorizada',()=>{
  const s=service(),asset=s.cloud().assets[0];
  const result=s.sync({novelties:[novelty()],assets:[{...asset,estadoVisor:'Negro',serial:'NO CAMBIAR',syncState:'pending'}]});
- assert.equal(result.ok,true);assert.ok(result.data);assert.equal(s.cloud().assets[0].estadoVisor,'Negro');assert.equal(s.cloud().assets[0].serial,'S-123');assert.equal(s.cloud().novelties[0].estadoVisorAnterior,'Azul celeste');assert.equal(s.cloud().novelties[0].registeredBy,'tester');
+ assert.equal(result.ok,true);assert.ok(result.data);assert.equal(s.cloud().assets[0].estadoVisor,'Negro');assert.equal(s.cloud().assets[0].serial,'NO CAMBIAR');assert.equal(s.cloud().novelties[0].estadoVisorAnterior,'Azul celeste');assert.equal(s.cloud().novelties[0].registeredBy,'tester');
 });
 test('ambos roles rechazan color en otra clase, color vacío y tipo equivocado',()=>{
  for(const role of ['owner','assistant'])for(const extra of [{assetId:'yt'},{estadoVisor:''},{descripcion:'Revista física'}]){
   const s=service();assert.throws(()=>s.sync({novelties:[novelty(extra)]},role));assert.equal(s.cloud().novelties.length,0);
  }
 });
-test('auxiliar rechaza altas incompletas, fichas sin novedad y otros catálogos',()=>{
- for(const data of [{assets:[{id:'new',syncState:'pending'}]},{assets:[{id:'ar',estadoVisor:'Blanco',syncState:'pending'}]},{inventoryCriteria:[{id:'catalog',syncState:'pending'}]}])assert.throws(()=>service().sync(data));
+test('auxiliar rechaza altas incompletas y otros catálogos',()=>{
+ for(const data of [{assets:[{id:'new',syncState:'pending'}]},{inventoryCriteria:[{id:'catalog',syncState:'pending'}]}])assert.throws(()=>service().sync(data));
 });
 test('reintentar no duplica la novedad ni revierte un color más reciente',()=>{
  const s=service(),first=novelty(),later=novelty({id:'n2',estadoVisor:'Amarillo',estadoVisorAnterior:'Negro',createdAt:'2026-10-02T11:00:00Z',updatedAt:'2026-10-02T11:00:00Z'});
