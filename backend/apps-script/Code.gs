@@ -570,6 +570,12 @@ function applyPlazaChanges_(cloud,incoming,auth){
         if(!Number.isFinite(qty)||!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');
         const isReturn=row.movementType==='DEVOLUCIÓN';
         if(isReturn&&(name!=='blendingDeliveries'||!row.loanId))throw new Error('Retorno de elementos incompleto');
+        if(row.bringsReplacement==='first-delivery'){
+          const criterion=(cloud.inventoryCriteria||[]).find(item=>item?.id===row.itemId&&!item.deleted&&item.active!==false);
+          const fixed=truthy_(criterion?.isFixedAsset??criterion?.esActivoFijo??criterion?.fixedAsset??criterion?.CI_ES_A_FIJO);
+          if(name!=='blendingDeliveries'||isReturn||row.assetId||fixed||criterion?.isEpp!==true||
+             cargoNorm_(row.deliveryType)==='prestamo')delete row.bringsReplacement;
+        }
         if(name==='blendingDeliveries'&&!isReturn&&cargoNorm_(row.deliveryType)==='prestamo'){
           const criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===row.itemId&&!item.deleted&&item.active!==false);
           if(!criterion||!truthy_(criterion.allowLoan))throw new Error('El elemento no permite préstamos en Criterios de inventario');

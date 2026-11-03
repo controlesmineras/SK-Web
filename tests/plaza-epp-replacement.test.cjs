@@ -3,7 +3,7 @@ const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('nod
 const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8'),clone=x=>JSON.parse(JSON.stringify(x));
 const seed=()=>({personal:[{id:'person',nombre:'Persona de prueba',documento:'123'}],assets:[],inventoryCriteria:[{id:'gloves',name:'Guantes',isEpp:true,unit:'Par'},{id:'helmet',name:'Casco',isEpp:true,unit:'Unidad'},{id:'tool',name:'Herramienta',isEpp:false}],inventoryStock:['gloves','helmet','tool'].map(itemId=>({id:'stock-'+itemId,itemId,quantity:10})),blendingDeliveries:[],blendingIncomes:[]});
 function client(){
- const nodes=new Map(),storage=new Map(),alerts=[],inputs=['yes','no'].map(value=>({value,checked:false,required:false}));
+ const nodes=new Map(),storage=new Map(),alerts=[],inputs=['yes','no','first'].map(value=>({value,checked:false,required:false}));
  const field={dataset:{},style:{},hidden:true,disabled:true,querySelectorAll:()=>inputs};
  const button={disabled:false},form={elements:Object.fromEntries(['itemId','assetId','quantity','destination','destinationLevel','notes','recipientId','recipientCompany'].map(name=>[name,{value:'',dataset:{}}])),querySelector:()=>button};
  form.elements.quantity.value='1';form.elements.recipientId.value='person';form.elements.recipientCompany.value='SK';
@@ -37,21 +37,21 @@ test('batch validation blocks an unanswered EPP before changing stock or saving'
  const c=client(),before=clone(c.api.get());c.api.prepare([{itemId:'gloves',itemName:'Guantes',quantity:1}]);assert.equal(await c.api.save(),false);assert.deepEqual(clone(c.api.get()),before);assert.equal(c.storage.size,0);assert.match(c.alerts.at(-1),/TRAE REPOSICIÓN/);
  c.api.prepare([]);c.select('gloves');assert.equal(await c.api.save(),false);assert.deepEqual(clone(c.api.get()),before);
 });
-test('mixed batch persists boolean NO offline and through the real sync merge',async()=>{
- const c=client();for(const [id,answer] of [['gloves','yes'],['helmet','no'],['tool',null]]){c.select(id);if(answer)c.answer(answer);c.api.add()}
+test('mixed batch persists all three answers offline and through the real sync merge',async()=>{
+ const c=client();for(const [id,answer] of [['gloves','yes'],['helmet','no'],['gloves','first'],['tool',null]]){c.select(id);if(answer)c.answer(answer);c.api.add()}
  assert.equal(await c.api.save(),true);const local=JSON.parse(c.storage.get('skPlazaData'));
- assert.deepEqual(local.blendingDeliveries.map(r=>r.bringsReplacement),[true,false,undefined]);assert.ok(local.inventoryStock.every(r=>r.quantity===9));
+ assert.deepEqual(local.blendingDeliveries.map(r=>r.bringsReplacement),[true,false,'first-delivery',undefined]);assert.deepEqual(local.inventoryStock.map(r=>r.quantity),[8,9,9]);
  let cloud=seed();const ctx=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}});vm.runInContext(read('backend/apps-script/Code.gs'),ctx);
  ctx.findFile_=()=> 'file';ctx.readFile_=()=>clone(cloud);ctx.writeFile_=(_,next)=>{cloud=clone(next)};ctx.json_=clone;ctx.verifyToken_=()=>({document:'operator',role:'plaza_operator'});
- const sync=()=>ctx.plazaSync_({token:'test',syncProtocol:'plaza-receipts-v1',data:{blendingDeliveries:clone(local.blendingDeliveries)}});
- sync();sync();assert.deepEqual(cloud.blendingDeliveries.map(r=>r.bringsReplacement),[true,false,undefined]);assert.ok(cloud.inventoryStock.every(r=>r.quantity===9));
+ const sync=()=>ctx.plazaSync_({token:'test',syncProtocol:'plaza-receipts-v1',data:{blendingDeliveries:clone(local.blendingDeliveries).map(row=>row.itemId==='tool'?{...row,bringsReplacement:'first-delivery'}:row)}});
+ sync();sync();assert.deepEqual(cloud.blendingDeliveries.map(r=>r.bringsReplacement),[true,false,'first-delivery',undefined]);assert.deepEqual(cloud.inventoryStock.map(r=>r.quantity),[8,9,9]);
 });
 test('old records stay unrecorded, and queries and exports preserve the answer',async()=>{
- const c=client(),date=new Date().toISOString(),rows=[true,false,undefined].map((answer,i)=>({id:'r'+i,itemId:'gloves',itemName:'Guantes',recipientId:'person',quantity:1,createdAt:date,...(answer===undefined?{}:{bringsReplacement:answer})}));
- c.api.get().blendingDeliveries=rows;assert.deepEqual(rows.map(c.api.label),['SÍ','NO','Sin registrar']);assert.equal(c.api.label({itemId:'tool'}),'');assert.equal(c.api.label({itemId:'gloves',queryType:'INGRESO'}),'');assert.equal(c.api.label({itemId:'gloves',movementType:'DEVOLUCIÓN'}),'');
- assert.deepEqual(rows.map(r=>c.api.report(r).reposicion),['SÍ','NO','Sin registrar']);for(const row of rows)assert.match(c.api.card({...row,queryType:'ENTREGA'}),/Trae reposición:/);
- c.api.excel();let text=await c.ctx.window.lastDownload.blob.text();assert.match(text,/TRAE REPOSICIÓN/);assert.match(text,/>NO<\/Data>/);assert.match(text,/>Sin registrar<\/Data>/);
- c.api.pdf();text=await c.ctx.window.lastDownload.blob.text();assert.match(text,/Trae reposici/);assert.match(text,/NO/);assert.equal(Object.hasOwn(rows[2],'bringsReplacement'),false);
+ const c=client(),date=new Date().toISOString(),rows=[true,false,undefined,'first-delivery'].map((answer,i)=>({id:'r'+i,itemId:'gloves',itemName:'Guantes',recipientId:'person',quantity:1,createdAt:date,...(answer===undefined?{}:{bringsReplacement:answer})}));
+ c.api.get().blendingDeliveries=rows;assert.deepEqual(rows.map(c.api.label),['SÍ','NO','Sin registrar','PRIMERA ENTREGA']);assert.equal(c.api.label({itemId:'tool'}),'');assert.equal(c.api.label({itemId:'gloves',queryType:'INGRESO'}),'');assert.equal(c.api.label({itemId:'gloves',movementType:'DEVOLUCIÓN'}),'');
+ assert.deepEqual(rows.map(r=>c.api.report(r).reposicion),['SÍ','NO','Sin registrar','PRIMERA ENTREGA']);for(const row of rows)assert.match(c.api.card({...row,queryType:'ENTREGA'}),/Trae reposición:/);
+ c.api.excel();let text=await c.ctx.window.lastDownload.blob.text();assert.match(text,/TRAE REPOSICIÓN/);assert.match(text,/>NO<\/Data>/);assert.match(text,/>Sin registrar<\/Data>/);assert.match(text,/>PRIMERA ENTREGA<\/Data>/);
+ c.api.pdf();text=await c.ctx.window.lastDownload.blob.text();assert.match(text,/Trae reposici/);assert.match(text,/NO/);assert.match(text,/PRIMERA\) Tj ET\n[^\n]*\(ENTREGA\)/);assert.equal(Object.hasOwn(rows[2],'bringsReplacement'),false);
 });
 
 test('loans hide and clear replacement controls and exclude EPP even if the criterion enables loans',()=>{

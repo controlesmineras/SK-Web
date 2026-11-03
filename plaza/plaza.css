@@ -56,6 +56,8 @@
 .inventoryQuery .queryDeliveryDetails>.recentMovementList{margin:0}
 
 /* Opciones compactas de empresa y reposición, con área táctil de 44 px. */
+#deliveryForm #deliveryReplacementField{width:min(100%,420px);flex-wrap:wrap}
+#deliveryForm #deliveryReplacementField label:has(input[value="first"]){flex:2 0 158px}
 #deliveryReplacementField[hidden]{display:none!important}
 #deliveryForm .recipientCompany label[hidden]{display:none!important}
 #deliveryAssetSearchMenu button{grid-template-columns:minmax(0,1fr)}
