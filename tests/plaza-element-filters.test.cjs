@@ -56,7 +56,7 @@ test('cards, Excel and PDF share the selected rows and retain reversal informati
   c.api.excel(kind);const excel=c.downloads.at(-1),xml=await excel.blob.text();
   assert.match(excel.name,/_barreno_4_ft\.xls$/);assert.equal((xml.match(/<Row[ >]/g)||[]).length,c.api.rows(kind).length+1);
   assert.match(xml,new RegExp(kind+'-start'));assert.match(xml,new RegExp(kind+'-end'));assert.doesNotMatch(xml,new RegExp(kind+'-other'));assert.doesNotMatch(xml,new RegExp(kind+'-old'));assert.doesNotMatch(xml,new RegExp(kind+'-deleted'));assert.match(xml,/REVERSADO/);
-  if(kind==='income'){assert.match(xml,/QUIÉN TRAE/);assert.match(xml,/RECIBIÓ/);assert.match(xml,/Persona de prueba/);assert.doesNotMatch(xml,/TRAE REPOSICIÓN/)}
+  if(kind==='income'){assert.match(xml,/QUIÉN TRAE/);assert.match(xml,/REGISTRADO POR/);assert.match(xml,/BODEGUERO\/A DE TURNO/);assert.match(xml,/Persona de prueba/);assert.doesNotMatch(xml,/TRAE REPOSICIÓN/)}
   c.api.pdf(kind);const pdf=c.downloads.at(-1),text=await pdf.blob.text();assert.match(pdf.name,/_barreno_4_ft\.pdf$/);assert.ok(text.startsWith('%PDF-1.4'));assert.match(text,new RegExp('REGISTROS: '+c.api.rows(kind).length));assert.match(text,/BARRENO 4 FT/);assert.doesNotMatch(text,new RegExp(kind+'-other'));assert.match(text,/REVERSADO/);
   if(process.env.PLAZA_QA_OUTPUT){fs.mkdirSync(process.env.PLAZA_QA_OUTPUT,{recursive:true});fs.writeFileSync(path.join(process.env.PLAZA_QA_OUTPUT,pdf.name),Buffer.from(await pdf.blob.arrayBuffer()));fs.writeFileSync(path.join(process.env.PLAZA_QA_OUTPUT,excel.name),xml)}
  }
