@@ -70,7 +70,7 @@
     $('#assetReturnCount').textContent = `${count} ${count === 1 ? 'préstamo pendiente' : 'préstamos pendientes'} · Sin límite de fecha`;
     host.innerHTML = rows.map(({loan, state}) => {
       const person = people.get(loan.recipientId), back = returned(data, loan);
-      return `<article class="assetReturnCard"><div><b>${esc(loanLabel(data, loan))}</b><span>Prestado a: ${esc(person?.nombre || loan.recipientName || 'No informado')}</span><span>Documento: ${esc(person?.documento || loan.recipientDocument || 'No informado')}</span><span>Préstamo: ${esc(dateLabel(loan.createdAt))}</span>${loan.assetId ? '' : `<span>Cantidad: ${esc(loan.quantity)} ${esc(loan.unit || 'Unidad')}</span>`}<strong class="loanState">${state}</strong>${back ? `<span>Devolución: ${esc(dateLabel(back.returnedAt || back.createdAt))}</span><span>Devuelve: ${esc(back.returnedByName || back.returnedByDocument)}</span><span>Recibe: ${esc(back.operatorName || back.actorDocument || back.operatorDocument)}</span>${back.notes ? `<span>Observaciones: ${esc(back.notes)}</span>` : ''}<span>${back.syncState === 'pending' ? 'Pendiente de sincronizar' : 'Sincronizado'}</span>` : state === 'REVISAR' ? '<span>El activo tiene otro movimiento o ubicación. Sincroniza y revisa su historial.</span>' : ''}</div>${!readOnly && state === 'PENDIENTE' ? `<button type="button" data-return-loan="${esc(loan.id)}">RETORNAR ELEMENTOS</button>` : ''}</article>`;
+      return `<article class="assetReturnCard"><div><b>${esc(loanLabel(data, loan))}</b><span>Prestado a: ${esc(person?.nombre || loan.recipientName || 'No informado')}</span><span>Documento: ${esc(person?.documento || loan.recipientDocument || 'No informado')}</span><span>Préstamo: ${esc(dateLabel(loan.createdAt))}</span>${loan.assetId ? '' : `<span>Cantidad: ${esc(loan.quantity)} ${esc(loan.unit || 'Unidad')}</span>`}<strong class="loanState">${state}</strong>${back ? `<span>Devolución: ${esc(dateLabel(back.returnedAt || back.createdAt))}</span><span>Devuelve: ${esc(back.returnedByName || back.returnedByDocument)}</span><span>Bodeguero/a de turno: ${esc(back.shiftKeeperName || 'Sin dato histórico')}</span><span>Registrado por: ${esc(back.operatorName || back.actorDocument || back.operatorDocument)}</span>${back.notes ? `<span>Observaciones: ${esc(back.notes)}</span>` : ''}<span>${back.syncState === 'pending' ? 'Pendiente de sincronizar' : 'Sincronizado'}</span>` : state === 'REVISAR' ? '<span>El activo tiene otro movimiento o ubicación. Sincroniza y revisa su historial.</span>' : ''}</div>${!readOnly && state === 'PENDIENTE' ? `<button type="button" data-return-loan="${esc(loan.id)}">RETORNAR ELEMENTOS</button>` : ''}</article>`;
     }).join('') || '<p class="permission">No hay préstamos que coincidan con esta búsqueda.</p>';
     if (selectedId) {
       const selected = loans(data).find(row => row.id === selectedId);
@@ -105,7 +105,8 @@
     try {
       const app = window.SKPlaza, data = app.getData();
       const person = (data.personal || []).find(row => !row.deleted && personLabel(row) === form.elements.returnedBy.value.trim());
-      const row = createReturn(data, selectedId, {returnedById:person?.id, returnedAt:form.elements.returnedAt.value, notes:form.elements.notes.value}, app.getUser());
+      const shift = app.movementShift();
+      const row = {...createReturn(data, selectedId, {returnedById:person?.id, returnedAt:form.elements.returnedAt.value, notes:form.elements.notes.value}, app.getUser()), ...shift};
       const next = JSON.parse(JSON.stringify(data));
       next.blendingDeliveries.push(row);
       if (row.assetId) {
