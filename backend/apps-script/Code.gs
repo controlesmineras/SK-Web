@@ -14,7 +14,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='adminUsersList'){requireOwner_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireOwner_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireOwner_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireOwner_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireOwner_(auth);return plazaUserAdmin_(q)}if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireOwner_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireOwner_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='adminUsersList'){requireOwner_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireOwner_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireOwner_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireOwner_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireOwner_(auth);return plazaUserAdmin_(q)}if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireOwner_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireOwner_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Invitaciones de un solo uso: el enlace contiene un secreto aleatorio, nunca una contraseña.
 function invitationKey_(token){return 'SK_INVITE_'+hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token),Utilities.Charset.UTF_8))}
@@ -432,6 +432,36 @@ function adminSync_(incoming,since,auth){
   const merged=merge_(cloud,changes);if(marking.registry.length)merged.assetMarkRegistry=marking.registry;writeFile_(id,merged);
   if(!recovered&&since&&baseUpdatedAt===since&&!marking.changed&&!marking.assets.some(asset=>asset.markingPolicy==='letters-v1'))return json_({ok:true,capabilities:collaboratorSyncCapabilities_(),acknowledged:true,updatedAt:merged.updatedAt});
   return json_({ok:true,capabilities:collaboratorSyncCapabilities_(),data:merged,updatedAt:merged.updatedAt});
+ }finally{lock.releaseLock()}
+}
+
+function adminSetInventoryQuantity_(q,auth){
+ if(!['owner','assistant'].includes(auth.role))throw new Error('Tu rol no permite editar cantidades.');
+ const itemId=String(q.itemId||'').trim(),quantity=q.quantity;
+ if(!itemId||typeof quantity!=='number'||!Number.isFinite(quantity)||quantity<0)
+  throw new Error('Selecciona un elemento e indica una cantidad válida, cero o mayor.');
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const id=findFile_(),cloud=id?readFile_(id):{};
+  const item=(cloud.inventoryCriteria||[]).find(row=>row?.id===itemId);
+  if(!item||item.deleted||item.active===false||item.recordType==='formOptions'||
+     item.id==='SYSTEM-FORM-OPTIONS-V1'||truthy_(item.isYtSpare)||
+     truthy_(item.isFixedAsset??item.esActivoFijo??item.CI_ES_A_FIJO))
+   throw new Error('Este criterio no permite editar la cantidad.');
+  const stocks=Array.isArray(cloud.inventoryStock)?cloud.inventoryStock:[];
+  const current=stocks.find(row=>row?.itemId===itemId);
+  if(current&&(current.deleted||current.active===false))throw new Error('La existencia fue retirada.');
+  const revision=current?.updatedAt||current?.createdAt||'';
+  if(current&&Number(current.quantity)===quantity)return json_({ok:true,stock:current});
+  if(q.stockRevision!==revision)throw new Error('La cantidad cambió en la base central. Sincroniza y vuelve a seleccionar el elemento.');
+  const updatedAt=nextRevision_(revision);
+  const stock=Object.assign(current||{id:'stock-'+itemId,itemId,active:true,initialQuantity:quantity,
+   initialRecordedAt:updatedAt,createdAt:updatedAt},{quantity,updatedAt,syncState:'synced'});
+  if(!current)stocks.push(stock);
+  cloud.inventoryStock=stocks;
+  cloud.updatedAt=nextRevision_(cloud.updatedAt);
+  writeFile_(id,cloud);
+  return json_({ok:true,stock});
  }finally{lock.releaseLock()}
 }
 

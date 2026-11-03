@@ -46,7 +46,7 @@ async function waitForLoginRenewal(){
 try{user=JSON.parse(sessionStorage.getItem('skAdminUser')||'null')}catch(_){sessionStorage.removeItem('skAdminUser')}
 function validUser(value){return Boolean(value&&typeof value==='object'&&typeof value.username==='string'&&value.username.trim()&&['owner','assistant'].includes(value.role))}
 function checkSession(result,sessionToken){if(typeof sessionToken!=='string'||!sessionToken.trim()||!validUser(result?.user))throw new Error('El servidor no devolvió una sesión completa. Reintenta la comprobación de acceso.');return {...result.user,name:result.user.name||result.user.username}}
-const assistantViews=new Set(['home','queries','assetQuery','documentQuery','personQuery','plazaMovements','personal','assets','novelties','actas','consumption','optionCatalog']);
+const assistantViews=new Set(['home','queries','assetQuery','documentQuery','personQuery','plazaMovements','personal','assets','novelties','actas','consumption','optionCatalog','inventoryQuantities']);
 const api=()=>window.SK_SYNC_CONFIG?.apiUrl||'';
 async function request(action,body={},withKey=false){
  if(!api())throw new Error('El servicio central no está configurado');

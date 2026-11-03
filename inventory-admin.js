@@ -194,6 +194,73 @@ async function deactivate(){
 }
 
 function bind(){document.querySelectorAll('[data-catalog-kind]').forEach(b=>b.addEventListener('click',()=>openKind(b.dataset.catalogKind)));document.querySelector('#spareCatalogFilter').addEventListener('change',render);const search=document.querySelector('#inventoryItemSearch');search.addEventListener('input',render);search.addEventListener('search',render);document.querySelector('#inventoryItemList').addEventListener('click',e=>{const b=e.target.closest('[data-inv-id]');if(b)edit(b.dataset.invId);else{const missing=e.target.closest('[data-inv-class]');if(missing)createClassCriterion(missing.dataset.invClass)}});document.querySelector('#newInventoryItem').addEventListener('click',reset);document.querySelector('#inventoryItemForm').addEventListener('change',e=>{if(e.target.name==='itemKind'){openKind(e.target.value);return}if(e.target.matches('.invSwitchRow input'))syncSwitchText(e.target.parentElement);if(e.target.name==='fractionable')syncFractionableField(e.currentTarget);if(e.target.name==='isFixedAsset')syncFixedAssetFields(e.currentTarget);if(['isYtSpare','spareEquipment','spareItemNumber','spareItemName'].includes(e.target.name))syncSpareFields(e.currentTarget)});document.querySelector('#inventoryItemForm').addEventListener('input',e=>{if(['spareItemNumber','spareItemName'].includes(e.target.name))syncSpareFields(e.currentTarget)});document.querySelector('#inventoryItemForm').addEventListener('submit',save);document.querySelector('#inventoryItemDeactivate').addEventListener('click',deactivate);window.addEventListener('skweb-inventory-refresh',render);window.addEventListener('skweb-synced',render);window.addEventListener('skweb-options-applied',()=>syncFixedAssetFields());bindValidation(document.querySelector('#inventoryItemForm'))}
-window.SKInventoryAdmin={mount,render,openKind};window.addEventListener('load',()=>setTimeout(mount,120));
+const quantityFlag=value=>value===true||['true','si','sí','1','yes'].includes(norm(value));
+async function openQuantities(){
+ let section=document.querySelector('#inventoryQuantities');
+ if(!section){
+  section=document.createElement('section');section.id='inventoryQuantities';section.className='view';
+  section.innerHTML=`<div class="sectionHead"><h2>Editar cantidades</h2></div>
+   <p class="hint">Ajusta la cantidad del elemento, como en el campo Cantidad inicial de Criterios de inventario. Para guardar necesitas conexión.</p>
+   <form><label>Buscar elemento<input type="search" autocomplete="off"></label>
+    <label>Elemento<select name="itemId" required></select></label>
+    <label>Cantidad inicial<input name="quantity" type="number" min="0" step="any" required disabled></label>
+    <div class="formActions"><button type="submit" disabled>Guardar cantidad</button>
+     <button type="button" id="backFromQuantities">Volver</button></div>
+   </form><p class="status" role="status" aria-live="polite"></p>`;
+  document.querySelector('main').append(section);
+  section.querySelector('#backFromQuantities').onclick=()=>window.SKAdminNav?.back();
+ }
+ const form=section.querySelector('form'),search=form.querySelector('input[type=search]'),
+  {itemId,quantity}=form.elements,button=form.querySelector('[type=submit]'),status=section.querySelector('.status');
+ if(button.dataset.saving==='1')return;
+ form.reset();itemId.replaceChildren(new Option('Selecciona un elemento',''));quantity.disabled=button.disabled=true;
+ status.textContent='';
+ if(typeof db==='undefined'||!db){status.textContent='El almacenamiento local todavía está cargando. Vuelve a abrir el módulo.';return}
+ let criteria,stocks;
+ try{[criteria,stocks]=await Promise.all([all('inventoryCriteria'),all('inventoryStock')])}
+ catch(error){status.textContent='No se pudo leer el inventario local: '+error.message;return}
+ const balances=new Map(stocks.map(row=>[row.itemId,row]));
+ const items=criteria.filter(row=>!row.deleted&&row.active!==false&&row.recordType!=='formOptions'&&
+  row.id!=='SYSTEM-FORM-OPTIONS-V1'&&!quantityFlag(row.isYtSpare)&&
+  !quantityFlag(row.isFixedAsset??row.esActivoFijo??row.CI_ES_A_FIJO)&&itemName(row)&&
+  !balances.get(row.id)?.deleted&&balances.get(row.id)?.active!==false)
+  .sort((a,b)=>itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'}));
+ function selectQuantity(){
+  quantity.disabled=button.disabled=!itemId.value;
+  quantity.value=itemId.value?(balances.get(itemId.value)?.quantity??0):'';
+  status.textContent='';
+ }
+ search.oninput=()=>{
+  const previous=itemId.value;
+  const matches=items.filter(row=>matchesItemSearch([itemName(row),itemSecondary(row),itemTertiary(row)].join(' '),'',search.value));
+  itemId.replaceChildren(new Option(matches.length?'Selecciona un elemento':'Sin elementos disponibles',''),
+   ...matches.map(row=>new Option(itemName(row),row.id)));
+  if(matches.some(row=>row.id===previous))itemId.value=previous;
+  else selectQuantity();
+ };
+ itemId.onchange=selectQuantity;
+ search.oninput();
+ form.onsubmit=async event=>{
+  event.preventDefault();
+  if(button.dataset.saving==='1'||!window.SKAdminAuth?.canView?.('inventoryQuantities')||!form.reportValidity())return;
+  if(!navigator.onLine){status.textContent='Sin conexión. Conéctate para guardar la cantidad.';return}
+  const id=itemId.value,stock=balances.get(id),value=quantity.valueAsNumber;
+  if(!id||!Number.isFinite(value)||value<0)return;
+  if(stock?.syncState==='pending'){status.textContent='Sincroniza los cambios pendientes de este elemento antes de ajustar su cantidad.';return}
+  button.dataset.saving='1';button.disabled=search.disabled=itemId.disabled=quantity.disabled=true;
+  status.textContent='Guardando cantidad…';
+  try{
+   const result=await window.SKAdminAuth.request('adminSetInventoryQuantity',{
+    itemId:id,quantity:value,stockRevision:stock?.updatedAt||stock?.createdAt||''
+   });
+   if(result.stock?.itemId!==id)throw new Error('El servidor no confirmó la cantidad.');
+   balances.set(id,result.stock);quantity.value=result.stock.quantity;
+   status.textContent='Cantidad guardada.';
+   void window.skSyncApi?.sync?.({silent:true,forceFull:true});
+  }catch(error){status.textContent='No se pudo guardar: '+error.message}
+  finally{delete button.dataset.saving;button.disabled=search.disabled=itemId.disabled=quantity.disabled=false}
+ };
+}
+window.SKInventoryAdmin={mount,render,openKind};window.SKInventoryAdmin.openQuantities=openQuantities;window.addEventListener('load',()=>setTimeout(mount,120));
 })();
 
