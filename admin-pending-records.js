@@ -2,7 +2,7 @@
 (()=>{
   'use strict';
   const button=document.querySelector('#adminPendingRecords');
-  const labels={personal:'Colaborador',assets:'Activo fijo',novelties:'Novedad de activo',parts:'Repuesto',consumptions:'Consumo',incomes:'Ingreso',inventoryCriteria:'Criterio de inventario',inventoryStock:'Existencia',blendingIncomes:'Ingreso Plaza Blending',blendingDeliveries:'Entrega Plaza Blending',actas:'Documento'};
+  const labels={personal:'Colaborador',assets:'Activo fijo',novelties:'Novedad de activo',parts:'Repuesto',consumptions:'Consumo',incomes:'Ingreso',inventoryCriteria:'Criterio de inventario',inventoryStock:'Existencia',inventoryQuantityAdjustments:'Ajuste de cantidad',blendingIncomes:'Ingreso Plaza Blending',blendingDeliveries:'Entrega Plaza Blending',actas:'Documento'};
   let dialog,list,status,entries=[],busy=false,renderVersion=0;
   const text=value=>String(value??'').trim();
   const name=row=>text(row?.name||row?.nombre||row?.elemento||row?.CI_ELEMENTO);
@@ -29,6 +29,7 @@
         info.append(node('small',type),node('strong',entry.title));
         const date=new Date(entry.row.updatedAt||entry.row.createdAt||'');
         if(!Number.isNaN(date.getTime()))info.append(node('small',date.toLocaleString('es-CO')));
+        if(entry.row.syncError)info.append(node('small',entry.row.syncError));
         if(entry.row.deleted)info.append(node('small','Eliminación pendiente'));
         const discard=node('button','Descartar');discard.type='button';discard.dataset.pendingIndex=String(index);discard.disabled=busy;
         discard.setAttribute('aria-label',`Descartar pendiente: ${type} · ${entry.title}`);

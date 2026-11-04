@@ -9,12 +9,12 @@
   async function pendingRecords(){
     if(!window.SKAdminAuth?.ready?.())throw new Error('Ingresa a SK Web Admin para consultar los pendientes.');
     if(typeof db==='undefined'||!db)throw new Error('El almacenamiento local todavía está iniciando. Intenta nuevamente.');
-    const rows=await Promise.all(stores.map(all));
-    return stores.flatMap((store,index)=>rows[index].filter(row=>row?.syncState==='pending').map(row=>({store,row})));
+    const rows=await Promise.all(localStores.map(all));
+    return localStores.flatMap((store,index)=>rows[index].filter(row=>row?.syncState==='pending').map(row=>({store,row})));
   }
   async function discardPending(store,row){
     if(!window.SKAdminAuth?.ready?.())throw new Error('Ingresa a SK Web Admin para descartar un pendiente.');
-    if(!stores.includes(store)||!row||row.syncState!=='pending')throw new Error('Selecciona un registro pendiente válido.');
+    if(!localStores.includes(store)||!row||row.syncState!=='pending')throw new Error('Selecciona un registro pendiente válido.');
     if(discarding)throw new Error('Ya se está descartando un registro. Espera un momento.');
     discarding=true;clearTimeout(timer);queued=false;
     try{
@@ -87,9 +87,12 @@
     throw lastError;
   }
   async function finishSync(label,detail){
-    const pending=await pendingSnapshot(),count=stores.reduce((total,store)=>total+pending[store].length,0),status=document.querySelector('#syncStatus');
+    await window.SKInventoryAdmin?.syncQuantities?.();
+    const pending=await pendingSnapshot(),adjustments=await all(quantityAdjustments),status=document.querySelector('#syncStatus');
+    const count=stores.reduce((total,store)=>total+pending[store].length,adjustments.length);
+    const adjustmentError=adjustments.find(row=>row.syncError)?.syncError;
     if(count){
-      if(status)status.textContent=`Sincronización parcial · ${count} ${count===1?'registro pendiente':'registros pendientes'}; se conservan en este dispositivo.`;
+      if(status)status.textContent=`Sincronización parcial · ${count} ${count===1?'registro pendiente':'registros pendientes'}; se conservan en este dispositivo.${adjustmentError?' · '+adjustmentError:''}`;
       ui('idle');if(pending.personal?.length)schedule(300);return false;
     }
     if(status)status.textContent=`${label} · ${new Date().toLocaleString('es-CO')}`;
@@ -148,6 +151,7 @@
     }catch(e){
       retryAfter=Date.now()+60000;console.error('SK Web automatic sync:',e);ui('error');
       if(s)s.textContent=navigator.onLine?'Sincronización pendiente · '+(e?.message||e):'Sin conexión · cambios seguros en este dispositivo';
+      if((await all(quantityAdjustments).catch(()=>[])).some(row=>!row.syncError))schedule(60000);
       if(!silent)alert('Los datos están seguros en este dispositivo, pero aún no se sincronizaron: '+(e?.message||e));return false;
     }finally{running=false;buttonStop(b)}
   }
