@@ -404,10 +404,27 @@ function validateAssetSerials_(cloudAssets,changes,criteria=[]){
   if(duplicate)throw new Error('El serial '+String(saved.serial).trim()+' ya existe en: '+[duplicate.clase,duplicate.numeroClase||duplicate.numeroYT,duplicate.marcaActual||duplicate.marcaInterna].filter(Boolean).join(' · ')+'.');
  }
 }
+function validateLastActaDeletion_(incoming,cloud,auth){
+ const pending=(incoming.actas||[]).filter(row=>row&&row.syncState==='pending');
+ const deletions=pending.filter(row=>row.deleted).sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo));
+ if(!deletions.length)return;
+ if(!auth||auth.role!=='owner')throw new Error('Solo el administrador puede eliminar la última acta.');
+ const finalRows=new Map((cloud.actas||[]).filter(row=>row&&row.id).map(row=>[row.id,row]));
+ pending.filter(row=>!row.deleted).forEach(row=>finalRows.set(row.id,row));
+ for(const row of deletions){
+  const previous=finalRows.get(row.id);
+  if(previous&&previous.deleted)continue;
+  const active=Array.from(finalRows.values()).filter(x=>!x.deleted&&x.tipo!=='OFICIO');
+  const last=active.sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo))[0];
+  if(row.tipo==='OFICIO'||!previous||!last||last.id!==row.id)throw new Error('Solo puedes eliminar la última acta. Sincroniza para conocer el consecutivo más reciente.');
+  finalRows.set(row.id,Object.assign({},previous,{deleted:true}));
+ }
+}
+
 function validateActaStatus_(incoming,cloud,auth){
  const protectedKeys=['documentStatus','notCreatedReason','notCreatedAt'];
  for(const row of incoming.actas||[]){
-  if(!row||row.syncState!=='pending')continue;
+  if(!row||row.syncState!=='pending'||row.deleted)continue;
   const old=(cloud.actas||[]).find(x=>x&&x.id===row.id);
   const specialMotive=String(row.motivo||'')==='NO SE REGISTRÓ';
   if(specialMotive&&(row.documentStatus!=='not_created'||row.tipo==='OFICIO'))throw new Error('El motivo «No se registró» solo corresponde a un acta no elaborada.');
@@ -425,6 +442,7 @@ function adminSync_(incoming,since,auth){
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
   const id=findFile_(),cloud=id?readFile_(id):{},baseUpdatedAt=cloud.updatedAt||'',changes={},recovered=completePendingAssetMarks_(cloud);
+  validateLastActaDeletion_(incoming||{},cloud,auth);
   validateActaStatus_(incoming||{},cloud,auth);
   incoming=prepareAdminNovelties_(incoming,cloud,auth);
   const hasPending=Object.keys(incoming||{}).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.id&&x.syncState==='pending'));

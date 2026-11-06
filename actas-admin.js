@@ -15,7 +15,7 @@ function injectStyles(){
   style.textContent=`#actas [hidden]{display:none!important}#actas .actaNumber{margin:4px 0 18px;padding:16px;border-radius:12px;background:#102f45;color:#fff;text-align:center;font-size:1.14rem;font-weight:850;letter-spacing:.035em}#actas .actaNumber strong{color:#f7c948;font-size:1.35em}.documentTypeTitle{max-width:760px;margin:0 auto 8px;font-weight:850;color:#102f45}.actaForm label[hidden]{display:none!important}.documentTabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;max-width:760px;margin:0 auto 18px}.documentTabs button{border:2px solid #b9cad6;background:#fff;color:#102f45;font-size:1.05rem}.documentTabs button.active{background:#102f45;border-color:#102f45;color:#fff}.actaForm{max-width:760px;margin:auto}.actaList{display:grid;gap:8px;max-width:760px;margin:22px auto 0}.actaRow{display:flex;justify-content:space-between;align-items:center;gap:10px;width:100%;padding:0 8px 0 0;text-align:left;background:#fff;border:1px solid #d6dfe6;border-radius:9px;color:#102f45}.actaEdit{flex:1;min-width:0;text-align:left;background:transparent;color:inherit}.actaEdit span{display:grid;gap:3px}.actaEdit small{font-weight:500;color:#657484;overflow-wrap:anywhere}.actaLink,.actaNoLink{flex-shrink:0;font-size:.84rem;font-weight:750}.actaLink{display:inline-flex;align-items:center;min-height:44px;padding:10px 8px;color:#1769aa;text-decoration:underline;text-underline-offset:3px}.actaLink:focus-visible{outline:2px solid #1769aa;outline-offset:2px;border-radius:5px}.actaNoLink{max-width:110px;color:#657484}@media(max-width:600px){#actas .actaNumber{font-size:1rem;padding:13px}.actaRow{align-items:flex-start}}`;
   document.head.appendChild(style);
 }
-async function rows(){return (await all('actas')).sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo))}
+async function rows(){return (await all('actas')).filter(row=>!row.deleted).sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo))}
 async function nextNumber(type=documentType,list){const records=list||await rows();return Math.max(type==='ACTA'?ACTA_BASE:OFICIO_BASE,...records.filter(x=>!x.deleted&&typeOf(x)===type&&Number.isSafeInteger(Number(x.consecutivo))&&Number(x.consecutivo)>0).map(x=>Number(x.consecutivo)))+1}
 async function updateNumber(number){
   const value=number??await nextNumber(),box=document.getElementById('actaNumber');
@@ -68,7 +68,32 @@ function updateMode(){
   document.getElementById('newActa').textContent=`+ NUEVO ${documentType}`;
   document.getElementById('actaSave').textContent=editing?'GUARDAR CAMBIOS':previous?'REGISTRAR ACTA ANTERIOR':`REGISTRAR ${documentType}`;
   updateNotCreated();
+  updateDeleteLast();
 }
+async function updateDeleteLast(){
+ const button=document.getElementById('actaDeleteLast');if(!button)return;
+ const form=document.getElementById('actaForm'),last=(await rows()).find(row=>typeOf(row)==='ACTA');
+ button.hidden=!(window.SKAdminAuth?.isOwner?.()===true&&documentType==='ACTA'&&last&&form?.elements.id.value===last.id);
+ button.textContent='ELIMINAR REGISTRO';
+ button.dataset.actaId=last?.id||'';
+}
+async function deleteLastActa(){
+ if(window.SKAdminAuth?.isOwner?.()!==true)return;
+ const button=document.getElementById('actaDeleteLast');if(button.disabled)return;
+ button.disabled=true;
+ try{
+  const last=(await rows()).find(row=>typeOf(row)==='ACTA');
+  if(!last)return;
+  if(last.id!==button.dataset.actaId){await updateDeleteLast();return alert('La última acta cambió. Revisa el número antes de eliminar.')}
+  if(!confirm('¿Eliminar el acta N.º '+last.consecutivo+'?\n\nSe eliminarán el registro y su enlace en la aplicación. El consecutivo '+last.consecutivo+' quedará disponible para reutilizarse.\n\nEl archivo de Drive no se borrará. Esta acción se enviará al sincronizar.'))return;
+  await put('actas',{...last,enlace:'',deleted:true,deletedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),syncState:'pending'});
+  window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-documents-changed'));
+  await reset();await render();
+  const status=document.getElementById('actaStatus');status.hidden=false;status.textContent='Acta N.º '+last.consecutivo+' eliminada. Pendiente de sincronizar.';
+ }catch(error){alert(error?.message||'No fue posible eliminar el acta.')}
+ finally{button.disabled=false}
+}
+
 async function render(){
   if(typeof db==='undefined'||!db)return setTimeout(render,120);
   const list=(await rows()).filter(x=>typeOf(x)===documentType),host=document.getElementById('actaList');
@@ -77,6 +102,7 @@ async function render(){
     return `<div class="actaRow"><button type="button" class="actaEdit" data-acta-id="${esc(x.id)}" aria-label="Editar ${esc(label)}"><span><b>${esc(label)}</b>${x.documentStatus==='not_created'?`<strong style="display:block;background:#fff0b3;color:#713f12;padding:8px;border-radius:6px">⚠ ACTA NO ELABORADA · CONSECUTIVO RESERVADO</strong><small>${esc(x.notCreatedReason||'')}</small>`:''}<small>${esc(x.fecha||'Sin fecha')} · ${esc(documentType==='ACTA'?x.area||'Sin área':x.dirigidoA||'Sin destinatario')} · ${esc(documentType==='ACTA'?x.motivo||'Sin motivo':x.asunto||'Sin asunto')}</small></span></button>${url?`<a class="actaLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(label)}">ABRIR ${documentType} ↗</a>`:`<span class="actaNoLink">${x.enlace?'ENLACE NO VÁLIDO':'SIN ENLACE'}</span>`}</div>`;
   }).join('')||`<p class="hint">Aún no hay ${documentType==='ACTA'?'actas':'oficios'} registrados en esta aplicación.</p>`;
   const form=document.getElementById('actaForm');if(form&&!form.elements.id.value)await updateNumber();
+  await updateDeleteLast();
 }
 async function reset({keepRegistrationMode=false}={}){
   const form=document.getElementById('actaForm');if(!form)return;
@@ -127,7 +153,7 @@ function mount(){
   injectStyles();const section=document.createElement('section');section.id='actas';section.className='view';
   section.innerHTML=`<div class="sectionHead"><h2>REGISTRO DE DOCUMENTOS</h2><button type="button" id="newActa">+ NUEVA ACTA</button></div>
   <div class="documentTypeTitle">REGISTRAR</div><div class="documentTabs" role="group" aria-label="REGISTRAR"><button type="button" data-document-type="ACTA">ACTA</button><button type="button" data-document-type="OFICIO">OFICIO</button></div>
-  <div id="actaNotCreatedFields" hidden style="max-width:760px;margin:0 auto 12px;border:1px solid #dca528;background:#fff8dc;padding:8px 12px;border-radius:8px"><label style="display:flex!important;flex-direction:row!important;align-items:center;justify-content:flex-start;gap:10px;margin:0;font-size:.9rem"><input type="checkbox" name="noElaborada" form="actaForm" style="width:18px!important;height:18px!important;min-height:0!important;flex:0 0 18px;margin:0!important;padding:0!important">ACTA NO ELABORADA</label><label id="actaNotCreatedReason" hidden>JUSTIFICACIÓN<textarea name="justificacionNoElaborada" form="actaForm" rows="2" disabled></textarea></label></div>
+  <div id="actaNotCreatedFields" hidden style="max-width:760px;margin:0 auto 12px;border:1px solid #dca528;background:#fff8dc;padding:8px 12px;border-radius:8px"><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:center"><label style="display:flex!important;flex-direction:row!important;align-items:center;justify-content:flex-start;gap:10px;margin:0;font-size:.9rem"><input type="checkbox" name="noElaborada" form="actaForm" style="width:18px!important;height:18px!important;min-height:0!important;flex:0 0 18px;margin:0!important;padding:0!important">ACTA NO ELABORADA</label><button type="button" id="actaDeleteLast" class="dangerBtn" hidden style="width:100%;min-height:44px">ELIMINAR REGISTRO</button></div><label id="actaNotCreatedReason" hidden>JUSTIFICACIÓN<textarea name="justificacionNoElaborada" form="actaForm" rows="2" disabled></textarea></label></div>
   <div id="actaNumber" class="actaNumber">CALCULANDO CONSECUTIVO…</div>
   <form id="actaForm" class="actaForm"><input type="hidden" name="id"><input type="hidden" name="consecutivo">
   <label class="actaRegistrationMode" style="grid-column:1/-1">TIPO DE REGISTRO<select name="modoRegistro"><option value="nuevo">ACTA NUEVA · NÚMERO AUTOMÁTICO</option><option value="anterior">ACTA ANTERIOR · YA TIENE NÚMERO</option></select></label>
@@ -142,6 +168,7 @@ function mount(){
   <button type="button" id="actaClearLink" hidden>QUITAR ENLACE DEL DOCUMENTO</button><p id="actaReplaceHint" class="hint" hidden>Para reemplazar el documento, quita el enlace anterior y pega el enlace del archivo corregido. Pulsa GUARDAR CAMBIOS para confirmar.</p><button type="submit" id="actaSave">REGISTRAR ACTA</button><p id="actaStatus" class="status" hidden></p></form><div id="actaList" class="actaList"></div>`;
   document.querySelector('main')?.append(section);
   section.querySelector('[name="noElaborada"]').addEventListener('change',updateNotCreated);
+  section.querySelector('#actaDeleteLast').addEventListener('click',deleteLastActa);
   section.querySelector('#actaClearLink').addEventListener('click',()=>{
     const form=document.getElementById('actaForm');form.elements.enlace.value='';
     form.elements.enlace.focus();const status=document.getElementById('actaStatus');
@@ -155,5 +182,7 @@ function mount(){
   reset();render();
 }
 window.SKActasAdmin={render,reset,edit};
+window.addEventListener('skadmin-permissions',()=>{updateDeleteLast();updateNotCreated()});
+window.addEventListener('skweb-synced',()=>{if(document.getElementById('actas')?.classList.contains('active'))render()});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();
