@@ -28,20 +28,30 @@ function updateNotCreated(){
  const field=document.getElementById('actaNotCreatedFields');if(!field)return;
  const allowed=Boolean(form.elements.id.value)&&documentType==='ACTA'&&window.SKAdminAuth?.isOwner?.()===true;
  field.hidden=!allowed;
- const selected=form.elements.noElaborada.checked;
+ const selected=documentType==='ACTA'&&form.elements.noElaborada.checked;
  const special=form.elements.motivo.querySelector('[data-not-created-motive]');
- if(special){special.hidden=!selected;special.disabled=!selected||!allowed;
-  if(selected&&allowed){if(form.elements.motivo.value!=='NO SE REGISTRÓ')form.dataset.previousMotive=form.elements.motivo.value;form.elements.motivo.value='NO SE REGISTRÓ'}
-  else if(!selected&&form.elements.motivo.value==='NO SE REGISTRÓ')form.elements.motivo.value=form.dataset.previousMotive||'';
+ const areaOption=form.elements.area.querySelector('[data-not-created-area]');
+ if(special){special.hidden=!selected;special.disabled=!selected}
+ if(areaOption){areaOption.hidden=!selected;areaOption.disabled=!selected}
+ if(selected){
+  if(!form._notCreatedDraft)form._notCreatedDraft={area:form.elements.area.value,motivo:form.elements.motivo.value,enlace:form.elements.enlace.value};
+  form.elements.motivo.value='NO SE REGISTRÓ';form.elements.area.value='NO APLICA';form.elements.enlace.value='';
+ }else if(form._notCreatedDraft){
+  for(const [key,value]of Object.entries(form._notCreatedDraft))form.elements[key].value=value;
+  delete form._notCreatedDraft;
  }
- form.elements.justificacionNoElaborada.disabled=!allowed||!selected;
- form.elements.justificacionNoElaborada.required=allowed&&selected;
- document.getElementById('actaNotCreatedReason').hidden=!selected;
+ form.elements.area.disabled=selected;form.elements.motivo.disabled=selected;form.elements.enlace.disabled=selected;
+ form.elements.justificacionNoElaborada.disabled=true;
+ form.elements.justificacionNoElaborada.required=false;
+ document.getElementById('actaNotCreatedReason').hidden=true;
+ document.getElementById('actaClearLink')?.toggleAttribute('hidden',selected||!form.elements.id.value);
+ document.getElementById('actaReplaceHint')?.toggleAttribute('hidden',selected||!form.elements.id.value);
 }
+
 function updateMode(){
   const form=document.getElementById('actaForm');if(!form)return;
   const editing=Boolean(form.elements.id.value),previous=isPreviousActa(form);
-  updateNotCreated();
+
   document.getElementById('actaClearLink')?.toggleAttribute('hidden',!editing);
   document.getElementById('actaReplaceHint')?.toggleAttribute('hidden',!editing);
   form.querySelector('.actaRegistrationMode').hidden=documentType!=='ACTA'||editing;
@@ -57,6 +67,7 @@ function updateMode(){
   form.querySelector('.documentLinkLabel').firstChild.textContent=`ENLACE AL ${documentType} DIGITALIZADO (OPCIONAL)`;
   document.getElementById('newActa').textContent=`+ NUEVO ${documentType}`;
   document.getElementById('actaSave').textContent=editing?'GUARDAR CAMBIOS':previous?'REGISTRAR ACTA ANTERIOR':`REGISTRAR ${documentType}`;
+  updateNotCreated();
 }
 async function render(){
   if(typeof db==='undefined'||!db)return setTimeout(render,120);
@@ -70,13 +81,13 @@ async function render(){
 async function reset({keepRegistrationMode=false}={}){
   const form=document.getElementById('actaForm');if(!form)return;
   const mode=keepRegistrationMode?form.elements.modoRegistro.value:'nuevo';
-  form.reset();form.elements.modoRegistro.value=mode;form.elements.id.value='';form.elements.fecha.value=today();document.getElementById('actaStatus').hidden=true;updateMode();await updateNumber();
+  delete form._notCreatedDraft;form.reset();form.elements.modoRegistro.value=mode;form.elements.id.value='';form.elements.fecha.value=today();document.getElementById('actaStatus').hidden=true;updateMode();await updateNumber();
 }
 async function selectMode(type){if(type===documentType)return;documentType=type;await reset();await render()}
 async function edit(id){
   const acta=(await rows()).find(x=>x.id===id);if(!acta)return;documentType=typeOf(acta);
   const form=document.getElementById('actaForm');
-  form.reset();for(const field of ['id','consecutivo','fecha','area','motivo','asunto','dirigidoA','enlace'])if(form.elements[field])form.elements[field].value=acta[field]||'';
+  delete form._notCreatedDraft;form.reset();for(const field of ['id','consecutivo','fecha','area','motivo','asunto','dirigidoA','enlace'])if(form.elements[field])form.elements[field].value=acta[field]||'';
   form.elements.numeroAnterior.value=String(acta.consecutivo||'');
   form.elements.noElaborada.checked=acta.documentStatus==='not_created';
   form.elements.justificacionNoElaborada.value=acta.notCreatedReason||'';
@@ -93,7 +104,7 @@ async function save(event){
     if(list.some(x=>!x.deleted&&x.id!==id&&typeOf(x)===documentType&&Number(x.consecutivo)===consecutivo))throw new Error(`${documentType==='ACTA'?'El acta':'El oficio'} N.º ${consecutivo} ya está ${documentType==='ACTA'?'registrada':'registrado'}. Revisa la lista antes de guardar.`);
     const requested=form.elements.noElaborada.checked;
     const wasNotCreated=existing?.documentStatus==='not_created';
-    const reason=String(form.elements.justificacionNoElaborada.value||'').trim();
+    const reason=String(form.elements.justificacionNoElaborada.value||'').trim()||(requested?'Acta registrada, pero no elaborada.':'');
     if(documentType==='ACTA'&&existing&&(requested!==wasNotCreated||(requested&&reason!==String(existing.notCreatedReason||'')))){
       if(window.SKAdminAuth?.isOwner?.()!==true)throw new Error('Solo el administrador puede cambiar el estado de elaboración.');
       if(wasNotCreated&&!requested)throw new Error('El consecutivo de un acta no elaborada se conserva. No puede reutilizarse.');
@@ -106,7 +117,7 @@ async function save(event){
       acta.documentStatus='not_created';acta.notCreatedReason=reason;
       acta.notCreatedAt=acta.notCreatedAt||stamp;
     }
-    Object.assign(acta,{tipo:documentType,consecutivo,fecha:form.elements.fecha.value,area:documentType==='ACTA'?form.elements.area.value:'',motivo:documentType==='ACTA'?(requested?(window.SKAdminAuth?.isOwner?.()===true?'NO SE REGISTRÓ':existing?.motivo||''):form.elements.motivo.value):'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
+    Object.assign(acta,{tipo:documentType,consecutivo,fecha:form.elements.fecha.value,area:documentType==='ACTA'?(requested?'NO APLICA':form.elements.area.value):'',motivo:documentType==='ACTA'?(requested?(window.SKAdminAuth?.isOwner?.()===true?'NO SE REGISTRÓ':existing?.motivo||''):form.elements.motivo.value):'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:requested?'':form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
     await put('actas',acta);window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-documents-changed'));status.hidden=false;status.textContent=existing?'Cambios guardados.':`${documentType==='ACTA'?'Acta':'Oficio'} N.º ${consecutivo} ${documentType==='ACTA'?'registrada':'registrado'} y pendiente de sincronización.`;await render();if(!existing)setTimeout(()=>reset({keepRegistrationMode:true}),900);
   }catch(error){status.hidden=false;status.textContent=error?.message||String(error)}
   finally{button.disabled=false}
@@ -116,13 +127,13 @@ function mount(){
   injectStyles();const section=document.createElement('section');section.id='actas';section.className='view';
   section.innerHTML=`<div class="sectionHead"><h2>REGISTRO DE DOCUMENTOS</h2><button type="button" id="newActa">+ NUEVA ACTA</button></div>
   <div class="documentTypeTitle">REGISTRAR</div><div class="documentTabs" role="group" aria-label="REGISTRAR"><button type="button" data-document-type="ACTA">ACTA</button><button type="button" data-document-type="OFICIO">OFICIO</button></div>
-  <div id="actaNotCreatedFields" hidden style="max-width:760px;margin:0 auto 18px;border:2px solid #dca528;background:#fff8dc;padding:14px;border-radius:10px"><label style="display:flex;align-items:center;gap:10px"><input type="checkbox" name="noElaborada" form="actaForm" style="width:20px;height:20px">ACTA NO ELABORADA</label><p class="hint">El acta se registró, pero nunca se elaboró. Su consecutivo se conserva y no se reutiliza.</p><label id="actaNotCreatedReason" hidden>JUSTIFICACIÓN<textarea name="justificacionNoElaborada" form="actaForm" rows="2" disabled></textarea></label></div>
+  <div id="actaNotCreatedFields" hidden style="max-width:760px;margin:0 auto 12px;border:1px solid #dca528;background:#fff8dc;padding:8px 12px;border-radius:8px"><label style="display:flex!important;flex-direction:row!important;align-items:center;justify-content:flex-start;gap:10px;margin:0;font-size:.9rem"><input type="checkbox" name="noElaborada" form="actaForm" style="width:18px!important;height:18px!important;min-height:0!important;flex:0 0 18px;margin:0!important;padding:0!important">ACTA NO ELABORADA</label><label id="actaNotCreatedReason" hidden>JUSTIFICACIÓN<textarea name="justificacionNoElaborada" form="actaForm" rows="2" disabled></textarea></label></div>
   <div id="actaNumber" class="actaNumber">CALCULANDO CONSECUTIVO…</div>
   <form id="actaForm" class="actaForm"><input type="hidden" name="id"><input type="hidden" name="consecutivo">
   <label class="actaRegistrationMode" style="grid-column:1/-1">TIPO DE REGISTRO<select name="modoRegistro"><option value="nuevo">ACTA NUEVA · NÚMERO AUTOMÁTICO</option><option value="anterior">ACTA ANTERIOR · YA TIENE NÚMERO</option></select></label>
   <label class="actaPreviousNumber" hidden>NÚMERO ORIGINAL DEL ACTA<input name="numeroAnterior" type="number" min="1" step="1" inputmode="numeric" disabled placeholder="Ejemplo: 8"></label>
   <label>FECHA<input name="fecha" type="date" required></label>
-  <label class="actaArea">ÁREA<select name="area"><option value="">SELECCIONAR…</option><option>ADMINISTRATIVA</option><option>BODEGA DE SUPERFICIE</option><option>DESMIN</option><option>DESMIN - OBRAS CIVILES</option><option>PRODUCCIÓN</option><option>SEGURIDAD FÍSICA</option></select></label>
+  <label class="actaArea">ÁREA<select name="area"><option value="NO APLICA" data-not-created-area hidden disabled>No aplica</option><option value="">SELECCIONAR…</option><option>ADMINISTRATIVA</option><option>BODEGA DE SUPERFICIE</option><option>DESMIN</option><option>DESMIN - OBRAS CIVILES</option><option>PRODUCCIÓN</option><option>SEGURIDAD FÍSICA</option></select></label>
   <label class="actaMotivo">MOTIVO DEL ACTA<select name="motivo"><option value="">Seleccionar…</option><option value="NO SE REGISTRÓ" data-not-created-motive hidden disabled>No se registró · Acta no elaborada</option><option value="DE COMPROMISO">De compromiso</option><option value="DAR DE BAJA HERRAMIENTAS">Dar de baja herramientas</option><option value="INVENTARIO GENERAL">Inventario general</option><option value="ENTREGA DE ELEMENTOS">Entrega de elementos</option></select></label>
   <label class="oficioAsunto" hidden>ASUNTO<input name="asunto" type="text"></label>
   <label class="oficioDestinatario" hidden>DIRIGIDO A<input name="dirigidoA" type="text"></label>
