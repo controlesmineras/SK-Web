@@ -73,10 +73,17 @@ function updateMode(){
 async function updateDeleteLast(){
  const button=document.getElementById('actaDeleteLast');if(!button)return;
  const form=document.getElementById('actaForm'),last=(await rows()).find(row=>typeOf(row)==='ACTA');
- button.hidden=!(window.SKAdminAuth?.isOwner?.()===true&&documentType==='ACTA'&&last&&form?.elements.id.value===last.id);
+ const allowed=window.SKAdminAuth?.isOwner?.()===true&&documentType==='ACTA';
+ const selected=form?.elements.id.value||'',canDelete=Boolean(allowed&&last&&selected===last.id);
+ button.hidden=!allowed;
+ button.disabled=!canDelete;
  button.textContent='ELIMINAR REGISTRO';
  button.dataset.actaId=last?.id||'';
+ button.title=canDelete?'Eliminar la última acta registrada':last?'Solo se puede eliminar la última acta: N.º '+last.consecutivo:'No hay actas para eliminar';
+ const hint=document.getElementById('actaDeleteHint');
+ if(hint){hint.hidden=!allowed||canDelete;hint.textContent=last?'Para eliminar, selecciona la última acta: N.º '+last.consecutivo+'.':'No hay actas para eliminar.'}
 }
+
 async function deleteLastActa(){
  if(window.SKAdminAuth?.isOwner?.()!==true)return;
  const button=document.getElementById('actaDeleteLast');if(button.disabled)return;
@@ -91,7 +98,7 @@ async function deleteLastActa(){
   await reset();await render();
   const status=document.getElementById('actaStatus');status.hidden=false;status.textContent='Acta N.º '+last.consecutivo+' eliminada. Pendiente de sincronizar.';
  }catch(error){alert(error?.message||'No fue posible eliminar el acta.')}
- finally{button.disabled=false}
+ finally{await updateDeleteLast()}
 }
 
 async function render(){
@@ -153,7 +160,7 @@ function mount(){
   injectStyles();const section=document.createElement('section');section.id='actas';section.className='view';
   section.innerHTML=`<div class="sectionHead"><h2>REGISTRO DE DOCUMENTOS</h2><button type="button" id="newActa">+ NUEVA ACTA</button></div>
   <div class="documentTypeTitle">REGISTRAR</div><div class="documentTabs" role="group" aria-label="REGISTRAR"><button type="button" data-document-type="ACTA">ACTA</button><button type="button" data-document-type="OFICIO">OFICIO</button></div>
-  <div id="actaNotCreatedFields" hidden style="max-width:760px;margin:0 auto 12px;border:1px solid #dca528;background:#fff8dc;padding:8px 12px;border-radius:8px"><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:center"><label style="display:flex!important;flex-direction:row!important;align-items:center;justify-content:flex-start;gap:10px;margin:0;font-size:.9rem"><input type="checkbox" name="noElaborada" form="actaForm" style="width:18px!important;height:18px!important;min-height:0!important;flex:0 0 18px;margin:0!important;padding:0!important">ACTA NO ELABORADA</label><button type="button" id="actaDeleteLast" class="dangerBtn" hidden style="width:100%;min-height:44px">ELIMINAR REGISTRO</button></div><label id="actaNotCreatedReason" hidden>JUSTIFICACIÓN<textarea name="justificacionNoElaborada" form="actaForm" rows="2" disabled></textarea></label></div>
+  <div id="actaNotCreatedFields" hidden style="max-width:760px;margin:0 auto 12px;border:1px solid #dca528;background:#fff8dc;padding:8px 12px;border-radius:8px"><div style="display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:12px;align-items:center"><label style="display:flex!important;flex-direction:row!important;align-items:center;justify-content:flex-start;gap:10px;margin:0;font-size:.9rem"><input type="checkbox" name="noElaborada" form="actaForm" style="width:18px!important;height:18px!important;min-height:0!important;flex:0 0 18px;margin:0!important;padding:0!important">ACTA NO ELABORADA</label><button type="button" id="actaDeleteLast" class="dangerBtn" hidden style="width:100%;min-height:44px">ELIMINAR REGISTRO</button></div><small id="actaDeleteHint" hidden style="display:block;margin-top:6px;color:#713f12"></small><label id="actaNotCreatedReason" hidden>JUSTIFICACIÓN<textarea name="justificacionNoElaborada" form="actaForm" rows="2" disabled></textarea></label></div>
   <div id="actaNumber" class="actaNumber">CALCULANDO CONSECUTIVO…</div>
   <form id="actaForm" class="actaForm"><input type="hidden" name="id"><input type="hidden" name="consecutivo">
   <label class="actaRegistrationMode" style="grid-column:1/-1">TIPO DE REGISTRO<select name="modoRegistro"><option value="nuevo">ACTA NUEVA · NÚMERO AUTOMÁTICO</option><option value="anterior">ACTA ANTERIOR · YA TIENE NÚMERO</option></select></label>
