@@ -116,6 +116,7 @@ function mount(){
   injectStyles();const section=document.createElement('section');section.id='actas';section.className='view';
   section.innerHTML=`<div class="sectionHead"><h2>REGISTRO DE DOCUMENTOS</h2><button type="button" id="newActa">+ NUEVA ACTA</button></div>
   <div class="documentTypeTitle">REGISTRAR</div><div class="documentTabs" role="group" aria-label="REGISTRAR"><button type="button" data-document-type="ACTA">ACTA</button><button type="button" data-document-type="OFICIO">OFICIO</button></div>
+  <div id="actaNotCreatedFields" hidden style="max-width:760px;margin:0 auto 18px;border:2px solid #dca528;background:#fff8dc;padding:14px;border-radius:10px"><label style="display:flex;align-items:center;gap:10px"><input type="checkbox" name="noElaborada" form="actaForm" style="width:20px;height:20px">ACTA NO ELABORADA</label><p class="hint">El acta se registró, pero nunca se elaboró. Su consecutivo se conserva y no se reutiliza.</p><label id="actaNotCreatedReason" hidden>JUSTIFICACIÓN<textarea name="justificacionNoElaborada" form="actaForm" rows="2" disabled></textarea></label></div>
   <div id="actaNumber" class="actaNumber">CALCULANDO CONSECUTIVO…</div>
   <form id="actaForm" class="actaForm"><input type="hidden" name="id"><input type="hidden" name="consecutivo">
   <label class="actaRegistrationMode" style="grid-column:1/-1">TIPO DE REGISTRO<select name="modoRegistro"><option value="nuevo">ACTA NUEVA · NÚMERO AUTOMÁTICO</option><option value="anterior">ACTA ANTERIOR · YA TIENE NÚMERO</option></select></label>
@@ -126,7 +127,7 @@ function mount(){
   <label class="oficioAsunto" hidden>ASUNTO<input name="asunto" type="text"></label>
   <label class="oficioDestinatario" hidden>DIRIGIDO A<input name="dirigidoA" type="text"></label>
   <label class="documentLinkLabel">ENLACE AL ACTA DIGITALIZADA (OPCIONAL)<input name="enlace" type="url" inputmode="url" placeholder="https://…"></label>
-  <div id="actaNotCreatedFields" hidden style="grid-column:1/-1;border:2px solid #dca528;background:#fff8dc;padding:14px;border-radius:10px"><label style="display:flex;align-items:center;gap:10px"><input type="checkbox" name="noElaborada" style="width:20px;height:20px">ACTA NO ELABORADA</label><p class="hint">El acta se registró, pero nunca se elaboró. Su consecutivo se conserva y no se reutiliza.</p><label id="actaNotCreatedReason" hidden>JUSTIFICACIÓN<textarea name="justificacionNoElaborada" rows="2" disabled></textarea></label></div>
+
   <button type="button" id="actaClearLink" hidden>QUITAR ENLACE DEL DOCUMENTO</button><p id="actaReplaceHint" class="hint" hidden>Para reemplazar el documento, quita el enlace anterior y pega el enlace del archivo corregido. Pulsa GUARDAR CAMBIOS para confirmar.</p><button type="submit" id="actaSave">REGISTRAR ACTA</button><p id="actaStatus" class="status" hidden></p></form><div id="actaList" class="actaList"></div>`;
   document.querySelector('main')?.append(section);
   section.querySelector('[name="noElaborada"]').addEventListener('change',updateNotCreated);
