@@ -39,6 +39,7 @@ function apply(){
  });
  const toggle=document.getElementById('adminSettingsToggle');
  if(toggle)toggle.setAttribute('aria-label',language==='en'?'Settings':'Configuración');
+ const done=document.getElementById('adminLanguageDone');if(done)done.textContent=language==='en'?'Done':'Listo';
  const title=document.getElementById('adminLanguageTitle');
  if(title)title.textContent=language==='en'?'Language':'Idioma';
  document.querySelectorAll('[data-interface-language]').forEach(b=>{
@@ -53,11 +54,14 @@ const observer=new MutationObserver(()=>{if(!queued){queued=true;queueMicrotask(
 function init(){
  const actions=document.querySelector('.headerActions');if(!actions)return;
  const wrapper=document.createElement('div');wrapper.dataset.languageMenu='';wrapper.style.cssText='position:relative;flex:0 0 auto';
- wrapper.innerHTML='<button id="adminSettingsToggle" type="button" aria-label="Configuración" aria-expanded="false" aria-controls="adminSettingsPanel" style="min-width:44px;min-height:44px;font-size:28px;line-height:1;padding:4px 12px">⋮</button><div id="adminSettingsPanel" hidden style="position:absolute;right:0;top:calc(100% + 8px);z-index:10000;min-width:210px;padding:14px;border:1px solid #bccbd5;border-radius:12px;background:#fff;color:#102c40;box-shadow:0 8px 28px #0004"><strong id="adminLanguageTitle" style="display:block;margin-bottom:10px">Idioma</strong><div role="group" aria-labelledby="adminLanguageTitle" style="display:grid;gap:8px"><button type="button" data-interface-language="es" lang="es">Español</button><button type="button" data-interface-language="en" lang="en">English</button></div></div>';
+ wrapper.innerHTML='<button id="adminSettingsToggle" type="button" aria-label="Configuración" aria-expanded="false" aria-controls="adminSettingsPanel" style="min-width:44px;min-height:44px;font-size:28px;line-height:1;padding:4px 12px">⋮</button><div id="adminSettingsPanel" hidden style="position:absolute;right:0;top:calc(100% + 8px);z-index:10000;min-width:210px;padding:14px;border:1px solid #bccbd5;border-radius:12px;background:#fff;color:#102c40;box-shadow:0 8px 28px #0004"><strong id="adminLanguageTitle" style="display:block;margin-bottom:10px">Idioma</strong><div role="group" aria-labelledby="adminLanguageTitle" style="display:grid;gap:8px"><button type="button" data-interface-language="es" lang="es">Español</button><button type="button" data-interface-language="en" lang="en">English</button></div><button type="button" id="adminLanguageDone" style="width:100%;margin-top:10px">Listo</button></div>';
+ const style=document.createElement('style');style.textContent='#adminSettingsPanel[hidden]{display:none!important}';document.head.append(style);
  actions.append(wrapper);
  const toggle=wrapper.querySelector('#adminSettingsToggle'),panel=wrapper.querySelector('#adminSettingsPanel');
- const close=()=>{panel.hidden=true;toggle.setAttribute('aria-expanded','false')};
- toggle.addEventListener('click',()=>{panel.hidden=!panel.hidden;toggle.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)panel.querySelector('[aria-pressed="true"]')?.focus()});
+ const close=()=>{panel.hidden=true;panel.style.setProperty('display','none','important');toggle.setAttribute('aria-expanded','false')};
+ wrapper.querySelector('#adminLanguageDone').addEventListener('click',()=>{close();toggle.focus()});
+ close();
+ toggle.addEventListener('click',()=>{panel.hidden=!panel.hidden;panel.style.setProperty('display',panel.hidden?'none':'block','important');toggle.setAttribute('aria-expanded',String(!panel.hidden));if(!panel.hidden)panel.querySelector('[aria-pressed="true"]')?.focus()});
  wrapper.querySelectorAll('[data-interface-language]').forEach(button=>button.addEventListener('click',()=>{
   language=button.dataset.interfaceLanguage;try{localStorage.setItem(KEY,language)}catch{}
   apply();close();toggle.focus();window.dispatchEvent(new CustomEvent('skweb-language-changed',{detail:{language}}));
