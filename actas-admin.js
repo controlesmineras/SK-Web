@@ -23,9 +23,20 @@ async function updateNumber(number){
   const form=document.getElementById('actaForm');
   if(form)form.elements.consecutivo.value=String(value);
 }
+function updateNotCreated(){
+ const form=document.getElementById('actaForm');if(!form)return;
+ const field=document.getElementById('actaNotCreatedFields');if(!field)return;
+ const allowed=Boolean(form.elements.id.value)&&documentType==='ACTA'&&window.SKAdminAuth?.isOwner?.()===true;
+ field.hidden=!allowed;
+ const selected=form.elements.noElaborada.checked;
+ form.elements.justificacionNoElaborada.disabled=!allowed||!selected;
+ form.elements.justificacionNoElaborada.required=allowed&&selected;
+ document.getElementById('actaNotCreatedReason').hidden=!selected;
+}
 function updateMode(){
   const form=document.getElementById('actaForm');if(!form)return;
   const editing=Boolean(form.elements.id.value),previous=isPreviousActa(form);
+  updateNotCreated();
   document.getElementById('actaClearLink')?.toggleAttribute('hidden',!editing);
   document.getElementById('actaReplaceHint')?.toggleAttribute('hidden',!editing);
   form.querySelector('.actaRegistrationMode').hidden=documentType!=='ACTA'||editing;
@@ -47,7 +58,7 @@ async function render(){
   const list=(await rows()).filter(x=>typeOf(x)===documentType),host=document.getElementById('actaList');
   if(host)host.innerHTML=list.map(x=>{
     const url=documentUrl(x.enlace),label=`${documentType} N.º ${x.consecutivo}`;
-    return `<div class="actaRow"><button type="button" class="actaEdit" data-acta-id="${esc(x.id)}" aria-label="Editar ${esc(label)}"><span><b>${esc(label)}</b><small>${esc(x.fecha||'Sin fecha')} · ${esc(documentType==='ACTA'?x.area||'Sin área':x.dirigidoA||'Sin destinatario')} · ${esc(documentType==='ACTA'?x.motivo||'Sin motivo':x.asunto||'Sin asunto')}</small></span></button>${url?`<a class="actaLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(label)}">ABRIR ${documentType} ↗</a>`:`<span class="actaNoLink">${x.enlace?'ENLACE NO VÁLIDO':'SIN ENLACE'}</span>`}</div>`;
+    return `<div class="actaRow"><button type="button" class="actaEdit" data-acta-id="${esc(x.id)}" aria-label="Editar ${esc(label)}"><span><b>${esc(label)}</b>${x.documentStatus==='not_created'?`<strong style="display:block;background:#fff0b3;color:#713f12;padding:8px;border-radius:6px">⚠ ACTA NO ELABORADA · CONSECUTIVO RESERVADO</strong><small>${esc(x.notCreatedReason||'')}</small>`:''}<small>${esc(x.fecha||'Sin fecha')} · ${esc(documentType==='ACTA'?x.area||'Sin área':x.dirigidoA||'Sin destinatario')} · ${esc(documentType==='ACTA'?x.motivo||'Sin motivo':x.asunto||'Sin asunto')}</small></span></button>${url?`<a class="actaLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(label)}">ABRIR ${documentType} ↗</a>`:`<span class="actaNoLink">${x.enlace?'ENLACE NO VÁLIDO':'SIN ENLACE'}</span>`}</div>`;
   }).join('')||`<p class="hint">Aún no hay ${documentType==='ACTA'?'actas':'oficios'} registrados en esta aplicación.</p>`;
   const form=document.getElementById('actaForm');if(form&&!form.elements.id.value)await updateNumber();
 }
@@ -62,6 +73,8 @@ async function edit(id){
   const form=document.getElementById('actaForm');
   form.reset();for(const field of ['id','consecutivo','fecha','area','motivo','asunto','dirigidoA','enlace'])if(form.elements[field])form.elements[field].value=acta[field]||'';
   form.elements.numeroAnterior.value=String(acta.consecutivo||'');
+  form.elements.noElaborada.checked=acta.documentStatus==='not_created';
+  form.elements.justificacionNoElaborada.value=acta.notCreatedReason||'';
   updateMode();await updateNumber(acta.consecutivo);form.scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function save(event){
@@ -73,7 +86,20 @@ async function save(event){
     if(existing&&typeOf(existing)!==documentType)throw new Error('El tipo de documento no coincide.');
     if(!Number.isSafeInteger(consecutivo)||consecutivo<1)throw new Error('Ingresa un número de acta entero mayor que cero.');
     if(list.some(x=>!x.deleted&&x.id!==id&&typeOf(x)===documentType&&Number(x.consecutivo)===consecutivo))throw new Error(`${documentType==='ACTA'?'El acta':'El oficio'} N.º ${consecutivo} ya está ${documentType==='ACTA'?'registrada':'registrado'}. Revisa la lista antes de guardar.`);
+    const requested=form.elements.noElaborada.checked;
+    const wasNotCreated=existing?.documentStatus==='not_created';
+    const reason=String(form.elements.justificacionNoElaborada.value||'').trim();
+    if(documentType==='ACTA'&&existing&&(requested!==wasNotCreated||(requested&&reason!==String(existing.notCreatedReason||'')))){
+      if(window.SKAdminAuth?.isOwner?.()!==true)throw new Error('Solo el administrador puede cambiar el estado de elaboración.');
+      if(wasNotCreated&&!requested)throw new Error('El consecutivo de un acta no elaborada se conserva. No puede reutilizarse.');
+      if(requested&&!reason)throw new Error('Escribe por qué el acta no fue elaborada.');
+    }
+    if(wasNotCreated&&consecutivo!==Number(existing.consecutivo))throw new Error('El número de un acta no elaborada debe conservarse.');
     const acta=existing||{id:uuid(),createdAt:stamp};
+    if(documentType==='ACTA'&&existing&&requested&&window.SKAdminAuth?.isOwner?.()===true){
+      acta.documentStatus='not_created';acta.notCreatedReason=reason;
+      acta.notCreatedAt=acta.notCreatedAt||stamp;
+    }
     Object.assign(acta,{tipo:documentType,consecutivo,fecha:form.elements.fecha.value,area:documentType==='ACTA'?form.elements.area.value:'',motivo:documentType==='ACTA'?form.elements.motivo.value:'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
     await put('actas',acta);window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-documents-changed'));status.hidden=false;status.textContent=existing?'Cambios guardados.':`${documentType==='ACTA'?'Acta':'Oficio'} N.º ${consecutivo} ${documentType==='ACTA'?'registrada':'registrado'} y pendiente de sincronización.`;await render();if(!existing)setTimeout(()=>reset({keepRegistrationMode:true}),900);
   }catch(error){status.hidden=false;status.textContent=error?.message||String(error)}
@@ -94,8 +120,10 @@ function mount(){
   <label class="oficioAsunto" hidden>ASUNTO<input name="asunto" type="text"></label>
   <label class="oficioDestinatario" hidden>DIRIGIDO A<input name="dirigidoA" type="text"></label>
   <label class="documentLinkLabel">ENLACE AL ACTA DIGITALIZADA (OPCIONAL)<input name="enlace" type="url" inputmode="url" placeholder="https://…"></label>
+  <div id="actaNotCreatedFields" hidden style="grid-column:1/-1;border:2px solid #dca528;background:#fff8dc;padding:14px;border-radius:10px"><label style="display:flex;align-items:center;gap:10px"><input type="checkbox" name="noElaborada" style="width:20px;height:20px">ACTA NO ELABORADA</label><p class="hint">El acta se registró, pero nunca se elaboró. Su consecutivo se conserva y no se reutiliza.</p><label id="actaNotCreatedReason" hidden>JUSTIFICACIÓN<textarea name="justificacionNoElaborada" rows="2" disabled></textarea></label></div>
   <button type="button" id="actaClearLink" hidden>QUITAR ENLACE DEL DOCUMENTO</button><p id="actaReplaceHint" class="hint" hidden>Para reemplazar el documento, quita el enlace anterior y pega el enlace del archivo corregido. Pulsa GUARDAR CAMBIOS para confirmar.</p><button type="submit" id="actaSave">REGISTRAR ACTA</button><p id="actaStatus" class="status" hidden></p></form><div id="actaList" class="actaList"></div>`;
   document.querySelector('main')?.append(section);
+  section.querySelector('[name="noElaborada"]').addEventListener('change',updateNotCreated);
   section.querySelector('#actaClearLink').addEventListener('click',()=>{
     const form=document.getElementById('actaForm');form.elements.enlace.value='';
     form.elements.enlace.focus();const status=document.getElementById('actaStatus');

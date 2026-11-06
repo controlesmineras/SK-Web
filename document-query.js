@@ -77,7 +77,7 @@
   host.innerHTML=rows.map(row=>{
    const type=typeOf(row),title=`${type==='ACTA'?'Acta':'Oficio'} N.º ${text(row.consecutivo)||'Sin número'}`,url=documentUrl(row.enlace);
    return `<article class="documentQueryCard" ${window.SKAdminAuth?.canView?.('actas')?`data-edit-document="${esc(row.id)}" tabindex="0" aria-label="Seleccionar ${esc(title)} para editar"`:''}><div class="documentQueryCardHead"><h3>${esc(title)}</h3>${url?`<a class="documentQueryLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(title)}">Abrir ${type==='ACTA'?'acta':'oficio'} ↗</a>`:`<span class="documentQueryNoLink">${text(row.enlace)?'Enlace no válido':'Sin enlace digitalizado'}</span>`}</div>
-    <dl>${field('Fecha de origen',displayDate(row.fecha))}${type==='ACTA'?field('Área',row.area)+field('Motivo',row.motivo):field('Dirigido a',row.dirigidoA)+field('Asunto',row.asunto)}</dl>
+    ${row.documentStatus==='not_created'?`<p style="background:#fff0b3;color:#713f12;padding:12px;border-radius:8px;font-weight:800">⚠ ACTA NO ELABORADA · CONSECUTIVO RESERVADO</p><p>${esc(row.notCreatedReason||'')}</p>`:''}<dl>${field('Fecha de origen',displayDate(row.fecha))}${type==='ACTA'?field('Área',row.area)+field('Motivo',row.motivo):field('Dirigido a',row.dirigidoA)+field('Asunto',row.asunto)}</dl>
     ${row.syncState==='pending'?'<p class="documentQueryPending">Pendiente de sincronizar</p>':''}</article>`;
   }).join('')||'<p class="hint">No hay documentos que coincidan. Revisa los filtros o sincroniza para recibir registros de otros dispositivos.</p>';
  }

@@ -10,7 +10,7 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 function app(seed=[]){
   let records=clone(seed),sequence=0;
   const writes=[],timers=[];
-  const elements=Object.fromEntries(['id','consecutivo','modoRegistro','numeroAnterior','fecha','area','motivo','asunto','dirigidoA','enlace'].map(name=>[name,{value:name==='modoRegistro'?'nuevo':'',disabled:false,required:false}]));
+  const elements=Object.fromEntries(['id','consecutivo','modoRegistro','numeroAnterior','fecha','area','motivo','asunto','dirigidoA','enlace','noElaborada','justificacionNoElaborada'].map(name=>[name,{value:name==='modoRegistro'?'nuevo':'',disabled:false,required:false,checked:false}]));
   const fields={};
   for(const [selector,name] of Object.entries({'.actaRegistrationMode':'modoRegistro','.actaPreviousNumber':'numeroAnterior','.actaArea':'area','.actaMotivo':'motivo','.oficioAsunto':'asunto','.oficioDestinatario':'dirigidoA'}))fields[selector]={hidden:false,firstChild:{textContent:''},querySelector:()=>elements[name]};
   fields['.documentLinkLabel']={firstChild:{textContent:''}};

@@ -404,10 +404,25 @@ function validateAssetSerials_(cloudAssets,changes,criteria=[]){
   if(duplicate)throw new Error('El serial '+String(saved.serial).trim()+' ya existe en: '+[duplicate.clase,duplicate.numeroClase||duplicate.numeroYT,duplicate.marcaActual||duplicate.marcaInterna].filter(Boolean).join(' · ')+'.');
  }
 }
+function validateActaStatus_(incoming,cloud,auth){
+ const protectedKeys=['documentStatus','notCreatedReason','notCreatedAt'];
+ for(const row of incoming.actas||[]){
+  if(!row||row.syncState!=='pending')continue;
+  const old=(cloud.actas||[]).find(x=>x&&x.id===row.id);
+  const changed=protectedKeys.some(key=>String(row[key]||'')!==String(old&&old[key]||''));
+  if(changed&&(!auth||auth.role!=='owner'))throw new Error('Solo el administrador puede cambiar el estado de elaboración del acta.');
+  if(row.documentStatus==='not_created'){
+   if(!old||row.tipo==='OFICIO'||!String(row.notCreatedReason||'').trim())throw new Error('Selecciona un acta registrada e indica por qué no fue elaborada.');
+  }
+  if(old&&old.documentStatus==='not_created'&&(row.documentStatus!=='not_created'||row.deleted||Number(row.consecutivo)!==Number(old.consecutivo)))throw new Error('El consecutivo del acta no elaborada se conserva y no puede reutilizarse.');
+ }
+}
+
 function adminSync_(incoming,since,auth){
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
   const id=findFile_(),cloud=id?readFile_(id):{},baseUpdatedAt=cloud.updatedAt||'',changes={},recovered=completePendingAssetMarks_(cloud);
+  validateActaStatus_(incoming||{},cloud,auth);
   incoming=prepareAdminNovelties_(incoming,cloud,auth);
   const hasPending=Object.keys(incoming||{}).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.id&&x.syncState==='pending'));
   if(!hasPending){
