@@ -1,7 +1,7 @@
 // Registro y consulta básica de actas administrativas.
 (()=>{
 'use strict';
-const ACTA_BASE=14,OFICIO_BASE=0;
+const ACTA_BASE=0,OFICIO_BASE=0;
 let documentType='ACTA';
 const typeOf=row=>row.tipo==='OFICIO'?'OFICIO':'ACTA';
 const isPreviousActa=form=>documentType==='ACTA'&&!form.elements.id.value&&form.elements.modoRegistro.value==='anterior';
@@ -16,7 +16,7 @@ function injectStyles(){
   document.head.appendChild(style);
 }
 async function rows(){return (await all('actas')).sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo))}
-async function nextNumber(type=documentType,list){const records=list||await rows();return Math.max(type==='ACTA'?ACTA_BASE:OFICIO_BASE,...records.filter(x=>typeOf(x)===type).map(x=>Number(x.consecutivo)||0))+1}
+async function nextNumber(type=documentType,list){const records=list||await rows();return Math.max(type==='ACTA'?ACTA_BASE:OFICIO_BASE,...records.filter(x=>!x.deleted&&typeOf(x)===type&&Number.isSafeInteger(Number(x.consecutivo))&&Number(x.consecutivo)>0).map(x=>Number(x.consecutivo)))+1}
 async function updateNumber(number){
   const value=number??await nextNumber(),box=document.getElementById('actaNumber');
   if(box)box.innerHTML=`TU NÚMERO DE ${documentType} ES: <strong>${esc(value)}</strong>`;
@@ -30,10 +30,12 @@ function updateMode(){
   document.getElementById('actaReplaceHint')?.toggleAttribute('hidden',!editing);
   form.querySelector('.actaRegistrationMode').hidden=documentType!=='ACTA'||editing;
   form.elements.modoRegistro.disabled=documentType!=='ACTA'||editing;
-  form.querySelector('.actaPreviousNumber').hidden=!previous;
-  form.elements.numeroAnterior.disabled=!previous;
-  form.elements.numeroAnterior.required=previous;
-  document.getElementById('actaNumber').hidden=previous;
+  const editableNumber=previous||(editing&&documentType==='ACTA');
+  form.querySelector('.actaPreviousNumber').hidden=!editableNumber;
+  form.querySelector('.actaPreviousNumber').firstChild.textContent=editing?'NÚMERO DEL ACTA':'NÚMERO ORIGINAL DEL ACTA';
+  form.elements.numeroAnterior.disabled=!editableNumber;
+  form.elements.numeroAnterior.required=editableNumber;
+  document.getElementById('actaNumber').hidden=editableNumber;
   document.querySelectorAll('#actas [data-document-type]').forEach(button=>{const active=button.dataset.documentType===documentType;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active))});
   for(const [selector,visible] of [['.actaArea',documentType==='ACTA'],['.actaMotivo',documentType==='ACTA'],['.oficioAsunto',documentType==='OFICIO'],['.oficioDestinatario',documentType==='OFICIO']]){const field=form.querySelector(selector);field.hidden=!visible;field.querySelector('input,select').required=visible}
   form.querySelector('.documentLinkLabel').firstChild.textContent=`ENLACE AL ${documentType} DIGITALIZADO (OPCIONAL)`;
@@ -59,17 +61,18 @@ async function edit(id){
   const acta=(await rows()).find(x=>x.id===id);if(!acta)return;documentType=typeOf(acta);
   const form=document.getElementById('actaForm');
   form.reset();for(const field of ['id','consecutivo','fecha','area','motivo','asunto','dirigidoA','enlace'])if(form.elements[field])form.elements[field].value=acta[field]||'';
+  form.elements.numeroAnterior.value=String(acta.consecutivo||'');
   updateMode();await updateNumber(acta.consecutivo);form.scrollIntoView({behavior:'smooth',block:'start'});
 }
 async function save(event){
   event.preventDefault();const form=event.currentTarget,button=document.getElementById('actaSave'),status=document.getElementById('actaStatus');
   button.disabled=true;
   try{
-    const list=await rows(),id=form.elements.id.value,existing=id?list.find(x=>x.id===id):null,consecutivo=existing?Number(existing.consecutivo):isPreviousActa(form)?Number(form.elements.numeroAnterior.value):await nextNumber(documentType,list),stamp=new Date().toISOString();
+    const list=await rows(),id=form.elements.id.value,existing=id?list.find(x=>x.id===id):null,consecutivo=existing?(documentType==='ACTA'?Number(form.elements.numeroAnterior.value):Number(existing.consecutivo)):isPreviousActa(form)?Number(form.elements.numeroAnterior.value):await nextNumber(documentType,list),stamp=new Date().toISOString();
     if(id&&!existing)throw new Error('El documento ya no está disponible. Actualiza los datos e intenta nuevamente.');
     if(existing&&typeOf(existing)!==documentType)throw new Error('El tipo de documento no coincide.');
     if(!Number.isSafeInteger(consecutivo)||consecutivo<1)throw new Error('Ingresa un número de acta entero mayor que cero.');
-    if(!existing&&list.some(x=>typeOf(x)===documentType&&Number(x.consecutivo)===consecutivo))throw new Error(`${documentType==='ACTA'?'El acta':'El oficio'} N.º ${consecutivo} ya está ${documentType==='ACTA'?'registrada':'registrado'}. Revisa la lista antes de guardar.`);
+    if(list.some(x=>!x.deleted&&x.id!==id&&typeOf(x)===documentType&&Number(x.consecutivo)===consecutivo))throw new Error(`${documentType==='ACTA'?'El acta':'El oficio'} N.º ${consecutivo} ya está ${documentType==='ACTA'?'registrada':'registrado'}. Revisa la lista antes de guardar.`);
     const acta=existing||{id:uuid(),createdAt:stamp};
     Object.assign(acta,{tipo:documentType,consecutivo,fecha:form.elements.fecha.value,area:documentType==='ACTA'?form.elements.area.value:'',motivo:documentType==='ACTA'?form.elements.motivo.value:'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
     await put('actas',acta);window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-documents-changed'));status.hidden=false;status.textContent=existing?'Cambios guardados.':`${documentType==='ACTA'?'Acta':'Oficio'} N.º ${consecutivo} ${documentType==='ACTA'?'registrada':'registrado'} y pendiente de sincronización.`;await render();if(!existing)setTimeout(()=>reset({keepRegistrationMode:true}),900);
