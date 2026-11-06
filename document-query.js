@@ -1,4 +1,4 @@
-// Consulta de documentos: lee las actas/oficios locales y abre sus enlaces sin editar registros.
+// Consulta de documentos: lee las actas/oficios locales y abre sus enlaces con acceso a la edición de registros autorizados.
 (()=>{
  'use strict';
  const text=value=>String(value??'').trim();
@@ -28,6 +28,10 @@
    <p id="documentQueryCount" class="hint" role="status" aria-live="polite"></p>
    <div id="documentQueryList" aria-busy="false"></div>`;
   main.append(section);
+  section.addEventListener('click',async event=>{
+   const button=event.target.closest('[data-edit-document]');if(!button||!window.SKAdminAuth?.canView?.('actas'))return;
+   await window.SKAdminNav?.go?.('actas');await window.SKActasAdmin?.edit?.(button.dataset.editDocument);
+  });
   section.querySelector('[data-document-query-back]').onclick=()=>window.SKAdminNav?.openQueryMenu?.();
   for(const id of ['documentQuerySearch','documentQueryType','documentQueryFrom','documentQueryTo'])node(id).addEventListener(id==='documentQuerySearch'?'input':'change',draw);
   node('documentQueryClear').onclick=()=>{for(const id of ['documentQuerySearch','documentQueryFrom','documentQueryTo'])node(id).value='';draw();node('documentQuerySearch').focus()};
@@ -70,7 +74,7 @@
   count.textContent=`${rows.length} documento${rows.length===1?'':'s'} encontrado${rows.length===1?'':'s'} · ${type==='ACTA'?'Número de acta: de mayor a menor':'Fecha de origen: del más antiguo al más reciente'}`;
   host.innerHTML=rows.map(row=>{
    const type=typeOf(row),title=`${type==='ACTA'?'Acta':'Oficio'} N.º ${text(row.consecutivo)||'Sin número'}`,url=documentUrl(row.enlace);
-   return `<article class="documentQueryCard"><div class="documentQueryCardHead"><h3>${esc(title)}</h3>${url?`<a class="documentQueryLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(title)}">Abrir ${type==='ACTA'?'acta':'oficio'} ↗</a>`:`<span class="documentQueryNoLink">${text(row.enlace)?'Enlace no válido':'Sin enlace digitalizado'}</span>`}</div>
+   return `<article class="documentQueryCard"><div class="documentQueryCardHead"><h3>${esc(title)}</h3>${window.SKAdminAuth?.canView?.('actas')?`<button type="button" data-edit-document="${esc(row.id)}">✎ EDITAR DOCUMENTO</button>`:''}${url?`<a class="documentQueryLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(title)}">Abrir ${type==='ACTA'?'acta':'oficio'} ↗</a>`:`<span class="documentQueryNoLink">${text(row.enlace)?'Enlace no válido':'Sin enlace digitalizado'}</span>`}</div>
     <dl>${field('Fecha de origen',displayDate(row.fecha))}${type==='ACTA'?field('Área',row.area)+field('Motivo',row.motivo):field('Dirigido a',row.dirigidoA)+field('Asunto',row.asunto)}</dl>
     ${row.syncState==='pending'?'<p class="documentQueryPending">Pendiente de sincronizar</p>':''}</article>`;
   }).join('')||'<p class="hint">No hay documentos que coincidan. Revisa los filtros o sincroniza para recibir registros de otros dispositivos.</p>';
@@ -86,7 +90,7 @@
   finally{if(ticket===version)host.setAttribute('aria-busy','false');}
  }
  window.SKDocumentQuery={mount,render};
- for(const event of ['skweb-db-ready','skweb-synced','skadmin-permissions'])window.addEventListener(event,()=>{
+ for(const event of ['skweb-db-ready','skweb-synced','skadmin-permissions','skweb-documents-changed'])window.addEventListener(event,()=>{
   if(!window.SKAdminAuth?.canView?.('documentQuery')){++version;records=[];draw();node('documentQueryList')?.setAttribute('aria-busy','false');}
   else if(node('documentQuery')?.classList.contains('active'))void render();
  });

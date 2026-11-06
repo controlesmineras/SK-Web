@@ -17,7 +17,7 @@
 
 <script src="asset-record-rules.js?v=20261022-mark-uniqueness-1"></script>
 <script src="cargo-search.js?v=20260927-2"></script><script src="spare-catalog.js?v=20261010-delete-6"></script><script src="asset-history.js?v=20261022-bodega-autosync-1"></script><script src="asset-history-ui.js?v=20261022-bodega-autosync-1"></script><script src="app.js?v=20261104-offline-quantities-2"></script><script src="admin-install-ui.js?v=20261010-spares-5"></script>
-<script src="duplicate-person-guard.js?v=20261020-personal-sync-1"></script>
+<script src="duplicate-person-guard.js?v=20261106-person-document-acta-edit-1"></script>
 <script src="active-asset-count.js?v=20260913-1"></script>
 
 
@@ -49,7 +49,7 @@
 <script src="inventory-admin.js?v=20261104-offline-quantities-2"></script>
 <script src="production-spares.js?v=20261010-1"></script>
 <script src="inventory-stock-query.js?v=20260914-1"></script>
-<script src="actas-admin.js?v=20261016-acta-motivos-1"></script><script src="document-query.js?v=20261020-document-order-1"></script><script src="admin-home-navigation.js?v=20261103-quantities-offline-1"></script>
+<script src="actas-admin.js?v=20261106-person-document-acta-edit-1"></script><script src="document-query.js?v=20261106-person-document-acta-edit-1"></script><script src="admin-home-navigation.js?v=20261103-quantities-offline-1"></script>
 <script src="form-option-catalog.js?v=20261018-assignment-area-1"></script>
 <script>{const button=document.querySelector('#adminHomeInfoToggle'),dialog=document.querySelector('#adminHomeInfoDialog'),close=document.querySelector('#adminHomeInfoClose');const dismiss=()=>{dialog.hidden=true;button.focus()};button?.addEventListener('click',()=>{dialog.hidden=false;close.focus()});dialog?.addEventListener('click',dismiss);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dialog.hidden)dismiss()})}window.addEventListener('load',()=>{let tries=0;const t=setInterval(async()=>{tries++;if(typeof db!=='undefined'&&db){clearInterval(t);try{await seedPersonal();await seedAssets();await refresh();document.querySelector('#syncStatus').textContent=window.skSyncApi?.configured()?'Base local lista · sincronización automática activa.':'Base local lista. Personal y activos cargados.'}catch(e){console.error(e)}}else if(tries>40)clearInterval(t)},250)})</script>
 <script src="admin-language.js?v=20261106-language-menu-1"></script></body></html>

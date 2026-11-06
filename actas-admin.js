@@ -43,7 +43,7 @@ async function render(){
   const list=(await rows()).filter(x=>typeOf(x)===documentType),host=document.getElementById('actaList');
   if(host)host.innerHTML=list.map(x=>{
     const url=documentUrl(x.enlace),label=`${documentType} N.º ${x.consecutivo}`;
-    return `<div class="actaRow"><button type="button" class="actaEdit" data-acta-id="${esc(x.id)}" aria-label="Editar ${esc(label)}"><span><b>${esc(label)}</b><small>${esc(x.fecha||'Sin fecha')} · ${esc(documentType==='ACTA'?x.area||'Sin área':x.dirigidoA||'Sin destinatario')} · ${esc(documentType==='ACTA'?x.motivo||'Sin motivo':x.asunto||'Sin asunto')}</small></span></button>${url?`<a class="actaLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(label)}">ABRIR ${documentType} ↗</a>`:`<span class="actaNoLink">${x.enlace?'ENLACE NO VÁLIDO':'SIN ENLACE'}</span>`}</div>`;
+    return `<div class="actaRow"><button type="button" class="actaEdit" data-acta-id="${esc(x.id)}" aria-label="Editar ${esc(label)}"><span><b>${esc(label)}</b><small>✎ EDITAR DOCUMENTO</small><small>${esc(x.fecha||'Sin fecha')} · ${esc(documentType==='ACTA'?x.area||'Sin área':x.dirigidoA||'Sin destinatario')} · ${esc(documentType==='ACTA'?x.motivo||'Sin motivo':x.asunto||'Sin asunto')}</small></span></button>${url?`<a class="actaLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(label)}">ABRIR ${documentType} ↗</a>`:`<span class="actaNoLink">${x.enlace?'ENLACE NO VÁLIDO':'SIN ENLACE'}</span>`}</div>`;
   }).join('')||`<p class="hint">Aún no hay ${documentType==='ACTA'?'actas':'oficios'} registrados en esta aplicación.</p>`;
   const form=document.getElementById('actaForm');if(form&&!form.elements.id.value)await updateNumber();
 }
@@ -70,7 +70,7 @@ async function save(event){
     if(!existing&&list.some(x=>typeOf(x)===documentType&&Number(x.consecutivo)===consecutivo))throw new Error(`${documentType==='ACTA'?'El acta':'El oficio'} N.º ${consecutivo} ya está ${documentType==='ACTA'?'registrada':'registrado'}. Revisa la lista antes de guardar.`);
     const acta=existing||{id:uuid(),createdAt:stamp};
     Object.assign(acta,{tipo:documentType,consecutivo,fecha:form.elements.fecha.value,area:documentType==='ACTA'?form.elements.area.value:'',motivo:documentType==='ACTA'?form.elements.motivo.value:'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
-    await put('actas',acta);status.hidden=false;status.textContent=existing?'Cambios guardados.':`${documentType==='ACTA'?'Acta':'Oficio'} N.º ${consecutivo} ${documentType==='ACTA'?'registrada':'registrado'} y pendiente de sincronización.`;await render();if(!existing)setTimeout(()=>reset({keepRegistrationMode:true}),900);
+    await put('actas',acta);window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-documents-changed'));status.hidden=false;status.textContent=existing?'Cambios guardados.':`${documentType==='ACTA'?'Acta':'Oficio'} N.º ${consecutivo} ${documentType==='ACTA'?'registrada':'registrado'} y pendiente de sincronización.`;await render();if(!existing)setTimeout(()=>reset({keepRegistrationMode:true}),900);
   }catch(error){status.hidden=false;status.textContent=error?.message||String(error)}
   finally{button.disabled=false}
 }
@@ -89,8 +89,13 @@ function mount(){
   <label class="oficioAsunto" hidden>ASUNTO<input name="asunto" type="text"></label>
   <label class="oficioDestinatario" hidden>DIRIGIDO A<input name="dirigidoA" type="text"></label>
   <label class="documentLinkLabel">ENLACE AL ACTA DIGITALIZADA (OPCIONAL)<input name="enlace" type="url" inputmode="url" placeholder="https://…"></label>
-  <button type="submit" id="actaSave">REGISTRAR ACTA</button><p id="actaStatus" class="status" hidden></p></form><div id="actaList" class="actaList"></div>`;
+  <button type="button" id="actaClearLink">QUITAR ENLACE DEL DOCUMENTO</button><p class="hint">Para reemplazar el documento, quita el enlace anterior y pega el enlace del archivo corregido. Pulsa GUARDAR CAMBIOS para confirmar.</p><button type="submit" id="actaSave">REGISTRAR ACTA</button><p id="actaStatus" class="status" hidden></p></form><div id="actaList" class="actaList"></div>`;
   document.querySelector('main')?.append(section);
+  section.querySelector('#actaClearLink').addEventListener('click',()=>{
+    const form=document.getElementById('actaForm');form.elements.enlace.value='';
+    form.elements.enlace.focus();const status=document.getElementById('actaStatus');
+    status.hidden=false;status.textContent='Enlace quitado del formulario. Guarda los cambios para confirmar o pega el enlace del documento corregido.';
+  });
   section.querySelector('#actaForm').addEventListener('submit',save);
   section.querySelector('#newActa').addEventListener('click',reset);
   section.querySelector('[name="modoRegistro"]').addEventListener('change',()=>{updateMode();document.getElementById('actaStatus').hidden=true;updateNumber();if(isPreviousActa(document.getElementById('actaForm')))document.querySelector('#actaForm [name="numeroAnterior"]').focus()});
@@ -98,6 +103,6 @@ function mount(){
   section.querySelector('#actaList').addEventListener('click',event=>{const row=event.target.closest('[data-acta-id]');if(row)edit(row.dataset.actaId)});
   reset();render();
 }
-window.SKActasAdmin={render,reset};
+window.SKActasAdmin={render,reset,edit};
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();
