@@ -29,6 +29,11 @@ function updateNotCreated(){
  const allowed=Boolean(form.elements.id.value)&&documentType==='ACTA'&&window.SKAdminAuth?.isOwner?.()===true;
  field.hidden=!allowed;
  const selected=form.elements.noElaborada.checked;
+ const special=form.elements.motivo.querySelector('[data-not-created-motive]');
+ if(special){special.hidden=!selected;special.disabled=!selected||!allowed;
+  if(selected&&allowed){if(form.elements.motivo.value!=='NO SE REGISTRÓ')form.dataset.previousMotive=form.elements.motivo.value;form.elements.motivo.value='NO SE REGISTRÓ'}
+  else if(!selected&&form.elements.motivo.value==='NO SE REGISTRÓ')form.elements.motivo.value=form.dataset.previousMotive||'';
+ }
  form.elements.justificacionNoElaborada.disabled=!allowed||!selected;
  form.elements.justificacionNoElaborada.required=allowed&&selected;
  document.getElementById('actaNotCreatedReason').hidden=!selected;
@@ -94,13 +99,14 @@ async function save(event){
       if(wasNotCreated&&!requested)throw new Error('El consecutivo de un acta no elaborada se conserva. No puede reutilizarse.');
       if(requested&&!reason)throw new Error('Escribe por qué el acta no fue elaborada.');
     }
+    if(form.elements.motivo.value==='NO SE REGISTRÓ'&&!requested)throw new Error('El motivo «No se registró» solo corresponde a un acta no elaborada.');
     if(wasNotCreated&&consecutivo!==Number(existing.consecutivo))throw new Error('El número de un acta no elaborada debe conservarse.');
     const acta=existing||{id:uuid(),createdAt:stamp};
     if(documentType==='ACTA'&&existing&&requested&&window.SKAdminAuth?.isOwner?.()===true){
       acta.documentStatus='not_created';acta.notCreatedReason=reason;
       acta.notCreatedAt=acta.notCreatedAt||stamp;
     }
-    Object.assign(acta,{tipo:documentType,consecutivo,fecha:form.elements.fecha.value,area:documentType==='ACTA'?form.elements.area.value:'',motivo:documentType==='ACTA'?form.elements.motivo.value:'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
+    Object.assign(acta,{tipo:documentType,consecutivo,fecha:form.elements.fecha.value,area:documentType==='ACTA'?form.elements.area.value:'',motivo:documentType==='ACTA'?(requested?(window.SKAdminAuth?.isOwner?.()===true?'NO SE REGISTRÓ':existing?.motivo||''):form.elements.motivo.value):'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
     await put('actas',acta);window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-documents-changed'));status.hidden=false;status.textContent=existing?'Cambios guardados.':`${documentType==='ACTA'?'Acta':'Oficio'} N.º ${consecutivo} ${documentType==='ACTA'?'registrada':'registrado'} y pendiente de sincronización.`;await render();if(!existing)setTimeout(()=>reset({keepRegistrationMode:true}),900);
   }catch(error){status.hidden=false;status.textContent=error?.message||String(error)}
   finally{button.disabled=false}
@@ -116,7 +122,7 @@ function mount(){
   <label class="actaPreviousNumber" hidden>NÚMERO ORIGINAL DEL ACTA<input name="numeroAnterior" type="number" min="1" step="1" inputmode="numeric" disabled placeholder="Ejemplo: 8"></label>
   <label>FECHA<input name="fecha" type="date" required></label>
   <label class="actaArea">ÁREA<select name="area"><option value="">SELECCIONAR…</option><option>ADMINISTRATIVA</option><option>BODEGA DE SUPERFICIE</option><option>DESMIN</option><option>DESMIN - OBRAS CIVILES</option><option>PRODUCCIÓN</option><option>SEGURIDAD FÍSICA</option></select></label>
-  <label class="actaMotivo">MOTIVO DEL ACTA<select name="motivo"><option value="">Seleccionar…</option><option value="DE COMPROMISO">De compromiso</option><option value="DAR DE BAJA HERRAMIENTAS">Dar de baja herramientas</option><option value="INVENTARIO GENERAL">Inventario general</option><option value="ENTREGA DE ELEMENTOS">Entrega de elementos</option></select></label>
+  <label class="actaMotivo">MOTIVO DEL ACTA<select name="motivo"><option value="">Seleccionar…</option><option value="NO SE REGISTRÓ" data-not-created-motive hidden disabled>No se registró · Acta no elaborada</option><option value="DE COMPROMISO">De compromiso</option><option value="DAR DE BAJA HERRAMIENTAS">Dar de baja herramientas</option><option value="INVENTARIO GENERAL">Inventario general</option><option value="ENTREGA DE ELEMENTOS">Entrega de elementos</option></select></label>
   <label class="oficioAsunto" hidden>ASUNTO<input name="asunto" type="text"></label>
   <label class="oficioDestinatario" hidden>DIRIGIDO A<input name="dirigidoA" type="text"></label>
   <label class="documentLinkLabel">ENLACE AL ACTA DIGITALIZADA (OPCIONAL)<input name="enlace" type="url" inputmode="url" placeholder="https://…"></label>

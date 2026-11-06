@@ -409,6 +409,9 @@ function validateActaStatus_(incoming,cloud,auth){
  for(const row of incoming.actas||[]){
   if(!row||row.syncState!=='pending')continue;
   const old=(cloud.actas||[]).find(x=>x&&x.id===row.id);
+  const specialMotive=String(row.motivo||'')==='NO SE REGISTRÓ';
+  if(specialMotive&&(row.documentStatus!=='not_created'||row.tipo==='OFICIO'))throw new Error('El motivo «No se registró» solo corresponde a un acta no elaborada.');
+  if(specialMotive&&String(old&&old.motivo||'')!=='NO SE REGISTRÓ'&&(!auth||auth.role!=='owner'))throw new Error('Solo el administrador puede elegir el motivo «No se registró».');
   const changed=protectedKeys.some(key=>String(row[key]||'')!==String(old&&old[key]||''));
   if(changed&&(!auth||auth.role!=='owner'))throw new Error('Solo el administrador puede cambiar el estado de elaboración del acta.');
   if(row.documentStatus==='not_created'){
