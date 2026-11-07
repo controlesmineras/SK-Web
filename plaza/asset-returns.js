@@ -96,7 +96,7 @@
     form.elements.returnedAt.value = localTime(new Date());
     form.scrollIntoView({behavior:'smooth', block:'start'});
   }
-  function save(event) {
+  async function save(event) {
     event.preventDefault();
     if (readOnly || saving) return;
     saving = true;
@@ -120,7 +120,7 @@
         row.balanceAfter = row.balanceBefore + row.quantity;
         stock.quantity = row.balanceAfter; stock.updatedAt = row.updatedAt;
       }
-      app.saveData(next); // Persistir antes de cambiar la pantalla o liberar el activo.
+      await app.saveData(next); // Persistir antes de cambiar la pantalla o liberar el activo.
       reset(); refresh(); app.refreshDelivery(); app.updatePendingBadge(); app.renderRecentQueries();
       alert('RETORNO REGISTRADO\n\nLos elementos volvieron a estar disponibles en bodega. El registro queda guardado en este dispositivo y pendiente de sincronización.');
       app.sync(true);
