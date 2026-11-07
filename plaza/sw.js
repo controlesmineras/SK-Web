@@ -1,4 +1,4 @@
-const VERSION='20261106-person-document-acta-edit-1';
+const VERSION='20261106-sync-errors-1';
 const CACHE=`plaza-blending-shell-${VERSION}`;
 const CORE=['./','./index.html','./plaza.css?v=20261103-first-delivery-1','./plaza-pending.css','./plaza-collaborator.css','./plaza-home.css','./plaza.js?v=20261104-delivery-field-order-1','../asset-history.js','../asset-record-rules.js','./asset-returns.js?v=20261102-plaza-shift-1','./plaza-collaborator.js?v=20261106-person-document-acta-edit-1','./asset-not-found.js','./install-ui.js','./manifest.webmanifest','../sync-config.js','../asset-marking.js','../form-option-catalog.js','../cargo-search.js','../cargo-search.css','./icon-volqueta-32.png','./icon-volqueta-48.png','./icon-volqueta.svg','./icon-volqueta-192.png','./icon-volqueta-512.png','./icon-volqueta-180.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(async cache=>{for(const url of CORE){try{await cache.add(new Request(url,{cache:'reload'}))}catch(error){console.warn('No se pudo precargar',url,error)}}}).then(()=>self.skipWaiting())));
