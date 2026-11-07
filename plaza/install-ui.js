@@ -58,7 +58,7 @@
   function addUpdateAppButton(){const home=document.querySelector('#home');if(!home||document.querySelector('#plazaUpdateAppBtn'))return;const btn=document.createElement('button');btn.id='plazaUpdateAppBtn';btn.type='button';btn.textContent='↻ ACTUALIZAR APP';btn.style.cssText='display:block;margin:16px auto 0;min-height:52px;padding:12px 18px;border-radius:12px;font-weight:800';btn.addEventListener('click',async()=>{if(btn.disabled)return;const old=btn.textContent;try{btn.disabled=true;btn.textContent='↻ ACTUALIZANDO APP…';await updateApp();btn.textContent='✓ APP ACTUALIZADA';setTimeout(()=>{btn.disabled=false;btn.textContent=old},1800)}catch(error){console.error(error);alert(error?.message||'No se pudo actualizar la aplicación.');btn.disabled=false;btn.textContent=old}});home.append(btn)}
   // Plaza.js antiguo enlaza SINCRONIZAR a datos+app. Interceptamos ese toque antes
   // de su listener y disparamos exclusivamente la ruta de sincronización de datos.
-  syncButton?.addEventListener('click',event=>{event.preventDefault();event.stopImmediatePropagation();window.dispatchEvent(new Event('online'))},true);
+  syncButton?.addEventListener('click',event=>{event.preventDefault();event.stopImmediatePropagation();const status=document.querySelector('#syncStatus');if(status)status.hidden=false;if(window.SKPlaza?.sync)void window.SKPlaza.sync(false)},true);
   window.SKPlazaInstall={updateApp};
   updateButton();addUpdateAppButton();register().then(updateButton);window.addEventListener('load',updateButton);
 })();
