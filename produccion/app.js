@@ -1,0 +1,161 @@
+
+'use strict';
+const byId=id=>document.getElementById(id);
+const form=byId('record'),fields=form.elements;
+const status=message=>{byId('status').textContent=message};
+const sessionKey='sk-production-session';
+const db=true;
+async function all(name){return name==='consumptions'?[...(state.consumptions||[]),...(state.pending||[])]:state[name]||[]}
+let session=null,state={},draft=[],syncing=false,saving=false;
+try{session=JSON.parse(localStorage.getItem(sessionKey)||'null')}catch{}
+const invitation=new URLSearchParams(location.hash.slice(1)).get('invitation');
+const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Bogota'}).format(new Date());
+const norm=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const valid=()=>session?.token&&Number(session.expiresAt)>Date.now();
+const database=new Promise((resolve,reject)=>{
+ const request=indexedDB.open('sk-production',1);
+ request.onupgradeneeded=()=>request.result.createObjectStore('accounts');
+ request.onsuccess=()=>resolve(request.result);
+ request.onerror=()=>reject(request.error);
+});
+async function changeState(document,update){
+ const db=await database;
+ return new Promise((resolve,reject)=>{
+  const tx=db.transaction('accounts',update?'readwrite':'readonly'),store=tx.objectStore('accounts'),read=store.get(document);
+  let next;
+  read.onsuccess=()=>{next=read.result||{};if(update){next=update(next);store.put(next,document)}};
+  tx.oncomplete=()=>resolve(next);tx.onabort=()=>reject(tx.error||new Error('No se pudo guardar en este dispositivo'));
+ });
+}
+async function api(action,data={}){
+ const response=await fetch(window.SK_SYNC_CONFIG.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,...data}),signal:AbortSignal.timeout(30000),cache:'no-store',credentials:'omit'});
+ if(!response.ok)throw new Error('Error de conexión ('+response.status+')');
+ const result=await response.json();if(!result.ok)throw new Error(result.error||'No se pudo completar la solicitud');
+ return result;
+}
+const labelAsset=row=>[row.clase,row.modelo,row.marcaActual||row.marcaInterna,row.numeroMarcaActual,row.serial].filter(Boolean).join(' · ');
+function options(select,rows,label){
+ const value=select.value;
+ select.replaceChildren(new Option('Selecciona…',''),...rows.map(row=>new Option(label(row),row.id)));
+ select.value=rows.some(row=>row.id===value)?value:'';
+}
+const personLabel=row=>[row.nombre,row.documento].filter(Boolean).join(' · ');
+function partOptions(){
+ const rows=window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]);
+ return window.SKSpareCatalog.filter(rows,fields.tipoEquipo.value,fields.origen.value);
+}
+function paintParts(){
+ const query=norm(byId('partSearch').value);
+ options(fields.partId,partOptions().filter(row=>norm(row.numero+' '+row.nombre).includes(query)),row=>[row.numero,row.nombre].filter(Boolean).join(' · '));
+}
+function paintPeople(){
+ const query=norm(byId('personSearch').value);
+ options(fields.responsableId,(state.personal||[]).filter(row=>norm(personLabel(row)).includes(query)),personLabel);
+}
+function list(id,rows,label){
+ byId(id).replaceChildren(...rows.map(row=>{const li=document.createElement('li');li.textContent=label(row);return li}));
+}
+function paintDirectory(){
+ const query=norm(byId('directorySearch').value);
+ list('directory',(state.personal||[]).filter(row=>norm(personLabel(row)).includes(query)),personLabel);
+}
+function paintDraft(){
+ byId('draft').replaceChildren(...draft.map((row,index)=>{
+  const li=document.createElement('li'),button=document.createElement('button');
+  li.append(row.nombreRepuesto+' × '+row.cantidad+' · '+row.origen+' ');
+  button.type='button';button.textContent='Quitar';button.onclick=()=>{draft.splice(index,1);paintDraft()};
+  li.append(button);return li;
+ }));
+}
+function paint(){
+ options(fields.assetId,(state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value))),labelAsset);
+ paintParts();paintPeople();paintDirectory();paintDraft();
+ const assets=new Map((state.assets||[]).map(row=>[row.id,labelAsset(row)]));
+ byId('history').replaceChildren(...[...(state.consumptions||[]),...(state.pending||[])].sort((a,b)=>b.fechaISO.localeCompare(a.fechaISO)).map(row=>{
+  const tr=document.createElement('tr');
+  for(const value of [row.fechaISO,assets.get(row.assetId)||row.assetId,row.origen,row.nombreRepuesto,row.cantidad,row.registradoPor?'Sincronizado':'Pendiente']){const td=document.createElement('td');td.textContent=value;tr.append(td)}
+  return tr;
+ }));
+ list('deliveries',state.deliveries||[],row=>[row.createdAt?.slice(0,10),row.itemName,row.quantity,row.reversed?'Reversado':''].filter(Boolean).join(' · '));
+ byId('sync').textContent='Sincronizar ('+(state.pending||[]).length+' pendientes)';
+ window.dispatchEvent(new Event('skweb-consumption-changed'));
+}
+async function sync(){
+ if(!valid()||syncing)return;
+ if(!navigator.onLine)return status('Sin conexión. Los consumos pendientes quedan en este dispositivo.');
+ const active=session,document=active.user.document;
+ syncing=true;byId('sync').disabled=true;
+ try{
+  const local=await changeState(document),pending=(local.pending||[]).slice(0,1000);
+  status('Sincronizando Producción…');
+  const data=await api('productionSync',{token:active.token,pending});
+  const acknowledged=new Set(data.ack);
+  const fresh=await changeState(document,current=>({...data,pending:(current.pending||[]).filter(row=>!acknowledged.has(row.id))}));
+  if(session===active){state=fresh;paint();status('Sincronización completa. '+state.pending.length+' pendientes.')}
+ }catch(error){if(session===active)status(error.message+' Los pendientes siguen guardados.')}
+ finally{syncing=false;byId('sync').disabled=false}
+}
+async function openWorkspace(){
+ if(!valid())return;
+ state=await changeState(session.user.document);
+ byId('access').hidden=true;byId('workspace').hidden=false;byId('logout').hidden=false;
+ byId('operator').textContent=session.user.name;
+ fields.fechaISO.value=today();paint();window.dispatchEvent(new Event('skweb-open-queries'));await sync();
+}
+function currentPart(){
+ const part=partOptions().find(row=>row.id===fields.partId.value),cantidad=Number(fields.cantidad.value);
+ if(!part||!Number.isSafeInteger(cantidad)||cantidad<1)throw new Error('Selecciona un repuesto e ingresa una cantidad entera mayor que cero.');
+ return {partId:part.id,itemId:part.criterionId||'',noItem:part.numero||'',nombreRepuesto:part.nombre,cantidad,origen:fields.tipoEquipo.value+fields.origen.value,tipoEquipo:fields.tipoEquipo.value};
+}
+byId('addPart').onclick=()=>{
+ if(saving)return;
+ try{draft.push(currentPart());fields.partId.value='';fields.cantidad.value=1;byId('partSearch').value='';paintParts();paintDraft();status('Repuesto agregado a la lista.')}
+ catch(error){status(error.message)}
+};
+form.onsubmit=async event=>{
+ event.preventDefault();if(saving)return;
+ if(!valid())return status('La sesión venció. Vuelve a iniciar sesión para guardar.');
+ const active=session;
+ saving=true;form.querySelector('[type=submit]').disabled=true;
+ try{
+  const lines=draft.slice();if(fields.partId.value||!lines.length||byId('partSearch').value.trim())lines.push(currentPart());
+  if(lines.some(row=>row.tipoEquipo!==fields.tipoEquipo.value))throw new Error('Todos los repuestos deben corresponder al tipo de máquina seleccionado.');
+  const shared={assetId:fields.assetId.value,responsableId:fields.responsableId.value,fechaISO:fields.fechaISO.value};
+  const records=lines.map(row=>({...shared,...row,id:crypto.randomUUID(),createdAt:new Date().toISOString()}));
+  const fresh=await changeState(active.user.document,current=>({...current,pending:[...(current.pending||[]),...records]}));
+  if(session===active){state=fresh;draft=[];fields.partId.value='';fields.cantidad.value=1;byId('partSearch').value='';paint();status('Consumos guardados. '+state.pending.length+' pendientes de sincronizar.')}
+ }catch(error){status(error.message)}
+ finally{saving=false;form.querySelector('[type=submit]').disabled=false}
+};
+function submitAccess(id,handler){
+ byId(id).onsubmit=async event=>{
+  event.preventDefault();const button=event.currentTarget.querySelector('button'),values=Object.fromEntries(new FormData(event.currentTarget));
+  if(button.disabled)return;
+  button.disabled=true;try{await handler(values)}catch(error){status(error.message)}finally{button.disabled=false}
+ };
+}
+submitAccess('login',async values=>{
+ const data=await api('productionLogin',values);
+ session={token:data.token,expiresAt:data.expiresAt,user:data.user};localStorage.setItem(sessionKey,JSON.stringify(session));
+ byId('login').reset();await openWorkspace();
+});
+submitAccess('activate',async values=>{
+ await api('accessInvitationAccept',{...values,invitation});history.replaceState(null,'',location.pathname);
+ byId('activate').reset();byId('activate').hidden=true;byId('login').hidden=false;byId('login').elements.document.value=values.document;
+ status('Acceso activado. Ingresa con tu nueva contraseña.');
+});
+byId('logout').onclick=()=>{
+ session=null;state={};draft=[];localStorage.removeItem(sessionKey);
+ byId('workspace').hidden=true;byId('logout').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
+};
+byId('sync').onclick=sync;window.addEventListener('online',sync);
+fields.tipoEquipo.onchange=paint;fields.origen.onchange=paintParts;
+byId('partSearch').oninput=paintParts;byId('personSearch').oninput=paintPeople;byId('directorySearch').oninput=paintDirectory;
+if(invitation){
+ byId('login').hidden=true;
+ api('accessInvitationInfo',{invitation}).then(info=>{
+  if(info.scope!=='production')throw new Error('Esta invitación corresponde a otra aplicación');
+  byId('activate').elements.document.value=info.document;byId('activate').hidden=false;
+ }).catch(error=>{status(error.message);byId('login').hidden=false});
+}else openWorkspace().catch(error=>status(error.message));
+navigator.serviceWorker?.register('sw.js').catch(console.error);
