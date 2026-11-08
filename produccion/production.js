@@ -43,7 +43,8 @@ async function renderHistory(){
     [row.fechaLocal,row.origen,row.noItem,row.nombreRepuesto,'× '+row.cantidad,row.syncState==='pending'?'Pendiente':''].filter(Boolean).join(' · '));
   $('#sync').textContent='Sincronizar ('+rows.filter(row=>row.syncState==='pending').length+' pendientes)';
   const deliveries=(await all('deliveries')).filter(row=>!row.deleted&&!row.reversalOf);
-  displayList('#deliveries',deliveries.sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),row=>
+  if(!deliveries.length)$('#deliveries').replaceChildren(Object.assign(document.createElement('li'),{textContent:'Aún no hay ingresos de Plaza Blending.'}));
+  else displayList('#deliveries',deliveries.sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))),row=>
     [row.createdAt?.slice(0,10),row.itemName,'× '+row.quantity,row.reversed?'Reversada':''].filter(Boolean).join(' · '));
 }
 function saveSnapshot(data){
@@ -112,6 +113,14 @@ window.addEventListener('load',async()=>{
       $('#login').reset();
     }catch(error){$('#status').textContent=error.message}
     finally{loading=false;$('#login button').disabled=false}
+  };
+  const sectionButtons=document.querySelectorAll('[data-production-panel]');
+  for(const button of sectionButtons)button.onclick=()=>{
+    for(const sectionButton of sectionButtons){
+      const selected=sectionButton===button;
+      sectionButton.setAttribute('aria-pressed',String(selected));
+      document.getElementById(sectionButton.dataset.productionPanel).hidden=!selected;
+    }
   };
   $('#sync').onclick=sync;
   $('#logout').onclick=async()=>{
