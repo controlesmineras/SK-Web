@@ -8,10 +8,13 @@
 [hidden]{display:none!important}main{max-width:900px;margin:auto}header{justify-content:space-between}section{margin:16px 0}fieldset{border:0;padding:0;margin:0;display:grid;gap:12px}form{margin:12px 0}label{min-width:0}select,input{max-width:100%}.productionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.productionActions button{min-height:48px}.tableWrap{overflow:auto}li{margin:6px 0}#status{white-space:pre-wrap}details{margin:12px 0}summary{cursor:pointer;font-weight:700}
 </style>
 <script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=1"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
 <header><strong>Producción · SK 3.7</strong><button id="logout" type="button" hidden>Cerrar sesión</button></header>
 <main>
+<button type="button" id="installProduction" aria-describedby="installProductionHelp">INSTALAR</button>
+<p id="installProductionHelp" class="hint" role="status" hidden></p>
 <p id="status" role="status" aria-live="polite"></p>
 <section id="access">
 <h2>Acceso a Producción</h2>
