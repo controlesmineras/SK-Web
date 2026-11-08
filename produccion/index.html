@@ -4,6 +4,8 @@
 <link rel="stylesheet" href="../styles.css"><link rel="stylesheet" href="production.css"><link rel="icon" href="produccion-192.png"><link rel="apple-touch-icon" href="produccion-192.png"><link rel="manifest" href="manifest.webmanifest">
 </head><body><main>
 <div class="production-heading"><img src="produccion-192.png" alt="SK Producción" width="68" height="68"><h1>CONSUMO DE REPUESTOS</h1></div>
+<button type="button" id="installProduction" aria-describedby="installProductionHelp">INSTALAR</button>
+<p id="installProductionHelp" class="hint" role="status" hidden></p>
 <form id="login"><label>Documento<input name="document" inputmode="numeric" autocomplete="username" required></label>
 <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
 <button>Ingresar</button></form>
@@ -25,6 +27,7 @@
 </section>
 <details><summary>Personal</summary><input id="personalSearch" placeholder="Buscar personal" aria-label="Buscar personal"><p id="personalShown"></p><div id="personalList"></div></details>
 </div></main>
+<script src="install-ui.js"></script>
 <script src="../sync-config.js"></script>
 <script src="production.js"></script>
 <script src="../asset-field-compat.js"></script>
