@@ -57,7 +57,7 @@
 <script src="form-option-catalog.js?v=20261018-assignment-area-1"></script>
 <script>{const button=document.querySelector('#adminHomeInfoToggle'),dialog=document.querySelector('#adminHomeInfoDialog'),close=document.querySelector('#adminHomeInfoClose');const dismiss=()=>{dialog.hidden=true;button.focus()};button?.addEventListener('click',()=>{dialog.hidden=false;close.focus()});dialog?.addEventListener('click',dismiss);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dialog.hidden)dismiss()})}window.addEventListener('load',()=>{let tries=0;const t=setInterval(async()=>{tries++;if(typeof db!=='undefined'&&db){clearInterval(t);try{await seedPersonal();await seedAssets();await refresh();document.querySelector('#syncStatus').textContent=window.skSyncApi?.configured()?'Base local lista · sincronización automática activa.':'Base local lista. Personal y activos cargados.'}catch(e){console.error(e)}}else if(tries>40)clearInterval(t)},250)})</script>
 <script src="admin-language.js?v=20261108-menu-dots-1"></script><script src="production-access-admin.js?v=20261108-production-users-order-1"></script><dialog id="skLinksDialog" aria-labelledby="skLinksTitle" style="width:min(480px,90vw);box-sizing:border-box;border:0;border-radius:14px;padding:18px;color:#102f45;background:#fff">
-<h2 id="skLinksTitle">Enlaces</h2>
+<h2 id="skLinksTitle" style="margin:0"><button id="skLinksClose" type="button" autofocus title="Replegar enlaces" style="position:relative;width:100%;min-height:48px;padding:10px 40px;text-align:center;background:#e8f2f8;color:#102f45;border:1px solid #bfd4e2;border-radius:12px;font-size:1.1rem">ENLACES<svg aria-hidden="true" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="position:absolute;right:14px;top:50%;transform:translateY(-50%)"><path d="m6 15 6-6 6 6"/></svg></button></h2>
 <ul style="list-style:none;padding:0;display:grid;gap:8px">
 <li style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px"><a href="./" target="_blank" rel="noopener noreferrer">SK Web Admin</a><button type="button" data-copy-link aria-label="Copiar enlace de SK Web Admin">Copiar</button></li>
 <li style="display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:12px"><a href="https://controlesmineras.github.io/Gestion-de-Personal/" target="_blank" rel="noopener noreferrer">Personal</a><button type="button" data-copy-link aria-label="Copiar enlace de Personal">Copiar</button></li>
@@ -66,7 +66,6 @@
 </ul>
 <p id="skLinksStatus" role="status"></p>
 <input id="skLinksCopyFallback" type="url" readonly hidden aria-label="Enlace para copiar">
-<button id="skLinksClose" type="button">Cerrar</button>
 </dialog>
 <script>
 {
