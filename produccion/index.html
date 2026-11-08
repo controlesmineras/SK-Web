@@ -3,6 +3,8 @@
 <head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="theme-color" content="#102f45"><link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="./produccion-192.png" type="image/png">
+<link rel="apple-touch-icon" href="./produccion-192.png">
 <title>Producción SK 3.7</title><link rel="stylesheet" href="../styles.css">
 <style>
 [hidden]{display:none!important}main{max-width:900px;margin:auto}header{justify-content:space-between}section{margin:16px 0}fieldset{border:0;padding:0;margin:0;display:grid;gap:12px}form{margin:12px 0}label{min-width:0}select,input{max-width:100%}.productionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.productionActions button{min-height:48px}.tableWrap{overflow:auto}li{margin:6px 0}#status{white-space:pre-wrap}details{margin:12px 0}summary{cursor:pointer;font-weight:700}
@@ -11,7 +13,7 @@
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
-<header><strong>Producción · SK 3.7</strong><button id="logout" type="button" hidden>Cerrar sesión</button></header>
+<header><strong style="display:flex;align-items:center;gap:8px"><img src="./produccion-192.png" width="44" height="44" alt="">Producción · SK 3.7</strong><button id="logout" type="button" hidden>Cerrar sesión</button></header>
 <main>
 <button type="button" id="installProduction" aria-describedby="installProductionHelp">INSTALAR</button>
 <p id="installProductionHelp" class="hint" role="status" hidden></p>
@@ -23,7 +25,7 @@
 </section>
 <section id="workspace" hidden>
 <p id="operator"></p><button id="sync" type="button">Sincronizar</button>
-<h2>Consumo de repuestos</h2>
+<h2>CONSUMO DE REPUESTOS</h2>
 <form id="record">
 <label>Tipo de equipo<select name="tipoEquipo"><option>YT</option><option>Columna</option></select></label>
 <label>Máquina<select name="assetId" required></select></label>
