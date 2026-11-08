@@ -6,8 +6,11 @@ function mount(){
  const home=document.querySelector('#home .homeAccess');
  if(!home||document.getElementById('productionUsersBtn'))return;
  const button=document.createElement('button');
- button.type='button';button.id='productionUsersBtn';button.className='homeAccessBtn';button.textContent='USUARIOS PRODUCCIÓN';
- button.onclick=open;home.append(button);
+ button.type='button';button.id='productionUsersBtn';button.className='homeAccessBtn';button.textContent='USUARIOS DE PRODUCCIÓN';button.style.gridColumn='1 / -1';
+ button.onclick=open;
+ const adminButton=document.getElementById('adminUsersBtn');
+ if(adminButton)adminButton.before(button);
+ else (home.querySelector('.adminAccessRow')||home).append(button);
 }
 let dialog;
 async function open(){
