@@ -91,6 +91,10 @@ const deviceAccess=createDeviceAccess('sk-plaza');
     input.setAttribute('aria-label','Buscar y seleccionar el activo específico');input.setAttribute('role','combobox');input.setAttribute('aria-autocomplete','list');input.setAttribute('aria-controls','deliveryAssetSearchMenu');input.setAttribute('aria-expanded','false');
     menu.id='deliveryAssetSearchMenu';menu.className='itemSearchMenu';menu.hidden=true;menu.setAttribute('role','listbox');menu.setAttribute('aria-label','Activos disponibles');
     select.hidden=true;select.required=false;field.insertBefore(input,select);field.append(menu);
+    const warning=document.createElement('p');
+    warning.className='permission';warning.hidden=true;warning.setAttribute('role','status');
+    warning.style.cssText='margin:8px 0;color:#7a350d;background:#fff2d9;white-space:pre-wrap';
+    field.append(warning);
     let editing=false,typing=false,lastItemId='',visibleRows=[],activeIndex=-1;
     const close=()=>{menu.hidden=true;field.classList.remove('isOpen');input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');activeIndex=-1};
     const draw=()=>{
@@ -106,6 +110,10 @@ const deviceAccess=createDeviceAccess('sk-plaza');
       if(!fixed||changed){editing=false;input.value='';close()}
       const asset=fixed?availableAssets(item).find(row=>row.id===select.value):null;
       if(asset){input.value=assetSelectionLabel(asset);editing=false}else if(!editing)input.value='';
+      const damaged=asset&&window.SKAssetHistory.damaged(asset);
+      const note=damaged?window.SKAssetHistory.latestIncomeNote(asset,data):'';
+      warning.hidden=!damaged;
+      warning.textContent=damaged?'Estado del activo: '+asset.estado+'.'+(note?'\nObservación del ingreso: '+note:''):'';
       input.setCustomValidity(fixed&&!asset?'Selecciona un activo de la lista.':'');
       if(!menu.hidden)draw();
     };

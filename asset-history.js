@@ -52,6 +52,16 @@
   }
   return [...entries.values()].sort((a,b)=>b.epoch-a.epoch||b.order-a.order);
  }
+ function damaged(asset){return /^averiad(?:o|a|o\/a)?\b|^en reparacion\b/.test(norm(asset?.estado));}
+ function operationStatus(asset){
+  const state=norm(asset?.estado);
+  if(!state)return '';
+  return /^operativ(?:o|a|o\/a)?\b/.test(state)&&!retired(asset)?'Sí':'No';
+ }
+ function latestIncomeNote(asset,data){
+  const event=timeline(data,asset.id).find(entry=>entry.kind==='income'&&!entry.reversed&&!entry.raw.reversalOf&&norm(entry.raw.movementType)!=='reversion');
+  return text(event?.raw.notes);
+ }
  function project(asset,data){
   const events=timeline(data,asset.id),active=events.filter(e=>!e.reversed),latest=active[0],result={...asset};
   // A previously displayed source event is not an independent manual snapshot.
@@ -61,7 +71,7 @@
   if(latest&&latest.epoch&&latest.epoch>=snapshotTime){
    Object.assign(result,{fechaNovedad:latest.date,horaNovedad:latest.time,descripcionNovedad:latest.title,documentoResponsable:latest.responsible.document,nombreResponsable:latest.responsible.name,documentoBodeguero:latest.warehouse.document,nombreBodeguero:latest.warehouse.name});
    if(!retired(asset)&&latest.location)result.ubicacion=latest.kind==='assignment'?assignmentLocation(latest.raw,latest.responsible):latest.location;
-   result.disponibleEntrega=!retired(result)&&norm(result.ubicacion)==='bodega de superficie'&&!(latest.kind==='income'&&norm(latest.raw.incomeType)==='reparacion')?'Sí':'No';
+
    // Keep the stored physical state: an assignment by itself does not certify operability.
   }
   if(!latest&&linkedSnapshot)Object.assign(result,{fechaNovedad:'',horaNovedad:'',descripcionNovedad:'',documentoResponsable:'',nombreResponsable:'',documentoBodeguero:'',nombreBodeguero:''});
@@ -81,8 +91,9 @@
   // Guardar una edición de la ficha no debe recuperar después un área histórica.
   const areaRevision=asset.areaAsignadaRevision;
   if(areaRevision&&millis(areaRevision.at)>0&&millis(areaRevision.at)>=(areaEvent?.epoch||0)&&!retired(result))result.areaAsignada=text(areaRevision.value);
+  result.disponibleEntrega=operationStatus(result);
   return {asset:result,events,latest,assigned};
  }
- function available(asset,data){const current=project(asset,data).asset;return !current.deleted&&!retired(current)&&norm(current.ubicacion)==='bodega de superficie'&&norm(current.disponibleEntrega)!=='no';}
- return {timeline,project,localTime,available,inventoryLocation,assignmentArea,assignmentLocation};
+ function available(asset,data){const current=project(asset,data).asset;return !current.deleted&&!retired(current)&&norm(current.ubicacion)==='bodega de superficie';}
+ return {timeline,project,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
 });
