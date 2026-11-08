@@ -66,9 +66,9 @@
    ${group('Información principal',[
     field('Clase',a.clase),field('Número de clase',canonical.numeroClase),
     field('Modelo',a.modelo),field('Marca comercial',a.fabricante),
-    field('Marca actual',canonical.marcaActual),field('No. de marca actual',canonical.numeroMarcaActual),
+    field('MARCA',canonical.marcaActual),field('No. de marca actual',canonical.numeroMarcaActual),
     field('Nueva marca',a.nuevaMarca),field('Marca anterior',a.marcaPrevia),
-    column?'':field('Serial',a.serial||window.SKAssetRules?.serialStatusLabel(a)),
+    column&&window.SKAssetOwnership.isSK(a)?'':field('Serial',a.serial||window.SKAssetRules?.serialStatusLabel(a)),
     column||text(a.largo)?field('Largo (ft)',a.largo):'',
     selfRescuer||text(a.estadoVisor)?field('Color del visor',a.estadoVisor):'',
     field('¿Marcada físicamente?',a.marcada),field('Mina propietaria',a.mina),
