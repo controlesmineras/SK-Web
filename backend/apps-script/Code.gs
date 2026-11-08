@@ -34,7 +34,8 @@ function accessInvitationCreate_(q){
   Object.keys(old).filter(k=>k.indexOf('SK_INVITE_')===0).forEach(k=>{try{const v=JSON.parse(old[k]);if(v.expires<Date.now()||(v.scope===scope&&v.document===document))props.deleteProperty(k)}catch(_){props.deleteProperty(k)}});
   const secret=[Utilities.getUuid(),Utilities.getUuid(),Utilities.getUuid()].join('').replace(/-/g,'');
   const expires=Date.now()+24*60*60*1000;
-  const plazaAccess=scope==='plaza'?{plazaRole:q.plazaRole==='assistant'?'assistant':'operator'}:{};
+  const plazaRole=q.plazaRole==='supervisor'&&person.plazaEnabled&&person.plazaRole==='supervisor'?'supervisor':q.plazaRole==='assistant'?'assistant':'operator';
+  const plazaAccess=scope==='plaza'?{plazaRole}:{};
   props.setProperty(invitationKey_(secret),JSON.stringify({scope:scope,personId:person.id,document:document,expires:expires,...plazaAccess}));
   return json_({ok:true,token:secret,document:document,name:person.nombre||'',...plazaAccess,expiresAt:new Date(expires).toISOString()});
  }finally{lock.releaseLock()}
@@ -46,7 +47,7 @@ function accessInvitationAccept_(q){const password=String(q.password||'');if(pas
  try{const invite=invitationRecord_(q),row=invite.row,document=String(q.document||'').trim();if(document!==row.document)throw new Error('El documento no corresponde a la invitación');
   const fileId=findFile_(),cloud=fileId?readFile_(fileId):{},person=(cloud.personal||[]).find(x=>x&&x.id===row.personId&&!x.deleted&&String(x.documento||'').trim()===document);
   if(!person)throw new Error('El colaborador ya no está disponible en Personal');const now=new Date().toISOString();
-  if(row.scope==='plaza'){(cloud.personal||[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()===document).forEach(x=>{x.pinHash=hashPin_(document,password);x.plazaEnabled=true;x.plazaRole=row.plazaRole==='assistant'?'assistant':'operator';x.updatedAt=now});cloud.updatedAt=nextRevision_(cloud.updatedAt);writeFile_(fileId,cloud)}
+  if(row.scope==='plaza'){(cloud.personal||[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()===document).forEach(x=>{x.pinHash=hashPin_(document,password);x.plazaEnabled=true;x.plazaRole=['assistant','supervisor'].includes(row.plazaRole)?row.plazaRole:'operator';x.updatedAt=now});cloud.updatedAt=nextRevision_(cloud.updatedAt);writeFile_(fileId,cloud)}
   else if(row.scope==='production'){saveProductionAccess_(person,hashPin_(document,password))}
   else if(row.scope==='admin'){const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');if(area!=='seguridad fisica')throw new Error('El colaborador ya no pertenece a Seguridad física');const users=adminUsers_();let user=users.find(x=>x.role!=='owner'&&(x.personId===person.id||x.document===document));if(!user){if(users.some(x=>x.username===document))throw new Error('El documento ya está registrado como otro usuario');user={id:'ADMIN-'+Utilities.getUuid(),createdAt:now};users.push(user)}user.personId=person.id;user.document=document;user.username=document;user.name=person.nombre||document;user.role='assistant';user.enabled=true;user.passwordHash=hashPin_(document,password);user.updatedAt=now;saveAdminUsers_(users)}
   else throw new Error('Aplicación no válida');PropertiesService.getScriptProperties().deleteProperty(invite.key);return json_({ok:true,scope:row.scope});
