@@ -16,7 +16,7 @@ function mount(){
 const apps={
  admin:{name:'SK Web Admin',roles:{assistant:'Auxiliar administrativo'}},
  plaza:{name:'Plaza Blending',roles:{assistant:'Auxiliar',operator:'Bodeguero/a',supervisor:'Supervisor/a'}},
- production:{name:'Producción',roles:{operator:'Usuario de Producción'}}
+ production:{name:'Producción',roles:{mechanic:'Mecánico',assistant:'Auxiliar',admin:'Administrador'}}
 };
 const normalize=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const doc=person=>String(person?.documento??person?.document??'').trim();
@@ -86,11 +86,11 @@ async function open(scope){
   title.textContent=(existing?'Gestionar accesos de ':'Nuevo acceso para ')+identity(row);
   manage.replaceChildren(title);
   let role;
-  if(scope==='plaza'){
+  if(scope!=='admin'){
    const label=document.createElement('label');
-   label.textContent='Rol en Plaza Blending';role=document.createElement('select');
-   for(const key of ['assistant','operator'])role.add(new Option(app.roles[key],key));
-   if(row.role==='supervisor')role.add(new Option(app.roles.supervisor,'supervisor'));
+   label.textContent='Rol en '+app.name;role=document.createElement('select');
+   for(const key of scope==='production'?Object.keys(app.roles):['assistant','operator'])role.add(new Option(app.roles[key],key));
+   if(scope==='plaza'&&row.role==='supervisor')role.add(new Option(app.roles.supervisor,'supervisor'));
    role.value=row.role||'assistant';label.append(role);manage.append(label);
   }
   manage.append(button(existing?'Generar enlace con el rol seleccionado':'Generar enlace',()=>generate(row,role?.value||row.role)));
@@ -109,8 +109,10 @@ async function open(scope){
   run('Generando invitación para '+identity(row)+'…',async()=>{
    const data={scope,personId:row.personId};
    if(scope==='plaza')data.plazaRole=role;
+   if(scope==='production')data.productionRole=role;
    const result=await request('accessInvitationCreate',data);
    if(scope==='plaza'&&result.plazaRole!==role)throw new Error('El servicio devolvió un rol distinto. Revisa la versión de Code.gs.');
+   if(scope==='production'&&result.productionRole!==role)throw new Error('Actualiza y despliega Code.gs para asignar roles de Producción.');
    if(!result.token)throw new Error('El servicio no devolvió una invitación.');
    const url=new URL(scope==='production'?'produccion/':'crear-acceso.html',location.href);
    if(scope==='production')url.hash=new URLSearchParams({invitation:result.token});
@@ -163,7 +165,7 @@ async function open(scope){
   });
   if(production.status==='fulfilled')access.production=(production.value.users||[]).filter(row=>row.enabled!==false).map(row=>{
    const person=people.find(p=>same({personId:p.id,document:doc(p)},row));
-   return {...person,...row,nombre:person?.nombre||row.name||row.nombre,role:row.role||'operator'};
+   return {...person,...row,nombre:person?.nombre||row.name||row.nombre,role:row.role||'assistant'};
   });
   renderActive();renderSearch();
   const missing=Object.keys(access).filter(key=>!access[key]).map(key=>apps[key].name);
