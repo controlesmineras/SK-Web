@@ -11,6 +11,8 @@ try{session=JSON.parse(localStorage.getItem(sessionKey)||'null')}catch{}
 const invitation=new URLSearchParams(location.hash.slice(1)).get('invitation');
 const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Bogota'}).format(new Date());
 const norm=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
+const roleLabels={admin:'Administrador',assistant:'Auxiliar',mechanic:'Mecánico'};
+const ownPerson=()=>session.user.personId||(state.personal||[]).find(row=>String(row.documento).trim()===session.user.document)?.id;
 const valid=()=>session?.token&&Number(session.expiresAt)>Date.now();
 const database=new Promise((resolve,reject)=>{
  const request=indexedDB.open('sk-production',1);
@@ -50,7 +52,12 @@ function paintParts(){
 }
 function paintPeople(){
  const query=norm(byId('personSearch').value);
- options(fields.responsableId,(state.personal||[]).filter(row=>norm(personLabel(row)).includes(query)),personLabel);
+ const mechanic=session?.user.role==='mechanic';
+ byId('responsibleSearchLabel').hidden=mechanic;
+ fields.responsableId.disabled=mechanic;
+ const people=(state.personal||[]).filter(row=>mechanic?row.id===ownPerson():norm(personLabel(row)).includes(query));
+ options(fields.responsableId,people,personLabel);
+ if(mechanic)fields.responsableId.value=ownPerson()||'';
 }
 function list(id,rows,label){
  byId(id).replaceChildren(...rows.map(row=>{const li=document.createElement('li');li.textContent=label(row);return li}));
@@ -70,10 +77,11 @@ function paintDraft(){
 function paint(){
  options(fields.assetId,(state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value))),labelAsset);
  paintParts();paintPeople();paintDirectory();paintDraft();
+ const people=new Map((state.personal||[]).map(row=>[row.id,row.nombre]));
  const assets=new Map((state.assets||[]).map(row=>[row.id,labelAsset(row)]));
- byId('history').replaceChildren(...[...(state.consumptions||[]),...(state.pending||[])].sort((a,b)=>b.fechaISO.localeCompare(a.fechaISO)).map(row=>{
+ byId('history').replaceChildren(...[...(state.consumptions||[]),...(state.pending||[]).map(row=>({...row,syncState:'pending'}))].sort((a,b)=>b.fechaISO.localeCompare(a.fechaISO)).map(row=>{
   const tr=document.createElement('tr');
-  for(const value of [row.fechaISO,assets.get(row.assetId)||row.assetId,row.origen,row.nombreRepuesto,row.cantidad,row.registradoPor?'Sincronizado':'Pendiente']){const td=document.createElement('td');td.textContent=value;tr.append(td)}
+  for(const value of [row.fechaISO,assets.get(row.assetId)||row.assetId,row.origen,row.nombreRepuesto,row.cantidad,row.responsableNombre||people.get(row.responsableId)||'—',row.registradoPorNombre||row.registradoPor||(row.syncState==='pending'?session.user.name:'—'),row.syncState==='pending'?'Pendiente':'Sincronizado']){const td=document.createElement('td');td.textContent=value;tr.append(td)}
   return tr;
  }));
  list('deliveries',state.deliveries||[],row=>[row.createdAt?.slice(0,10),row.itemName,row.quantity,row.reversed?'Reversado':''].filter(Boolean).join(' · '));
@@ -99,7 +107,7 @@ async function openWorkspace(){
  if(!valid())return;
  state=await changeState(session.user.document);
  byId('access').hidden=true;byId('workspace').hidden=false;byId('logout').hidden=false;
- byId('operator').textContent=session.user.name;
+ byId('operator').textContent=session.user.name+' · '+(roleLabels[session.user.role]||'Auxiliar');
  fields.fechaISO.value=today();paint();window.dispatchEvent(new Event('skweb-open-queries'));await sync();
 }
 function currentPart(){
@@ -121,7 +129,8 @@ form.onsubmit=async event=>{
   const lines=draft.slice();if(fields.partId.value||!lines.length||byId('partSearch').value.trim())lines.push(currentPart());
   if(lines.some(row=>row.tipoEquipo!==fields.tipoEquipo.value))throw new Error('Todos los repuestos deben corresponder al tipo de máquina seleccionado.');
   const shared={assetId:fields.assetId.value,responsableId:fields.responsableId.value,fechaISO:fields.fechaISO.value};
-  const records=lines.map(row=>({...shared,...row,id:crypto.randomUUID(),createdAt:new Date().toISOString()}));
+  if(!shared.responsableId)throw new Error('Selecciona el mecánico o responsable de la reparación.');
+  const records=lines.map(row=>({...shared,...row,syncState:'pending',registradoPorNombre:active.user.name,id:crypto.randomUUID(),createdAt:new Date().toISOString()}));
   const fresh=await changeState(active.user.document,current=>({...current,pending:[...(current.pending||[]),...records]}));
   if(session===active){state=fresh;draft=[];fields.partId.value='';fields.cantidad.value=1;byId('partSearch').value='';paint();status('Consumos guardados. '+state.pending.length+' pendientes de sincronizar.')}
  }catch(error){status(error.message)}
