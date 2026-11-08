@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="es"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Producción | SK</title><meta name="theme-color" content="#173d59">
+<link rel="stylesheet" href="../styles.css"><link rel="manifest" href="manifest.webmanifest">
+</head><body><main>
+<h1>Producción</h1>
+<form id="login"><label>Documento<input name="document" inputmode="numeric" autocomplete="username" required></label>
+<label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
+<button>Ingresar</button></form>
+<p id="status" role="status"></p>
+<div id="productionWorkspace" hidden>
+<button type="button" id="sync">Sincronizar</button> <button type="button" id="logout">Cerrar sesión</button>
+<h2>Consumo de repuestos</h2>
+<form id="consumptionForm"><input type="hidden" name="bodega" value="Producción"><label>Tipo de equipo<select id="equipmentType" required><option value="YT" selected>YT</option><option value="Columna">Columna</option></select></label><label>Número de YT / marca actual<input id="conAssetSearch" autocomplete="off" required></label><select name="assetId" id="conAsset" hidden><option value=""></option></select><label>Modelo<input id="conModel" class="derived" readonly></label><label id="serialField">Serial<input id="conSerial" class="derived" readonly></label><label>Inventario origen<select name="origen" id="origin"><option>YT29</option><option>YT28</option></select></label><label>Buscador item<input id="partSearch" autocomplete="off" required></label><select name="partId" id="part" hidden><option value=""></option></select><label>No. de item<input id="partNo" class="derived" readonly></label><label>Nombre de repuesto<input id="partName" class="derived" readonly></label><label>Cantidad<input name="cantidad" type="number" min="1" value="1" required></label><label>Responsable<input id="responsibleSearch" autocomplete="off" required><select name="responsableId" id="responsible" hidden></select></label><button>Registrar consumo</button></form>
+<p id="consumptionSaveStatus" role="status" hidden></p>
+<details><summary>Consumos registrados</summary><ul id="history"></ul></details>
+<details><summary>Entregas de Plaza Blending</summary><ul id="deliveries"></ul></details>
+<details><summary>Personal</summary><input id="personalSearch" placeholder="Buscar personal" aria-label="Buscar personal"><p id="personalShown"></p><div id="personalList"></div></details>
+</div></main>
+<script src="../sync-config.js"></script>
+<script src="production.js"></script>
+<script src="../asset-field-compat.js"></script>
+<script src="../spare-catalog.js"></script>
+<script src="../searchable-consumption.js?v=production-1"></script>
+<script src="../consumption-manual-date.js?v=production-1"></script>
+</body></html>
