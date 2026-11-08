@@ -52,12 +52,8 @@
   }
   return [...entries.values()].sort((a,b)=>b.epoch-a.epoch||b.order-a.order);
  }
- function damaged(asset){return /^averiad(?:o|a|o\/a)?\b|^en reparacion\b/.test(norm(asset?.estado));}
- function operationStatus(asset){
-  const state=norm(asset?.estado);
-  if(!state)return '';
-  return /^operativ(?:o|a|o\/a)?\b/.test(state)&&!retired(asset)?'Sí':'No';
- }
+ function damaged(asset){return /^(?:averiado|averiada|averiado\/a)$/.test(norm(asset?.estado));}
+ function operationStatus(asset){return damaged(asset)?'No':'Sí';}
  function latestIncomeNote(asset,data){
   const event=timeline(data,asset.id).find(entry=>entry.kind==='income'&&!entry.reversed&&!entry.raw.reversalOf&&norm(entry.raw.movementType)!=='reversion');
   return text(event?.raw.notes);

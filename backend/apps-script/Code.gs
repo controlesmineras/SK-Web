@@ -117,7 +117,7 @@ function applyPlazaIncomeContext_(row,asset){
  if(row.incomeType==='TRASLADO')asset.mina='Sandra K';else if(!asset.mina)asset.mina=asset.ultimaMinaOrigen;
  asset.activoExterno=!sandraKMine_(asset.mina);
  asset.ingresoTemporal=row.incomeType==='REPARACIÓN'&&asset.activoExterno;
- if(row.incomeType==='REPARACIÓN'){asset.estado='En reparación';asset.disponibleEntrega='No'}
+ if(row.incomeType==='REPARACIÓN'){asset.estado='En reparación';asset.disponibleEntrega='Sí'}
 }
 function preparePlazaIncomeAsset_(asset){
  if(!repairIncomeClass_(asset.clase)||!asset.tipoIngresoInicial)return;
