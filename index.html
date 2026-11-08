@@ -2,10 +2,10 @@
 <link rel="stylesheet" href="plaza-admin.css?v=20260919-2"><script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js" defer></script>
 <script src="bulk-import.js?v=20261009-assets-1" defer></script><style>body:not([data-admin-role="owner"]) .homeAccess .adminAccessRow{display:none!important}</style><style>
 #adminHomeUser:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:10px}
-.adminHomeIdentity{min-width:0;display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;column-gap:7px;row-gap:3px;text-align:left}
-#adminHomeUser .adminHomeUserOnline{display:block;width:9px;height:9px;border-radius:50%}
-#adminHomeUserName{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#adminHomeUserRole{grid-column:2;font-size:.8em;font-weight:500;overflow-wrap:normal}
+.adminHomeIdentity{min-width:0;display:grid;grid-template-columns:minmax(16px,1fr) minmax(0,max-content) minmax(16px,1fr);align-items:center;row-gap:3px;text-align:center}
+#adminHomeUser .adminHomeUserOnline{display:block;width:9px;height:9px;border-radius:50%;justify-self:end;margin-right:7px}
+#adminHomeUserName{grid-column:2;max-width:100%;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#adminHomeUserRole{grid-column:1 / -1;font-size:.8em;font-weight:500;overflow-wrap:normal}
 #adminHomeLogout{display:inline-flex;align-items:center;gap:6px;min-height:44px;padding:8px 12px;background:#eef4f8;color:#102f45;white-space:nowrap}
 </style></head><body>
 <header><div><strong>SK Admin</strong><small>Inventario y control de activos SK 3.7</small></div><div class="headerActions"><button id="installBtn" type="button" hidden>INSTALAR APP</button><div class="adminSyncGroup"><button id="updateAppBtn" type="button" aria-label="Sincronizar datos" title="Sincronizar datos"><span id="updateAppBtnLabel" class="adminSyncIcons" aria-hidden="true"><span class="adminSyncCloud">☁</span><svg class="adminSyncArrows" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M16 16h4v4"/></svg></span><span id="adminSyncBadge" class="adminSyncBadge" hidden aria-live="polite"></span></button><small id="adminLastSync" class="adminLastSync">SIN SINCRONIZAR</small></div></div></header>
