@@ -1,6 +1,6 @@
 
-const CACHE='sk-production-shell-v1-install';
-const files=['./','./index.html','./app.js?v=1','./install-ui.js?v=1','./manifest.webmanifest','../styles.css','../sync-config.js','../spare-catalog.js','../consumption-query-v2.js','../icons/sk-admin-dark-192.png','../icons/sk-admin-dark-512.png'];
+const CACHE='sk-production-shell-v2-roles';
+const files=['./','./index.html','./app.js?v=2-roles','./install-ui.js?v=1','./manifest.webmanifest','../styles.css','../sync-config.js','../spare-catalog.js','../consumption-query-v2.js','../icons/sk-admin-dark-192.png','../icons/sk-admin-dark-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files)).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('sk-production-shell-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
