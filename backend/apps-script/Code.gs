@@ -36,8 +36,9 @@ function accessInvitationCreate_(q){
   const expires=Date.now()+24*60*60*1000;
   const plazaRole=q.plazaRole==='supervisor'&&person.plazaEnabled&&person.plazaRole==='supervisor'?'supervisor':q.plazaRole==='assistant'?'assistant':'operator';
   const plazaAccess=scope==='plaza'?{plazaRole}:{};
-  props.setProperty(invitationKey_(secret),JSON.stringify({scope:scope,personId:person.id,document:document,expires:expires,...plazaAccess}));
-  return json_({ok:true,token:secret,document:document,name:person.nombre||'',...plazaAccess,expiresAt:new Date(expires).toISOString()});
+  const productionAccess=scope==='production'?{productionRole:productionRole_(q.productionRole||productionAccess_(document)?.role)}:{};
+  props.setProperty(invitationKey_(secret),JSON.stringify({scope:scope,personId:person.id,document:document,expires:expires,...plazaAccess,...productionAccess}));
+  return json_({ok:true,token:secret,document:document,name:person.nombre||'',...plazaAccess,...productionAccess,expiresAt:new Date(expires).toISOString()});
  }finally{lock.releaseLock()}
 }
 function revokeInvitations_(scope,document){const props=PropertiesService.getScriptProperties();Object.keys(props.getProperties()).filter(k=>k.indexOf('SK_INVITE_')===0).forEach(k=>{try{const row=JSON.parse(props.getProperty(k));if(row.scope===scope&&row.document===document)props.deleteProperty(k)}catch(_){props.deleteProperty(k)}})}
@@ -48,7 +49,7 @@ function accessInvitationAccept_(q){const password=String(q.password||'');if(pas
   const fileId=findFile_(),cloud=fileId?readFile_(fileId):{},person=(cloud.personal||[]).find(x=>x&&x.id===row.personId&&!x.deleted&&String(x.documento||'').trim()===document);
   if(!person)throw new Error('El colaborador ya no está disponible en Personal');const now=new Date().toISOString();
   if(row.scope==='plaza'){(cloud.personal||[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()===document).forEach(x=>{x.pinHash=hashPin_(document,password);x.plazaEnabled=true;x.plazaRole=['assistant','supervisor'].includes(row.plazaRole)?row.plazaRole:'operator';x.updatedAt=now});cloud.updatedAt=nextRevision_(cloud.updatedAt);writeFile_(fileId,cloud)}
-  else if(row.scope==='production'){saveProductionAccess_(person,hashPin_(document,password))}
+  else if(row.scope==='production'){saveProductionAccess_(person,hashPin_(document,password),row.productionRole)}
   else if(row.scope==='admin'){const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');if(area!=='seguridad fisica')throw new Error('El colaborador ya no pertenece a Seguridad física');const users=adminUsers_();let user=users.find(x=>x.role!=='owner'&&(x.personId===person.id||x.document===document));if(!user){if(users.some(x=>x.username===document))throw new Error('El documento ya está registrado como otro usuario');user={id:'ADMIN-'+Utilities.getUuid(),createdAt:now};users.push(user)}user.personId=person.id;user.document=document;user.username=document;user.name=person.nombre||document;user.role='assistant';user.enabled=true;user.passwordHash=hashPin_(document,password);user.updatedAt=now;saveAdminUsers_(users)}
   else throw new Error('Aplicación no válida');PropertiesService.getScriptProperties().deleteProperty(invite.key);return json_({ok:true,scope:row.scope});
  }finally{lock.releaseLock()}}
@@ -721,9 +722,10 @@ function json_(x){return ContentService.createTextOutput(JSON.stringify(x)).setM
 const PRODUCTION_FILE='sk-web-production.json';
 function productionAccessKey_(document){return 'SK_PROD_USER_'+invitationKey_(document).slice('SK_INVITE_'.length)}
 function productionAccess_(document){const raw=PropertiesService.getScriptProperties().getProperty(productionAccessKey_(document));return raw?JSON.parse(raw):null}
-function saveProductionAccess_(person,passwordHash){
+function productionRole_(role){return ['admin','mechanic','assistant'].includes(role)?role:'assistant'}
+function saveProductionAccess_(person,passwordHash,role){
  const document=String(person.documento).trim();
- PropertiesService.getScriptProperties().setProperty(productionAccessKey_(document),JSON.stringify({document:document,personId:person.id,passwordHash:passwordHash,revision:Utilities.getUuid()}));
+ PropertiesService.getScriptProperties().setProperty(productionAccessKey_(document),JSON.stringify({document:document,personId:person.id,role:productionRole_(role),passwordHash:passwordHash,revision:Utilities.getUuid()}));
 }
 function productionAccessAdmin_(q){
  const props=PropertiesService.getScriptProperties();
@@ -733,7 +735,7 @@ function productionAccessAdmin_(q){
   finally{lock.releaseLock()}
  }
  const values=props.getProperties();
- return json_({ok:true,users:Object.keys(values).filter(key=>key.startsWith('SK_PROD_USER_')).map(key=>{const row=JSON.parse(values[key]);return {document:row.document,personId:row.personId}})});
+ return json_({ok:true,users:Object.keys(values).filter(key=>key.startsWith('SK_PROD_USER_')).map(key=>{const row=JSON.parse(values[key]);return {document:row.document,personId:row.personId,role:productionRole_(row.role)}})});
 }
 function productionLogin_(q){
  const document=String(q.document||'').trim(),user=productionAccess_(document);
@@ -741,7 +743,7 @@ function productionLogin_(q){
  const id=findFile_(),cloud=id?readFile_(id):{},person=(cloud.personal||[]).find(row=>row.id===user.personId&&!row.deleted&&String(row.documento).trim()===document);
  if(!person)throw new Error('Colaborador no disponible');
  const expires=Date.now()+12*60*60*1000,payload=JSON.stringify(['production',document,user.revision,expires]);
- return json_({ok:true,token:Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload),expiresAt:expires,user:{document:document,name:person.nombre||document}});
+ return json_({ok:true,token:Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload),expiresAt:expires,user:{document:document,name:person.nombre||document,personId:person.id,role:productionRole_(user.role)}});
 }
 function verifyProductionToken_(token){
  const bits=String(token||'').split('.');
@@ -758,7 +760,8 @@ function productionSync_(q){
  try{
   const user=verifyProductionToken_(q.token),id=findFile_(),central=id?readFile_(id):{};
   const personal=(central.personal||[]).filter(row=>!row.deleted);
-  if(!personal.some(row=>row.id===user.personId&&String(row.documento).trim()===user.document))throw new Error('Colaborador no disponible');
+  const recorder=personal.find(row=>row.id===user.personId&&String(row.documento).trim()===user.document);
+  if(!recorder)throw new Error('Colaborador no disponible');
   const files=DriveApp.getFilesByName(PRODUCTION_FILE),file=files.hasNext()?files.next():null;
   if(files.hasNext())throw new Error('Hay más de una base de Producción. Revisa los archivos de Drive.');
   const data=file?JSON.parse(file.getBlob().getDataAsString('UTF-8')):{consumptions:[]};
@@ -775,13 +778,15 @@ function productionSync_(q){
    if(!Number.isSafeInteger(row.cantidad)||row.cantidad<1||!/^\d{4}-\d{2}-\d{2}$/.test(String(row.fechaISO||'')))throw new Error('Cantidad o fecha no válida');
    if(!/^(?:YT|Columna)(?:28|29)$/.test(row.origen)||!['YT','Columna'].includes(row.tipoEquipo)||!row.origen.startsWith(row.tipoEquipo))throw new Error('Inventario de origen no válido');
    if(!assets.some(x=>x.id===row.assetId)||!personal.some(x=>x.id===row.responsableId)||![...parts,...criteria.filter(x=>x.isYtSpare)].some(x=>x.id===row.partId&&!x.deleted))throw new Error('Máquina, responsable o repuesto no disponible. Revisa los consumos pendientes.');
-   const saved={id:row.id,assetId:row.assetId,responsableId:row.responsableId,partId:row.partId,itemId:String(row.itemId||''),noItem:String(row.noItem||''),nombreRepuesto:String(row.nombreRepuesto||'').slice(0,200),tipoEquipo:row.tipoEquipo,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,createdAt:new Date().toISOString(),registradoPor:user.document};
+   if(productionRole_(user.role)==='mechanic'&&row.responsableId!==user.personId)throw new Error('El mecánico solo puede registrar consumos a su nombre.');
+   const responsible=personal.find(person=>person.id===row.responsableId);
+   const saved={id:row.id,assetId:row.assetId,responsableId:row.responsableId,responsableNombre:responsible.nombre||responsible.documento,partId:row.partId,itemId:String(row.itemId||''),noItem:String(row.noItem||''),nombreRepuesto:String(row.nombreRepuesto||'').slice(0,200),tipoEquipo:row.tipoEquipo,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,registradoPorId:recorder.id};
    known.set(saved.id,saved);changed=true;
   }
   const consumptions=Array.from(known.values());
   if(changed){const body=JSON.stringify({schema:1,consumptions:consumptions});if(file)file.setContent(body);else DriveApp.createFile(PRODUCTION_FILE,body,MimeType.PLAIN_TEXT)}
   const spareIds=new Set(criteria.filter(x=>x.isYtSpare).map(x=>x.id));
   const deliveries=(central.blendingDeliveries||[]).filter(row=>!row.deleted&&cargoNorm_(row.destination)==='produccion'&&spareIds.has(row.itemId)).map(row=>({id:row.id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,createdAt:row.createdAt,reversed:row.reversed===true||row.reversado===true}));
-  return json_({ok:true,personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,consumptions:consumptions,ack:pending.map(row=>row.id)});
+  return json_({ok:true,productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,consumptions:consumptions,ack:pending.map(row=>row.id)});
  }finally{lock.releaseLock()}
 }
