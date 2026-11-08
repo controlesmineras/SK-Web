@@ -1,4 +1,4 @@
-const cacheName='sk-production-shell-v2';
+const cacheName='sk-production-shell-v3';
 const shell=['./','./index.html','./production.js','./manifest.webmanifest','./production.css','./produccion-192.png','./produccion-512.png','../styles.css','../sync-config.js','../asset-field-compat.js',
   '../spare-catalog.js','../searchable-consumption.js?v=production-1','../consumption-manual-date.js?v=production-1'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(cacheName).then(cache=>cache.addAll(shell)).then(()=>self.skipWaiting())));
