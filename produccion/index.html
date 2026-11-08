@@ -7,7 +7,7 @@
 <style>
 [hidden]{display:none!important}main{max-width:900px;margin:auto}header{justify-content:space-between}section{margin:16px 0}fieldset{border:0;padding:0;margin:0;display:grid;gap:12px}form{margin:12px 0}label{min-width:0}select,input{max-width:100%}.productionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.productionActions button{min-height:48px}.tableWrap{overflow:auto}li{margin:6px 0}#status{white-space:pre-wrap}details{margin:12px 0}summary{cursor:pointer;font-weight:700}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=1"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=2-roles"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -28,8 +28,8 @@
 <label>Tipo de equipo<select name="tipoEquipo"><option>YT</option><option>Columna</option></select></label>
 <label>Máquina<select name="assetId" required></select></label>
 <label>Fecha<input name="fechaISO" type="date" required></label>
-<label>Buscar responsable<input id="personSearch" type="search" placeholder="Nombre o documento"></label>
-<label>Responsable<select name="responsableId" required></select></label>
+<label id="responsibleSearchLabel">Buscar mecánico o responsable<input id="personSearch" type="search" placeholder="Nombre o documento"></label>
+<label>Mecánico o responsable<select name="responsableId" required></select></label>
 <label>Inventario de origen<select name="origen"><option value="29">29</option><option value="28">28</option></select></label>
 <label>Buscar repuesto<input id="partSearch" type="search" placeholder="Ítem o nombre"></label>
 <label>Repuesto<select name="partId"></select></label>
@@ -38,7 +38,7 @@
 <div class="productionActions"><button type="button" id="addPart">+ Agregar repuesto</button><button type="submit">Guardar consumos</button></div>
 </form>
 <details><summary>Personal</summary><input id="directorySearch" type="search" placeholder="Buscar nombre o documento"><ul id="directory"></ul></details>
-<details><summary>Consumos registrados</summary><div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Máquina</th><th>Inventario</th><th>Repuesto</th><th>Cantidad</th><th>Estado</th></tr></thead><tbody id="history"></tbody></table></div></details>
+<details><summary>Consumos registrados</summary><div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Máquina</th><th>Inventario</th><th>Repuesto</th><th>Cantidad</th><th>Mecánico o responsable</th><th>Registrado por</th><th>Estado</th></tr></thead><tbody id="history"></tbody></table></div></details>
 <details><summary>Consultas y exportación de consumos</summary><section id="queries"></section></details>
 <details><summary>Entregas de Plaza Blending a Producción</summary><ul id="deliveries"></ul></details>
 </section>
