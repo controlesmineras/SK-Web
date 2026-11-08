@@ -7,98 +7,175 @@ function mount(){
  if(!home||document.getElementById('productionUsersBtn'))return;
  const button=document.createElement('button');
  button.type='button';button.id='productionUsersBtn';button.className='homeAccessBtn';button.textContent='USUARIOS DE PRODUCCIÓN';button.style.gridColumn='1 / -1';
- button.onclick=open;
+ 
  const adminButton=document.getElementById('adminUsersBtn');
  if(adminButton)adminButton.before(button);
  else (home.querySelector('.adminAccessRow')||home).append(button);
 }
+
+const apps={
+ admin:{name:'SK Web Admin',roles:{assistant:'Auxiliar administrativo'}},
+ plaza:{name:'Plaza Blending',roles:{assistant:'Auxiliar',operator:'Bodeguero/a',supervisor:'Supervisor/a'}},
+ production:{name:'Producción',roles:{operator:'Usuario de Producción'}}
+};
+const normalize=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
+const doc=person=>String(person?.documento??person?.document??'').trim();
+const labels=(scope,row)=>String(apps[scope].roles[row.role]|| (row.role==='owner'?'Administrador principal':row.role||'Usuario')).trim();
+const same=(a,b)=>Boolean((a.personId&&a.personId===b.personId)||(doc(a)&&doc(a)===doc(b)));
+function button(label,action){
+ const node=document.createElement('button');
+ node.type='button';node.textContent=label;node.onclick=action;
+ return node;
+}
 let dialog;
-async function open(){
- if(!auth()?.isOwner())return;
+async function open(scope){
+ if(!auth()?.isOwner()||dialog?.open)return;
+ const app=apps[scope];
  if(!dialog){
   dialog=document.createElement('dialog');
-  dialog.style.cssText='width:min(580px,92vw);border:0;border-radius:14px;padding:20px;color:#102f45';
-  dialog.innerHTML='<h2>Accesos a Producción</h2><p><a href="produccion/">Abrir Producción</a></p><div class="plazaAccessPeople"><input type="search" id="productionPersonSearch" aria-label="Buscar colaborador" placeholder="Buscar por nombre o documento..."><div id="productionPersonCount" aria-live="polite"></div><div id="productionPersonList" class="list" style="max-height:35vh"></div></div><p id="productionAccessState" role="status"></p><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button type="button" id="productionInvite">Generar enlace</button><button type="button" id="productionDisable">Quitar acceso</button></div><input id="productionInviteUrl" hidden readonly aria-label="Enlace de invitación"><div style="display:flex;justify-content:center;margin-top:14px"><button type="button" id="productionClose">Cerrar</button></div>';
+  dialog.style.cssText='width:min(680px,94vw);max-height:90dvh;border:0;border-radius:14px;padding:16px;color:#102f45';
   document.body.append(dialog);
  }
- const get=id=>dialog.querySelector('#'+id),list=get('productionPersonList'),count=get('productionPersonCount'),search=get('productionPersonSearch'),status=get('productionAccessState'),invite=get('productionInvite'),disable=get('productionDisable'),url=get('productionInviteUrl');
- if(dialog.open)return;
- let people=[],enabled=new Set(),busy=false,selected=null,accessKnown=false;
- const normalize=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
- const accessError=error=>/solicitud no válida|aplicación no válida/i.test(error.message)?'El servicio no reconoce esta opción. Actualiza Code.gs del servicio central de SK Web y publica una nueva versión de la implementación existente.':error.message;
- function update(){
-  invite.disabled=busy||!selected?.documento;
-  disable.disabled=busy||!selected?.documento;
-  invite.textContent=enabled.has(selected?.id)?'Generar nuevo enlace':'Generar enlace';
+ dialog.innerHTML='<div class="sectionHead"><h2></h2><button type="button" data-close>Cerrar</button></div><section class="plazaAccessPeople"><h3>Accesos activos</h3><div data-active class="list" style="max-height:34vh"></div></section><section class="plazaAccessPeople"><h3>Nuevo acceso</h3><input type="search" aria-label="Buscar colaborador" placeholder="Buscar por nombre o documento…" autocomplete="off"><div data-results class="list" style="max-height:26vh"></div></section><section data-manage class="plazaAccessPeople" hidden></section><p role="status" aria-live="polite"></p><div data-copy></div>';
+ const find=selector=>dialog.querySelector(selector);
+ const active=find('[data-active]'),results=find('[data-results]'),manage=find('[data-manage]'),search=find('input'),status=find('[role=status]'),copy=find('[data-copy]');
+ find('h2').textContent='Accesos a '+app.name;
+ find('[data-close]').onclick=()=>dialog.close();
+ const request=(action,data)=>auth().request(action,data);
+ let people=[],selected=null,inviteUrl='',busy=false;
+ const access={admin:null,plaza:null,production:null};
+ function clearInvite(){inviteUrl='';copy.replaceChildren()}
+ function identity(p){return [p.nombre||p.name||'Sin nombre',doc(p),p.cargo].filter(Boolean).join(' · ')}
+ function rolesFor(row){
+  return Object.entries(access).flatMap(([key,list])=>(list||[]).filter(other=>other===row||same(other,row)).map(other=>apps[key].name+' — '+labels(key,other)));
  }
- function filter(){
-  const query=normalize(search.value.trim());
-  const matches=people.filter(p=>normalize([p.nombre,p.documento].join(' ')).includes(query));
-  if(selected&&!matches.includes(selected)){selected=null;clearUrl()}
-  count.textContent=matches.length+' colaboradores';
-  list.replaceChildren(...matches.map(person=>{
-   const row=document.createElement('button');
-   const hasAccess=enabled.has(person.id);
-   row.type='button';
-   row.className='plazaUserRow'+(person===selected?' active':'');
-   row.setAttribute('aria-pressed',String(person===selected));
-   const details=document.createElement('span'),name=document.createElement('b'),info=document.createElement('small'),badge=document.createElement('span');
-   name.textContent=person.nombre||'Sin nombre';
-   info.textContent=(person.documento||'Sin documento')+' · '+(person.cargo||'Sin cargo');
-   details.append(name,info);
-   badge.className='plazaAccessBadge'+(hasAccess?' enabled':'');
-   badge.textContent=hasAccess?'Habilitado':accessKnown?'Sin acceso':'Sin verificar';
-   row.append(details,badge);
-   row.onclick=()=>{
-    list.querySelector('.active')?.setAttribute('aria-pressed','false');
-    list.querySelector('.active')?.classList.remove('active');
-    selected=person;
-    row.classList.add('active');
-    row.setAttribute('aria-pressed','true');
-    clearUrl();
-    update();
-   };
-   return row;
-  }));
-  if(!matches.length)list.textContent='No hay colaboradores que coincidan.';
-  update();
- }
- function clearUrl(){url.hidden=true;url.value=''}
- get('productionClose').onclick=()=>dialog.close();
- search.oninput=filter;
- async function run(fn){
-  if(busy)return;
-  busy=true;update();try{await fn()}catch(error){status.textContent=accessError(error)}finally{busy=false;update()}
- }
- invite.onclick=()=>run(async()=>{
-  const person=selected;
-  const result=await auth().request('accessInvitationCreate',{scope:'production',personId:person.id});
-  if(selected!==person||!dialog.open)return;
-  const link=new URL('produccion/',location.href);link.hash=new URLSearchParams({invitation:result.token});
-  url.value=link.href;url.hidden=false;url.focus();url.select();
-  try{await navigator.clipboard.writeText(link.href);status.textContent='Enlace copiado. Válido por 24 horas y para un solo uso.'}
-  catch{status.textContent='Copia el enlace seleccionado. Válido por 24 horas y para un solo uso.'}
- });
- disable.onclick=()=>run(async()=>{
-  const person=selected;
-  if(!person?.documento||!confirm('¿Quitar acceso a Producción a '+person.nombre+'?'))return;
-  await auth().request('productionDisable',{document:person.documento});enabled.delete(person.id);clearUrl();filter();status.textContent='Acceso retirado.';
- });
- search.value='';list.replaceChildren();count.textContent='';clearUrl();status.textContent='Cargando colaboradores…';dialog.showModal();
- await run(async()=>{
-  const local=await all('personal');
-  people=local.filter(row=>!row.deleted).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
-  filter();
-  status.textContent=people.length?'Consultando accesos…':'Sincroniza SK Web Admin para cargar Personal.';
-  try{
-   const result=await auth().request('productionUsers');
-   enabled=new Set(result.users.map(row=>row.personId));accessKnown=true;filter();
-   if(people.length)status.textContent='';
-  }catch(error){
-   status.textContent='No se pudo verificar quién tiene acceso. '+accessError(error);
+ function renderActive(){
+  const rows=access[scope];
+  active.replaceChildren();
+  if(!rows){active.textContent='No se pudieron cargar los accesos de esta app.';return}
+  if(!rows.length){active.textContent='No hay accesos activos.';return}
+  for(const row of rows){
+   const card=document.createElement('div');
+   card.className='plazaAccessPeople';
+   const name=document.createElement('b'),roles=document.createElement('p');
+   name.textContent=identity(row);roles.textContent=[...new Set(rolesFor(row))].join(' · ');
+   card.append(name,roles);
+   if(row.role!=='owner'){
+    card.append(button('Restablecer acceso',()=>generate(row,row.role)),button('Gestionar accesos',()=>choose(row,true)));
+   }
+   active.append(card);
   }
+ }
+ function eligible(person){return doc(person)&&(scope!=='admin'||normalize(person.area).replace(/\s+/g,' ')==='seguridad fisica')}
+ function renderSearch(){
+  results.replaceChildren();
+  const query=normalize(search.value);
+  if(!query)return;
+  if(!access[scope]){results.textContent='Carga los accesos activos antes de conceder un acceso.';return}
+  const matches=people.filter(person=>eligible(person)&&normalize([person.nombre,doc(person)].join(' ')).includes(query)&&!access[scope].some(row=>same(row,{personId:person.id,document:doc(person)})));
+  for(const person of matches){
+   const row=button(identity(person),()=>choose({...person,personId:person.id},false));
+   row.className='plazaUserRow';results.append(row);
+  }
+  if(!matches.length)results.textContent='No hay colaboradores disponibles que coincidan.';
+ }
+ function choose(row,existing){
+  if(busy)return;
+  selected=row;clearInvite();status.textContent='';manage.hidden=false;
+  const title=document.createElement('h3');
+  title.textContent=(existing?'Gestionar accesos de ':'Nuevo acceso para ')+identity(row);
+  manage.replaceChildren(title);
+  let role;
+  if(scope==='plaza'){
+   const label=document.createElement('label');
+   label.textContent='Rol en Plaza Blending';role=document.createElement('select');
+   for(const key of ['assistant','operator'])role.add(new Option(app.roles[key],key));
+   if(row.role==='supervisor')role.add(new Option(app.roles.supervisor,'supervisor'));
+   role.value=row.role||'assistant';label.append(role);manage.append(label);
+  }
+  manage.append(button(existing?'Generar enlace con el rol seleccionado':'Generar enlace',()=>generate(row,role?.value||row.role)));
+  if(existing)manage.append(button('Quitar acceso',()=>disable(row)));
+  manage.scrollIntoView({block:'nearest'});
+ }
+ async function run(message,fn){
+  if(busy)return;
+  busy=true;status.textContent=message;
+  try{await fn()}catch(error){status.textContent=error.message||String(error)}finally{busy=false}
+ }
+ function generate(row,role){
+  if(busy)return;
+  clearInvite();
+  if(!row.personId){status.textContent='Esta cuenta no está vinculada a un colaborador de Personal.';return}
+  run('Generando invitación para '+identity(row)+'…',async()=>{
+   const data={scope,personId:row.personId};
+   if(scope==='plaza')data.plazaRole=role;
+   const result=await request('accessInvitationCreate',data);
+   if(scope==='plaza'&&result.plazaRole!==role)throw new Error('El servicio devolvió un rol distinto. Revisa la versión de Code.gs.');
+   if(!result.token)throw new Error('El servicio no devolvió una invitación.');
+   const url=new URL(scope==='production'?'produccion/':'crear-acceso.html',location.href);
+   if(scope==='production')url.hash=new URLSearchParams({invitation:result.token});
+   else url.searchParams.set('invite',result.token);
+   inviteUrl=url.href;
+   status.textContent='Invitación para '+identity(row)+'. Válida durante 24 horas y para un solo uso.';
+   copy.append(button('Copiar enlace',async()=>{
+    try{await navigator.clipboard.writeText(inviteUrl);status.textContent='Enlace copiado.'}
+    catch{
+     const field=document.createElement('textarea');
+     field.value=inviteUrl;field.readOnly=true;
+     field.style.cssText='position:fixed;left:0;top:0;opacity:0;pointer-events:none';
+     dialog.append(field);field.select();field.setSelectionRange(0,field.value.length);
+     let copied=false;
+     try{copied=document.execCommand('copy')}catch{}finally{field.remove()}
+     status.textContent=copied?'Enlace copiado.':'El navegador no permitió copiar. Vuelve a intentarlo desde el botón.';
+    }
+   }));
+   copy.scrollIntoView({block:'nearest'});
+  });
+ }
+ function disable(row){
+  if(busy||!confirm('¿Quitar acceso a '+app.name+' a '+identity(row)+'?'))return;
+  clearInvite();
+  run('Quitando acceso…',async()=>{
+   if(scope==='admin')await request('adminUserDisable',{id:row.id});
+   if(scope==='production')await request('productionDisable',{document:doc(row)});
+   if(scope==='plaza'){
+    await request('plazaUserAdmin',{document:doc(row),enabled:false});
+    for(const person of people.filter(person=>doc(person)===doc(row))){
+     await put('personal',{...person,plazaEnabled:false,plazaRole:'',updatedAt:new Date().toISOString()});
+    }
+   }
+   access[scope]=access[scope].filter(other=>other!==row);
+   if(selected===row){selected=null;manage.hidden=true}
+   renderActive();renderSearch();status.textContent='Acceso retirado.';
+  });
+ }
+ search.oninput=renderSearch;
+ dialog.showModal();
+ await run('Cargando Personal y accesos…',async()=>{
+  const [local,admin,production]=await Promise.allSettled([all('personal'),request('adminUsersList'),request('productionUsers')]);
+  if(local.status==='fulfilled'){
+   people=local.value.filter(person=>!person.deleted).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
+   access.plaza=people.filter(person=>person.plazaEnabled).map(person=>({...person,personId:person.id,role:person.plazaRole||'operator'}));
+  }
+  if(admin.status==='fulfilled')access.admin=(admin.value.users||[]).filter(row=>row.enabled).map(row=>{
+   const person=people.find(p=>same({personId:p.id,document:doc(p)},row));
+   return {...row,personId:row.personId||person?.id};
+  });
+  if(production.status==='fulfilled')access.production=(production.value.users||[]).filter(row=>row.enabled!==false).map(row=>{
+   const person=people.find(p=>same({personId:p.id,document:doc(p)},row));
+   return {...person,...row,nombre:person?.nombre||row.name||row.nombre,role:row.role||'operator'};
+  });
+  renderActive();renderSearch();
+  const missing=Object.keys(access).filter(key=>!access[key]).map(key=>apps[key].name);
+  status.textContent=missing.length?'Accesos sin verificar: '+missing.join(', ')+'.':'';
  });
 }
+document.addEventListener('click',event=>{
+ const trigger=event.target.closest('#adminUsersBtn,.plazaAccessBtn,#productionUsersBtn');
+ if(!trigger||!auth()?.isOwner())return;
+ event.preventDefault();event.stopImmediatePropagation();
+ open(trigger.id==='adminUsersBtn'?'admin':trigger.id==='productionUsersBtn'?'production':'plaza');
+},true);
 function permissions(){mount();const button=document.getElementById('productionUsersBtn');if(button){button.hidden=!auth()?.isOwner();if(button.hidden)button.style.setProperty('display','none','important');else button.style.removeProperty('display')}}
 window.addEventListener('skadmin-permissions',permissions);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',permissions);else permissions();
