@@ -18,21 +18,24 @@ async function open(){
  if(!dialog){
   dialog=document.createElement('dialog');
   dialog.style.cssText='width:min(580px,92vw);border:0;border-radius:14px;padding:20px;color:#102f45';
-  dialog.innerHTML='<h2>Accesos a Producción</h2><p><a href="produccion/">Abrir Producción</a></p><label>Buscar colaborador<input type="search" id="productionPersonSearch" placeholder="Nombre o documento"></label><label>Colaborador<select id="productionPerson"></select></label><p id="productionAccessState" role="status"></p><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button type="button" id="productionInvite">Generar enlace</button><button type="button" id="productionDisable">Quitar acceso</button></div><input id="productionInviteUrl" hidden readonly aria-label="Enlace de invitación"><button type="button" id="productionClose">Cerrar</button>';
+  dialog.innerHTML='<h2>Accesos a Producción</h2><p><a href="produccion/">Abrir Producción</a></p><label>Buscar colaborador<input type="search" id="productionPersonSearch" placeholder="Nombre o documento"></label><label>Colaborador<select id="productionPerson"></select></label><p id="productionAccessState" role="status"></p><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><button type="button" id="productionInvite">Generar enlace</button><button type="button" id="productionDisable">Quitar acceso</button></div><input id="productionInviteUrl" hidden readonly aria-label="Enlace de invitación"><div style="display:flex;justify-content:center;margin-top:14px"><button type="button" id="productionClose">Cerrar</button></div>';
   document.body.append(dialog);
  }
  const get=id=>dialog.querySelector('#'+id),select=get('productionPerson'),search=get('productionPersonSearch'),status=get('productionAccessState'),invite=get('productionInvite'),disable=get('productionDisable'),url=get('productionInviteUrl');
  if(dialog.open)return;
  let people=[],enabled=new Set(),busy=false;
+ const normalize=value=>String(value||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
+ const accessError=error=>/solicitud no válida|aplicación no válida/i.test(error.message)?'El servicio no reconoce esta opción. Actualiza Code.gs del servicio central de SK Web y publica una nueva versión de la implementación existente.':error.message;
  function update(){
   invite.disabled=busy||!select.value;
   disable.disabled=busy||!select.value;
   invite.textContent=enabled.has(select.value)?'Generar nuevo enlace':'Generar enlace';
  }
  function filter(){
-  const selected=select.value,query=search.value.trim().toLocaleLowerCase('es');
-  select.replaceChildren(new Option('Selecciona…',''),...people.filter(p=>[p.nombre,p.documento].join(' ').toLocaleLowerCase('es').includes(query)).map(p=>new Option((p.nombre||'')+' · '+p.documento+(enabled.has(p.id)?' · Habilitado':''),p.id)));
-  select.value=selected;update();
+  const selected=select.value,query=normalize(search.value.trim());
+  const matches=people.filter(p=>normalize([p.nombre,p.documento].join(' ')).includes(query));
+  select.replaceChildren(new Option(matches.length?'Selecciona…':query?'Sin coincidencias':'No hay colaboradores disponibles',''),...matches.map(p=>new Option((p.nombre||'')+' · '+p.documento+(enabled.has(p.id)?' · Habilitado':''),p.id)));
+  select.value=matches.some(p=>p.id===selected)?selected:'';update();
  }
  function clearUrl(){url.hidden=true;url.value=''}
  get('productionClose').onclick=()=>dialog.close();
@@ -40,7 +43,7 @@ async function open(){
  search.oninput=filter;
  async function run(fn){
   if(busy)return;
-  busy=true;update();try{await fn()}catch(error){status.textContent=error.message}finally{busy=false;update()}
+  busy=true;update();try{await fn()}catch(error){status.textContent=accessError(error)}finally{busy=false;update()}
  }
  invite.onclick=()=>run(async()=>{
   const result=await auth().request('accessInvitationCreate',{scope:'production',personId:select.value});
@@ -56,9 +59,17 @@ async function open(){
  });
  search.value='';select.replaceChildren();clearUrl();status.textContent='Cargando colaboradores…';dialog.showModal();
  await run(async()=>{
-  const [local,result]=await Promise.all([all('personal'),auth().request('productionUsers')]);
+  const local=await all('personal');
   people=local.filter(row=>!row.deleted&&row.documento).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
-  enabled=new Set(result.users.map(row=>row.personId));filter();status.textContent='';
+  filter();
+  status.textContent=people.length?'Consultando accesos…':'Sincroniza SK Web Admin para cargar Personal.';
+  try{
+   const result=await auth().request('productionUsers');
+   enabled=new Set(result.users.map(row=>row.personId));filter();
+   if(people.length)status.textContent='';
+  }catch(error){
+   status.textContent='No se pudo verificar quién tiene acceso. '+accessError(error);
+  }
  });
 }
 function permissions(){mount();const button=document.getElementById('productionUsersBtn');if(button){button.hidden=!auth()?.isOwner();if(button.hidden)button.style.setProperty('display','none','important');else button.style.removeProperty('display')}}
