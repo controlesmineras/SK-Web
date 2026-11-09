@@ -193,7 +193,7 @@ function paintSync(){
  byId('syncLabel').textContent=label;
  badge.className='pendingBadge'+(syncFailed?' error':!syncing&&complete?' synced':'');
  badge.textContent=count?String(count):syncing?'↻':syncFailed?'!':complete?'✓':'0';
- badge.title=count?count+' pendientes':syncing?label:syncFailed?'Error de sincronización':complete?'Todo sincronizado':'Sin sincronizar';
+ badge.title=count?count+(count===1?' consumo pendiente':' consumos pendientes'):syncing?label:syncFailed?'Error de sincronización':complete?'Todo sincronizado':'Sin sincronizar';
  badge.setAttribute('aria-label',badge.title);
  const date=new Date(state.lastSyncAt);
  byId('headerLastSync').textContent=Number.isNaN(date.getTime())?'SIN SINCRONIZAR':
@@ -236,7 +236,7 @@ form.onsubmit=async event=>{
   if(!shared.responsableId)throw new Error('Selecciona el mecánico o responsable de la reparación.');
   const records=lines.map(row=>({...shared,...row,syncState:'pending',registradoPorNombre:active.user.name,id:crypto.randomUUID(),createdAt:new Date().toISOString()}));
   const fresh=await changeState(active.user.document,current=>({...current,pending:[...(current.pending||[]),...records]}));
-  if(session===active){state=fresh;draft=[];closeParts();paint();status('Consumos guardados. '+state.pending.length+' pendientes de sincronizar.')}
+  if(session===active){state=fresh;draft=[];closeParts();paint();status('Consumos guardados.')}
  }catch(error){status(error.message)}
  finally{saving=false;form.querySelector('[type=submit]').disabled=false}
 };
