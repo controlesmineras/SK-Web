@@ -74,6 +74,19 @@ function paintDraft(){
   li.append(button);return li;
  }));
 }
+function filterMachines(){
+ const terms=norm(byId('machineSearch').value).trim().split(/\s+/);
+ const cards=Array.from(byId('machineOptions').children);
+ for(const card of cards){
+  const label=norm(card.textContent);
+  card.hidden=!terms.every(term=>label.includes(term));
+ }
+ byId('machineSearchEmpty').hidden=!cards.length||cards.some(card=>!card.hidden);
+}
+byId('machineSearch').oninput=filterMachines;
+byId('machineSearch').onkeydown=event=>{
+ if(event.key==='Enter')event.preventDefault();
+};
 function paint(){
  const machines=(state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value)));
  const selected=machines.find(row=>String(row.id)===fields.assetId.value);
@@ -91,11 +104,14 @@ function paint(){
    button.setAttribute('aria-pressed','true');
    const picker=button.closest('details');
    picker.open=false;
+   byId('machineSearch').value='';
+   filterMachines();
    picker.querySelector('summary').focus();
   };
   return button;
  }));
  if(!machines.length)byId('machineOptions').textContent='No hay máquinas disponibles para este tipo.';
+ filterMachines();
  paintParts();paintPeople();paintDirectory();paintDraft();
  const people=new Map((state.personal||[]).map(row=>[row.id,row.nombre]));
  const assets=new Map((state.assets||[]).map(row=>[row.id,labelAsset(row)]));
@@ -179,7 +195,10 @@ byId('logout').onclick=()=>{
  byId('workspace').hidden=true;byId('logout').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
 };
 byId('sync').onclick=sync;window.addEventListener('online',sync);
-for(const radio of fields.tipoEquipo)radio.onchange=paint;fields.origen.onchange=paintParts;
+for(const radio of fields.tipoEquipo)radio.onchange=()=>{
+ byId('machineSearch').value='';
+ paint();
+};fields.origen.onchange=paintParts;
 byId('partSearch').oninput=paintParts;byId('personSearch').oninput=paintPeople;byId('directorySearch').oninput=paintDirectory;
 if(invitation){
  byId('login').hidden=true;
