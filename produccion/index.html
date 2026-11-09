@@ -7,7 +7,7 @@
 <link rel="apple-touch-icon" href="./produccion-yt-192.png">
 <title>Producción SK 3.7</title><link rel="stylesheet" href="../styles.css">
 <style>
-[hidden]{display:none!important}main{max-width:900px;margin:auto}header{justify-content:space-between}section{margin:16px 0}fieldset{border:0;padding:0;margin:0;display:grid;gap:12px}form{margin:12px 0}label{min-width:0}select,input{max-width:100%}.productionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.productionActions button{min-height:48px}.tableWrap{overflow:auto}li{margin:6px 0}#status{white-space:pre-wrap}details{margin:12px 0}summary{cursor:pointer;font-weight:700}
+[hidden]{display:none!important}main{max-width:900px;margin:auto}header{justify-content:space-between}section{margin:16px 0}fieldset{border:0;padding:0;margin:0;display:grid;gap:12px}form{margin:12px 0}label{min-width:0}select,input{max-width:100%}.tableWrap{overflow:auto}li{margin:6px 0}#status{white-space:pre-wrap}details{margin:12px 0}summary{cursor:pointer;font-weight:700}
 body>main{max-width:900px;color:#f8fafc}
 main form,main .tableWrap{color:#172033}
 .productionToolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
@@ -19,14 +19,17 @@ main form,main .tableWrap{color:#172033}
 .equipmentTypes label{flex-direction:row;align-items:center;justify-content:center;min-height:44px;border:1px solid #cbd3da;border-radius:8px}
 .equipmentTypes label:has(:checked){background:#e4f1fa;border-color:#416a89}
 .equipmentTypes input{width:auto;min-height:0}
-.machinePicker{margin:0;border:1px solid #cbd3da;border-radius:8px;padding:10px}
-.machinePicker summary span{display:block;overflow:auto;white-space:nowrap;font-weight:400}
 .machineOptions{display:grid;max-height:16rem;overflow:auto;gap:4px;margin-top:8px}
 .machineOptions button{min-height:44px;width:100%;text-align:left;white-space:nowrap}
 .machineOptions button[aria-pressed="true"]{background:#e4f1fa;color:#172033}
-.machineSearch{margin-top:8px}
+.partOptions button{white-space:normal}
+#draft{display:grid;gap:8px;list-style:none;padding:0;margin:0}
+#draft li{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;align-items:center;border:1px solid #cbd3da;border-radius:8px;padding:10px;margin:0}
+#draft button{grid-column:2;grid-row:1;min-height:44px;padding:0}
+#draft label{grid-column:1/-1;max-width:130px}
+#draft small{display:block;color:#43576b}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=5-search"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=6-pickers"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -54,23 +57,23 @@ main form,main .tableWrap{color:#172033}
 <label><input type="radio" name="tipoEquipo" value="YT" checked> YT</label>
 <label><input type="radio" name="tipoEquipo" value="Columna"> Columna</label>
 </fieldset>
-<details class="productionField machinePicker">
-<summary>Máquina <span id="selectedMachine">Selecciona…</span></summary>
+<div id="machinePicker" class="productionField">
 <input type="hidden" name="assetId">
-<label class="machineSearch">Buscar máquina
+<label>Máquina
 <input id="machineSearch" type="search" placeholder="Marca, número o serial" autocomplete="off" aria-controls="machineOptions">
 </label>
-<div id="machineOptions" class="machineOptions"></div>
+<div id="machineOptions" class="machineOptions" hidden></div>
 <p id="machineSearchEmpty" role="status" hidden>Sin máquinas que coincidan con la búsqueda.</p>
-</details>
+</div>
 <label id="responsibleSearchLabel">Buscar mecánico o responsable<input id="personSearch" type="search" placeholder="Nombre o documento"></label>
 <label>Mecánico o responsable<select name="responsableId" required></select></label>
 <label>Inventario de origen<select name="origen"><option value="29">29</option><option value="28">28</option></select></label>
-<label>Buscar repuesto<input id="partSearch" type="search" placeholder="Ítem o nombre"></label>
-<label>Repuesto<select name="partId"></select></label>
-<label>Cantidad<input name="cantidad" type="number" min="1" step="1" value="1"></label>
-<ul id="draft"></ul>
-<div class="productionActions"><button type="button" id="addPart">+ Agregar repuesto</button><button type="submit">Guardar consumos</button></div>
+<ul id="draft" class="productionField" hidden></ul>
+<div id="partPicker" class="productionField">
+<label>Buscar repuesto<input id="partSearch" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="partOptions"></label>
+<div id="partOptions" class="machineOptions partOptions" hidden></div>
+</div>
+<button type="submit">Guardar consumos</button>
 </form>
 <details><summary>Personal</summary><input id="directorySearch" type="search" placeholder="Buscar nombre o documento"><ul id="directory"></ul></details>
 <details><summary>Consumos registrados</summary><div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Máquina</th><th>Inventario</th><th>Repuesto</th><th>Cantidad</th><th>Mecánico o responsable</th><th>Registrado por</th><th>Estado</th></tr></thead><tbody id="history"></tbody></table></div></details>

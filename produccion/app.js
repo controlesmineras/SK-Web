@@ -46,9 +46,59 @@ function partOptions(){
  const rows=window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]);
  return window.SKSpareCatalog.filter(rows,fields.tipoEquipo.value,fields.origen.value);
 }
+const machineSearch=byId('machineSearch'),partSearch=byId('partSearch');
+const machineOptions=byId('machineOptions'),partCards=byId('partOptions');
+let selectedMachineLabel='';
+function setupPicker(input,container,open,close){
+ input.onfocus=open;
+ input.onclick=()=>{if(container.hidden)open()};
+ input.onkeydown=event=>{
+  if(event.key==='Enter')event.preventDefault();
+  if(event.key==='Escape')input.blur();
+ };
+ input.closest('.productionField').onfocusout=event=>{
+  if(!event.currentTarget.contains(event.relatedTarget))close();
+ };
+ container.onpointerdown=event=>{
+  if(event.target.closest('button'))event.preventDefault();
+ };
+}
+function closeMachine(){
+ machineOptions.hidden=true;
+ byId('machineSearchEmpty').hidden=true;
+ machineSearch.value=selectedMachineLabel;
+}
+function closeParts(){
+ partCards.hidden=true;
+ partSearch.value='';
+}
+setupPicker(machineSearch,machineOptions,()=>{
+ machineSearch.value='';
+ machineOptions.hidden=false;
+ filterMachines();
+},closeMachine);
+setupPicker(partSearch,partCards,()=>{
+ partCards.hidden=false;
+ paintParts();
+},closeParts);
 function paintParts(){
- const query=norm(byId('partSearch').value);
- options(fields.partId,partOptions().filter(row=>norm(row.numero+' '+row.nombre).includes(query)),row=>[row.numero,row.nombre].filter(Boolean).join(' · '));
+ if(partCards.hidden)return;
+ const terms=norm(partSearch.value).trim().split(/\s+/);
+ const rows=partOptions().filter(row=>terms.every(term=>norm((row.numero??'')+' '+row.nombre).includes(term)));
+ partCards.replaceChildren(...rows.map(row=>{
+  const button=document.createElement('button');
+  button.type='button';
+  button.textContent=[row.numero,row.nombre].filter(Boolean).join(' · ');
+  button.onclick=()=>{
+   if(saving)return;
+   draft.push({partId:row.id,itemId:row.criterionId||'',noItem:row.numero||'',nombreRepuesto:row.nombre,cantidad:1,origen:fields.tipoEquipo.value+fields.origen.value,tipoEquipo:fields.tipoEquipo.value});
+   partSearch.blur();
+   closeParts();
+   paintDraft();
+  };
+  return button;
+ }));
+ if(!rows.length)partCards.textContent='No hay repuestos que coincidan.';
 }
 function paintPeople(){
  const query=norm(byId('personSearch').value);
@@ -67,11 +117,23 @@ function paintDirectory(){
  list('directory',(state.personal||[]).filter(row=>norm(personLabel(row)).includes(query)),personLabel);
 }
 function paintDraft(){
- byId('draft').replaceChildren(...draft.map((row,index)=>{
+ const list=byId('draft');
+ list.hidden=!draft.length;
+ list.replaceChildren(...draft.map((row,index)=>{
   const li=document.createElement('li'),button=document.createElement('button');
-  li.append(row.nombreRepuesto+' × '+row.cantidad+' · '+row.origen+' ');
-  button.type='button';button.textContent='Quitar';button.onclick=()=>{draft.splice(index,1);paintDraft()};
-  li.append(button);return li;
+  const identity=document.createElement('strong'),origin=document.createElement('small');
+  identity.textContent=[row.noItem,row.nombreRepuesto].filter(Boolean).join(' · ');
+  origin.textContent='Inventario '+row.origen;
+  identity.append(origin);
+  const quantityLabel=document.createElement('label'),quantity=document.createElement('input');
+  quantityLabel.textContent='Cantidad';
+  quantity.type='number';quantity.min='1';quantity.step='1';quantity.required=true;
+  quantity.value=row.cantidad;
+  quantity.oninput=()=>{row.cantidad=quantity.value};
+  quantityLabel.append(quantity);
+  button.type='button';button.textContent='×';button.setAttribute('aria-label','Retirar '+row.nombreRepuesto);
+  button.onclick=()=>{if(!saving){draft.splice(index,1);paintDraft()}};
+  li.append(identity,button,quantityLabel);return li;
  }));
 }
 function filterMachines(){
@@ -81,17 +143,15 @@ function filterMachines(){
   const label=norm(card.textContent);
   card.hidden=!terms.every(term=>label.includes(term));
  }
- byId('machineSearchEmpty').hidden=!cards.length||cards.some(card=>!card.hidden);
+ byId('machineSearchEmpty').hidden=machineOptions.hidden||!cards.length||cards.some(card=>!card.hidden);
 }
 byId('machineSearch').oninput=filterMachines;
-byId('machineSearch').onkeydown=event=>{
- if(event.key==='Enter')event.preventDefault();
-};
 function paint(){
  const machines=(state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value)));
  const selected=machines.find(row=>String(row.id)===fields.assetId.value);
  fields.assetId.value=selected?.id??'';
- byId('selectedMachine').textContent=selected?labelAsset(selected):'Selecciona…';
+ selectedMachineLabel=selected?labelAsset(selected):'';
+ if(machineOptions.hidden)machineSearch.value=selectedMachineLabel;
  byId('machineOptions').replaceChildren(...machines.map(row=>{
   const button=document.createElement('button');
   button.type='button';
@@ -99,14 +159,11 @@ function paint(){
   button.setAttribute('aria-pressed',String(row===selected));
   button.onclick=()=>{
    fields.assetId.value=row.id;
-   byId('selectedMachine').textContent=labelAsset(row);
-   byId('machineOptions').querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed','false');
+   selectedMachineLabel=labelAsset(row);
+   machineOptions.querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed','false');
    button.setAttribute('aria-pressed','true');
-   const picker=button.closest('details');
-   picker.open=false;
-   byId('machineSearch').value='';
-   filterMachines();
-   picker.querySelector('summary').focus();
+   machineSearch.blur();
+   closeMachine();
   };
   return button;
  }));
@@ -146,16 +203,6 @@ async function openWorkspace(){
  byId('operator').textContent=session.user.name+' · '+(roleLabels[session.user.role]||'Auxiliar');
  fields.fechaISO.value=today();paint();window.dispatchEvent(new Event('skweb-open-queries'));await sync();
 }
-function currentPart(){
- const part=partOptions().find(row=>row.id===fields.partId.value),cantidad=Number(fields.cantidad.value);
- if(!part||!Number.isSafeInteger(cantidad)||cantidad<1)throw new Error('Selecciona un repuesto e ingresa una cantidad entera mayor que cero.');
- return {partId:part.id,itemId:part.criterionId||'',noItem:part.numero||'',nombreRepuesto:part.nombre,cantidad,origen:fields.tipoEquipo.value+fields.origen.value,tipoEquipo:fields.tipoEquipo.value};
-}
-byId('addPart').onclick=()=>{
- if(saving)return;
- try{draft.push(currentPart());fields.partId.value='';fields.cantidad.value=1;byId('partSearch').value='';paintParts();paintDraft();status('Repuesto agregado a la lista.')}
- catch(error){status(error.message)}
-};
 form.onsubmit=async event=>{
  event.preventDefault();if(saving)return;
  if(!valid())return status('La sesión venció. Vuelve a iniciar sesión para guardar.');
@@ -163,13 +210,15 @@ form.onsubmit=async event=>{
  saving=true;form.querySelector('[type=submit]').disabled=true;
  try{
   if(!fields.assetId.value)throw new Error('Selecciona la máquina.');
-  const lines=draft.slice();if(fields.partId.value||!lines.length||byId('partSearch').value.trim())lines.push(currentPart());
+  if(!draft.length)throw new Error('Selecciona al menos un repuesto.');
+  const lines=draft.map(row=>({...row,cantidad:Number(row.cantidad)}));
+  if(lines.some(row=>!Number.isSafeInteger(row.cantidad)||row.cantidad<1))throw new Error('Ingresa una cantidad entera mayor que cero para cada repuesto.');
   if(lines.some(row=>row.tipoEquipo!==fields.tipoEquipo.value))throw new Error('Todos los repuestos deben corresponder al tipo de máquina seleccionado.');
   const shared={assetId:fields.assetId.value,responsableId:fields.responsableId.value,fechaISO:fields.fechaISO.value};
   if(!shared.responsableId)throw new Error('Selecciona el mecánico o responsable de la reparación.');
   const records=lines.map(row=>({...shared,...row,syncState:'pending',registradoPorNombre:active.user.name,id:crypto.randomUUID(),createdAt:new Date().toISOString()}));
   const fresh=await changeState(active.user.document,current=>({...current,pending:[...(current.pending||[]),...records]}));
-  if(session===active){state=fresh;draft=[];fields.partId.value='';fields.cantidad.value=1;byId('partSearch').value='';paint();status('Consumos guardados. '+state.pending.length+' pendientes de sincronizar.')}
+  if(session===active){state=fresh;draft=[];closeParts();paint();status('Consumos guardados. '+state.pending.length+' pendientes de sincronizar.')}
  }catch(error){status(error.message)}
  finally{saving=false;form.querySelector('[type=submit]').disabled=false}
 };
@@ -191,7 +240,7 @@ submitAccess('activate',async values=>{
  status('Acceso activado. Ingresa con tu nueva contraseña.');
 });
 byId('logout').onclick=()=>{
- session=null;state={};draft=[];localStorage.removeItem(sessionKey);
+ session=null;state={};draft=[];fields.assetId.value='';closeParts();closeMachine();localStorage.removeItem(sessionKey);
  byId('workspace').hidden=true;byId('logout').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
 };
 byId('sync').onclick=sync;window.addEventListener('online',sync);
@@ -213,7 +262,7 @@ const workerRegistration=navigator.serviceWorker?.register('sw.js',{updateViaCac
 byId('updateProduction').onclick=async event=>{
  const button=event.currentTarget;
  if(saving||syncing)return status('Espera a que termine el guardado o la sincronización.');
- if(draft.length||fields.partId.value)return status('Guarda o quita los repuestos seleccionados antes de actualizar.');
+ if(draft.length)return status('Guarda o quita los repuestos seleccionados antes de actualizar.');
  button.disabled=true;
  status('Buscando la versión más reciente de Producción…');
  try{
@@ -223,7 +272,7 @@ byId('updateProduction').onclick=async event=>{
   if(!response.ok)throw new Error('No se pudo abrir Producción.');
   const registration=await workerRegistration;
   await registration?.update();
-  if(saving||syncing||draft.length||fields.partId.value){
+  if(saving||syncing||draft.length){
    status('Versión comprobada. Termina el registro y vuelve a pulsar Actualizar app.');
    return;
   }
