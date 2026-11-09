@@ -72,6 +72,7 @@ main form,main .tableWrap{color:#172033}
 .productionToolbar button,.productionViews button{font-size:.85rem;line-height:1.2;text-transform:uppercase;padding-inline:6px}
 #login .productionLoginText{display:inline-block;transform:scale(1.32);text-transform:uppercase}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
+#record .productionSaveText{display:inline-block;transform:scale(1.2)}
 </style>
 <script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=20-access-logo"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
@@ -134,7 +135,7 @@ main form,main .tableWrap{color:#172033}
 <div id="responsibleOptions" class="machineOptions partOptions" hidden></div>
 </div>
 <input type="hidden" name="responsableId">
-<button type="submit">Guardar consumos</button>
+<button type="submit"><span class="productionSaveText">Guardar consumos</span></button>
 </form>
 <details><summary>Personal</summary><input id="directorySearch" type="search" placeholder="Buscar nombre o documento"><ul id="directory"></ul></details>
 <details><summary>Consumos registrados</summary><div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Turno</th><th>Máquina</th><th>Inventario</th><th>Repuesto</th><th>Cantidad</th><th>Mecánico o responsable</th><th>Registrado por</th><th>Estado</th></tr></thead><tbody id="history"></tbody></table></div></details>
