@@ -75,7 +75,27 @@ function paintDraft(){
  }));
 }
 function paint(){
- options(fields.assetId,(state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value))),labelAsset);
+ const machines=(state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value)));
+ const selected=machines.find(row=>String(row.id)===fields.assetId.value);
+ fields.assetId.value=selected?.id??'';
+ byId('selectedMachine').textContent=selected?labelAsset(selected):'Selecciona…';
+ byId('machineOptions').replaceChildren(...machines.map(row=>{
+  const button=document.createElement('button');
+  button.type='button';
+  button.textContent=labelAsset(row);
+  button.setAttribute('aria-pressed',String(row===selected));
+  button.onclick=()=>{
+   fields.assetId.value=row.id;
+   byId('selectedMachine').textContent=labelAsset(row);
+   byId('machineOptions').querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed','false');
+   button.setAttribute('aria-pressed','true');
+   const picker=button.closest('details');
+   picker.open=false;
+   picker.querySelector('summary').focus();
+  };
+  return button;
+ }));
+ if(!machines.length)byId('machineOptions').textContent='No hay máquinas disponibles para este tipo.';
  paintParts();paintPeople();paintDirectory();paintDraft();
  const people=new Map((state.personal||[]).map(row=>[row.id,row.nombre]));
  const assets=new Map((state.assets||[]).map(row=>[row.id,labelAsset(row)]));
@@ -126,6 +146,7 @@ form.onsubmit=async event=>{
  const active=session;
  saving=true;form.querySelector('[type=submit]').disabled=true;
  try{
+  if(!fields.assetId.value)throw new Error('Selecciona la máquina.');
   const lines=draft.slice();if(fields.partId.value||!lines.length||byId('partSearch').value.trim())lines.push(currentPart());
   if(lines.some(row=>row.tipoEquipo!==fields.tipoEquipo.value))throw new Error('Todos los repuestos deben corresponder al tipo de máquina seleccionado.');
   const shared={assetId:fields.assetId.value,responsableId:fields.responsableId.value,fechaISO:fields.fechaISO.value};
@@ -158,7 +179,7 @@ byId('logout').onclick=()=>{
  byId('workspace').hidden=true;byId('logout').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
 };
 byId('sync').onclick=sync;window.addEventListener('online',sync);
-fields.tipoEquipo.onchange=paint;fields.origen.onchange=paintParts;
+for(const radio of fields.tipoEquipo)radio.onchange=paint;fields.origen.onchange=paintParts;
 byId('partSearch').oninput=paintParts;byId('personSearch').oninput=paintPeople;byId('directorySearch').oninput=paintDirectory;
 if(invitation){
  byId('login').hidden=true;
