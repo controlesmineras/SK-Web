@@ -27,8 +27,14 @@ main form,main .tableWrap{color:#172033}
 .partOptions button{white-space:normal}
 #draft{display:grid;gap:8px;list-style:none;padding:0;margin:0}
 #draft li{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;align-items:center;border:1px solid #cbd3da;border-radius:8px;padding:10px;margin:0}
-#draft button{grid-column:2;grid-row:1;min-height:44px;padding:0}
-#draft label{grid-column:1/-1;max-width:130px}
+#draft .removePart{grid-column:2;grid-row:1;min-height:44px;padding:0}
+#draft label{grid-column:1/-1}
+#responsibleOptions button{font-size:.95rem;line-height:1.2;height:44px;white-space:nowrap}
+.quantityStepper{display:grid;grid-template-columns:44px minmax(0,90px) 44px;gap:6px}
+.quantityStepper button{min-height:44px;padding:0;font-size:1rem}
+.quantityStepper button:disabled{opacity:.5;cursor:default}
+.quantityStepper input{text-align:center;appearance:textfield}
+.quantityStepper input::-webkit-inner-spin-button{-webkit-appearance:none}
 #draft small{display:block;color:#43576b}
 #logout{display:inline-grid;place-items:center;width:44px;height:44px;padding:0;background:#eef4f8;color:#102f45;white-space:nowrap}
 .productionIdentity{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;margin:12px 0}
@@ -64,7 +70,7 @@ main form,main .tableWrap{color:#172033}
 #queries .queryTabs button{min-width:0;white-space:normal}
 #queries .filterChip{max-width:100%;flex-wrap:wrap}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=17-responsible-picker"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=18-quantity"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>

@@ -167,14 +167,34 @@ function paintDraft(){
   origin.textContent='Inventario '+row.origen;
   identity.append(origin);
   const quantityLabel=document.createElement('label'),quantity=document.createElement('input');
+  quantity.id='partQuantity'+index;quantityLabel.htmlFor=quantity.id;
   quantityLabel.textContent='Cantidad';
   quantity.type='number';quantity.min='1';quantity.step='1';quantity.required=true;
   quantity.value=row.cantidad;
-  quantity.oninput=()=>{row.cantidad=quantity.value};
-  quantityLabel.append(quantity);
-  button.type='button';button.textContent='×';button.setAttribute('aria-label','Retirar '+row.nombreRepuesto);
+  const stepper=document.createElement('span'),down=document.createElement('button'),up=document.createElement('button');
+  stepper.className='quantityStepper';
+  down.type=up.type='button';
+  down.textContent='▼';up.textContent='▲';
+  down.setAttribute('aria-label','Disminuir cantidad de '+row.nombreRepuesto);
+  up.setAttribute('aria-label','Aumentar cantidad de '+row.nombreRepuesto);
+  const updateQuantity=()=>{
+   if(quantity.value!==''&&Number(quantity.value)<1)quantity.value='1';
+   row.cantidad=quantity.value;
+   down.disabled=Number(quantity.value)<=1;
+  };
+  const step=delta=>{
+   if(saving)return;
+   const current=Math.floor(Number(quantity.value));
+   quantity.value=Math.min(Number.MAX_SAFE_INTEGER,Math.max(1,current+delta));
+   updateQuantity();
+  };
+  down.onclick=()=>step(-1);up.onclick=()=>step(1);
+  quantity.oninput=updateQuantity;
+  updateQuantity();
+  stepper.append(down,quantity,up);
+  button.type='button';button.className='removePart';button.textContent='×';button.setAttribute('aria-label','Retirar '+row.nombreRepuesto);
   button.onclick=()=>{if(!saving){draft.splice(index,1);paintDraft()}};
-  li.append(identity,button,quantityLabel);return li;
+  li.append(identity,button,quantityLabel,stepper);return li;
  }));
 }
 function filterMachines(){
