@@ -3,6 +3,8 @@
 const byId=id=>document.getElementById(id);
 const form=byId('record'),fields=form.elements;
 const status=message=>{byId('status').textContent=message};
+const inventoryOrigin='29';
+byId('inventoryOrigin').value=inventoryOrigin;
 const sessionKey='sk-production-session';
 const db=true;
 async function all(name){return name==='consumptions'?[...(state.consumptions||[]),...(state.pending||[])]:state[name]||[]}
@@ -44,7 +46,7 @@ function options(select,rows,label){
 const personLabel=row=>[row.nombre,row.documento].filter(Boolean).join(' · ');
 function partOptions(){
  const rows=window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]);
- return window.SKSpareCatalog.filter(rows,fields.tipoEquipo.value,fields.origen.value);
+ return window.SKSpareCatalog.filter(rows,fields.tipoEquipo.value,inventoryOrigin);
 }
 const machineSearch=byId('machineSearch'),partSearch=byId('partSearch');
 const machineOptions=byId('machineOptions'),partCards=byId('partOptions');
@@ -91,7 +93,7 @@ function paintParts(){
   button.textContent=[row.numero,row.nombre].filter(Boolean).join(' · ');
   button.onclick=()=>{
    if(saving)return;
-   draft.push({partId:row.id,itemId:row.criterionId||'',noItem:row.numero||'',nombreRepuesto:row.nombre,cantidad:1,origen:fields.tipoEquipo.value+fields.origen.value,tipoEquipo:fields.tipoEquipo.value});
+   draft.push({partId:row.id,itemId:row.criterionId||'',noItem:row.numero||'',nombreRepuesto:row.nombre,cantidad:1,origen:fields.tipoEquipo.value+inventoryOrigin,tipoEquipo:fields.tipoEquipo.value});
    partSearch.blur();
    closeParts();
    paintDraft();
@@ -247,7 +249,7 @@ byId('sync').onclick=sync;window.addEventListener('online',sync);
 for(const radio of fields.tipoEquipo)radio.onchange=()=>{
  byId('machineSearch').value='';
  paint();
-};fields.origen.onchange=paintParts;
+};
 byId('partSearch').oninput=paintParts;byId('personSearch').oninput=paintPeople;byId('directorySearch').oninput=paintDirectory;
 if(invitation){
  byId('login').hidden=true;

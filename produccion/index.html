@@ -28,12 +28,13 @@ main form,main .tableWrap{color:#172033}
 #draft button{grid-column:2;grid-row:1;min-height:44px;padding:0}
 #draft label{grid-column:1/-1;max-width:130px}
 #draft small{display:block;color:#43576b}
+#logout{display:inline-grid;place-items:center;width:44px;height:44px;padding:0;background:#eef4f8;color:#102f45;white-space:nowrap}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=6-pickers"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=7-origin"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
-<header><strong style="display:flex;align-items:center;gap:8px"><img src="./produccion-yt-192.png" width="44" height="44" alt="">Producción · SK 3.7</strong><button id="logout" type="button" hidden>Cerrar sesión</button></header>
+<header><strong style="display:flex;align-items:center;gap:8px"><img src="./produccion-yt-192.png" width="44" height="44" alt="">PRODUCCIÓN</strong><button id="logout" hidden type="button" aria-label="Cerrar sesión"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></button></header>
 <main>
 <button type="button" id="installProduction" aria-describedby="installProductionHelp">INSTALAR</button>
 <p id="installProductionHelp" class="hint" role="status" hidden></p>
@@ -67,7 +68,7 @@ main form,main .tableWrap{color:#172033}
 </div>
 <label id="responsibleSearchLabel">Buscar mecánico o responsable<input id="personSearch" type="search" placeholder="Nombre o documento"></label>
 <label>Mecánico o responsable<select name="responsableId" required></select></label>
-<label>Inventario de origen<select name="origen"><option value="29">29</option><option value="28">28</option></select></label>
+<label>Inventario de origen<input id="inventoryOrigin" readonly></label>
 <ul id="draft" class="productionField" hidden></ul>
 <div id="partPicker" class="productionField">
 <label>Buscar repuesto<input id="partSearch" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="partOptions"></label>
