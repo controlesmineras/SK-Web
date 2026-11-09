@@ -5,12 +5,40 @@ const form=byId('record'),fields=form.elements;
 const status=message=>{byId('status').textContent=message};
 const inventoryOrigin='29';
 byId('inventoryOrigin').value=inventoryOrigin;
+function createDeviceAccess(namespace) {
+    const key = namespace + ':device-access:v1';
+    const id = (value) => String(value).trim().toLowerCase();
+    const read = () => { try {
+        return Object.assign(Object.create(null), JSON.parse(localStorage.getItem(key) || '{}'));
+    }
+    catch {
+        return Object.create(null);
+    } };
+    const write = (rows) => localStorage.setItem(key, JSON.stringify(rows));
+    const hex = (bytes) => Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('');
+    async function hash(password, salt) { const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(password), 'PBKDF2', false, ['deriveBits']); return hex(new Uint8Array(await crypto.subtle.deriveBits({ name: 'PBKDF2', salt: new TextEncoder().encode(salt), iterations: 150000, hash: 'SHA-256' }, material, 256))); }
+    return {
+        async remember(username, password, session) { const salt = hex(crypto.getRandomValues(new Uint8Array(16))), derived = await hash(password, salt), rows = read(); rows[id(username)] = { salt, hash: derived, session, confirmedAt: new Date().toISOString() }; write(rows); },
+        async verify(username, password) { const row = read()[id(username)]; if (!row || await hash(password, row.salt) !== row.hash)
+            return null; return row.session; },
+        byToken(token) { return Object.values(read()).find(row => row.session?.token === token)?.session || null; },
+        remove(username) { const rows = read(); delete rows[id(username)]; write(rows); },
+        revokeToken(token) { const rows = read(); for (const name of Object.keys(rows))
+            if (rows[name].session?.token === token)
+                delete rows[name]; write(rows); }
+    };
+}
+const deviceAccess=createDeviceAccess('sk-production');
 const sessionKey='sk-production-session';
 const db=true;
 async function all(name){return name==='consumptions'?[...(state.consumptions||[]),...(state.pending||[])]:state[name]||[]}
 let syncFailed=false;
 let session=null,state={},draft=[],syncing=false,saving=false;
 try{session=JSON.parse(localStorage.getItem(sessionKey)||'null')}catch{}
+if(session&&Number(session.expiresAt)<=Date.now()){
+ session=navigator.onLine?null:deviceAccess.byToken(session.token);
+}
+
 const invitation=new URLSearchParams(location.hash.slice(1)).get('invitation');
 const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Bogota'}).format(new Date());
 const bogotaHour=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Bogota',hour:'2-digit',hourCycle:'h23'});
@@ -26,7 +54,7 @@ function refreshShift(){
 const norm=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const roleLabels={admin:'Administrador',assistant:'Auxiliar',mechanic:'Mecánico'};
 const ownPerson=()=>session.user.personId||(state.personal||[]).find(row=>String(row.documento).trim()===session.user.document)?.id;
-const valid=()=>session?.token&&Number(session.expiresAt)>Date.now();
+const canSync=()=>session?.token&&Number(session.expiresAt)>Date.now();
 const database=new Promise((resolve,reject)=>{
  const request=indexedDB.open('sk-production',1);
  request.onblocked=()=>reject(new Error('Cierra las otras ventanas de Producción y vuelve a abrir la app.'));
@@ -57,7 +85,11 @@ async function api(action,data={}){
   throw new Error('No se pudo conectar con el servidor de Producción. Revisa la conexión e inténtalo de nuevo.');
  }finally{clearTimeout(timeout)}
  if(!response.ok)throw new Error('Error de conexión ('+response.status+')');
- if(!result.ok)throw new Error(result.error||'No se pudo completar la solicitud');
+ if(!result.ok){
+  const error=new Error(result.error||'No se pudo completar la solicitud');
+  error.centralResponse=true;
+  throw error;
+ }
  return result;
 }
 const labelAsset=row=>[row.clase,row.modelo,row.marcaActual||row.marcaInterna,row.numeroMarcaActual,row.serial].filter(Boolean).join(' · ');
@@ -265,8 +297,9 @@ function paintSync(){
   'Sinc. '+date.toLocaleDateString('es-CO',{timeZone:'America/Bogota',day:'numeric',month:'numeric'})+' '+date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
 }
 async function sync(){
- if(!valid()||syncing)return;
+ if(!session||syncing)return;
  if(!navigator.onLine){syncFailed=true;paintSync();return}
+ if(!canSync()){syncFailed=true;paintSync();status('Vuelve a iniciar sesión con internet para sincronizar. Tus registros siguen guardados.');return}
  const active=session,document=active.user.document;
  syncing=true;syncFailed=false;paintSync();
  try{
@@ -275,7 +308,17 @@ async function sync(){
   const acknowledged=new Set(data.ack);
   const fresh=await changeState(document,current=>({...data,lastSyncAt:new Date().toISOString(),pending:(current.pending||[]).filter(row=>!acknowledged.has(row.id))}));
   if(session===active){state=fresh;paint()}
- }catch(error){if(session===active)syncFailed=true;console.error('Sincronización de Producción:',error)}
+ }catch(error){
+  if(error.centralResponse&&/revocada|sesión no válida|inicia sesión/i.test(error.message)){
+   deviceAccess.revokeToken(active.token);
+   if(session===active){
+    byId('logout').click();
+    byId('accessStatus').textContent=error.message+'. Los consumos pendientes siguen guardados.';
+   }
+  }
+  if(session===active)syncFailed=true;
+  console.error('Sincronización de Producción:',error);
+ }
  finally{syncing=false;paintSync()}
 }
 function showConsumptionView(showQueries){
@@ -291,17 +334,17 @@ function placeInstallControls(container){
  container.append(byId('installProduction'),byId('installProductionHelp'));
 }
 async function openWorkspace(){
- if(!valid())return;
+ if(!session)return;
  state=await changeState(session.user.document);
  placeInstallControls(byId('updateProduction').parentElement);
  byId('access').hidden=true;byId('workspace').hidden=false;byId('productionSync').hidden=false;syncFailed=false;
  byId('operatorName').textContent=session.user.name;
  byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
- fields.fechaISO.value=today();manualShift=false;refreshShift();showConsumptionView(false);paint();await sync();
+ fields.fechaISO.value=today();manualShift=false;refreshShift();showConsumptionView(false);paint();if(navigator.onLine)await sync();
 }
 form.onsubmit=async event=>{
  event.preventDefault();if(saving)return;
- if(!valid())return status('La sesión venció. Vuelve a iniciar sesión para guardar.');
+ if(!session)return status('Inicia sesión para guardar.');
  const active=session;
  saving=true;form.querySelector('[type=submit]').disabled=true;
  try{
@@ -329,8 +372,22 @@ function submitAccess(id,handler){
  };
 }
 submitAccess('login',async values=>{
- const data=await api('productionLogin',values);
- session={token:data.token,expiresAt:data.expiresAt,user:data.user};localStorage.setItem(sessionKey,JSON.stringify(session));
+ const {document,password}=values;
+ let nextSession;
+ try{
+  const data=await api('productionLogin',values);
+  nextSession={token:data.token,expiresAt:data.expiresAt,user:data.user};
+  await deviceAccess.remember(document,password,nextSession);
+ }catch(error){
+  if(error.centralResponse){
+   if(/documento o contraseña incorrectos|colaborador no disponible/i.test(error.message))deviceAccess.remove(document);
+   throw error;
+  }
+  nextSession=await deviceAccess.verify(document,password);
+  if(!nextSession)throw new Error(navigator.onLine?error.message:'Acceso local no disponible. Verifica la contraseña o inicia sesión con internet en este dispositivo.');
+ }
+ session=nextSession;
+ localStorage.setItem(sessionKey,JSON.stringify(session));
  await openWorkspace();byId('login').reset();
 });
 byId('login').querySelector('button').disabled=false;
