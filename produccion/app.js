@@ -204,7 +204,7 @@ function paint(){
  }));
  list('deliveries',state.deliveries||[],row=>[row.createdAt?.slice(0,10),row.itemName,row.quantity,row.reversed?'Reversado':''].filter(Boolean).join(' · '));
  paintSync();
- window.dispatchEvent(new Event('skweb-consumption-changed'));
+ if(!byId('queries').hidden)window.dispatchEvent(new Event('skweb-consumption-changed'));
 }
 function paintSync(){
  const count=(state.pending||[]).length,badge=byId('pendingBadge'),button=byId('sync');
@@ -235,6 +235,15 @@ async function sync(){
  }catch(error){if(session===active)syncFailed=true;console.error('Sincronización de Producción:',error)}
  finally{syncing=false;paintSync()}
 }
+function showConsumptionView(showQueries){
+ byId('recordPanel').hidden=showQueries;
+ byId('queries').hidden=!showQueries;
+ byId('showRecord').setAttribute('aria-pressed',String(!showQueries));
+ byId('showConsumptionQueries').setAttribute('aria-pressed',String(showQueries));
+ if(showQueries)window.dispatchEvent(new Event('skweb-open-queries'));
+}
+byId('showRecord').onclick=()=>showConsumptionView(false);
+byId('showConsumptionQueries').onclick=()=>showConsumptionView(true);
 function placeInstallControls(container){
  container.append(byId('installProduction'),byId('installProductionHelp'));
 }
@@ -245,7 +254,7 @@ async function openWorkspace(){
  byId('access').hidden=true;byId('workspace').hidden=false;byId('productionSync').hidden=false;syncFailed=false;
  byId('operatorName').textContent=session.user.name;
  byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
- fields.fechaISO.value=today();manualShift=false;refreshShift();paint();window.dispatchEvent(new Event('skweb-open-queries'));await sync();
+ fields.fechaISO.value=today();manualShift=false;refreshShift();showConsumptionView(false);paint();await sync();
 }
 form.onsubmit=async event=>{
  event.preventDefault();if(saving)return;

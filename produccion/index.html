@@ -54,8 +54,14 @@ main form,main .tableWrap{color:#172033}
 .recordDateShift input,.recordDateShift select{min-width:0;box-sizing:border-box}
 #accessStatus{margin:8px 0}
 #accessStatus:empty{display:none}
+.productionViews{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}
+.productionViews button{min-height:44px;background:#eef3f7;color:#173d59;border:1px solid #cbd7df}
+.productionViews button[aria-pressed="true"]{background:#214b63;color:#fff;border-color:#7696ac}
+#queries .queryTabs{max-width:100%}
+#queries .queryTabs button{min-width:0;white-space:normal}
+#queries .filterChip{max-width:100%;flex-wrap:wrap}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=13-shift"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=14-queries"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -80,6 +86,11 @@ main form,main .tableWrap{color:#172033}
 <div class="productionToolbar">
 <button id="updateProduction" type="button">Actualizar app</button>
 </div>
+<div class="productionViews" role="group" aria-label="Consumo de repuestos">
+<button type="button" id="showRecord" aria-controls="recordPanel" aria-pressed="true">Registrar consumo</button>
+<button type="button" id="showConsumptionQueries" aria-controls="queries" aria-pressed="false">Consultar consumos</button>
+</div>
+<div id="recordPanel">
 <h2>CONSUMO DE REPUESTOS</h2>
 <form id="record">
 <div class="productionField recordDateShift">
@@ -111,7 +122,8 @@ main form,main .tableWrap{color:#172033}
 </form>
 <details><summary>Personal</summary><input id="directorySearch" type="search" placeholder="Buscar nombre o documento"><ul id="directory"></ul></details>
 <details><summary>Consumos registrados</summary><div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Turno</th><th>Máquina</th><th>Inventario</th><th>Repuesto</th><th>Cantidad</th><th>Mecánico o responsable</th><th>Registrado por</th><th>Estado</th></tr></thead><tbody id="history"></tbody></table></div></details>
-<details><summary>Consultas y exportación de consumos</summary><section id="queries"></section></details>
+</div>
+<section id="queries" hidden></section>
 <details><summary>Entregas de Plaza Blending a Producción</summary><ul id="deliveries"></ul></details>
 </section>
 </main></body></html>
