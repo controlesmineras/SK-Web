@@ -174,20 +174,24 @@ byId('machineSearch').oninput=filterMachines;
 function availableForConsumption(asset){
  return !/^yt/i.test(asset.clase||'')||!/dad(?:o\/a|o|a) de baja|retirad[oa]|desechad[oa]/.test(norm(asset.estado)+' '+norm(asset.ubicacion));
 }
+function machinePickerLabel(row){
+ const label=labelAsset(row);
+ return /^YT$/i.test(row.clase)&&row.modelo?label.replace(/^YT · /i,'YT'):label;
+}
 function paint(){
  const machines=(state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value))&&availableForConsumption(row));
  const selected=machines.find(row=>String(row.id)===fields.assetId.value);
  fields.assetId.value=selected?.id??'';
- selectedMachineLabel=selected?labelAsset(selected):'';
+ selectedMachineLabel=selected?machinePickerLabel(selected):'';
  if(machineOptions.hidden)machineSearch.value=selectedMachineLabel;
  byId('machineOptions').replaceChildren(...machines.map(row=>{
   const button=document.createElement('button');
   button.type='button';
-  button.textContent=labelAsset(row);
+  button.textContent=machinePickerLabel(row);
   button.setAttribute('aria-pressed',String(row===selected));
   button.onclick=()=>{
    fields.assetId.value=row.id;
-   selectedMachineLabel=labelAsset(row);
+   selectedMachineLabel=machinePickerLabel(row);
    machineOptions.querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed','false');
    button.setAttribute('aria-pressed','true');
    machineSearch.blur();
