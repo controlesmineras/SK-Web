@@ -64,7 +64,7 @@ main form,main .tableWrap{color:#172033}
 #queries .queryTabs button{min-width:0;white-space:normal}
 #queries .filterChip{max-width:100%;flex-wrap:wrap}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=16-yt-label"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=17-responsible-picker"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -113,8 +113,11 @@ main form,main .tableWrap{color:#172033}
 <div id="machineOptions" class="machineOptions" hidden></div>
 <p id="machineSearchEmpty" role="status" hidden>Sin máquinas que coincidan con la búsqueda.</p>
 </div>
-<label id="responsibleSearchLabel">Buscar mecánico o responsable<input id="personSearch" type="search" placeholder="Nombre o documento"></label>
-<label>Mecánico o responsable<select name="responsableId" required></select></label>
+<div id="responsiblePicker" class="productionField">
+<label>Mecánico o responsable<input id="personSearch" type="search" autocomplete="off" placeholder="Buscar por documento o nombre…" aria-controls="responsibleOptions"></label>
+<div id="responsibleOptions" class="machineOptions partOptions" hidden></div>
+</div>
+<input type="hidden" name="responsableId">
 <label>Inventario de origen<input id="inventoryOrigin" readonly></label>
 <ul id="draft" class="productionField" hidden></ul>
 <div id="partPicker" class="productionField">

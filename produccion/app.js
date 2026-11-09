@@ -61,11 +61,6 @@ async function api(action,data={}){
  return result;
 }
 const labelAsset=row=>[row.clase,row.modelo,row.marcaActual||row.marcaInterna,row.numeroMarcaActual,row.serial].filter(Boolean).join(' · ');
-function options(select,rows,label){
- const value=select.value;
- select.replaceChildren(new Option('Selecciona…',''),...rows.map(row=>new Option(label(row),row.id)));
- select.value=rows.some(row=>row.id===value)?value:'';
-}
 const personLabel=row=>[row.nombre,row.documento].filter(Boolean).join(' · ');
 function partOptions(){
  const rows=window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]);
@@ -125,14 +120,35 @@ function paintParts(){
  }));
  if(!rows.length)partCards.textContent='No hay repuestos que coincidan.';
 }
+const personSearch=byId('personSearch'),responsibleOptions=byId('responsibleOptions');
+setupPicker(personSearch,responsibleOptions,()=>{
+ responsibleOptions.hidden=false;
+ paintPeople();
+},()=>{responsibleOptions.hidden=true});
 function paintPeople(){
- const query=norm(byId('personSearch').value);
  const mechanic=session?.user.role==='mechanic';
- byId('responsibleSearchLabel').hidden=mechanic;
- fields.responsableId.disabled=mechanic;
- const people=(state.personal||[]).filter(row=>mechanic?row.id===ownPerson():norm(personLabel(row)).includes(query));
- options(fields.responsableId,people,personLabel);
- if(mechanic)fields.responsableId.value=ownPerson()||'';
+ byId('responsiblePicker').hidden=mechanic;
+ if(mechanic){fields.responsableId.value=ownPerson()||'';return}
+ const people=(state.personal||[]).filter(row=>!row.deleted);
+ const selected=people.find(row=>String(row.id)===fields.responsableId.value);
+ if(!selected)fields.responsableId.value='';
+ if(responsibleOptions.hidden)return;
+ const terms=selected?[]:norm(personSearch.value).split(/\s+/);
+ const matches=people.filter(row=>terms.every(term=>norm(personLabel(row)).includes(term)));
+ responsibleOptions.replaceChildren(...matches.map(row=>{
+  const button=document.createElement('button');
+  button.type='button';
+  button.textContent=personLabel(row);
+  button.setAttribute('aria-pressed',String(row===selected));
+  button.onclick=()=>{
+   fields.responsableId.value=row.id;
+   personSearch.value=personLabel(row);
+   personSearch.blur();
+   responsibleOptions.hidden=true;
+  };
+  return button;
+ }));
+ if(!matches.length)responsibleOptions.textContent='No se encontraron colaboradores.';
 }
 function list(id,rows,label){
  byId(id).replaceChildren(...rows.map(row=>{const li=document.createElement('li');li.textContent=label(row);return li}));
@@ -307,6 +323,7 @@ submitAccess('activate',async values=>{
  status('Acceso activado. Ingresa con tu nueva contraseña.');
 });
 byId('logout').onclick=()=>{
+ fields.responsableId.value='';personSearch.value='';responsibleOptions.hidden=true;
  placeInstallControls(byId('installBeforeLogin'));
  session=null;state={};draft=[];fields.assetId.value='';closeParts();closeMachine();localStorage.removeItem(sessionKey);
  byId('workspace').hidden=true;byId('productionSync').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
@@ -316,7 +333,7 @@ for(const radio of fields.tipoEquipo)radio.onchange=()=>{
  byId('machineSearch').value='';
  paint();
 };
-byId('partSearch').oninput=paintParts;byId('personSearch').oninput=paintPeople;byId('directorySearch').oninput=paintDirectory;
+byId('partSearch').oninput=paintParts;personSearch.oninput=()=>{fields.responsableId.value='';paintPeople()};byId('directorySearch').oninput=paintDirectory;
 if(invitation){
  byId('login').hidden=true;
  api('accessInvitationInfo',{invitation}).then(info=>{
