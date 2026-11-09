@@ -29,12 +29,16 @@ main form,main .tableWrap{color:#172033}
 #draft label{grid-column:1/-1;max-width:130px}
 #draft small{display:block;color:#43576b}
 #logout{display:inline-grid;place-items:center;width:44px;height:44px;padding:0;background:#eef4f8;color:#102f45;white-space:nowrap}
+.productionIdentity{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;margin:12px 0}
+#operator{grid-column:2;display:grid;gap:3px;text-align:center;overflow-wrap:anywhere}
+#operatorRole{font-size:.9rem}
+.productionIdentity #logout{grid-column:3}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=7-origin"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=8-identity"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
-<header><strong style="display:flex;align-items:center;gap:8px"><img src="./produccion-yt-192.png" width="44" height="44" alt="">PRODUCCIÓN</strong><button id="logout" hidden type="button" aria-label="Cerrar sesión"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></button></header>
+<header><strong style="display:flex;align-items:center;gap:8px"><img src="./produccion-yt-192.png" width="44" height="44" alt="">PRODUCCIÓN</strong></header>
 <main>
 <button type="button" id="installProduction" aria-describedby="installProductionHelp">INSTALAR</button>
 <p id="installProductionHelp" class="hint" role="status" hidden></p>
@@ -45,7 +49,10 @@ main form,main .tableWrap{color:#172033}
 <form id="activate" hidden><h3>Crear contraseña</h3><label>Documento<input name="document" readonly required></label><label>Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><button>Activar acceso</button></form>
 </section>
 <section id="workspace" hidden>
-<p id="operator"></p>
+<div class="productionIdentity">
+<div id="operator"><strong id="operatorName"></strong><span id="operatorRole"></span></div>
+<button id="logout" type="button" aria-label="Cerrar sesión"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></button>
+</div>
 <div class="productionToolbar">
 <button id="sync" type="button">Sincronizar</button>
 <button id="updateProduction" type="button">Actualizar app</button>

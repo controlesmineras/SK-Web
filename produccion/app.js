@@ -201,8 +201,9 @@ async function sync(){
 async function openWorkspace(){
  if(!valid())return;
  state=await changeState(session.user.document);
- byId('access').hidden=true;byId('workspace').hidden=false;byId('logout').hidden=false;
- byId('operator').textContent=session.user.name+' · '+(roleLabels[session.user.role]||'Auxiliar');
+ byId('access').hidden=true;byId('workspace').hidden=false;
+ byId('operatorName').textContent=session.user.name;
+ byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
  fields.fechaISO.value=today();paint();window.dispatchEvent(new Event('skweb-open-queries'));await sync();
 }
 form.onsubmit=async event=>{
@@ -243,7 +244,7 @@ submitAccess('activate',async values=>{
 });
 byId('logout').onclick=()=>{
  session=null;state={};draft=[];fields.assetId.value='';closeParts();closeMachine();localStorage.removeItem(sessionKey);
- byId('workspace').hidden=true;byId('logout').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
+ byId('workspace').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
 };
 byId('sync').onclick=sync;window.addEventListener('online',sync);
 for(const radio of fields.tipoEquipo)radio.onchange=()=>{
