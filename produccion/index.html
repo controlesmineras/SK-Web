@@ -50,8 +50,12 @@ main form,main .tableWrap{color:#172033}
 }
 @keyframes productionSyncSpin{to{transform:rotate(360deg)}}
 @keyframes productionSyncPulse{from{background:#397aa5}to{background:#2f765a;box-shadow:0 0 11px #35d87980}}
+.recordDateShift{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
+.recordDateShift input,.recordDateShift select{min-width:0;box-sizing:border-box}
+#accessStatus{margin:8px 0}
+#accessStatus:empty{display:none}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=12-toolbar"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=13-shift"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -64,7 +68,8 @@ main form,main .tableWrap{color:#172033}
 <p id="status" role="status" aria-live="polite"></p>
 <section id="access">
 <h2>Acceso a Producción</h2>
-<form id="login"><label>Documento<input name="document" autocomplete="username" required></label><label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label><button>Ingresar</button></form>
+<form id="login"><label>Documento<input name="document" autocomplete="username" required></label><label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label><button disabled>Ingresar</button></form>
+<p id="accessStatus" role="status">Si Ingresar sigue deshabilitado, vuelve a cargar Producción con conexión.</p>
 <form id="activate" hidden><h3>Crear contraseña</h3><label>Documento<input name="document" readonly required></label><label>Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><button>Activar acceso</button></form>
 </section>
 <section id="workspace" hidden>
@@ -77,7 +82,10 @@ main form,main .tableWrap{color:#172033}
 </div>
 <h2>CONSUMO DE REPUESTOS</h2>
 <form id="record">
-<label class="productionField">Fecha<input name="fechaISO" type="date" required></label>
+<div class="productionField recordDateShift">
+<label>Fecha<input name="fechaISO" type="date" required></label>
+<label>Turno<select name="turno" required><option value="D">D</option><option value="T">T</option><option value="S">S</option></select></label>
+</div>
 <fieldset class="productionField equipmentTypes">
 <legend>Tipo de equipo</legend>
 <label><input type="radio" name="tipoEquipo" value="YT" checked> YT</label>
@@ -102,7 +110,7 @@ main form,main .tableWrap{color:#172033}
 <button type="submit">Guardar consumos</button>
 </form>
 <details><summary>Personal</summary><input id="directorySearch" type="search" placeholder="Buscar nombre o documento"><ul id="directory"></ul></details>
-<details><summary>Consumos registrados</summary><div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Máquina</th><th>Inventario</th><th>Repuesto</th><th>Cantidad</th><th>Mecánico o responsable</th><th>Registrado por</th><th>Estado</th></tr></thead><tbody id="history"></tbody></table></div></details>
+<details><summary>Consumos registrados</summary><div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Turno</th><th>Máquina</th><th>Inventario</th><th>Repuesto</th><th>Cantidad</th><th>Mecánico o responsable</th><th>Registrado por</th><th>Estado</th></tr></thead><tbody id="history"></tbody></table></div></details>
 <details><summary>Consultas y exportación de consumos</summary><section id="queries"></section></details>
 <details><summary>Entregas de Plaza Blending a Producción</summary><ul id="deliveries"></ul></details>
 </section>

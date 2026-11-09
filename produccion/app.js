@@ -13,16 +13,28 @@ let session=null,state={},draft=[],syncing=false,saving=false;
 try{session=JSON.parse(localStorage.getItem(sessionKey)||'null')}catch{}
 const invitation=new URLSearchParams(location.hash.slice(1)).get('invitation');
 const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Bogota'}).format(new Date());
+const bogotaHour=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Bogota',hour:'2-digit',hourCycle:'h23'});
+function currentShift(date=new Date()){
+ const hour=Number(bogotaHour.format(date));
+ return hour<6||hour>=22?'S':hour<14?'D':'T';
+}
+let manualShift=false;
+fields.turno.onchange=()=>{manualShift=true};
+function refreshShift(){
+ if(!manualShift)fields.turno.value=currentShift();
+}
 const norm=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const roleLabels={admin:'Administrador',assistant:'Auxiliar',mechanic:'Mecánico'};
 const ownPerson=()=>session.user.personId||(state.personal||[]).find(row=>String(row.documento).trim()===session.user.document)?.id;
 const valid=()=>session?.token&&Number(session.expiresAt)>Date.now();
 const database=new Promise((resolve,reject)=>{
  const request=indexedDB.open('sk-production',1);
+ request.onblocked=()=>reject(new Error('Cierra las otras ventanas de Producción y vuelve a abrir la app.'));
  request.onupgradeneeded=()=>request.result.createObjectStore('accounts');
  request.onsuccess=()=>resolve(request.result);
- request.onerror=()=>reject(request.error);
+ request.onerror=()=>reject(new Error('No se pudo abrir el almacenamiento local de Producción.'));
 });
+database.catch(()=>{});
 async function changeState(document,update){
  const db=await database;
  return new Promise((resolve,reject)=>{
@@ -33,9 +45,19 @@ async function changeState(document,update){
  });
 }
 async function api(action,data={}){
- const response=await fetch(window.SK_SYNC_CONFIG.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,...data}),signal:AbortSignal.timeout(30000),cache:'no-store',credentials:'omit'});
+ if(!navigator.onLine)throw new Error('Sin conexión. Conéctate a internet e inténtalo de nuevo.');
+ const controller=new AbortController();
+ const timeout=setTimeout(()=>controller.abort(),30000);
+ let response,result;
+ try{
+  response=await fetch(window.SK_SYNC_CONFIG.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,...data}),signal:controller.signal,cache:'no-store',credentials:'omit'});
+  if(response.ok)result=await response.json();
+ }catch(error){
+  if(controller.signal.aborted)throw new Error('El servidor tardó demasiado en responder. Inténtalo de nuevo.');
+  throw new Error('No se pudo conectar con el servidor de Producción. Revisa la conexión e inténtalo de nuevo.');
+ }finally{clearTimeout(timeout)}
  if(!response.ok)throw new Error('Error de conexión ('+response.status+')');
- const result=await response.json();if(!result.ok)throw new Error(result.error||'No se pudo completar la solicitud');
+ if(!result.ok)throw new Error(result.error||'No se pudo completar la solicitud');
  return result;
 }
 const labelAsset=row=>[row.clase,row.modelo,row.marcaActual||row.marcaInterna,row.numeroMarcaActual,row.serial].filter(Boolean).join(' · ');
@@ -177,7 +199,7 @@ function paint(){
  const assets=new Map((state.assets||[]).map(row=>[row.id,labelAsset(row)]));
  byId('history').replaceChildren(...[...(state.consumptions||[]),...(state.pending||[]).map(row=>({...row,syncState:'pending'}))].sort((a,b)=>b.fechaISO.localeCompare(a.fechaISO)).map(row=>{
   const tr=document.createElement('tr');
-  for(const value of [row.fechaISO,assets.get(row.assetId)||row.assetId,row.origen,row.nombreRepuesto,row.cantidad,row.responsableNombre||people.get(row.responsableId)||'—',row.registradoPorNombre||row.registradoPor||(row.syncState==='pending'?session.user.name:'—'),row.syncState==='pending'?'Pendiente':'Sincronizado']){const td=document.createElement('td');td.textContent=value;tr.append(td)}
+  for(const value of [row.fechaISO,row.turno||'—',assets.get(row.assetId)||row.assetId,row.origen,row.nombreRepuesto,row.cantidad,row.responsableNombre||people.get(row.responsableId)||'—',row.registradoPorNombre||row.registradoPor||(row.syncState==='pending'?session.user.name:'—'),row.syncState==='pending'?'Pendiente':'Sincronizado']){const td=document.createElement('td');td.textContent=value;tr.append(td)}
   return tr;
  }));
  list('deliveries',state.deliveries||[],row=>[row.createdAt?.slice(0,10),row.itemName,row.quantity,row.reversed?'Reversado':''].filter(Boolean).join(' · '));
@@ -223,7 +245,7 @@ async function openWorkspace(){
  byId('access').hidden=true;byId('workspace').hidden=false;byId('productionSync').hidden=false;syncFailed=false;
  byId('operatorName').textContent=session.user.name;
  byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
- fields.fechaISO.value=today();paint();window.dispatchEvent(new Event('skweb-open-queries'));await sync();
+ fields.fechaISO.value=today();manualShift=false;refreshShift();paint();window.dispatchEvent(new Event('skweb-open-queries'));await sync();
 }
 form.onsubmit=async event=>{
  event.preventDefault();if(saving)return;
@@ -236,26 +258,33 @@ form.onsubmit=async event=>{
   const lines=draft.map(row=>({...row,cantidad:Number(row.cantidad)}));
   if(lines.some(row=>!Number.isSafeInteger(row.cantidad)||row.cantidad<1))throw new Error('Ingresa una cantidad entera mayor que cero para cada repuesto.');
   if(lines.some(row=>row.tipoEquipo!==fields.tipoEquipo.value))throw new Error('Todos los repuestos deben corresponder al tipo de máquina seleccionado.');
-  const shared={assetId:fields.assetId.value,responsableId:fields.responsableId.value,fechaISO:fields.fechaISO.value};
+  refreshShift();
+  const shared={turno:fields.turno.value,assetId:fields.assetId.value,responsableId:fields.responsableId.value,fechaISO:fields.fechaISO.value};
   if(!shared.responsableId)throw new Error('Selecciona el mecánico o responsable de la reparación.');
   const records=lines.map(row=>({...shared,...row,syncState:'pending',registradoPorNombre:active.user.name,id:crypto.randomUUID(),createdAt:new Date().toISOString()}));
   const fresh=await changeState(active.user.document,current=>({...current,pending:[...(current.pending||[]),...records]}));
-  if(session===active){state=fresh;draft=[];closeParts();paint();status('Consumos guardados.')}
+  if(session===active){state=fresh;draft=[];manualShift=false;refreshShift();closeParts();paint();status('Consumos guardados.')}
  }catch(error){status(error.message)}
  finally{saving=false;form.querySelector('[type=submit]').disabled=false}
 };
 function submitAccess(id,handler){
+ const feedback=byId('accessStatus');
  byId(id).onsubmit=async event=>{
   event.preventDefault();const button=event.currentTarget.querySelector('button'),values=Object.fromEntries(new FormData(event.currentTarget));
   if(button.disabled)return;
-  button.disabled=true;try{await handler(values)}catch(error){status(error.message)}finally{button.disabled=false}
+  button.disabled=true;feedback.textContent=id==='login'?'Verificando acceso…':'Activando acceso…';
+  try{await handler(values);feedback.textContent=''}catch(error){feedback.textContent=error.message}finally{button.disabled=false}
  };
 }
 submitAccess('login',async values=>{
  const data=await api('productionLogin',values);
  session={token:data.token,expiresAt:data.expiresAt,user:data.user};localStorage.setItem(sessionKey,JSON.stringify(session));
- byId('login').reset();await openWorkspace();
+ await openWorkspace();byId('login').reset();
 });
+byId('login').querySelector('button').disabled=false;
+byId('accessStatus').textContent='';
+setInterval(refreshShift,15000);
+window.addEventListener('focus',refreshShift);
 submitAccess('activate',async values=>{
  await api('accessInvitationAccept',{...values,invitation});history.replaceState(null,'',location.pathname);
  byId('activate').reset();byId('activate').hidden=true;byId('login').hidden=false;byId('login').elements.document.value=values.document;

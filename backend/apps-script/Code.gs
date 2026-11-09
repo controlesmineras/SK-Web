@@ -779,8 +779,10 @@ function productionSync_(q){
    if(!/^(?:YT|Columna)(?:28|29)$/.test(row.origen)||!['YT','Columna'].includes(row.tipoEquipo)||!row.origen.startsWith(row.tipoEquipo))throw new Error('Inventario de origen no válido');
    if(!assets.some(x=>x.id===row.assetId)||!personal.some(x=>x.id===row.responsableId)||![...parts,...criteria.filter(x=>x.isYtSpare)].some(x=>x.id===row.partId&&!x.deleted))throw new Error('Máquina, responsable o repuesto no disponible. Revisa los consumos pendientes.');
    if(productionRole_(user.role)==='mechanic'&&row.responsableId!==user.personId)throw new Error('El mecánico solo puede registrar consumos a su nombre.');
+   if(row.turno!=null&&!/^[DTS]$/.test(row.turno))throw new Error('Turno no válido');
    const responsible=personal.find(person=>person.id===row.responsableId);
    const saved={id:row.id,assetId:row.assetId,responsableId:row.responsableId,responsableNombre:responsible.nombre||responsible.documento,partId:row.partId,itemId:String(row.itemId||''),noItem:String(row.noItem||''),nombreRepuesto:String(row.nombreRepuesto||'').slice(0,200),tipoEquipo:row.tipoEquipo,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,registradoPorId:recorder.id};
+   if(row.turno)saved.turno=row.turno;
    known.set(saved.id,saved);changed=true;
   }
   const consumptions=Array.from(known.values());
