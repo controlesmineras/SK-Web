@@ -10,7 +10,8 @@
 [hidden]{display:none!important}main{max-width:900px;margin:auto}header{justify-content:space-between}section{margin:16px 0}fieldset{border:0;padding:0;margin:0;display:grid;gap:12px}form{margin:12px 0}label{min-width:0}select,input{max-width:100%}.tableWrap{overflow:auto}li{margin:6px 0}#status{white-space:pre-wrap}details{margin:12px 0}summary{cursor:pointer;font-weight:700}
 body>main{max-width:900px;color:#f8fafc}
 main form,main .tableWrap{color:#172033}
-.productionToolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.productionToolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}
+.productionToolbar #installProductionHelp{grid-column:1/-1;margin:0}
 .productionToolbar button{min-height:44px;background:#f8fafc;color:#173d59}
 .productionToolbar button:disabled{background:#dbe4ec;color:#43576b}
 #record .productionField{grid-column:1/-1;min-width:0}
@@ -50,14 +51,16 @@ main form,main .tableWrap{color:#172033}
 @keyframes productionSyncSpin{to{transform:rotate(360deg)}}
 @keyframes productionSyncPulse{from{background:#397aa5}to{background:#2f765a;box-shadow:0 0 11px #35d87980}}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=11-pending"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=12-toolbar"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
 <header><strong style="display:flex;align-items:center;gap:8px"><img src="./produccion-yt-192.png" width="44" height="44" alt="">PRODUCCIÓN</strong><div id="productionSync" hidden><button id="sync" type="button"><span class="plazaSyncCloud" aria-hidden="true">☁</span><svg class="plazaSyncArrows" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M16 16h4v4"/></svg><span id="syncLabel" class="plazaSyncLabel">SINCRONIZAR</span><span id="pendingBadge" class="pendingBadge" aria-live="polite"></span></button><small id="headerLastSync" class="headerLastSync">SIN SINCRONIZAR</small></div></header>
 <main>
+<div id="installBeforeLogin">
 <button type="button" id="installProduction" aria-describedby="installProductionHelp">INSTALAR</button>
 <p id="installProductionHelp" class="hint" role="status" hidden></p>
+</div>
 <p id="status" role="status" aria-live="polite"></p>
 <section id="access">
 <h2>Acceso a Producción</h2>

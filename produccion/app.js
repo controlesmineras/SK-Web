@@ -213,9 +213,13 @@ async function sync(){
  }catch(error){if(session===active)syncFailed=true;console.error('Sincronización de Producción:',error)}
  finally{syncing=false;paintSync()}
 }
+function placeInstallControls(container){
+ container.append(byId('installProduction'),byId('installProductionHelp'));
+}
 async function openWorkspace(){
  if(!valid())return;
  state=await changeState(session.user.document);
+ placeInstallControls(byId('updateProduction').parentElement);
  byId('access').hidden=true;byId('workspace').hidden=false;byId('productionSync').hidden=false;syncFailed=false;
  byId('operatorName').textContent=session.user.name;
  byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
@@ -258,6 +262,7 @@ submitAccess('activate',async values=>{
  status('Acceso activado. Ingresa con tu nueva contraseña.');
 });
 byId('logout').onclick=()=>{
+ placeInstallControls(byId('installBeforeLogin'));
  session=null;state={};draft=[];fields.assetId.value='';closeParts();closeMachine();localStorage.removeItem(sessionKey);
  byId('workspace').hidden=true;byId('productionSync').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
 };
