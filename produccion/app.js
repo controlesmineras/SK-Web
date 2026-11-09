@@ -171,8 +171,11 @@ function filterMachines(){
  byId('machineSearchEmpty').hidden=machineOptions.hidden||!cards.length||cards.some(card=>!card.hidden);
 }
 byId('machineSearch').oninput=filterMachines;
+function availableForConsumption(asset){
+ return !/^yt/i.test(asset.clase||'')||!/dad(?:o\/a|o|a) de baja|retirad[oa]|desechad[oa]/.test(norm(asset.estado)+' '+norm(asset.ubicacion));
+}
 function paint(){
- const machines=(state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value)));
+ const machines=(state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value))&&availableForConsumption(row));
  const selected=machines.find(row=>String(row.id)===fields.assetId.value);
  fields.assetId.value=selected?.id??'';
  selectedMachineLabel=selected?labelAsset(selected):'';
