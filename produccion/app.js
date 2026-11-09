@@ -337,7 +337,7 @@ async function openWorkspace(){
  if(!session)return;
  state=await changeState(session.user.document);
  placeInstallControls(byId('updateProduction').parentElement);
- byId('access').hidden=true;byId('workspace').hidden=false;byId('productionSync').hidden=false;syncFailed=false;
+ byId('access').hidden=true;byId('productionHeader').hidden=false;byId('workspace').hidden=false;byId('productionSync').hidden=false;syncFailed=false;
  byId('operatorName').textContent=session.user.name;
  byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
  fields.fechaISO.value=today();manualShift=false;refreshShift();showConsumptionView(false);paint();if(navigator.onLine)await sync();
@@ -403,7 +403,7 @@ byId('logout').onclick=()=>{
  fields.responsableId.value='';personSearch.value='';responsibleOptions.hidden=true;
  placeInstallControls(byId('installBeforeLogin'));
  session=null;state={};draft=[];fields.assetId.value='';closeParts();closeMachine();localStorage.removeItem(sessionKey);
- byId('workspace').hidden=true;byId('productionSync').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
+ byId('workspace').hidden=true;byId('productionHeader').hidden=true;byId('productionSync').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
 };
 byId('sync').onclick=sync;window.addEventListener('online',sync);
 for(const radio of fields.tipoEquipo)radio.onchange=()=>{
