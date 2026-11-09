@@ -1,5 +1,5 @@
 
-const CACHE='sk-production-shell-v25-responsible-card-text';
+const CACHE='sk-production-shell-v26-responsible-last';
 const files=['./','./index.html','./app.js?v=18-quantity','./install-ui.js?v=1','./manifest.webmanifest','../styles.css','../sync-config.js','../spare-catalog.js','../consumption-query-v2.js','./produccion-yt-192.png','./produccion-yt-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files.map(file=>new Request(file,{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('sk-production-shell-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));

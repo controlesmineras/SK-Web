@@ -119,17 +119,17 @@ main form,main .tableWrap{color:#172033}
 <div id="machineOptions" class="machineOptions" hidden></div>
 <p id="machineSearchEmpty" role="status" hidden>Sin máquinas que coincidan con la búsqueda.</p>
 </div>
-<div id="responsiblePicker" class="productionField">
-<label>Mecánico o responsable<input id="personSearch" type="search" autocomplete="off" placeholder="Buscar por documento o nombre…" aria-controls="responsibleOptions"></label>
-<div id="responsibleOptions" class="machineOptions partOptions" hidden></div>
-</div>
-<input type="hidden" name="responsableId">
 <label>Inventario de origen<input id="inventoryOrigin" readonly></label>
 <ul id="draft" class="productionField" hidden></ul>
 <div id="partPicker" class="productionField">
 <label>Buscar repuesto<input id="partSearch" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="partOptions"></label>
 <div id="partOptions" class="machineOptions partOptions" hidden></div>
 </div>
+<div id="responsiblePicker" class="productionField">
+<label>Mecánico o responsable<input id="personSearch" type="search" autocomplete="off" placeholder="Buscar por documento o nombre…" aria-controls="responsibleOptions"></label>
+<div id="responsibleOptions" class="machineOptions partOptions" hidden></div>
+</div>
+<input type="hidden" name="responsableId">
 <button type="submit">Guardar consumos</button>
 </form>
 <details><summary>Personal</summary><input id="directorySearch" type="search" placeholder="Buscar nombre o documento"><ul id="directory"></ul></details>
