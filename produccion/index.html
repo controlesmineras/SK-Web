@@ -50,8 +50,10 @@ main form,main .tableWrap{color:#172033}
 }
 @keyframes productionSyncSpin{to{transform:rotate(360deg)}}
 @keyframes productionSyncPulse{from{background:#397aa5}to{background:#2f765a;box-shadow:0 0 11px #35d87980}}
-.recordDateShift{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}
-.recordDateShift input,.recordDateShift select{min-width:0;box-sizing:border-box}
+.recordDateShift{display:grid;grid-template-columns:minmax(0,2fr) minmax(0,1fr);gap:12px}
+.recordDateShift input,.recordDateShift select{width:100%;min-width:0;max-width:100%;height:45px;box-sizing:border-box}
+.recordDateShift input[type="date"]{-webkit-appearance:none;appearance:none;display:block}
+.recordDateShift input[type="date"]::-webkit-date-and-time-value{min-width:0;margin:0;text-align:left}
 #accessStatus{margin:8px 0}
 #accessStatus:empty{display:none}
 .productionViews{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}
