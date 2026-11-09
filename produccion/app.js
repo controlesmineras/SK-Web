@@ -167,4 +167,30 @@ if(invitation){
   byId('activate').elements.document.value=info.document;byId('activate').hidden=false;
  }).catch(error=>{status(error.message);byId('login').hidden=false});
 }else openWorkspace().catch(error=>status(error.message));
-navigator.serviceWorker?.register('sw.js').catch(console.error);
+const workerRegistration=navigator.serviceWorker?.register('sw.js',{updateViaCache:'none'})
+ .catch(error=>console.error(error));
+
+byId('updateProduction').onclick=async event=>{
+ const button=event.currentTarget;
+ if(saving||syncing)return status('Espera a que termine el guardado o la sincronización.');
+ if(draft.length||fields.partId.value)return status('Guarda o quita los repuestos seleccionados antes de actualizar.');
+ button.disabled=true;
+ status('Buscando la versión más reciente de Producción…');
+ try{
+  const url=new URL(location.href);
+  url.searchParams.set('_appUpdate',Date.now());
+  const response=await fetch(url,{cache:'no-store'});
+  if(!response.ok)throw new Error('No se pudo abrir Producción.');
+  const registration=await workerRegistration;
+  await registration?.update();
+  if(saving||syncing||draft.length||fields.partId.value){
+   status('Versión comprobada. Termina el registro y vuelve a pulsar Actualizar app.');
+   return;
+  }
+  location.replace(url.href);
+ }catch{
+  status('No se pudo actualizar Producción. Revisa la conexión y vuelve a intentarlo.');
+ }finally{
+  button.disabled=false;
+ }
+};

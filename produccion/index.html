@@ -8,8 +8,13 @@
 <title>Producción SK 3.7</title><link rel="stylesheet" href="../styles.css">
 <style>
 [hidden]{display:none!important}main{max-width:900px;margin:auto}header{justify-content:space-between}section{margin:16px 0}fieldset{border:0;padding:0;margin:0;display:grid;gap:12px}form{margin:12px 0}label{min-width:0}select,input{max-width:100%}.productionActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.productionActions button{min-height:48px}.tableWrap{overflow:auto}li{margin:6px 0}#status{white-space:pre-wrap}details{margin:12px 0}summary{cursor:pointer;font-weight:700}
+body>main{max-width:900px;color:#f8fafc}
+main form,main .tableWrap{color:#172033}
+.productionToolbar{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px}
+.productionToolbar button{min-height:44px;background:#f8fafc;color:#173d59}
+.productionToolbar button:disabled{background:#dbe4ec;color:#43576b}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=2-roles"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=3-update"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -24,7 +29,11 @@
 <form id="activate" hidden><h3>Crear contraseña</h3><label>Documento<input name="document" readonly required></label><label>Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><button>Activar acceso</button></form>
 </section>
 <section id="workspace" hidden>
-<p id="operator"></p><button id="sync" type="button">Sincronizar</button>
+<p id="operator"></p>
+<div class="productionToolbar">
+<button id="sync" type="button">Sincronizar</button>
+<button id="updateProduction" type="button">Actualizar app</button>
+</div>
 <h2>CONSUMO DE REPUESTOS</h2>
 <form id="record">
 <label>Tipo de equipo<select name="tipoEquipo"><option>YT</option><option>Columna</option></select></label>
