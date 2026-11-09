@@ -201,17 +201,16 @@ function paintSync(){
 }
 async function sync(){
  if(!valid()||syncing)return;
- if(!navigator.onLine){syncFailed=true;paintSync();return status('Sin conexión. Los consumos pendientes quedan en este dispositivo.');}
+ if(!navigator.onLine){syncFailed=true;paintSync();return}
  const active=session,document=active.user.document;
  syncing=true;syncFailed=false;paintSync();
  try{
   const local=await changeState(document),pending=(local.pending||[]).slice(0,1000);
-  status('Sincronizando Producción…');
   const data=await api('productionSync',{token:active.token,pending});
   const acknowledged=new Set(data.ack);
   const fresh=await changeState(document,current=>({...data,lastSyncAt:new Date().toISOString(),pending:(current.pending||[]).filter(row=>!acknowledged.has(row.id))}));
-  if(session===active){state=fresh;paint();status('Sincronización completa. '+state.pending.length+' pendientes.')}
- }catch(error){if(session===active){syncFailed=true;status(error.message+' Los pendientes siguen guardados.')}}
+  if(session===active){state=fresh;paint()}
+ }catch(error){if(session===active)syncFailed=true;console.error('Sincronización de Producción:',error)}
  finally{syncing=false;paintSync()}
 }
 async function openWorkspace(){
