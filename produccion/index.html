@@ -33,12 +33,28 @@ main form,main .tableWrap{color:#172033}
 #operator{grid-column:2;display:grid;gap:3px;text-align:center;overflow-wrap:anywhere}
 #operatorRole{font-size:.9rem}
 .productionIdentity #logout{grid-column:3}
+#productionSync{display:grid;justify-items:center;gap:3px}
+#productionSync #sync{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:40px;padding:8px 9px;background:#eef3f7;color:#173d59;border:1px solid #cbd7df;box-shadow:0 2px 7px #0002}
+#productionSync small{display:block;font-size:.61rem;line-height:1.2;white-space:nowrap}
+#productionSync .plazaSyncCloud{font-size:1.15rem;line-height:1}
+#productionSync .plazaSyncArrows{width:22px;height:22px}
+#productionSync .plazaSyncLabel{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
+#productionSync .pendingBadge{display:inline-grid;place-items:center;min-width:21px;height:21px;padding:0 5px;border-radius:99px;background:#ffe09a;color:#573900;font-size:.7rem}
+#productionSync .synced{background:transparent;color:#167340;font-size:1.05rem;padding:0;min-width:14px}
+#productionSync .error{background:#f9d2cd;color:#8b2920}
+#productionSync #sync.isSyncing{color:#fff;background:#2f765a;border-color:#4d8e79}
+@media(prefers-reduced-motion:no-preference){
+ #productionSync #sync.isSyncing{animation:productionSyncPulse 1.15s ease-in-out infinite alternate}
+ #productionSync .isSyncing .plazaSyncArrows{animation:productionSyncSpin .9s linear infinite}
+}
+@keyframes productionSyncSpin{to{transform:rotate(360deg)}}
+@keyframes productionSyncPulse{from{background:#397aa5}to{background:#2f765a;box-shadow:0 0 11px #35d87980}}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=8-identity"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=9-sync"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
-<header><strong style="display:flex;align-items:center;gap:8px"><img src="./produccion-yt-192.png" width="44" height="44" alt="">PRODUCCIÓN</strong></header>
+<header><strong style="display:flex;align-items:center;gap:8px"><img src="./produccion-yt-192.png" width="44" height="44" alt="">PRODUCCIÓN</strong><div id="productionSync" hidden><button id="sync" type="button"><span class="plazaSyncCloud" aria-hidden="true">☁</span><svg class="plazaSyncArrows" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M16 16h4v4"/></svg><span id="syncLabel" class="plazaSyncLabel">SINCRONIZAR</span><span id="pendingBadge" class="pendingBadge" aria-live="polite"></span></button><small id="headerLastSync" class="headerLastSync">SIN SINCRONIZAR</small></div></header>
 <main>
 <button type="button" id="installProduction" aria-describedby="installProductionHelp">INSTALAR</button>
 <p id="installProductionHelp" class="hint" role="status" hidden></p>
@@ -54,7 +70,6 @@ main form,main .tableWrap{color:#172033}
 <button id="logout" type="button" aria-label="Cerrar sesión"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></button>
 </div>
 <div class="productionToolbar">
-<button id="sync" type="button">Sincronizar</button>
 <button id="updateProduction" type="button">Actualizar app</button>
 </div>
 <h2>CONSUMO DE REPUESTOS</h2>
