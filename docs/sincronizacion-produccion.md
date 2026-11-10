@@ -32,3 +32,9 @@ Mientras el servidor siga en la versión anterior, las nuevas correcciones se gu
 `node --test tests/production*.test.cjs`
 
 Pruebas con datos ficticios y el código real de las funciones: 24→4→0, guardado offline, pérdida de respuesta, fallo de Drive, conflicto entre dispositivos, cambio local durante el envío, confirmaciones incompletas, rechazo independiente y cola de más de 1000 movimientos. Las pruebas no sustituyen verificar la versión de Apps Script desplegada en la cuenta.
+
+## SALDO DE APERTURA
+
+El formulario EXISTENCIAS → EDITAR SALDO DE APERTURA guarda `kind: initial`, exclusivo del administrador. La cantidad reemplaza la apertura del mismo repuesto e inventario; no genera un ingreso ni un ajuste absoluto. Admite cero y correcciones sucesivas, también sin conexión. Las correcciones pendientes reemplazan la versión local del mismo ID con un nuevo `correctionId`; una respuesta anterior no descarta una edición posterior.
+
+Antes del primer cierre, saldo esperado = apertura + ingresos − consumos, incluyendo los movimientos ya registrados. Los ajustes absolutos de versiones anteriores conservan su historial y efecto. Un cierre aprobado sigue siendo la apertura del período siguiente; corregir la apertura inicial no modifica cierres aprobados. El conteo físico y el informe central usan la misma regla. Actualizar Code.gs es necesario para incluir en el cierre movimientos anteriores a la fecha de la apertura inicial.

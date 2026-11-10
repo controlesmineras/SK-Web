@@ -814,7 +814,7 @@ function productionSync_(q){
      const opening=latest?.rows.find(x=>(x.aliases||[x.partId]).some(id=>aliases.has(id)));
      const matches=x=>!x.deleted&&x.fechaISO<=date&&x.origen===row.origen&&aliases.has(x.partId);
      const initial=Array.from(incomes.values()).reverse().find(x=>matches(x)&&x.kind==='initial');
-     const includes=x=>matches(x)&&(opening?productionAfterClose_(x,latest.date,latest.closedAt):!initial||x.fechaISO>=initial.fechaISO);
+     const includes=x=>matches(x)&&(opening?productionAfterClose_(x,latest.date,latest.closedAt):true);
      let before=opening?.physical??initial?.cantidad??0;
      for(const x of incomes.values())if(includes(x)&&['income','adjustment'].includes(x.kind))before+=x.cantidad;
      for(const x of known.values())if(includes(x))before-=x.cantidad;
@@ -928,7 +928,7 @@ function productionCountRows_(count,counts,parts,criteria,incomes,consumptions){
   const row=get(movement);
   if(row&&!row.cutoff&&movement.kind==='initial'){row.opening=movement.cantidad;row.initialDate=movement.fechaISO;}
  }
- const include=(row,movement)=>row&&(row.cutoff?productionAfterClose_(movement,row.cutoff,row.closedAt):!row.initialDate||movement.fechaISO>=row.initialDate);
+ const include=(row,movement)=>row&&(row.cutoff?productionAfterClose_(movement,row.cutoff,row.closedAt):true);
  for(const movement of incomes){const row=get(movement);if(include(row,movement)){if(movement.kind==='income'||movement.kind==='adjustment'&&movement.cantidad>=0)row.incomes+=movement.cantidad;else if(movement.kind==='adjustment')row.consumptions-=movement.cantidad;}}
  for(const movement of consumptions){const row=get(movement);if(include(row,movement))row.consumptions+=movement.cantidad;}
  return Array.from(catalog.values(),({partId,name,aliases,opening,incomes,consumptions})=>{

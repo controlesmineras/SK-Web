@@ -51,12 +51,12 @@ test('historical aliases saved in the closed inventory still identify the select
   incomes:[movement('old-alias','income',3,{partId:'retired-criterion'})]});
  assert.equal(c.stockPeriodSummary(part,'YT29').incomes,3);
 });
-test('preview shows the absolute entered quantity and signed difference, accepts zero and never changes stored records',()=>{
+test('preview replaces opening and retains movements, accepts zero and never changes stored records',()=>{
  const c=runtime({incomes:[movement('initial','initial',4),movement('income','income',20),movement('adjust','adjustment',-20,{target:4})]});
  const before=JSON.stringify(c.state);
- assert.match(c.stockSummaryText(part,'YT29','7'),/SALDO DESPUÉS DEL CAMBIO: 7 · AJUSTE A REALIZAR: \+3 \(VISTA PREVIA\)/);
- assert.match(c.stockSummaryText(part,'YT29','0'),/SALDO DESPUÉS DEL CAMBIO: 0 · AJUSTE A REALIZAR: -4/);
- assert.match(c.stockSummaryText(part,'YT29','4'),/SALDO DESPUÉS DEL CAMBIO: 4 · AJUSTE A REALIZAR: 0/);
+ assert.match(c.stockSummaryText(part,'YT29','7'),/SALDO ESPERADO CON ESTA APERTURA: 7 \(VISTA PREVIA\)/);
+ assert.match(c.stockSummaryText(part,'YT29','0'),/SALDO ESPERADO CON ESTA APERTURA: 0/);
+ assert.match(c.stockSummaryText(part,'YT29','4'),/SALDO ESPERADO CON ESTA APERTURA: 4/);
  assert.match(c.stockSummaryText(part,'YT29',''),/ESCRIBE LA CANTIDAD/);
  for(const value of ['-1','1.5','invalid','9007199254740992'])assert.match(c.stockSummaryText(part,'YT29',value),/INGRESA UNA CANTIDAD ENTERA DESDE CERO/);
  assert.equal(JSON.stringify(c.state),before);
@@ -64,11 +64,11 @@ test('preview shows the absolute entered quantity and signed difference, accepts
 test('an unconfirmed or rejected target is never reported as a confirmed adjustment or real consumption',()=>{
  const base=movement('initial','initial',24),pending=movement('pending','adjustment',4,{baseQuantity:24});
  const c=runtime({incomes:[base],pending:[pending]});
- assert.match(c.stockSummaryText(part,'YT29','4'),/EXISTENCIA ACTUAL: 4/);
- assert.match(c.stockSummaryText(part,'YT29','4'),/SALDO SOLICITADO: 4 · PENDIENTE DE CONFIRMACIÓN/);
+ assert.match(c.stockSummaryText(part,'YT29','4'),/SALDO ESPERADO ACTUAL: 4/);
+ assert.match(c.stockSummaryText(part,'YT29','4'),/AJUSTE ANTERIOR: 4 · PENDIENTE DE CONFIRMACIÓN/);
  assert.equal(c.stockPeriodSummary(part,'YT29').consumptions,0);assert.equal(c.stockPeriodSummary(part,'YT29').adjustments,0);
  c.state={...c.state,pending:[{...pending,syncRejected:true}]};
- assert.match(c.stockSummaryText(part,'YT29','4'),/EXISTENCIA ACTUAL: 24/);
+ assert.match(c.stockSummaryText(part,'YT29','4'),/SALDO ESPERADO ACTUAL: 24/);
  assert.match(c.stockSummaryText(part,'YT29','4'),/CANTIDAD RECHAZADA: 4 · REQUIERE REVISIÓN/);
  assert.equal(c.stockPeriodSummary(part,'YT29').pending,0);
 });
@@ -79,18 +79,18 @@ test('typing reuses period totals but a new snapshot or day refreshes totals and
  assert.equal(c.stockPeriodSummary(part,'YT29'),first);
  c.state={...c.state,incomes:[...c.state.incomes,movement('new','income',1)]};
  const next=c.stockPeriodSummary(part,'YT29');assert.notEqual(next,first);assert.equal(next.incomes,1);
- assert.match(c.stockSummaryText(part,'YT29','9'),/AJUSTE A REALIZAR: \+4/);
+ assert.match(c.stockSummaryText(part,'YT29','9'),/SALDO ESPERADO CON ESTA APERTURA: 10/);
  c.today=()=> '2026-11-11';
  assert.equal(c.stockPeriodSummary(part,'YT29').incomes,3);
- assert.match(c.stockSummaryText(part,'YT29','9'),/AJUSTE A REALIZAR: \+2/);
+ assert.match(c.stockSummaryText(part,'YT29','9'),/SALDO ESPERADO CON ESTA APERTURA: 12/);
 });
 test('the input listener updates only the summary without saving, syncing or rebuilding the stock tables',()=>{
  const c=runtime({incomes:[movement('initial','initial',4)]});
  const handlers={},summary={textContent:''};
  const form={elements:{search:{},partId:{value:part.id},origen:{value:'YT29'},cantidad:{value:'7',addEventListener:(name,handler)=>{handlers[name]=handler}}},querySelector:()=>({}),addEventListener(){}};
- const view={kind:'adjustment',form,panel:{querySelector:()=>summary}};
+ const view={kind:'initial',form,panel:{querySelector:()=>summary}};
  Object.assign(c,{stockViews:[view],document:{addEventListener(){}},setupPicker(){},saveStock(){throw Error('unexpected save')},paintStockView(){throw Error('unexpected table redraw')}});
  vm.runInContext(source.slice(source.indexOf('for(const view of stockViews){'),source.indexOf("byId('reviewStockAdjustment').onclick")),c);
- handlers.input();assert.match(summary.textContent,/SALDO DESPUÉS DEL CAMBIO: 7/);
- form.elements.cantidad.value='0';handlers.input();assert.match(summary.textContent,/SALDO DESPUÉS DEL CAMBIO: 0/);
+ handlers.input();assert.match(summary.textContent,/SALDO ESPERADO CON ESTA APERTURA: 7/);
+ form.elements.cantidad.value='0';handlers.input();assert.match(summary.textContent,/SALDO ESPERADO CON ESTA APERTURA: 0/);
 });
