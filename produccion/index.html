@@ -100,8 +100,16 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
 #countTable{min-width:1050px}#countTable input{width:100%;min-width:85px}#countForm button{grid-column:auto}#physicalCount label{min-width:0}
+#offlineEntry{max-width:560px;margin:8px auto;padding:22px;background:#fff;color:#172033;border:1px solid #cbd7df;border-radius:16px}
+#offlineEntry h2{margin:12px 0}#offlineEntry p{line-height:1.5}
+.offlineSyncDetails{margin:18px 0;padding:14px;background:#edf4f9;border-radius:10px}
+.offlineSyncDetails dt{font-size:.8rem;font-weight:750;margin-top:12px}.offlineSyncDetails dt:first-child{margin-top:0}
+.offlineSyncDetails dd{margin:4px 0 0;font-size:1.05rem;font-weight:650}
+.offlineEntryActions{display:grid;gap:10px}.offlineEntryActions button{min-height:44px;white-space:normal}
+#continueOffline{background:#173d59;color:#fff}#refreshOfflineData{background:#edf4f9;color:#173d59;border:1px solid #b7c8d5}
+#offlineEntryStatus:empty{display:none}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=39-auditoria-produccion"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=40-acceso-offline"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -118,6 +126,21 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <p id="accessStatus" role="status">Si Ingresar sigue deshabilitado, vuelve a cargar Producción con conexión.</p>
 <form id="activate" hidden><h3>Crear contraseña</h3><label>Documento<input name="document" readonly required></label><label>Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><button>Activar acceso</button></form>
 <img class="productionAccessLogo" src="./produccion-yt-512.png" width="192" height="192" alt="Logo de Producción SK 3.7">
+</section>
+<section id="offlineEntry" aria-labelledby="offlineEntryTitle" hidden>
+<svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m3 3 18 18M2 8a16 16 0 0 1 3-2m4-1a16 16 0 0 1 13 3M5 12a10 10 0 0 1 4-2m5 0a10 10 0 0 1 5 2M8 16a5 5 0 0 1 8 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
+<h2 id="offlineEntryTitle" tabindex="-1">ACCESO SIN CONEXIÓN</h2>
+<p>Ingresaste anteriormente con conexión en este dispositivo. Puedes continuar con los datos guardados.</p>
+<dl class="offlineSyncDetails">
+<dt>ÚLTIMA SINCRONIZACIÓN</dt><dd id="offlineLastSync"></dd>
+<dt>ANTIGÜEDAD DE LOS DATOS</dt><dd id="offlineDataAge"></dd>
+</dl>
+<p id="offlineSyncAdvice">Cuando tengas internet, inicia sesión con conexión y sincroniza para obtener los datos recientes y enviar tus registros pendientes.</p>
+<p id="offlineEntryStatus" role="status" aria-live="polite"></p>
+<div class="offlineEntryActions">
+<button id="continueOffline" type="button">CONTINUAR CON DATOS GUARDADOS</button>
+<button id="refreshOfflineData" type="button">CONECTAR Y ACTUALIZAR DATOS</button>
+</div>
 </section>
 <section id="workspace" hidden>
 <div class="productionIdentity">
