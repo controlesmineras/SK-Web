@@ -196,8 +196,11 @@ function paintDraft(){
   quantityLabel.textContent='Cantidad';
   quantity.type='number';quantity.min='1';quantity.step='1';quantity.required=true;
   quantity.value=row.cantidad;
-  const stepper=document.createElement('span'),down=document.createElement('button'),up=document.createElement('button');
+  const stepper=document.createElement('div'),down=document.createElement('button'),up=document.createElement('button');
+  const quantityField=document.createElement('div'),quantityButtons=document.createElement('div');
   stepper.className='quantityStepper';
+  quantityField.className='quantityField';
+  quantityButtons.className='quantityButtons';
   down.type=up.type='button';
   down.textContent='▼';up.textContent='▲';
   down.setAttribute('aria-label','Disminuir cantidad de '+row.nombreRepuesto);
@@ -216,10 +219,12 @@ function paintDraft(){
   down.onclick=()=>step(-1);up.onclick=()=>step(1);
   quantity.oninput=updateQuantity;
   updateQuantity();
-  stepper.append(down,quantity,up);
+  quantityField.append(quantityLabel,quantity);
+  quantityButtons.append(up,down);
+  stepper.append(quantityField,quantityButtons);
   button.type='button';button.className='removePart';button.textContent='×';button.setAttribute('aria-label','Retirar '+row.nombreRepuesto);
   button.onclick=()=>{if(!saving){draft.splice(index,1);paintDraft()}};
-  li.append(identity,button,quantityLabel,stepper);return li;
+  li.append(identity,button,stepper);return li;
  }));
 }
 function filterMachines(){
@@ -260,7 +265,7 @@ function paint(){
   };
   return button;
  }));
- if(!machines.length)byId('machineOptions').textContent='No hay máquinas disponibles para este tipo.';
+ if(!machines.length)byId('machineOptions').textContent='No hay equipos disponibles para este tipo.';
  filterMachines();
  paintParts();paintPeople();paintDraft();
  paintSync();
@@ -333,11 +338,11 @@ form.onsubmit=async event=>{
  const active=session;
  saving=true;form.querySelector('[type=submit]').disabled=true;
  try{
-  if(!fields.assetId.value)throw new Error('Selecciona la máquina.');
+  if(!fields.assetId.value)throw new Error('Selecciona el equipo.');
   if(!draft.length)throw new Error('Selecciona al menos un repuesto.');
   const lines=draft.map(row=>({...row,cantidad:Number(row.cantidad)}));
   if(lines.some(row=>!Number.isSafeInteger(row.cantidad)||row.cantidad<1))throw new Error('Ingresa una cantidad entera mayor que cero para cada repuesto.');
-  if(lines.some(row=>row.tipoEquipo!==fields.tipoEquipo.value))throw new Error('Todos los repuestos deben corresponder al tipo de máquina seleccionado.');
+  if(lines.some(row=>row.tipoEquipo!==fields.tipoEquipo.value))throw new Error('Todos los repuestos deben corresponder al tipo de equipo seleccionado.');
   refreshShift();
   const shared={turno:fields.turno.value,assetId:fields.assetId.value,responsableId:fields.responsableId.value,fechaISO:fields.fechaISO.value};
   if(!shared.responsableId)throw new Error('Selecciona el mecánico o responsable de la reparación.');
