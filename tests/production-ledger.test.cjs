@@ -108,3 +108,37 @@ test('draft conflict is rejected, approval is administrator-only, archived rows 
  assert.equal(history.report.rows[0].physical,0);
  assert.equal(app.read().incomes.at(-1).target,4);
 });
+
+test('item 10 with a negative adjustment and no consumptions shows zero real consumption locally and in a new close',()=>{
+ const app=runtime({incomes:[movement('initial-0000000001','initial',20)]},parts,[]);
+ const saved=app.sync([movement('adjustment-0000001','adjustment',10)]);
+ const client=balances(saved),totals=client.countTotals('YT29','',parts).get('part10');
+ assert.equal(totals.opening,20);assert.equal(totals.incomes,0);assert.equal(totals.consumptions,0);assert.equal(totals.adjustments,-10);assert.equal(client.stockFor(parts[0],'YT29'),10);
+ const request={id:'inventory-00000001',revision:'revision-000000001',origin:'YT29',date:today,values:[{partId:'part10',physical:10}]};
+ const submitted=app.count({...request,action:'submit'}).inventoryResult.count;
+ const closed=app.count({id:request.id,action:'approve',revision:submitted.revision}).inventoryResult.count;
+ assert.equal(closed.rows[0].consumptions,0);assert.equal(closed.rows[0].incomes,0);assert.equal(closed.rows[0].adjustments,-10);assert.equal(closed.rows[0].expected,10);assert.equal(closed.rows[0].difference,0);
+});
+test('positive corrections are adjustments, while genuine income and consumption keep their own columns',()=>{
+ const app=runtime({incomes:[movement('initial-0000000001','initial',20)]},parts,[]);
+ app.sync([movement('adjustment-0000001','adjustment',30)]);
+ const saved=app.sync([movement('income-0000000001','income',4),movement('consume-000000001',undefined,3,{tipoEquipo:'YT',assetId:'machine',responsableId:'person',turno:'D'})]);
+ const client=balances(saved),totals=client.countTotals('YT29','',parts).get('part10');
+ assert.equal(totals.incomes,4);assert.equal(totals.consumptions,3);assert.equal(totals.adjustments,10);assert.equal(client.stockFor(parts[0],'YT29'),31);
+});
+test('pending and rejected legacy adjustments do not create phantom consumption',()=>{
+ const initial=movement('initial-0000000001','initial',20),adjustment=movement('adjustment-0000001','adjustment',10,{baseQuantity:20});
+ const pending=balances({incomes:[initial],pending:[adjustment,movement('consume-000000001',undefined,2)]});
+ const totals=pending.countTotals('YT29','',parts).get('part10');
+ assert.equal(totals.adjustments,-10);assert.equal(totals.consumptions,2);assert.equal(pending.stockFor(parts[0],'YT29'),8);
+ const rejected=balances({incomes:[initial],pending:[{...adjustment,syncRejected:true}]});
+ assert.equal(rejected.countTotals('YT29','',parts).get('part10').consumptions,0);assert.equal(rejected.stockFor(parts[0],'YT29'),20);
+});
+test('report exports preserve column positions and distinguish old approved reports without reclassifying them',()=>{
+ const c=vm.createContext({displayDate:x=>x});
+ vm.runInContext(client.slice(client.indexOf('function countReportRows('),client.indexOf('function paintCount('))+';globalThis.note=countAdjustmentNote;',c);
+ const report={date:today,origin:'YT29',rows:[{name:'O-ring',opening:20,incomes:0,consumptions:0,adjustments:-10,expected:10,physical:10,difference:0}]};
+ const values=c.countReportRows(report)[0];assert.equal(values.length,11);assert.equal(values[5],0);assert.equal(values[6],-10);assert.equal(values[7],10);assert.match(c.note(report),/por separado/);
+ const old={...report,rows:[{...report.rows[0],adjustments:undefined,consumptions:10}]};const frozen=JSON.stringify(old);
+ assert.equal(c.countReportRows(old)[0][5],10);assert.equal(c.countReportRows(old)[0][6],'—');assert.match(c.note(old),/CIERRE ANTERIOR/);assert.equal(JSON.stringify(old),frozen);
+});

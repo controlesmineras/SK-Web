@@ -46,3 +46,9 @@ CONSULTAS → INGRESOS permite al administrador editar cantidad/fecha, eliminar 
 Las operaciones se guardan en `incomeChanges` dentro de la misma cuenta de IndexedDB y se proyectan sobre el saldo local. Se envían únicamente cuando el servidor anuncia `incomeChangesV1`. Los recibos se validan contra el historial confirmado, después de escribir Drive. Cada operación tiene ID y versión de ingreso observada: los reintentos no duplican cambios y un conflicto de versión se conserva rechazado para revisión. No se ejecuta ninguna limpieza automática de ingresos existentes.
 
 `incomeHistory` conserva antes/después y la operación; la interfaz muestra los últimos 30 días. Un borrado marca `deleted`, conservando el registro recuperable. Revertir recupera la cantidad y fecha previas; no puede sobrescribir un cambio posterior ni modificar un cierre aprobado. El registro central de auditoría no se purga automáticamente. Es necesario reemplazar Code.gs y publicar una nueva versión de la implementación existente para habilitar la confirmación central de estas operaciones.
+
+## MOVIMIENTOS REALES Y AJUSTES
+
+El inventario físico y los nuevos cierres separan los ajustes administrativos en la columna AJUSTES, con signo. INGRESOS incluye únicamente registros `income`; CONSUMOS incluye únicamente consumos. SALDO ESPERADO = apertura + ingresos − consumos + ajustes. La clasificación no altera existencias ni borra historial: una corrección de −10 deja CONSUMOS en cero cuando no existen consumos reales.
+
+La pantalla local se corrige con la actualización de la app. Code.gs debe actualizarse para guardar esa misma separación en nuevos cierres. Los informes aprobados anteriores conservan sus cifras y muestran una nota cuando todavía incluyen ajustes dentro de ingresos/consumos.

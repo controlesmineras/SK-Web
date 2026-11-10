@@ -964,7 +964,7 @@ function productionCountRows_(count,counts,parts,criteria,incomes,consumptions){
  for(const row of previous?.rows||[])for(const id of row.aliases||[row.partId])lastRows.set(id,row);
  for(const row of catalog.values()){
   const last=row.aliases.map(id=>lastRows.get(id)).find(Boolean);
-  row.opening=last?.physical||0;row.incomes=0;row.consumptions=0;row.cutoff=last?previous.date:'';row.closedAt=last?previous.closedAt:'';
+  row.opening=last?.physical||0;row.incomes=0;row.consumptions=0;row.adjustments=0;row.cutoff=last?previous.date:'';row.closedAt=last?previous.closedAt:'';
   for(const id of row.aliases)byAlias.set(id,row);
  }
  const get=row=>row.origen===origin&&!row.deleted&&row.fechaISO<=date&&byAlias.get(row.partId);
@@ -973,11 +973,11 @@ function productionCountRows_(count,counts,parts,criteria,incomes,consumptions){
   if(row&&!row.cutoff&&movement.kind==='initial'){row.opening=movement.cantidad;row.initialDate=movement.fechaISO;}
  }
  const include=(row,movement)=>row&&(row.cutoff?productionAfterClose_(movement,row.cutoff,row.closedAt):true);
- for(const movement of incomes){const row=get(movement);if(include(row,movement)){if(movement.kind==='income'||movement.kind==='adjustment'&&movement.cantidad>=0)row.incomes+=movement.cantidad;else if(movement.kind==='adjustment')row.consumptions-=movement.cantidad;}}
+ for(const movement of incomes){const row=get(movement);if(include(row,movement)){if(movement.kind==='income')row.incomes+=movement.cantidad;else if(movement.kind==='adjustment')row.adjustments+=movement.cantidad;}}
  for(const movement of consumptions){const row=get(movement);if(include(row,movement))row.consumptions+=movement.cantidad;}
- return Array.from(catalog.values(),({partId,name,aliases,opening,incomes,consumptions})=>{
-  const expected=opening+incomes-consumptions,physical=counted.get(partId);
-  return {partId,name,aliases,opening,incomes,consumptions,expected,physical,difference:physical-expected};
+ return Array.from(catalog.values(),({partId,name,aliases,opening,incomes,consumptions,adjustments})=>{
+  const expected=opening+incomes-consumptions+adjustments,physical=counted.get(partId);
+  return {partId,name,aliases,opening,incomes,consumptions,adjustments,expected,physical,difference:physical-expected};
  });
 }
 
