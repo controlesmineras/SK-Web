@@ -29,12 +29,14 @@ main form,main .tableWrap{color:#172033}
 #draft{display:grid;gap:8px;list-style:none;padding:0;margin:0}
 #draft li{display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:8px;align-items:center;border:1px solid #cbd3da;border-radius:8px;padding:10px;margin:0}
 #draft .removePart{grid-column:2;grid-row:1;min-height:44px;padding:0}
-#draft label{grid-column:1/-1}
+
 #responsibleOptions button{font-size:1rem;line-height:1.2;height:44px;white-space:nowrap;text-transform:uppercase}
-.quantityStepper{display:grid;grid-template-columns:44px minmax(0,90px) 44px;gap:6px}
+.quantityStepper{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) 44px;gap:6px}
+.quantityField{display:grid;align-content:space-between;gap:6px}
+.quantityButtons{display:grid;grid-template-rows:repeat(2,1fr);gap:4px}
 .quantityStepper button{min-height:44px;padding:0;font-size:1rem}
 .quantityStepper button:disabled{opacity:.5;cursor:default}
-.quantityStepper input{text-align:center;appearance:textfield}
+.quantityStepper input{width:100%;min-width:0;text-align:center;appearance:textfield}
 .quantityStepper input::-webkit-inner-spin-button{-webkit-appearance:none}
 #draft small{display:block;color:#43576b}
 #logout{display:inline-grid;place-items:center;width:44px;height:44px;padding:0;background:#eef4f8;color:#102f45;white-space:nowrap}
@@ -75,7 +77,7 @@ main form,main .tableWrap{color:#172033}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.2)}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=22-clean-form"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=23-equipo-cantidad"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -124,11 +126,11 @@ main form,main .tableWrap{color:#172033}
 </fieldset>
 <div id="machinePicker" class="productionField">
 <input type="hidden" name="assetId">
-<label>Máquina
+<label>EQUIPO
 <input id="machineSearch" type="search" placeholder="Marca, número o serial" autocomplete="off" aria-controls="machineOptions">
 </label>
 <div id="machineOptions" class="machineOptions" hidden></div>
-<p id="machineSearchEmpty" role="status" hidden>Sin máquinas que coincidan con la búsqueda.</p>
+<p id="machineSearchEmpty" role="status" hidden>Sin equipos que coincidan con la búsqueda.</p>
 </div>
 <label>Inventario de origen<input id="inventoryOrigin" readonly></label>
 <ul id="draft" class="productionField" hidden></ul>
