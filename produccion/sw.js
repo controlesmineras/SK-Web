@@ -1,6 +1,6 @@
 
-const CACHE='sk-production-shell-v55-orden-modulos';
-const files=['./','./index.html','./app.js?v=27-existencias','./install-ui.js?v=1','./manifest.webmanifest','../styles.css','../sync-config.js','../spare-catalog.js','../consumption-query-v2.js?v=consulta-pc-1','./produccion-yt-192.png','./produccion-yt-512.png'];
+const CACHE='sk-production-shell-v56-consultas';
+const files=['./','./index.html','./app.js?v=28-consultas','./install-ui.js?v=1','./manifest.webmanifest','../styles.css','../sync-config.js','../spare-catalog.js','../consumption-query-v2.js?v=consulta-pc-1','./produccion-yt-192.png','./produccion-yt-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files.map(file=>new Request(file,{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('sk-production-shell-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{
