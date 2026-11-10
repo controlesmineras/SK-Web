@@ -101,7 +101,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
 #countTable{min-width:1050px}#countTable input{width:100%;min-width:85px}#countForm button{grid-column:auto}#physicalCount label{min-width:0}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=37-verificar-saldo"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=38-ajustar-existencia"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -150,16 +150,18 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <h2>EDITAR EXISTENCIAS</h2>
 <form id="productionStockEdit">
 <label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
-<label>Fecha<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
+<label>Fecha<input name="fechaISO" readonly type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
 <div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="stockPartOptions"></label>
 <div id="stockPartOptions" class="machineOptions partOptions" hidden></div>
 <input type="hidden" name="partId"></div>
-<label>Saldo inicial<input name="cantidad" type="number" min="0" step="1" placeholder="0" required></label>
+<label>Existencia actual corregida<input name="cantidad" type="number" min="0" step="1" placeholder="0" required></label>
 <p data-stock-balance class="hint"></p>
-<button type="submit">Guardar saldo inicial</button>
+<button type="submit">GUARDAR EXISTENCIA ACTUAL</button>
 </form>
-<p class="hint">El saldo inicial corresponde al inicio de la fecha elegida. Se descuentan los consumos desde ese día.</p>
+<p class="hint">Escribe la cantidad que debe quedar hoy. El ajuste se registra en el historial y conserva los movimientos anteriores.</p>
 <div class="tableWrap"><table><thead><tr><th>Inventario</th><th>N.º de ítem</th><th>Repuesto</th><th>Existencia actual</th></tr></thead><tbody data-stock-rows></tbody></table></div>
+<h3>HISTORIAL DE AJUSTES</h3>
+<div class="tableWrap"><table><thead><tr><th>FECHA</th><th>REPUESTO</th><th>ANTES</th><th>DESPUÉS</th><th>AJUSTE</th><th>REGISTRÓ</th></tr></thead><tbody data-adjustment-rows></tbody></table></div>
 </section>
 <section id="physicalCount" hidden>
 <h2>INVENTARIO FÍSICO</h2>
