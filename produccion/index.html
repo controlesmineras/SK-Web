@@ -99,8 +99,9 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 .productionHeaderLogo{transform:scale(1.45);transform-origin:left center}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
+#countTable{min-width:1050px}#countTable input{width:100%;min-width:85px}#countForm button{grid-column:auto}#physicalCount label{min-width:0}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=35-corregir-saldo"></script><script defer src="../consumption-query-v2.js?v=fechas-colombia-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=36-inventario-fisico"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -130,6 +131,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <button type="button" id="showRecord" aria-controls="recordPanel" aria-pressed="true"><span aria-hidden="true">+</span> CONSUMOS</button>
 <button type="button" id="showConsumptionQueries" aria-controls="productionQueries" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" stroke="#172033" stroke-width="1.6" stroke-linejoin="round"><path d="m8 15-5.5 6a1.7 1.7 0 0 1-2.4-2.4l5.5-6" fill="#ff783b" transform="translate(1 0)"/><circle cx="14" cy="10" r="8.6" fill="#076ab4"/><circle cx="14" cy="10" r="6.9" fill="#9ce6f7"/><path d="M11 6h3.5l2.5 2.5V14h-6z" fill="#fff"/><path d="M14.5 6v2.5H17m-4.5 3.5v-2m2 2v-1" fill="none"/></svg> CONSULTAS</button>
 <button type="button" id="showStockEdit" aria-controls="stockEditPanel" aria-pressed="false" hidden><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g stroke="#111" stroke-width="1.8" stroke-linejoin="round"><rect x="2" y="6" width="15.5" height="16" rx="2" fill="#eee"/><path d="m6 18 2-6 10-10 4 4-10 10z" fill="#ffa823"/><path d="m6 18 2-6 4 4z" fill="#ffe184"/><path d="m16 4 2-2q1-1 2 0l2 2q1 1 0 2l-2 2z" fill="#f43c31"/></g></svg> EXISTENCIAS</button>
+<button type="button" id="showPhysicalCount" aria-controls="physicalCount" aria-pressed="false" hidden>INVENTARIO FÍSICO</button>
 </div>
 <section id="incomePanel" hidden>
 <h2>INGRESOS</h2>
@@ -158,6 +160,29 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 </form>
 <p class="hint">El saldo inicial corresponde al inicio de la fecha elegida. Se descuentan los consumos desde ese día.</p>
 <div class="tableWrap"><table><thead><tr><th>Inventario</th><th>N.º de ítem</th><th>Repuesto</th><th>Existencia actual</th></tr></thead><tbody data-stock-rows></tbody></table></div>
+</section>
+<section id="physicalCount" hidden>
+<h2>INVENTARIO FÍSICO</h2>
+<p id="countStatus" class="hint" role="status"></p>
+<form id="countForm">
+<label>INVENTARIO<select name="origin"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
+<label>FECHA DE INVENTARIO<input name="date" inputmode="numeric" placeholder="dd/mm/aaaa" required></label>
+<label>REGISTRO<select name="record"></select></label>
+<label>BUSCAR REPUESTO<input name="search" type="search" placeholder="Ítem o nombre"></label>
+<button type="submit">GUARDAR BORRADOR</button>
+<button id="submitCount" type="button">SOLICITAR AUTORIZACIÓN</button>
+<button id="approveCount" type="button" hidden>APROBAR Y CERRAR</button>
+<button id="returnCount" type="button" hidden>DEVOLVER PARA CORRECCIÓN</button>
+<button id="discardCount" type="button" hidden>DESCARTAR CAMBIO LOCAL PENDIENTE</button>
+</form>
+<div class="tableWrap"><table id="countTable"><thead></thead><tbody></tbody></table></div>
+<div class="productionViews" aria-label="Informes de inventario">
+<button id="newPhysicalCount" type="button">NUEVO CONTEO</button>
+<button id="loadCountHistory" type="button">CONSULTAR CIERRES</button>
+<button id="countExcel" type="button" disabled>EXPORTAR EXCEL</button>
+<button id="countPdf" type="button" disabled>EXPORTAR PDF</button>
+</div>
+<label>CIERRE GUARDADO<select id="countHistory" disabled><option value="">Selecciona un cierre</option></select></label>
 </section>
 <div id="recordPanel">
 <h2>CONSUMO DE REPUESTOS</h2>

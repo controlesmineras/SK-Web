@@ -806,9 +806,97 @@ function productionSync_(q){
    known.set(saved.id,saved);changed=true;
   }
   const consumptions=Array.from(known.values());
-  if(changed){const body=JSON.stringify({schema:2,consumptions:consumptions,incomes:Array.from(incomes.values())});if(file)file.setContent(body);else DriveApp.createFile(PRODUCTION_FILE,body,MimeType.PLAIN_TEXT)}
+  let inventoryResult;
+  if(q.inventoryRequest){
+   try{inventoryResult=productionCount_(q.inventoryRequest,data,user,recorder,parts,criteria,Array.from(incomes.values()),consumptions);}
+   catch(error){inventoryResult={error:error.message};}
+  }
+  if(q.inventoryRequest?.action==='history'&&!pending.length)return json_({ok:true,inventoryResult});
+  const counts=data.inventoryCounts||[],latest=new Map();
+  for(const count of counts)if(count.status==='closed'&&(!latest.has(count.origin)||count.date>latest.get(count.origin).date))latest.set(count.origin,count);
+  if(changed||inventoryResult?.changed){
+   const body=JSON.stringify({...data,schema:3,consumptions,incomes:Array.from(incomes.values())});
+   if(file)file.setContent(body);else DriveApp.createFile(PRODUCTION_FILE,body,MimeType.PLAIN_TEXT);
+  }
   const spareIds=new Set(criteria.filter(x=>x.isYtSpare).map(x=>x.id));
   const deliveries=(central.blendingDeliveries||[]).filter(row=>!row.deleted&&cargoNorm_(row.destination)==='produccion'&&spareIds.has(row.itemId)).map(row=>({id:row.id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,createdAt:row.createdAt,reversed:row.reversed===true||row.reversado===true}));
-  return json_({ok:true,productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.map(row=>row.id)});
+  return json_({ok:true,productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,inventoryResult,
+   inventoryCounts:counts.filter(row=>row.status!=='closed'&&(row.owner===user.document||user.role==='admin'&&row.status==='submitted')),
+   inventoryLatest:Array.from(latest.values()),incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.map(row=>row.id)});
  }finally{lock.releaseLock()}
+}
+
+function productionCount_(request,data,user,recorder,parts,criteria,incomes,consumptions){
+ const counts=data.inventoryCounts||(data.inventoryCounts=[]);
+ const role=productionRole_(user.role),admin=role==='admin';
+ if(!admin&&role!=='assistant')throw new Error('Tu rol no permite gestionar el inventario físico.');
+ if(request.action==='history'){
+  return {history:counts.filter(row=>row.status==='closed').map(({id,origin,date})=>({id,origin,date})),
+   report:counts.find(row=>row.status==='closed'&&row.id===request.id)||null};
+ }
+ const {id,action}=request;
+ if(!/^[-a-zA-Z0-9]{16,100}$/.test(String(id||'')))throw new Error('Identificador de inventario no válido.');
+ const index=counts.findIndex(row=>row.id===id),current=counts[index];
+ const stamp=new Date().toISOString();
+ if(action==='save'||action==='submit'){
+  if(current?.owner&&current.owner!==user.document)throw new Error('Este borrador pertenece a otro usuario.');
+  if(current?.revision===request.revision)return {count:current};
+  if(current&&!['draft','returned'].includes(current.status))throw new Error('El inventario ya se envió para revisión.');
+  if(current&&(request.baseRevision||'')!==current.revision)throw new Error('El borrador cambió en otro dispositivo. Revisa la versión sincronizada.');
+  const {origin,date,values,revision}=request;
+  if(!/^(YT|Columna)(28|29)$/.test(origin)||!/^\d{4}-\d{2}-\d{2}$/.test(date)||!Number.isFinite(Date.parse(date))||new Date(date).toISOString().slice(0,10)!==date||date>Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'))throw new Error('Fecha o inventario no válido.');
+  if(!/^[-a-zA-Z0-9]{16,100}$/.test(String(revision||''))||!Array.isArray(values)||values.length>3000)throw new Error('Conteo no válido.');
+  if(values.some(row=>!row||typeof row.partId!=='string'||!Number.isSafeInteger(row.physical)||row.physical<0)||new Set(values.map(row=>row.partId)).size!==values.length)throw new Error('Cada conteo debe ser un número entero de cero en adelante.');
+  const count={id,origin,date,values,revision,owner:user.document,countedBy:recorder.nombre||user.document,status:action==='submit'?'submitted':'draft',updatedAt:stamp};
+  if(action==='submit')productionCountRows_(count,counts,parts,criteria,incomes,consumptions);
+  if(index<0)counts.push(count);else counts[index]=count;
+  return {count,changed:true};
+ }
+ if(!admin)throw new Error('Solo un administrador puede aprobar o devolver el inventario.');
+ if(action==='approve'&&current?.status==='closed')return {count:current};
+ if(!current||current.status!=='submitted'||current.revision!==request.revision)throw new Error('La solicitud ya cambió. Sincroniza y revísala nuevamente.');
+ if(action==='return'){
+  const note=String(request.note||'').trim();
+  if(!note||note.length>500)throw new Error('Indica una observación de hasta 500 caracteres.');
+  counts[index]={...current,status:'returned',note,updatedAt:stamp};
+ }else if(action==='approve'){
+  const rows=productionCountRows_(current,counts,parts,criteria,incomes,consumptions);
+  counts[index]={...current,status:'closed',rows,approvedBy:recorder.nombre||user.document,closedAt:stamp};
+  delete counts[index].values;
+ }else throw new Error('Operación de inventario no válida.');
+ return {count:counts[index],changed:true};
+}
+
+function productionCountRows_(count,counts,parts,criteria,incomes,consumptions){
+ const {origin,date}=count,key=origin.toLowerCase();
+ const previous=counts.filter(row=>row.origin===origin&&row.status==='closed').sort((a,b)=>b.date.localeCompare(a.date))[0];
+ if(previous&&previous.date.slice(0,7)>=date.slice(0,7))throw new Error('Ya existe un cierre para este mes o un mes posterior.');
+ const catalog=new Map(parts.filter(p=>!p.deleted&&p.active!==false&&(String(p.clase).trim()+String(p.detalle).trim()).toLowerCase()===key)
+  .map(p=>[p.id,{partId:p.id,name:p.nombre,aliases:[p.id]}]));
+ for(const item of criteria.filter(p=>p.isYtSpare&&!p.deleted&&p.active!==false&&String(p.spareEquipment).replace(/\s/g,'').toLowerCase()===key)){
+  const base=catalog.get(item.productionPartId),id=base?.partId||item.id;
+  catalog.set(id,{partId:id,name:item.spareItemName||item.name,aliases:[id,item.id]});
+ }
+ const counted=new Map(count.values.map(row=>[row.partId,row.physical]));
+ if(!catalog.size||catalog.size!==counted.size||[...catalog.keys()].some(id=>!counted.has(id)))throw new Error('Completa el conteo de todos los repuestos del inventario vigente.');
+ const byAlias=new Map();
+ const lastRows=new Map();
+ for(const row of previous?.rows||[])for(const id of row.aliases||[row.partId])lastRows.set(id,row);
+ for(const row of catalog.values()){
+  const last=row.aliases.map(id=>lastRows.get(id)).find(Boolean);
+  row.opening=last?.physical||0;row.incomes=0;row.consumptions=0;row.cutoff=last?previous.date:'';
+  for(const id of row.aliases)byAlias.set(id,row);
+ }
+ const get=row=>row.origen===origin&&!row.deleted&&row.fechaISO<=date&&byAlias.get(row.partId);
+ for(const movement of incomes){
+  const row=get(movement);
+  if(row&&!row.cutoff&&movement.kind==='initial'){row.opening=movement.cantidad;row.initialDate=movement.fechaISO;}
+ }
+ const include=(row,movement)=>row&&(row.cutoff?movement.fechaISO>row.cutoff:!row.initialDate||movement.fechaISO>=row.initialDate);
+ for(const movement of incomes){const row=get(movement);if(movement.kind==='income'&&include(row,movement))row.incomes+=movement.cantidad;}
+ for(const movement of consumptions){const row=get(movement);if(include(row,movement))row.consumptions+=movement.cantidad;}
+ return Array.from(catalog.values(),({partId,name,aliases,opening,incomes,consumptions})=>{
+  const expected=opening+incomes-consumptions,physical=counted.get(partId);
+  return {partId,name,aliases,opening,incomes,consumptions,expected,physical,difference:physical-expected};
+ });
 }
