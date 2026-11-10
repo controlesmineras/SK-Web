@@ -7,7 +7,7 @@
 <link rel="apple-touch-icon" href="./produccion-yt-192.png">
 <title>Producción SK 3.7</title><link rel="stylesheet" href="../styles.css">
 <style>
-[hidden]{display:none!important}main{max-width:900px;margin:auto}header{justify-content:space-between}section{margin:16px 0}fieldset{border:0;padding:0;margin:0;display:grid;gap:12px}form{margin:12px 0}label{min-width:0}select,input{max-width:100%}.tableWrap{overflow:auto}li{margin:6px 0}#status{white-space:pre-wrap}details{margin:12px 0}summary{cursor:pointer;font-weight:700}
+[hidden]{display:none!important}main{max-width:900px;margin:auto}header{justify-content:space-between}section{margin:16px 0}fieldset{border:0;padding:0;margin:0;display:grid;gap:12px}form{margin:12px 0}label{min-width:0}select,input{max-width:100%}.tableWrap{overflow:auto}li{margin:6px 0}#status{white-space:pre-wrap}
 body>main{max-width:900px;color:#f8fafc}
 main form,main .tableWrap{color:#172033}
 .productionToolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}
@@ -75,7 +75,7 @@ main form,main .tableWrap{color:#172033}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.2)}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=21-shift-options"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=22-clean-form"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -143,10 +143,7 @@ main form,main .tableWrap{color:#172033}
 <input type="hidden" name="responsableId">
 <button type="submit"><span class="productionSaveText">Guardar consumos</span></button>
 </form>
-<details><summary>Personal</summary><input id="directorySearch" type="search" placeholder="Buscar nombre o documento"><ul id="directory"></ul></details>
-<details><summary>Consumos registrados</summary><div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Turno</th><th>Máquina</th><th>Inventario</th><th>Repuesto</th><th>Cantidad</th><th>Mecánico o responsable</th><th>Registrado por</th><th>Estado</th></tr></thead><tbody id="history"></tbody></table></div></details>
 </div>
 <section id="queries" hidden></section>
-<details><summary>Entregas de Plaza Blending a Producción</summary><ul id="deliveries"></ul></details>
 </section>
 </main></body></html>

@@ -182,13 +182,6 @@ function paintPeople(){
  }));
  if(!matches.length)responsibleOptions.textContent='No se encontraron colaboradores.';
 }
-function list(id,rows,label){
- byId(id).replaceChildren(...rows.map(row=>{const li=document.createElement('li');li.textContent=label(row);return li}));
-}
-function paintDirectory(){
- const query=norm(byId('directorySearch').value);
- list('directory',(state.personal||[]).filter(row=>norm(personLabel(row)).includes(query)),personLabel);
-}
 function paintDraft(){
  const list=byId('draft');
  list.hidden=!draft.length;
@@ -269,15 +262,7 @@ function paint(){
  }));
  if(!machines.length)byId('machineOptions').textContent='No hay máquinas disponibles para este tipo.';
  filterMachines();
- paintParts();paintPeople();paintDirectory();paintDraft();
- const people=new Map((state.personal||[]).map(row=>[row.id,row.nombre]));
- const assets=new Map((state.assets||[]).map(row=>[row.id,labelAsset(row)]));
- byId('history').replaceChildren(...[...(state.consumptions||[]),...(state.pending||[]).map(row=>({...row,syncState:'pending'}))].sort((a,b)=>b.fechaISO.localeCompare(a.fechaISO)).map(row=>{
-  const tr=document.createElement('tr');
-  for(const value of [row.fechaISO,row.turno||'—',assets.get(row.assetId)||row.assetId,row.origen,row.nombreRepuesto,row.cantidad,row.responsableNombre||people.get(row.responsableId)||'—',row.registradoPorNombre||row.registradoPor||(row.syncState==='pending'?session.user.name:'—'),row.syncState==='pending'?'Pendiente':'Sincronizado']){const td=document.createElement('td');td.textContent=value;tr.append(td)}
-  return tr;
- }));
- list('deliveries',state.deliveries||[],row=>[row.createdAt?.slice(0,10),row.itemName,row.quantity,row.reversed?'Reversado':''].filter(Boolean).join(' · '));
+ paintParts();paintPeople();paintDraft();
  paintSync();
  if(!byId('queries').hidden)window.dispatchEvent(new Event('skweb-consumption-changed'));
 }
@@ -410,7 +395,7 @@ for(const radio of fields.tipoEquipo)radio.onchange=()=>{
  byId('machineSearch').value='';
  paint();
 };
-byId('partSearch').oninput=paintParts;personSearch.oninput=()=>{fields.responsableId.value='';paintPeople()};byId('directorySearch').oninput=paintDirectory;
+byId('partSearch').oninput=paintParts;personSearch.oninput=()=>{fields.responsableId.value='';paintPeople()};
 if(invitation){
  byId('login').hidden=true;
  api('accessInvitationInfo',{invitation}).then(info=>{
