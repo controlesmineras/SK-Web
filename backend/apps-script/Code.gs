@@ -767,6 +767,7 @@ function productionSync_(q){
   const data=file?JSON.parse(file.getBlob().getDataAsString('UTF-8')):{consumptions:[]};
   if(!Array.isArray(data.consumptions))throw new Error('La base de Producción no es válida');
   const known=new Map(data.consumptions.map(row=>[row.id,row]));
+  const incomes=new Map((data.incomes||[]).map(row=>[row.id,row]));
   const assets=(central.assets||[]).filter(row=>!row.deleted&&/^(yt|columna)/i.test(String(row.clase||'')));
   const parts=central.parts||[],criteria=central.inventoryCriteria||[];
   const pending=Array.isArray(q.pending)?q.pending:[];
@@ -774,7 +775,19 @@ function productionSync_(q){
   let changed=false;
   for(const row of pending){
    if(!row||!/^[-a-zA-Z0-9]{16,100}$/.test(String(row.id||'')))throw new Error('Identificador de consumo no válido');
-   if(known.has(row.id))continue;
+   if(known.has(row.id)||incomes.has(row.id))continue;
+   if(row.kind==='initial'||row.kind==='income'){
+    if(user.role!=='admin'&&(row.kind==='initial'||user.role!=='assistant'))throw new Error('Tu rol no permite este ingreso.');
+    const part=parts.find(x=>x.id===row.partId&&!x.deleted&&x.active!==false&&String(x.clase).toLowerCase()+String(x.detalle)===String(row.origen).toLowerCase());
+    const criterion=criteria.find(x=>x.isYtSpare&&!x.deleted&&x.active!==false&&(x.id===row.partId||x.productionPartId===part?.id)&&String(x.spareEquipment).replace(/\s/g,'').toLowerCase()===String(row.origen).toLowerCase());
+    if(!part&&!criterion)throw new Error('Repuesto de ingreso no disponible.');
+    if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(row.kind==='initial'?0:1)||!/^\d{4}-\d{2}-\d{2}$/.test(String(row.fechaISO||'')))throw new Error('Cantidad o fecha de ingreso no válida.');
+    const partId=part?.id||criterion.id;
+    if(row.kind==='initial'&&Array.from(incomes.values()).some(x=>x.kind==='initial'&&x.partId===partId&&x.origen===row.origen))throw new Error('El repuesto ya tiene un saldo inicial.');
+    incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document});
+    changed=true;
+    continue;
+   }
    if(!Number.isSafeInteger(row.cantidad)||row.cantidad<1||!/^\d{4}-\d{2}-\d{2}$/.test(String(row.fechaISO||'')))throw new Error('Cantidad o fecha no válida');
    if(!/^(?:YT|Columna)(?:28|29)$/.test(row.origen)||!['YT','Columna'].includes(row.tipoEquipo)||!row.origen.startsWith(row.tipoEquipo))throw new Error('Inventario de origen no válido');
    if(!assets.some(x=>x.id===row.assetId)||!personal.some(x=>x.id===row.responsableId)||![...parts,...criteria.filter(x=>x.isYtSpare)].some(x=>x.id===row.partId&&!x.deleted))throw new Error('Máquina, responsable o repuesto no disponible. Revisa los consumos pendientes.');
@@ -786,9 +799,9 @@ function productionSync_(q){
    known.set(saved.id,saved);changed=true;
   }
   const consumptions=Array.from(known.values());
-  if(changed){const body=JSON.stringify({schema:1,consumptions:consumptions});if(file)file.setContent(body);else DriveApp.createFile(PRODUCTION_FILE,body,MimeType.PLAIN_TEXT)}
+  if(changed){const body=JSON.stringify({schema:2,consumptions:consumptions,incomes:Array.from(incomes.values())});if(file)file.setContent(body);else DriveApp.createFile(PRODUCTION_FILE,body,MimeType.PLAIN_TEXT)}
   const spareIds=new Set(criteria.filter(x=>x.isYtSpare).map(x=>x.id));
   const deliveries=(central.blendingDeliveries||[]).filter(row=>!row.deleted&&cargoNorm_(row.destination)==='produccion'&&spareIds.has(row.itemId)).map(row=>({id:row.id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,createdAt:row.createdAt,reversed:row.reversed===true||row.reversado===true}));
-  return json_({ok:true,productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,consumptions:consumptions,ack:pending.map(row=>row.id)});
+  return json_({ok:true,productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.map(row=>row.id)});
  }finally{lock.releaseLock()}
 }

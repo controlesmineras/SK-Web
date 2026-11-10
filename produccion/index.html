@@ -98,7 +98,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=25-icono-actualizar"></script><script defer src="../consumption-query-v2.js?v=consulta-pc-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=26-ingresos"></script><script defer src="../consumption-query-v2.js?v=consulta-pc-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -126,7 +126,23 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <div class="productionViews" role="group" aria-label="Consumo de repuestos">
 <button type="button" id="showRecord" aria-controls="recordPanel" aria-pressed="true">Registrar consumo</button>
 <button type="button" id="showConsumptionQueries" aria-controls="queries" aria-pressed="false">Consultar consumos</button>
+<button type="button" id="showIncome" aria-controls="incomePanel" aria-pressed="false">Ingresos</button>
 </div>
+<section id="incomePanel" hidden>
+<h2>INGRESOS Y EXISTENCIAS</h2>
+<form id="productionIncome">
+<label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
+<label>Buscar repuesto<input id="incomeSearch" type="search" placeholder="Ítem o nombre"></label>
+<label>Repuesto<select name="partId" required></select></label>
+<label>Movimiento<select name="kind"><option value="income">Ingreso manual</option><option value="initial">Saldo inicial</option></select></label>
+<label>Fecha<input name="fechaISO" type="date" required></label>
+<label>Cantidad<input name="cantidad" type="number" min="1" step="1" required></label>
+<p id="incomeBalance" class="hint"></p>
+<button type="submit">Guardar ingreso</button>
+</form>
+<p class="hint">El saldo inicial corresponde al inicio de la fecha elegida. Se descuentan los consumos desde ese día.</p>
+<div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Repuesto</th><th>Movimiento</th><th>Cantidad</th></tr></thead><tbody id="incomeRows"></tbody></table></div>
+</section>
 <div id="recordPanel">
 <h2>CONSUMO DE REPUESTOS</h2>
 <form id="record">
