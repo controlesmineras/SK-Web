@@ -114,8 +114,7 @@ async function api(action,data={}){
 const labelAsset=row=>[row.clase,row.modelo,row.marcaActual||row.marcaInterna,row.numeroMarcaActual,row.serial].filter(Boolean).join(' · ');
 const personLabel=row=>[row.nombre,row.documento].filter(Boolean).join(' · ');
 function partOptions(){
- const rows=window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]);
- return window.SKSpareCatalog.filter(rows,fields.tipoEquipo.value,inventoryOrigin);
+ return window.SKSpareCatalog.filter(catalog(),fields.tipoEquipo.value,inventoryOrigin);
 }
 const machineSearch=byId('machineSearch'),partSearch=byId('partSearch');
 const machineOptions=byId('machineOptions'),partCards=byId('partOptions');
@@ -169,7 +168,19 @@ const stockViews=[
 function canSaveStock(kind,role){
  return role==='admin'||(kind==='income'&&role==='assistant');
 }
-const catalog=()=>window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]);
+const trailingParts=['tapon lubricador','lubricador','funda de revestimiento'];
+function partOrder(part){
+ const item=String(part.numero??'').trim();
+ const special=trailingParts.indexOf(norm(part.nombre).trim().replace(/\s+/g,' '));
+ if(special!==-1)return [2,special];
+ if(/^\d+$/.test(item))return [0,Number(item)];
+ return [1,0];
+}
+function compareParts(left,right){
+ const [leftGroup,leftOrder]=partOrder(left),[rightGroup,rightOrder]=partOrder(right);
+ return leftGroup-rightGroup||leftOrder-rightOrder||left.nombre.localeCompare(right.nombre,'es');
+}
+const catalog=()=>window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]).sort(compareParts);
 const incomeMovements=()=>[...(state.incomes||[]),...(state.pending||[]).filter(row=>row.kind)];
 function stockFor(part,origin){
  const matches=row=>row.origen===origin&&(row.partId===part.id||Boolean(part.criterionId)&&row.partId===part.criterionId);
