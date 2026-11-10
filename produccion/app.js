@@ -233,15 +233,64 @@ function countTotals(origin,date,parts){
  }
  return totals;
 }
-let stockCacheState,stockCache=new Map();
+let stockCacheState,stockCacheDay,stockCache=new Map();
 function stockBreakdown(part,origin){
- if(stockCacheState!==state){stockCacheState=state;stockCache=new Map();}
+ const day=today();
+ if(stockCacheState!==state||stockCacheDay!==day){stockCacheState=state;stockCacheDay=day;stockCache=new Map();}
  if(!stockCache.has(origin))stockCache.set(origin,countTotals(origin,'',window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin)));
  return stockCache.get(origin).get(part.id);
 }
 function stockFor(part,origin){
  const total=stockBreakdown(part,origin);
  return total?total.opening+total.incomes-total.consumptions:0;
+}
+let stockSummaryState,stockSummaryDay,stockSummaryCache=new Map();
+function stockPeriodSummary(part,origin){
+ const day=today();
+ if(stockSummaryState!==state||stockSummaryDay!==day){stockSummaryState=state;stockSummaryDay=day;stockSummaryCache=new Map();}
+ const key=origin+'|'+part.id;
+ if(stockSummaryCache.has(key))return stockSummaryCache.get(key);
+ const closed=(state.inventoryLatest||[]).filter(row=>row.origin===origin&&row.status==='closed'&&row.date<=day)
+  .sort((a,b)=>b.date.localeCompare(a.date)||String(b.closedAt||'').localeCompare(String(a.closedAt||'')))[0];
+ const aliases=new Set([part.id,part.criterionId].filter(Boolean));
+ for(const row of state.inventoryCriteria||[])if(row.productionPartId===part.id&&window.SKSpareCatalog.equipment(row)===origin.toLowerCase())aliases.add(row.id);
+ const opening=closed?.rows?.find(row=>(row.aliases||[row.partId]).some(id=>aliases.has(id)));
+ for(const id of opening?.aliases||[])aliases.add(id);
+ const rows=new Map([...(state.incomes||[]),...(state.consumptions||[])].map(row=>[row.id,row]));
+ const pendingIds=new Set();
+ for(const row of state.pending||[])if(!row.syncRejected&&!rows.has(row.id)){rows.set(row.id,row);pendingIds.add(row.id);}
+ const result={closed,opening:opening?.physical,incomes:0,consumptions:0,adjustments:0,pending:0};
+ for(const row of rows.values()){
+  if(row.deleted||row.origen!==origin||!aliases.has(row.partId)||!row.fechaISO||row.fechaISO>day)continue;
+  if(closed&&(row.fechaISO<closed.date||row.fechaISO===closed.date&&!(Date.parse(row.recordedAt||row.createdAt)>Date.parse(closed.closedAt))))continue;
+  if(row.kind==='initial')continue;
+  if(row.kind==='income')result.incomes+=row.cantidad;
+  else if(!row.kind)result.consumptions+=row.cantidad;
+  else if(row.kind==='adjustment'&&row.target!=null&&!pendingIds.has(row.id))result.adjustments+=row.cantidad;
+  if(pendingIds.has(row.id))result.pending++;
+ }
+ stockSummaryCache.set(key,result);return result;
+}
+function stockSummaryText(part,origin,value){
+ const totals=stockPeriodSummary(part,origin),current=stockFor(part,origin),initial=initialFor(part,origin);
+ const signed=number=>number>0?'+'+number:String(number);
+ const pending=(state.pending||[]).find(row=>row.kind==='adjustment'&&row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId));
+ const lines=[totals.closed?'PERÍODO: DESDE EL INVENTARIO DEL '+displayDate(totals.closed.date)+'.':'PERÍODO: TODOS LOS MOVIMIENTOS · SIN INVENTARIO CERRADO.',
+  'INGRESOS: '+totals.incomes+' · CONSUMOS: '+totals.consumptions+' · AJUSTES CONFIRMADOS: '+signed(totals.adjustments)+'.'];
+ if(totals.closed&&totals.opening!=null)lines.push('SALDO DEL ÚLTIMO INVENTARIO: '+totals.opening+'.');
+ else if(initial)lines.push('SALDO INICIAL REGISTRADO: '+initial.cantidad+' · FECHA: '+displayDate(initial.fechaISO)+'.');
+ lines.push('EXISTENCIA ACTUAL: '+current+(stockBreakdown(part,origin)?.pending?' · CON MOVIMIENTOS PENDIENTES.':'.'));
+ if(pending)lines.push(pending.syncRejected?'CANTIDAD RECHAZADA: '+pending.cantidad+' · REQUIERE REVISIÓN.':'SALDO SOLICITADO: '+pending.cantidad+' · PENDIENTE DE CONFIRMACIÓN.');
+ else if(value==='')lines.push('SALDO DESPUÉS DEL CAMBIO: — · ESCRIBE LA CANTIDAD.');
+ else{
+  const target=Number(value);
+  lines.push(Number.isSafeInteger(target)&&target>=0?'SALDO DESPUÉS DEL CAMBIO: '+target+' · AJUSTE A REALIZAR: '+signed(target-current)+' (VISTA PREVIA).':'SALDO DESPUÉS DEL CAMBIO: — · INGRESA UNA CANTIDAD ENTERA DESDE CERO.');
+ }
+ if(totals.pending)lines.push('MOVIMIENTOS DEL PERÍODO PENDIENTES DE SINCRONIZAR: '+totals.pending+'.');
+ return lines.join('\n');
+}
+function paintStockBalance({form:stockForm,panel},part){
+ panel.querySelector('[data-stock-balance]').textContent=stockSummaryText(part,stockForm.elements.origen.value,stockForm.elements.cantidad.value);
 }
 function filterParts(parts,search){
  const query=norm(search).trim();
@@ -275,14 +324,6 @@ function paintStockView({form:stockForm,panel,kind}){
  const enabled=Array.isArray(state.incomes);
  const allowed=canSaveStock(kind,session?.user.role);
  panel.querySelector('[data-stock-balance]').textContent=!enabled?'El servidor debe actualizarse y sincronizarse antes de registrar movimientos.':part?'Existencia registrada: '+stockFor(part,origin):options.length?'Selecciona un repuesto para ver su existencia.':'Sin repuestos que coincidan.';
- if(kind==='adjustment'&&part&&enabled){
-  const initial=initialFor(part,origin),total=stockBreakdown(part,origin);
-  const pending=initial&&(state.pending||[]).some(row=>row.id===initial.id);
-  const detail=initial?' · Saldo inicial '+(pending?'pendiente de sincronizar':'guardado')+': '+initial.cantidad:' · Sin saldo inicial registrado';
-  const opening=total.cutoff?' · Cierre del '+displayDate(total.cutoff)+': '+total.opening:'';
-  const adjustment=(state.pending||[]).find(row=>row.kind==='adjustment'&&row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId));
-  panel.querySelector('[data-stock-balance]').textContent+=detail+opening+' · Entradas y ajustes positivos: '+total.incomes+' · Salidas y ajustes negativos: '+total.consumptions+(adjustment?' · AJUSTE PENDIENTE DE CONFIRMAR: '+adjustment.cantidad:'');
- }
  stockForm.querySelector('button[type=submit]').disabled=saving||!enabled||!allowed||!part;
  if(kind==='adjustment'){
   const pending=(state.pending||[]).find(row=>row.kind==='adjustment'&&row.origen===origin&&(row.partId===part?.id||row.partId===part?.criterionId));
@@ -305,6 +346,7 @@ function paintStockView({form:stockForm,panel,kind}){
    }
    return tr;
   }));
+  if(part&&enabled)paintStockBalance({form:stockForm,panel},part);
  }
 }
 function paintBalances(body,parts,origin,enabled){
@@ -375,6 +417,10 @@ for(const view of stockViews){
   if(!picker.hidden&&!search.closest('.productionField').contains(event.target))close();
  },true);
  view.form.addEventListener('submit',event=>saveStock(event,view));
+ if(view.kind==='adjustment')view.form.elements.cantidad.addEventListener('input',()=>{
+  const part=catalog().find(row=>row.id===partId.value);
+  if(part&&Array.isArray(state.incomes))paintStockBalance(view,part);
+ });
 }
 byId('reviewStockAdjustment').onclick=async()=>{
  const active=session,fields=stockEditForm.elements;
@@ -390,7 +436,7 @@ byId('reviewStockAdjustment').onclick=async()=>{
    if(!found?.syncRejected||!window.SKProductionSync.samePendingRow(found,pending))throw new Error('El ajuste cambió. Revisa la lista actualizada.');
    return {...current,pending:current.pending.filter(row=>row.id!==pending.id)};
   });
-  if(session===active){state=fresh;delete stockEditForm.dataset.pendingStockId;paint();fields.cantidad.value=pending.cantidad;stockStatus(stockEditForm,'Revisa la existencia sincronizada y pulsa GUARDAR para registrar la cantidad corregida.');}
+  if(session===active){state=fresh;delete stockEditForm.dataset.pendingStockId;fields.cantidad.value=pending.cantidad;paint();stockStatus(stockEditForm,'Revisa la existencia sincronizada y pulsa GUARDAR para registrar la cantidad corregida.');}
  }catch(error){if(session===active)stockStatus(stockEditForm,error.message,true);}
 };
 const partLabel=row=>[row.numero,row.nombre].filter(Boolean).join(' · ');
