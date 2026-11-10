@@ -175,26 +175,36 @@ function stockFor(part,origin){
   .filter(row=>!row.kind&&!row.deleted&&matches(row)&&since(row)).reduce((sum,row)=>sum+row.cantidad,0);
  return (initial?.cantidad||0)+received-used;
 }
+function filterParts(parts,search){
+ const query=norm(search).trim();
+ const itemQuery=query.match(/\bitem\s*(\d+)\b/);
+ const exactNumber=itemQuery?.[1]||(/^\d+$/.test(query)?query:'');
+ const nameQuery=itemQuery?query.replace(itemQuery[0],' ').replace(/\s+/g,' ').trim():exactNumber?'':query;
+ return parts.filter(row=>{
+  const number=String(row.numero??'').trim();
+  return (!exactNumber||number===exactNumber)&&norm(row.nombre).includes(nameQuery);
+ });
+}
 function paintStockView({form:stockForm,panel,kind}){
  const incomeFields=stockForm.elements;
  const rows=catalog(),origin=incomeFields.origen.value;
- const search=norm(incomeFields.search.value);
- const options=window.SKSpareCatalog.filter(rows,origin.replace(/\d+$/,''),origin)
-  .filter(row=>norm([row.numero,row.nombre].join(' ')).includes(search));
+ const options=filterParts(window.SKSpareCatalog.filter(rows,origin.replace(/\d+$/,''),origin),incomeFields.search.value);
  const selected=incomeFields.partId.value;
- incomeFields.partId.replaceChildren(...options.map(row=>new Option([row.numero,row.nombre].filter(Boolean).join(' · '),row.id)));
+ incomeFields.partId.replaceChildren(new Option('Selecciona un repuesto',''),...options.map(row=>new Option([row.numero,row.nombre].filter(Boolean).join(' · '),row.id)));
  if(options.some(row=>row.id===selected))incomeFields.partId.value=selected;
  const part=options.find(row=>row.id===incomeFields.partId.value);
  const enabled=Array.isArray(state.incomes);
  const allowed=canSaveStock(kind,session?.user.role);
- panel.querySelector('[data-stock-balance]').textContent=!enabled?'El servidor debe actualizarse y sincronizarse antes de registrar movimientos.':part?'Existencia registrada: '+stockFor(part,origin):'Sin repuestos que coincidan.';
+ panel.querySelector('[data-stock-balance]').textContent=!enabled?'El servidor debe actualizarse y sincronizarse antes de registrar movimientos.':part?'Existencia registrada: '+stockFor(part,origin):options.length?'Selecciona un repuesto para ver su existencia.':'Sin repuestos que coincidan.';
  stockForm.querySelector('button').disabled=saving||!enabled||!allowed||!part;
  if(kind==='initial')paintStockRows(panel.querySelector('[data-stock-rows]'),kind,rows);
 }
 function paintStockRows(body,kind,rows=catalog()){
  body.replaceChildren(...incomeMovements().filter(row=>row.kind===kind).reverse().map(row=>{
   const tr=document.createElement('tr'),item=rows.find(x=>x.id===row.partId);
-  for(const value of [row.fechaISO,item?.numero ?? '—',item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':row.origen,row.cantidad]){
+  const values=[row.fechaISO,item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':row.origen,row.cantidad];
+  if(kind==='initial')values.splice(1,0,item?.numero||'—');
+  for(const value of values){
    const td=document.createElement('td');td.textContent=value;tr.append(td);
   }
   return tr;
@@ -205,6 +215,7 @@ async function saveStock(event,{form:stockForm,kind}){
  const active=session;
  if(!active||saving||!Array.isArray(state.incomes)||!canSaveStock(kind,active.user.role))return;
  const {origen,partId,fechaISO,cantidad}=stockForm.elements;
+ if(cantidad.value==='')return;
  const row={kind,origen:origen.value,partId:partId.value,fechaISO:fechaISO.value,cantidad:Number(cantidad.value)};
  if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(row.kind==='initial'?0:1))return;
  saving=true;
@@ -226,14 +237,7 @@ for(const view of stockViews){
 }
 function paintParts(){
  if(partCards.hidden)return;
- const query=norm(partSearch.value).trim();
- const itemQuery=query.match(/\bitem\s*(\d+)\b/);
- const exactNumber=itemQuery?.[1]||(/^\d+$/.test(query)?query:'');
- const nameQuery=itemQuery?query.replace(itemQuery[0],' ').replace(/\s+/g,' ').trim():exactNumber?'':query;
- const rows=partOptions().filter(row=>{
-  const number=String(row.numero??'').trim();
-  return (!exactNumber||number===exactNumber)&&norm(row.nombre).includes(nameQuery);
- });
+ const rows=filterParts(partOptions(),partSearch.value);
  partCards.replaceChildren(...rows.map(row=>{
   const button=document.createElement('button');
   button.type='button';
@@ -387,18 +391,27 @@ function paintSync(){
  byId('headerLastSync').textContent=Number.isNaN(date.getTime())?'SIN SINCRONIZAR':
   'Sinc. '+date.toLocaleDateString('es-CO',{timeZone:'America/Bogota',day:'numeric',month:'numeric'})+' '+date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
 }
+let syncRequested=false;
 async function sync(){
- if(!session||syncing)return;
+ if(!session)return;
+ if(syncing){syncRequested=true;return}
  if(!navigator.onLine){syncFailed=true;paintSync();return}
  if(!canSync()){syncFailed=true;paintSync();status('Vuelve a iniciar sesión con internet para sincronizar. Tus registros siguen guardados.');return}
  const active=session,document=active.user.document;
  syncing=true;syncFailed=false;paintSync();
  try{
-  const local=await changeState(document),pending=(local.pending||[]).slice(0,1000);
-  const data=await api('productionSync',{token:active.token,pending});
-  const acknowledged=new Set(data.ack);
-  const fresh=await changeState(document,current=>({...data,lastSyncAt:new Date().toISOString(),pending:(current.pending||[]).filter(row=>!acknowledged.has(row.id))}));
-  if(session===active){state=fresh;paint()}
+  do{
+   syncRequested=false;
+   const local=await changeState(document),pending=(local.pending||[]).slice(0,1000);
+   const data=await api('productionSync',{token:active.token,pending});
+   const acknowledged=new Set(Array.isArray(data.ack)?data.ack:[]);
+   const savedIds=new Set([...(data.incomes||[]),...(data.consumptions||[])].map(row=>row.id));
+   if(pending.some(row=>!acknowledged.has(row.id)||!savedIds.has(row.id))){
+    throw new Error('La base central no confirmó todos los movimientos. Siguen pendientes para reintentar.');
+   }
+   const fresh=await changeState(document,current=>({...data,lastSyncAt:new Date().toISOString(),pending:(current.pending||[]).filter(row=>!acknowledged.has(row.id)||!savedIds.has(row.id))}));
+   if(session===active){state=fresh;paint()}
+  }while(session===active&&navigator.onLine&&(syncRequested||state.pending.length));
  }catch(error){
   if(error.centralResponse&&/revocada|sesión no válida|inicia sesión/i.test(error.message)){
    deviceAccess.revokeToken(active.token);
@@ -409,7 +422,7 @@ async function sync(){
   }
   if(session===active){
    syncFailed=true;
-   if(error.centralResponse)status(error.message);
+   status(error.name==='AbortError'?'La sincronización tardó demasiado. Puedes volver a intentarlo.':error.message);
   }
   console.error('Sincronización de Producción:',error);
  }
