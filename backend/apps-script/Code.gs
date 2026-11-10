@@ -770,32 +770,35 @@ function productionSync_(q){
   const incomes=new Map((data.incomes||[]).map(row=>[row.id,row]));
   const assets=(central.assets||[]).filter(row=>!row.deleted&&/^(yt|columna)/i.test(String(row.clase||'')));
   const parts=central.parts||[],criteria=central.inventoryCriteria||[];
+  const partAliases=new Map();
+  for(const origin of ['YT28','YT29','Columna28','Columna29'])
+   for(const part of productionCatalog_(parts,criteria,origin).values())
+    for(const alias of part.aliases)partAliases.set(origin+'|'+alias,part);
   const pending=Array.isArray(q.pending)?q.pending:[];
   if(pending.length>1000)throw new Error('Envía un máximo de 1000 consumos por sincronización');
   let changed=false;
   for(const row of pending){
    if(!row||!/^[-a-zA-Z0-9]{16,100}$/.test(String(row.id||'')))throw new Error('Identificador de consumo no válido');
    const existingIncome=incomes.get(row.id);
-   if(known.has(row.id)||existingIncome&&(!row.correctionId||existingIncome.correctionId===row.correctionId))continue;
+   if(known.has(row.id)||existingIncome&&(!row.correctionId||existingIncome.correctionId===row.correctionId||(existingIncome.appliedCorrections||[]).includes(row.correctionId)))continue;
    if(existingIncome){
     if(user.role!=='admin'||existingIncome.kind!=='initial'||row.kind!=='initial'||!/^[-a-zA-Z0-9]{16,100}$/.test(String(row.correctionId))||!Number.isSafeInteger(row.cantidad)||row.cantidad<0)throw new Error('Corrección de saldo inicial no válida.');
-    incomes.set(row.id,Object.assign({},existingIncome,{cantidad:row.cantidad,correctionId:row.correctionId,updatedAt:new Date().toISOString()}));
+    incomes.set(row.id,Object.assign({},existingIncome,{cantidad:row.cantidad,correctionId:row.correctionId,appliedCorrections:[...(existingIncome.appliedCorrections||[]),existingIncome.correctionId,row.correctionId].filter(Boolean),updatedAt:new Date().toISOString()}));
     changed=true;
     continue;
    }
    if(['initial','income','adjustment'].includes(row.kind)){
     if(user.role!=='admin'&&(row.kind!=='income'||user.role!=='assistant'))throw new Error('Tu rol no permite este ingreso.');
-    const part=parts.find(x=>x.id===row.partId&&!x.deleted&&x.active!==false&&String(x.clase).toLowerCase()+String(x.detalle)===String(row.origen).toLowerCase());
-    const criterion=criteria.find(x=>x.isYtSpare&&!x.deleted&&x.active!==false&&(x.id===row.partId||x.productionPartId===part?.id)&&String(x.spareEquipment).replace(/\s/g,'').toLowerCase()===String(row.origen).toLowerCase());
-    if(!part&&!criterion)throw new Error('Repuesto de ingreso no disponible.');
-    if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(row.kind==='income'?1:0)||!/^\d{4}-\d{2}-\d{2}$/.test(String(row.fechaISO||'')))throw new Error('Cantidad o fecha de ingreso no válida.');
-    const partId=part?.id||criterion.id;
+    const part=partAliases.get(row.origen+'|'+row.partId);
+    if(!part)throw new Error('Repuesto de ingreso no disponible para este inventario.');
+    if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(row.kind==='income'?1:0)||!productionDate_(row.fechaISO))throw new Error('Cantidad o fecha de ingreso no válida.');
+    const partId=part.partId;
     if(row.kind==='adjustment'){
      const date=Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd');
      const latest=(data.inventoryCounts||[]).filter(x=>x.status==='closed'&&x.origin===row.origen).sort((a,b)=>b.date.localeCompare(a.date))[0];
-     const aliases=new Set([partId,criterion?.id].filter(Boolean));
+     const aliases=new Set(part.aliases);
      const opening=latest?.rows.find(x=>(x.aliases||[x.partId]).some(id=>aliases.has(id)));
-     const matches=x=>!x.deleted&&x.origen===row.origen&&aliases.has(x.partId);
+     const matches=x=>!x.deleted&&x.fechaISO<=date&&x.origen===row.origen&&aliases.has(x.partId);
      const initial=Array.from(incomes.values()).reverse().find(x=>matches(x)&&x.kind==='initial');
      const includes=x=>matches(x)&&(opening?productionAfterClose_(x,latest.date,latest.closedAt):!initial||x.fechaISO>=initial.fechaISO);
      let before=opening?.physical??initial?.cantidad??0;
@@ -805,18 +808,18 @@ function productionSync_(q){
      changed=true;
      continue;
     }
-    if(row.kind==='initial'&&Array.from(incomes.values()).some(x=>x.kind==='initial'&&x.partId===partId&&x.origen===row.origen))throw new Error('El repuesto ya tiene un saldo inicial.');
-    incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,...(row.kind==='initial'&&row.correctionId?{correctionId:row.correctionId}:{})});
+    if(row.kind==='initial'&&Array.from(incomes.values()).some(x=>!x.deleted&&x.kind==='initial'&&part.aliases.includes(x.partId)&&x.origen===row.origen))throw new Error('El repuesto ya tiene un saldo inicial.');
+    incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,recordedAt:productionRecordedAt_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,...(row.kind==='initial'&&row.correctionId?{correctionId:row.correctionId}:{})});
     changed=true;
     continue;
    }
-   if(!Number.isSafeInteger(row.cantidad)||row.cantidad<1||!/^\d{4}-\d{2}-\d{2}$/.test(String(row.fechaISO||'')))throw new Error('Cantidad o fecha no válida');
+   if(row.kind||!Number.isSafeInteger(row.cantidad)||row.cantidad<1||!productionDate_(row.fechaISO))throw new Error('Cantidad o fecha no válida');
    if(!/^(?:YT|Columna)(?:28|29)$/.test(row.origen)||!['YT','Columna'].includes(row.tipoEquipo)||!row.origen.startsWith(row.tipoEquipo))throw new Error('Inventario de origen no válido');
-   if(!assets.some(x=>x.id===row.assetId)||!personal.some(x=>x.id===row.responsableId)||![...parts,...criteria.filter(x=>x.isYtSpare)].some(x=>x.id===row.partId&&!x.deleted))throw new Error('Máquina, responsable o repuesto no disponible. Revisa los consumos pendientes.');
+   if(!assets.some(x=>x.id===row.assetId)||!personal.some(x=>x.id===row.responsableId)||!partAliases.has(row.origen+'|'+row.partId))throw new Error('Máquina, responsable o repuesto no disponible. Revisa los consumos pendientes.');
    if(productionRole_(user.role)==='mechanic'&&row.responsableId!==user.personId)throw new Error('El mecánico solo puede registrar consumos a su nombre.');
    if(row.turno!=null&&!/^[DTS]$/.test(row.turno))throw new Error('Turno no válido');
    const responsible=personal.find(person=>person.id===row.responsableId);
-   const saved={id:row.id,assetId:row.assetId,responsableId:row.responsableId,responsableNombre:responsible.nombre||responsible.documento,partId:row.partId,itemId:String(row.itemId||''),noItem:String(row.noItem||''),nombreRepuesto:String(row.nombreRepuesto||'').slice(0,200),tipoEquipo:row.tipoEquipo,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,registradoPorId:recorder.id};
+   const saved={id:row.id,assetId:row.assetId,responsableId:row.responsableId,responsableNombre:responsible.nombre||responsible.documento,partId:row.partId,itemId:String(row.itemId||''),noItem:String(row.noItem||''),nombreRepuesto:String(row.nombreRepuesto||'').slice(0,200),tipoEquipo:row.tipoEquipo,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,recordedAt:productionRecordedAt_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,registradoPorId:recorder.id};
    if(row.turno)saved.turno=row.turno;
    known.set(saved.id,saved);changed=true;
   }
@@ -837,7 +840,7 @@ function productionSync_(q){
   const deliveries=(central.blendingDeliveries||[]).filter(row=>!row.deleted&&cargoNorm_(row.destination)==='produccion'&&spareIds.has(row.itemId)).map(row=>({id:row.id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,createdAt:row.createdAt,reversed:row.reversed===true||row.reversado===true}));
   return json_({ok:true,productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,inventoryResult,stockAdjustment:true,
    inventoryCounts:counts.filter(row=>row.status!=='closed'&&(row.owner===user.document||user.role==='admin'&&row.status==='submitted')),
-   inventoryLatest:Array.from(latest.values()),incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.map(row=>row.id)});
+   inventoryLatest:Array.from(latest.values()),incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.map(row=>row.id),superseded:pending.filter(row=>row.correctionId&&incomes.get(row.id)?.correctionId!==row.correctionId&&(incomes.get(row.id)?.appliedCorrections||[]).includes(row.correctionId)).map(row=>({id:row.id,correctionId:row.correctionId}))});
  }finally{lock.releaseLock()}
 }
 
@@ -869,6 +872,7 @@ function productionCount_(request,data,user,recorder,parts,criteria,incomes,cons
  }
  if(!admin)throw new Error('Solo un administrador puede aprobar o devolver el inventario.');
  if(action==='approve'&&current?.status==='closed')return {count:current};
+ if(action==='return'&&current?.status==='returned'&&current.revision===request.revision&&current.note===String(request.note||'').trim())return {count:current};
  if(!current||current.status!=='submitted'||current.revision!==request.revision)throw new Error('La solicitud ya cambió. Sincroniza y revísala nuevamente.');
  if(action==='return'){
   const note=String(request.note||'').trim();
@@ -886,12 +890,7 @@ function productionCountRows_(count,counts,parts,criteria,incomes,consumptions){
  const {origin,date}=count,key=origin.toLowerCase();
  const previous=counts.filter(row=>row.origin===origin&&row.status==='closed').sort((a,b)=>b.date.localeCompare(a.date))[0];
  if(previous&&previous.date.slice(0,7)>=date.slice(0,7))throw new Error('Ya existe un cierre para este mes o un mes posterior.');
- const catalog=new Map(parts.filter(p=>!p.deleted&&p.active!==false&&(String(p.clase).trim()+String(p.detalle).trim()).toLowerCase()===key)
-  .map(p=>[p.id,{partId:p.id,name:p.nombre,aliases:[p.id]}]));
- for(const item of criteria.filter(p=>p.isYtSpare&&!p.deleted&&p.active!==false&&String(p.spareEquipment).replace(/\s/g,'').toLowerCase()===key)){
-  const base=catalog.get(item.productionPartId),id=base?.partId||item.id;
-  catalog.set(id,{partId:id,name:item.spareItemName||item.name,aliases:[id,item.id]});
- }
+ const catalog=productionCatalog_(parts,criteria,origin);
  const counted=new Map(count.values.map(row=>[row.partId,row.physical]));
  if(!catalog.size||catalog.size!==counted.size||[...catalog.keys()].some(id=>!counted.has(id)))throw new Error('Completa el conteo de todos los repuestos del inventario vigente.');
  const byAlias=new Map();
@@ -917,5 +916,30 @@ function productionCountRows_(count,counts,parts,criteria,incomes,consumptions){
 }
 
 function productionAfterClose_(row,date,closedAt){
- return row.fechaISO>date||row.kind==='adjustment'&&row.fechaISO===date&&row.createdAt>closedAt;
+ return row.fechaISO>date||row.fechaISO===date&&(row.recordedAt||row.createdAt)>closedAt;
+}
+
+function productionDate_(value){
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(String(value||'')))return false;
+ const date=new Date(value+'T00:00:00Z');
+ return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value;
+}
+function productionRecordedAt_(value){
+ const stamp=Date.parse(value),now=Date.now();
+ return Number.isFinite(stamp)&&stamp<=now?new Date(stamp).toISOString():new Date(now).toISOString();
+}
+function productionCatalog_(parts,criteria,origin){
+ const normalize=value=>String(value??'').trim().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,'');
+ const key=normalize(origin),removed=criteria.filter(row=>row.deleted&&row.permanentSpareDeleted&&normalize(row.spareEquipment)===key);
+ const catalog=new Map(parts.filter(row=>!row.deleted&&row.active!==false&&normalize(row.clase)+String(row.detalle??'').trim()===key&&!removed.some(item=>item.productionPartId===row.id))
+  .map(row=>[row.id,{partId:row.id,name:row.nombre,aliases:[row.id]}]));
+ for(const item of criteria.filter(row=>row.isYtSpare&&!row.deleted&&row.active!==false&&normalize(row.spareEquipment)===key)){
+  const source=catalog.get(item.productionPartId),id=source?.partId||item.id;
+  catalog.set(id,{partId:id,name:item.spareItemName||item.name,aliases:Array.from(new Set([...(source?.aliases||[id]),item.id]))});
+ }
+ for(const item of criteria){
+  const source=catalog.get(item.productionPartId);
+  if(source&&normalize(item.spareEquipment)===key&&!source.aliases.includes(item.id))source.aliases.push(item.id);
+ }
+ return catalog;
 }

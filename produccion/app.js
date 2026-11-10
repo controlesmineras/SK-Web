@@ -189,22 +189,28 @@ const incomeMovements=(snapshot=state)=>Array.from(new Map([...(snapshot.incomes
 const initialFor=(part,origin,snapshot=state)=>incomeMovements(snapshot).reverse().find(row=>
  !row.deleted&&row.kind==='initial'&&row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId));
 function countTotals(origin,date,parts){
+ const through=date||today();
  const closed=(state.inventoryLatest||[]).find(row=>row.origin===origin&&(!date||row.date<date));
- const prior=new Map(),aliases=new Map(),totals=new Map();
+ const prior=new Map(),aliases=new Map(),totals=new Map(),criterionAliases=new Map();
+ for(const item of state.inventoryCriteria||[]){
+  if(!item.productionPartId||window.SKSpareCatalog.equipment(item)!==origin.toLowerCase())continue;
+  const ids=criterionAliases.get(item.productionPartId)||[];
+  ids.push(item.id);criterionAliases.set(item.productionPartId,ids);
+ }
  for(const row of closed?.rows||[])for(const id of row.aliases||[row.partId])prior.set(id,row);
  for(const part of parts){
-  const ids=[part.id,part.criterionId].filter(Boolean),previous=ids.map(id=>prior.get(id)).find(Boolean);
+  const ids=[part.id,part.criterionId,...(criterionAliases.get(part.id)||[])].filter(Boolean),previous=ids.map(id=>prior.get(id)).find(Boolean);
   const total={opening:previous?.physical??0,incomes:0,consumptions:0,cutoff:previous?closed.date:'',closedAt:previous?closed.closedAt:'',initialDate:''};
   totals.set(part.id,total);
   for(const id of ids)aliases.set(id,total);
  }
- const get=row=>row.origen===origin&&!row.deleted&&(!date||row.fechaISO<=date)&&aliases.get(row.partId);
+ const get=row=>row.origen===origin&&!row.deleted&&row.fechaISO<=through&&aliases.get(row.partId);
  const incomes=incomeMovements();
  for(const row of incomes){
   const total=get(row);
   if(total&&!total.cutoff&&row.kind==='initial'){total.opening=row.cantidad;total.initialDate=row.fechaISO;}
  }
- const include=(row,total)=>total&&(total.cutoff?(row.fechaISO>total.cutoff||row.kind==='adjustment'&&row.fechaISO===total.cutoff&&row.createdAt>total.closedAt):!total.initialDate||row.fechaISO>=total.initialDate);
+ const include=(row,total)=>total&&(total.cutoff?(row.fechaISO>total.cutoff||row.fechaISO===total.cutoff&&(row.recordedAt||row.createdAt)>total.closedAt):!total.initialDate||row.fechaISO>=total.initialDate);
  for(const row of incomes){const total=get(row);if(include(row,total)){if(row.kind==='income'||row.kind==='adjustment'&&row.target!=null&&row.cantidad>=0)total.incomes+=row.cantidad;else if(row.kind==='adjustment'&&row.target!=null)total.consumptions-=row.cantidad;}}
  const movements=new Map([...(state.consumptions||[]),...(state.pending||[]).filter(row=>!row.kind)].map(row=>[row.id,row]));
  for(const row of movements.values()){const total=get(row);if(include(row,total))total.consumptions+=row.cantidad;}
@@ -499,9 +505,10 @@ async function sync(){
    const data=await api('productionSync',{token:active.token,pending,inventoryRequest});
    const acknowledged=new Set(Array.isArray(data.ack)?data.ack:[]);
    const savedRows=new Map([...(data.incomes||[]),...(data.consumptions||[])].map(row=>[row.id,row]));
+   const superseded=row=>Boolean(row.correctionId)&&(data.superseded||[]).some(item=>item.id===row.id&&item.correctionId===row.correctionId);
    const confirmed=row=>{
     const saved=savedRows.get(row.id);
-    return acknowledged.has(row.id)&&saved&&saved.correctionId===row.correctionId&&(row.kind==='adjustment'?saved.target===row.cantidad:saved.cantidad===row.cantidad);
+    return acknowledged.has(row.id)&&saved&&(superseded(row)||saved.correctionId===row.correctionId&&(row.kind==='adjustment'?saved.target===row.cantidad:saved.cantidad===row.cantidad));
    };
    if(pending.some(row=>!confirmed(row))){
     throw new Error('La base central no confirmó todos los movimientos. Siguen pendientes para reintentar.');
@@ -518,9 +525,16 @@ async function sync(){
    });
    if(session===active){
     state=fresh;
+    if(pending.some(superseded))status('La base central conserva una corrección más reciente del saldo inicial.');
     if(pending.some(row=>row.kind==='adjustment'))status('Existencia actual ajustada y sincronizada.');
     if(inventoryResult?.count?.status==='closed'&&countSelection===inventoryResult.count.id){
      countReport=inventoryResult.count;countSelection='';countValues=new Map();
+    }
+    if(!countDirty&&!countSaving&&countSelection){
+     const selected=selectedCount();
+     countValues=new Map((selected?.values||[]).map(row=>[row.partId,row.physical]));
+     countEditRevision=selected?.revision||'';
+     if(!selected)countSelection='';
     }
     if(countError)syncFailed=true;
     paint();
@@ -544,6 +558,8 @@ async function sync(){
  finally{syncing=false;paintSync()}
 }
 function showConsumptionView(showQueries,stockView,physical=false){
+ if(countSaving)return;
+ if(!physical&&!byId('physicalCount').hidden&&countDirty&&!confirm('El conteo tiene cambios sin guardar. ¿Salir del inventario físico?'))return;
  if(stockView?.kind==='adjustment'&&session?.user.role!=='admin')return;
  byId('physicalCount').hidden=!physical;
  byId('showPhysicalCount').setAttribute('aria-pressed',String(physical));
@@ -552,7 +568,7 @@ function showConsumptionView(showQueries,stockView,physical=false){
   const selected=view===stockView;
   view.panel.hidden=!selected;
   view.button.setAttribute('aria-pressed',String(selected));
-  if(selected)paintStockView(view);
+  if(selected){if(view.kind==='adjustment')view.form.elements.fechaISO.value=displayDate(today());paintStockView(view);}
  }
  byId('productionQueries').hidden=!showQueries;
  byId('showRecord').setAttribute('aria-pressed',String(!showQueries&&!stockView&&!physical));
@@ -577,7 +593,7 @@ function showQueryType(incomes){
 const countForm=byId('countForm'),countFields=countForm.elements;
 const countHeaders=['FECHA DE INVENTARIO','INVENTARIO','REPUESTO','SALDO DE APERTURA','INGRESOS','CONSUMOS','SALDO ESPERADO','EXISTENCIA FÍSICA','DIFERENCIA','SALDO DE CIERRE'];
 const countStatus=message=>{byId('countStatus').textContent=message};
-let countSelection='',countValues=new Map(),countReport=null,countDirty=false,countAccount='';
+let countSelection='',countValues=new Map(),countReport=null,countDirty=false,countAccount='',countSaving=false,countEditRevision='';
 const canCount=()=>['admin','assistant'].includes(session?.user.role);
 function countRecords(){
  const records=new Map((state.inventoryCounts||[]).map(row=>[row.id,row]));
@@ -590,7 +606,7 @@ function selectCount(id){
  countSelection=id;
  const selected=selectedCount();
  countValues=new Map((selected?.values||[]).map(row=>[row.partId,row.physical]));
- countDirty=false;
+ countDirty=false;countEditRevision=selected?.revision||'';
  if(selected){countFields.origin.value=selected.origin;countFields.date.value=displayDate(selected.date);}
  paintCount();
 }
@@ -602,12 +618,13 @@ function paintCount(){
  const enabled=Array.isArray(state.inventoryCounts),records=countRecords(),selected=selectedCount();
  const queued=(state.countQueue||[]).find(row=>row.id===countSelection);
  const review=selected?.status==='submitted',admin=session?.user.role==='admin';
- const editable=enabled&&!countReport&&!review&&queued?.action!=='submit'&&(!selected||selected.owner===session?.user.document);
+ const editable=enabled&&!countSaving&&!countReport&&!review&&queued?.action!=='submit'&&(!selected||selected.owner===session?.user.document);
  countFields.record.replaceChildren(new Option('NUEVO CONTEO',''),...records.map(row=>new Option(
   [row.origin,displayDate(row.date),({draft:'BORRADOR',submitted:'PENDIENTE DE APROBACIÓN',returned:'DEVUELTO'})[row.status],row.countedBy].filter(Boolean).join(' · '),row.id)));
  countFields.record.value=countSelection;
- countFields.origin.disabled=Boolean(selected)||Boolean(countValues.size);
- countFields.date.disabled=Boolean(selected)||review;
+ countFields.record.disabled=countSaving;
+ countFields.origin.disabled=countSaving||Boolean(selected)||Boolean(countValues.size);
+ countFields.date.disabled=countSaving||Boolean(selected)||Boolean(countValues.size)||review;
  countForm.querySelector('[type=submit]').disabled=!editable;
  byId('submitCount').disabled=!editable;
  byId('approveCount').hidden=byId('returnCount').hidden=!(admin&&review);
@@ -615,9 +632,11 @@ function paintCount(){
  byId('discardCount').hidden=!queued||!state.countSyncError;
  if(!enabled)countStatus('Sincroniza después de actualizar Apps Script para habilitar el inventario físico.');
  else if(state.countSyncError)countStatus(state.countSyncError);
+ else if(countSaving)countStatus('GUARDANDO BORRADOR EN ESTE DISPOSITIVO…');
+ else if(countDirty)countStatus('CAMBIOS SIN GUARDAR · Pulsa GUARDAR BORRADOR.');
  else if(queued)countStatus('PENDIENTE DE SINCRONIZAR');
  else if(countReport){
-  const late=[...(state.incomes||[]),...(state.consumptions||[])].some(row=>!['initial','adjustment'].includes(row.kind)&&!row.deleted&&row.origen===countReport.origin&&row.fechaISO<=countReport.date&&row.createdAt>countReport.closedAt);
+  const late=[...(state.incomes||[]),...(state.consumptions||[])].some(row=>!['initial','adjustment'].includes(row.kind)&&!row.deleted&&row.origen===countReport.origin&&row.fechaISO<=countReport.date&&row.createdAt>countReport.closedAt&&(row.fechaISO<countReport.date||(row.recordedAt||row.createdAt)<=countReport.closedAt));
   countStatus('CIERRE APROBADO POR '+countReport.approvedBy+(late?' · Hay movimientos del período recibidos después del cierre. Revísalos en Consultas.':''));
  }
  else if(review)countStatus('PENDIENTE DE APROBACIÓN');
@@ -642,6 +661,8 @@ function paintCount(){
   input.oninput=()=>{
    countValues.set(part.id,input.value===''?null:input.valueAsNumber);
    countDirty=true;
+   countFields.origin.disabled=true;countFields.date.disabled=true;
+   countStatus('CAMBIOS SIN GUARDAR · Pulsa GUARDAR BORRADOR.');
    difference.textContent=input.value===''||!input.validity.valid?'—':input.valueAsNumber-expected;
   };
   return [partLabel(part),total.opening,total.incomes,total.consumptions,expected,input,difference];
@@ -655,7 +676,7 @@ function paintCount(){
 }
 async function queueCount(action,note){
  const active=session,selected=selectedCount();
- if(!active||!canCount()||!Array.isArray(state.inventoryCounts)||countReport)return;
+ if(!active||countSaving||!canCount()||!Array.isArray(state.inventoryCounts)||countReport)return;
  const revision=crypto.randomUUID(),id=selected?.id||crypto.randomUUID();
  let request={id,action,revision:selected?.revision,note};
  if(action==='save'||action==='submit'){
@@ -668,12 +689,15 @@ async function queueCount(action,note){
   }
   request={id,action,revision,origin,date,values,baseRevision:selected?.baseRevision??selected?.revision??''};
  }else if(!navigator.onLine){countStatus('Conéctate para aprobar o devolver el inventario.');return;}
+ if(countDirty&&selected&&countEditRevision!==selected.revision){countStatus('El conteo cambió durante la sincronización. Guarda tus cantidades aparte y vuelve a seleccionar el registro antes de editarlo.');return;}
+ countSaving=true;paintCount();
  try{
   const fresh=await changeState(active.user.document,current=>({...current,countSyncError:'',countQueue:[...(current.countQueue||[]).filter(row=>row.id!==id),request]}));
   if(session!==active)return;
-  state=fresh;countSelection=id;countDirty=false;paintCount();paintSync();
-  if(navigator.onLine)await sync();
- }catch(error){if(session===active)countStatus(error.message)}
+  state=fresh;countSelection=id;countDirty=false;countEditRevision=revision;paintSync();
+ }catch(error){if(session===active){state={...state,countSyncError:error.message};countStatus(error.message)}}
+ finally{countSaving=false;if(session===active)paintCount()}
+ if(session===active&&navigator.onLine)await sync();
 }
 countForm.onsubmit=event=>{event.preventDefault();queueCount('save')};
 byId('submitCount').onclick=()=>queueCount('submit');
@@ -681,7 +705,7 @@ byId('approveCount').onclick=()=>{if(confirm('¿Confirmar el cierre con las exis
 byId('returnCount').onclick=()=>{const note=prompt('OBSERVACIÓN PARA CORRECCIÓN');if(note?.trim())queueCount('return',note)};
 byId('discardCount').onclick=async()=>{
  const active=session,id=countSelection;
- if(!active||!confirm('¿Descartar el cambio pendiente y recuperar la versión sincronizada?'))return;
+ if(countSaving||!active||!confirm('¿Descartar el cambio pendiente y recuperar la versión sincronizada?'))return;
  try{
   const fresh=await changeState(active.user.document,current=>({...current,countSyncError:'',countQueue:(current.countQueue||[]).filter(row=>row.id!==id)}));
   if(session===active){state=fresh;selectCount(id);paintSync();}
@@ -695,6 +719,7 @@ for(const field of [countFields.origin,countFields.date])field.onchange=()=>{cou
 countFields.search.oninput=()=>paintCount();
 countFields.date.oninput=()=>countFields.date.setCustomValidity('');
 async function loadCountHistory(id){
+ if(countSaving)return;
  const active=session;
  if(!active||!canSync())return;
  try{
@@ -707,6 +732,7 @@ async function loadCountHistory(id){
  }catch(error){if(session===active)countStatus(error.message)}
 }
 byId('newPhysicalCount').onclick=()=>{
+ if(countSaving)return;
  if(countDirty&&!confirm('Hay cambios sin guardar. ¿Iniciar un nuevo conteo?'))return;
  countReport=null;countFields.date.value=displayDate(today());countFields.search.value='';
  byId('countHistory').value='';selectCount('');
@@ -728,7 +754,8 @@ byId('countPdf').onclick=()=>{
  const table=doc.createElement('table'),head=table.createTHead().insertRow(),body=table.createTBody();
  for(const text of countHeaders){const th=doc.createElement('th');th.textContent=text;head.append(th)}
  for(const row of countReportRows(countReport)){const tr=body.insertRow();for(const value of row)tr.insertCell().textContent=value}
- doc.body.append(title,info,table);report.focus();report.print();
+ const note=doc.createElement('p');note.textContent='INGRESOS incluye ajustes positivos. CONSUMOS incluye ajustes negativos del administrador.';
+ doc.body.append(title,info,note,table);report.focus();report.print();
 };
 
 byId('showPhysicalCount').onclick=()=>showConsumptionView(false,undefined,true);
@@ -817,11 +844,15 @@ submitAccess('activate',async values=>{
  status('Acceso activado. Ingresa con tu nueva contraseña.');
 });
 byId('logout').onclick=()=>{
+ if(countSaving)return;
+ if(countDirty&&!confirm('El conteo tiene cambios sin guardar. ¿Cerrar la sesión?'))return;
+ countAccount='';countSelection='';countValues=new Map();countReport=null;countDirty=false;countEditRevision='';
  fields.responsableId.value='';personSearch.value='';responsibleOptions.hidden=true;
  placeInstallControls(byId('installBeforeLogin'));
  session=null;state={};draft=[];fields.assetId.value='';closeParts();closeMachine();localStorage.removeItem(sessionKey);
  byId('workspace').hidden=true;byId('productionHeader').hidden=true;byId('productionSync').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
 };
+window.addEventListener('beforeunload',event=>{if(countDirty||countSaving){event.preventDefault();event.returnValue='';}});
 byId('sync').onclick=sync;window.addEventListener('online',sync);
 for(const radio of fields.tipoEquipo)radio.onchange=()=>{
  byId('machineSearch').value='';
@@ -840,7 +871,7 @@ const workerRegistration=navigator.serviceWorker?.register('sw.js',{updateViaCac
 
 byId('updateProduction').onclick=async event=>{
  const button=event.currentTarget;
- if(saving||syncing)return status('Espera a que termine el guardado o la sincronización.');
+ if(saving||syncing||countSaving)return status('Espera a que termine el guardado o la sincronización.');
  if(countDirty)return status('Guarda el borrador de inventario antes de actualizar.');
  if(draft.length)return status('Guarda o quita los repuestos seleccionados antes de actualizar.');
  button.disabled=true;
@@ -852,7 +883,7 @@ byId('updateProduction').onclick=async event=>{
   if(!response.ok)throw new Error('No se pudo abrir Producción.');
   const registration=await workerRegistration;
   await registration?.update();
-  if(saving||syncing||draft.length){
+  if(saving||syncing||draft.length||countDirty||countSaving){
    status('Versión comprobada. Termina el registro y vuelve a pulsar Actualizar app.');
    return;
   }
