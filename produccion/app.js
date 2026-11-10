@@ -330,7 +330,7 @@ function placeInstallControls(container){
 async function openWorkspace(){
  if(!session)return;
  state=await changeState(session.user.document);
- placeInstallControls(byId('updateProduction').parentElement);
+ placeInstallControls(document.querySelector('.productionToolbar'));
  byId('access').hidden=true;byId('productionHeader').hidden=false;byId('workspace').hidden=false;byId('productionSync').hidden=false;syncFailed=false;
  byId('operatorName').textContent=session.user.name;
  byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
