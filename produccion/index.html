@@ -101,7 +101,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=28-consultas"></script><script defer src="../consumption-query-v2.js?v=consulta-pc-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=29-selector-repuestos"></script><script defer src="../consumption-query-v2.js?v=consulta-pc-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -187,6 +187,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <ul id="draft" class="productionField" hidden></ul>
 <div id="partPicker" class="productionField">
 <label>Buscar repuesto<input id="partSearch" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="partOptions"></label>
+<button id="selectPart" type="button" aria-controls="partOptions" aria-expanded="false">Seleccionar repuesto</button>
 <div id="partOptions" class="machineOptions partOptions" hidden></div>
 </div>
 <div id="responsiblePicker" class="productionField">
