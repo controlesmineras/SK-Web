@@ -87,7 +87,11 @@ async function changeState(document,update){
  return new Promise((resolve,reject)=>{
   const tx=db.transaction('accounts',update?'readwrite':'readonly'),store=tx.objectStore('accounts'),read=store.get(document);
   let next;
-  read.onsuccess=()=>{next=read.result||{};if(update){next=update(next);store.put(next,document)}};
+  read.onsuccess=()=>{
+   next=read.result||{};
+   if(update)try{next=update(next);store.put(next,document)}
+   catch(error){reject(error);tx.abort()}
+  };
   tx.oncomplete=()=>resolve(next);tx.onabort=()=>reject(tx.error||new Error('No se pudo guardar en este dispositivo'));
  });
 }
@@ -181,7 +185,7 @@ function compareParts(left,right){
  return leftGroup-rightGroup||leftOrder-rightOrder||left.nombre.localeCompare(right.nombre,'es');
 }
 const catalog=()=>window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]).sort(compareParts);
-const incomeMovements=()=>[...(state.incomes||[]),...(state.pending||[]).filter(row=>row.kind)];
+const incomeMovements=()=>Array.from(new Map([...(state.incomes||[]),...(state.pending||[]).filter(row=>row.kind)].map(row=>[row.id,row])).values());
 function stockFor(part,origin){
  const matches=row=>row.origen===origin&&(row.partId===part.id||Boolean(part.criterionId)&&row.partId===part.criterionId);
  const income=incomeMovements().filter(matches);
@@ -254,8 +258,12 @@ async function saveStock(event,{form:stockForm,kind}){
  try{
   const record={...row,id:crypto.randomUUID(),createdAt:new Date().toISOString()};
   const fresh=await changeState(active.user.document,current=>{
-   if(row.kind==='initial'&&[...(current.incomes||[]),...(current.pending||[])].some(x=>x.kind==='initial'&&x.partId===row.partId&&x.origen===row.origen))throw new Error('El repuesto ya tiene un saldo inicial.');
-   return {...current,pending:[...(current.pending||[]),record]};
+   const pending=current.pending||[];
+   const part=catalog().find(item=>item.id===row.partId);
+   const existing=kind==='initial'&&[...pending,...(current.incomes||[])].find(item=>
+    item.kind==='initial'&&item.origen===row.origen&&(item.partId===row.partId||item.partId===part?.criterionId));
+   const movement=existing?{...existing,cantidad:row.cantidad,correctionId:record.id}:record;
+   return {...current,pending:[...pending.filter(item=>item.id!==movement.id),movement]};
   });
   if(session===active){state=fresh;cantidad.value='';status(kind==='initial'?'Saldo inicial guardado.':'Ingreso guardado.');}
  }catch(error){if(session===active)status(error.message)}
@@ -451,11 +459,12 @@ async function sync(){
    const local=await changeState(document),pending=(local.pending||[]).slice(0,1000);
    const data=await api('productionSync',{token:active.token,pending});
    const acknowledged=new Set(Array.isArray(data.ack)?data.ack:[]);
-   const savedIds=new Set([...(data.incomes||[]),...(data.consumptions||[])].map(row=>row.id));
-   if(pending.some(row=>!acknowledged.has(row.id)||!savedIds.has(row.id))){
+   const savedRows=new Map([...(data.incomes||[]),...(data.consumptions||[])].map(row=>[row.id,row]));
+   const confirmed=row=>acknowledged.has(row.id)&&savedRows.has(row.id)&&savedRows.get(row.id).correctionId===row.correctionId;
+   if(pending.some(row=>!confirmed(row))){
     throw new Error('La base central no confirmó todos los movimientos. Siguen pendientes para reintentar.');
    }
-   const fresh=await changeState(document,current=>({...data,lastSyncAt:new Date().toISOString(),pending:(current.pending||[]).filter(row=>!acknowledged.has(row.id)||!savedIds.has(row.id))}));
+   const fresh=await changeState(document,current=>({...data,lastSyncAt:new Date().toISOString(),pending:(current.pending||[]).filter(row=>!confirmed(row))}));
    if(session===active){state=fresh;paint()}
   }while(session===active&&navigator.onLine&&(syncRequested||state.pending.length));
  }catch(error){
