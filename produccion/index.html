@@ -128,21 +128,34 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <button type="button" id="showRecord" aria-controls="recordPanel" aria-pressed="true">Registrar consumo</button>
 <button type="button" id="showConsumptionQueries" aria-controls="queries" aria-pressed="false">Consultar consumos</button>
 <button type="button" id="showIncome" aria-controls="incomePanel" aria-pressed="false">Ingresos</button>
+<button type="button" id="showStockEdit" aria-controls="stockEditPanel" aria-pressed="false" hidden>Editar existencias</button>
 </div>
 <section id="incomePanel" hidden>
-<h2>INGRESOS Y EXISTENCIAS</h2>
+<h2>INGRESOS</h2>
 <form id="productionIncome">
 <label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
-<label>Buscar repuesto<input id="incomeSearch" type="search" placeholder="Ítem o nombre"></label>
+<label>Buscar repuesto<input name="search" type="search" placeholder="Ítem o nombre"></label>
 <label>Repuesto<select name="partId" required></select></label>
-<label>Movimiento<select name="kind"><option value="income">Ingreso manual</option><option value="initial">Saldo inicial</option></select></label>
 <label>Fecha<input name="fechaISO" type="date" required></label>
 <label>Cantidad<input name="cantidad" type="number" min="1" step="1" required></label>
-<p id="incomeBalance" class="hint"></p>
+<p data-stock-balance class="hint"></p>
 <button type="submit">Guardar ingreso</button>
 </form>
+<div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Repuesto</th><th>Movimiento</th><th>Cantidad</th></tr></thead><tbody data-stock-rows></tbody></table></div>
+</section>
+<section id="stockEditPanel" hidden>
+<h2>EDITAR EXISTENCIAS</h2>
+<form id="productionStockEdit">
+<label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
+<label>Buscar repuesto<input name="search" type="search" placeholder="Ítem o nombre"></label>
+<label>Repuesto<select name="partId" required></select></label>
+<label>Fecha<input name="fechaISO" type="date" required></label>
+<label>Saldo inicial<input name="cantidad" type="number" min="0" step="1" required></label>
+<p data-stock-balance class="hint"></p>
+<button type="submit">Guardar saldo inicial</button>
+</form>
 <p class="hint">El saldo inicial corresponde al inicio de la fecha elegida. Se descuentan los consumos desde ese día.</p>
-<div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Repuesto</th><th>Movimiento</th><th>Cantidad</th></tr></thead><tbody id="incomeRows"></tbody></table></div>
+<div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Repuesto</th><th>Movimiento</th><th>Cantidad</th></tr></thead><tbody data-stock-rows></tbody></table></div>
 </section>
 <div id="recordPanel">
 <h2>CONSUMO DE REPUESTOS</h2>
