@@ -774,13 +774,27 @@ function productionSync_(q){
   for(const origin of ['YT28','YT29','Columna28','Columna29'])
    for(const part of productionCatalog_(parts,criteria,origin).values())
     for(const alias of part.aliases)partAliases.set(origin+'|'+alias,part);
-  const pending=Array.isArray(q.pending)?q.pending:[];
+  const protocol=q.syncProtocol==='production-receipts-v1';
+  const pending=protocol&&Array.isArray(q.checkedPending)?q.checkedPending:Array.isArray(q.pending)?q.pending:[];
   if(pending.length>1000)throw new Error('Envía un máximo de 1000 consumos por sincronización');
+  const rejected=new Map(),priorIds=new Set([...known.keys(),...incomes.keys()]);
+  if(protocol&&new Set(pending.map(row=>row?.id)).size!==pending.length)throw new Error('El lote contiene identificadores repetidos. Los pendientes se conservan.');
   let changed=false;
   for(const row of pending){
+   try{
    if(!row||!/^[-a-zA-Z0-9]{16,100}$/.test(String(row.id||'')))throw new Error('Identificador de consumo no válido');
    const existingIncome=incomes.get(row.id);
-   if(known.has(row.id)||existingIncome&&(!row.correctionId||existingIncome.correctionId===row.correctionId||(existingIncome.appliedCorrections||[]).includes(row.correctionId)))continue;
+   const samePart=saved=>saved.partId===row.partId||partAliases.get(row.origen+'|'+row.partId)?.aliases.includes(saved.partId);
+   if(known.has(row.id)){
+    const saved=known.get(row.id);
+    if(row.kind||saved.cantidad!==row.cantidad||saved.origen!==row.origen||!samePart(saved))throw new Error('El identificador ya corresponde a otro consumo confirmado.');
+    continue;
+   }
+   if(existingIncome&&(!row.correctionId||existingIncome.correctionId===row.correctionId||(existingIncome.appliedCorrections||[]).includes(row.correctionId))){
+    const superseded=row.correctionId&&(existingIncome.appliedCorrections||[]).includes(row.correctionId);
+    if(existingIncome.kind!==row.kind||existingIncome.origen!==row.origen||!samePart(existingIncome)||!superseded&&(row.kind==='adjustment'?existingIncome.target:existingIncome.cantidad)!==row.cantidad)throw new Error('El identificador ya corresponde a otra cantidad confirmada.');
+    continue;
+   }
    if(existingIncome){
     if(user.role!=='admin'||existingIncome.kind!=='initial'||row.kind!=='initial'||!/^[-a-zA-Z0-9]{16,100}$/.test(String(row.correctionId))||!Number.isSafeInteger(row.cantidad)||row.cantidad<0)throw new Error('Corrección de saldo inicial no válida.');
     incomes.set(row.id,Object.assign({},existingIncome,{cantidad:row.cantidad,correctionId:row.correctionId,appliedCorrections:[...(existingIncome.appliedCorrections||[]),existingIncome.correctionId,row.correctionId].filter(Boolean),updatedAt:new Date().toISOString()}));
@@ -804,6 +818,8 @@ function productionSync_(q){
      let before=opening?.physical??initial?.cantidad??0;
      for(const x of incomes.values())if(includes(x)&&['income','adjustment'].includes(x.kind))before+=x.cantidad;
      for(const x of known.values())if(includes(x))before-=x.cantidad;
+     if(protocol&&!Number.isSafeInteger(row.baseQuantity))throw new Error('Este ajuste de una versión anterior necesita revisión. Saldo actual: '+before+'. Retira el ajuste rechazado y vuelve a guardar la cantidad.');
+     if(protocol&&row.baseQuantity!==before)throw new Error('La existencia cambió en la base central. Saldo actual: '+before+'. Revisa la cantidad antes de volver a guardar.');
      incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad-before,target:row.cantidad,before,fechaISO:date,createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document});
      changed=true;
      continue;
@@ -822,6 +838,10 @@ function productionSync_(q){
    const saved={id:row.id,assetId:row.assetId,responsableId:row.responsableId,responsableNombre:responsible.nombre||responsible.documento,partId:row.partId,itemId:String(row.itemId||''),noItem:String(row.noItem||''),nombreRepuesto:String(row.nombreRepuesto||'').slice(0,200),tipoEquipo:row.tipoEquipo,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,recordedAt:productionRecordedAt_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,registradoPorId:recorder.id};
    if(row.turno)saved.turno=row.turno;
    known.set(saved.id,saved);changed=true;
+   }catch(error){
+    if(!protocol)throw error;
+    rejected.set(row?.id||'',String(error.message||error));
+   }
   }
   const consumptions=Array.from(known.values());
   let inventoryResult;
@@ -838,9 +858,11 @@ function productionSync_(q){
   }
   const spareIds=new Set(criteria.filter(x=>x.isYtSpare).map(x=>x.id));
   const deliveries=(central.blendingDeliveries||[]).filter(row=>!row.deleted&&cargoNorm_(row.destination)==='produccion'&&spareIds.has(row.itemId)).map(row=>({id:row.id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,createdAt:row.createdAt,reversed:row.reversed===true||row.reversado===true}));
-  return json_({ok:true,productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,inventoryResult,stockAdjustment:true,
+  // Igual que Plaza: los recibos se emiten solo después de guardar en Drive.
+  const acknowledgements=protocol?pending.map(row=>({id:row?.id||'',status:rejected.has(row?.id||'')?'rejected':priorIds.has(row.id)?'already-applied':'accepted',...(rejected.has(row?.id||'')?{error:rejected.get(row?.id||'')}:{})})):undefined;
+  return json_({ok:true,...(protocol?{syncProtocol:'production-receipts-v1',acknowledgements}:{}),productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,inventoryResult,stockAdjustment:true,stockAdjustmentLocalV1:true,
    inventoryCounts:counts.filter(row=>row.status!=='closed'&&(row.owner===user.document||user.role==='admin'&&row.status==='submitted')),
-   inventoryLatest:Array.from(latest.values()),incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.map(row=>row.id),superseded:pending.filter(row=>row.correctionId&&incomes.get(row.id)?.correctionId!==row.correctionId&&(incomes.get(row.id)?.appliedCorrections||[]).includes(row.correctionId)).map(row=>({id:row.id,correctionId:row.correctionId}))});
+   inventoryLatest:Array.from(latest.values()),incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.filter(row=>!rejected.has(row?.id||'')).map(row=>row.id),superseded:pending.filter(row=>row.correctionId&&incomes.get(row.id)?.correctionId!==row.correctionId&&(incomes.get(row.id)?.appliedCorrections||[]).includes(row.correctionId)).map(row=>({id:row.id,correctionId:row.correctionId}))});
  }finally{lock.releaseLock()}
 }
 
