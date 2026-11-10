@@ -112,7 +112,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 [data-stock-status]{grid-column:1/-1;margin:0;color:#173d59;font-weight:650}
 [data-stock-status].stockError{background:#fff0e8;color:#8a290e;border:1px solid #e2aa8c}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=1"></script><script defer src="app.js?v=44-resumen-sin-historial"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=1"></script><script defer src="app.js?v=45-saldo-apertura"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -174,20 +174,20 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 </form>
 </section>
 <section id="stockEditPanel" hidden>
-<h2>EDITAR EXISTENCIAS</h2>
+<h2>EDITAR SALDO DE APERTURA</h2>
 <form id="productionStockEdit">
 <label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
 <label>Fecha<input name="fechaISO" readonly type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
 <div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="stockPartOptions"></label>
 <div id="stockPartOptions" class="machineOptions partOptions" hidden></div>
 <input type="hidden" name="partId"></div>
-<label>Existencia actual corregida<input name="cantidad" type="number" min="0" step="1" placeholder="0" required></label>
+<label>Saldo de apertura<input name="cantidad" type="number" min="0" step="1" placeholder="0" required></label>
 <p data-stock-balance class="hint"></p>
 <p data-stock-status class="hint" role="status" aria-live="polite" hidden></p>
-<button type="submit">GUARDAR EXISTENCIA ACTUAL</button>
+<button type="submit">GUARDAR SALDO DE APERTURA</button>
 <button id="reviewStockAdjustment" type="button" hidden>RETIRAR AJUSTE RECHAZADO</button>
 </form>
-<p class="hint">Escribe la cantidad que debe quedar hoy. El ajuste se registra en el historial y conserva los movimientos anteriores.</p>
+<p class="hint">El saldo esperado se calcula con el saldo de apertura más los ingresos menos los consumos. El inventario físico compara ese saldo con el conteo para obtener las diferencias.</p>
 <div class="tableWrap"><table><thead><tr><th>Inventario</th><th>N.º de ítem</th><th>Repuesto</th><th>Existencia actual</th></tr></thead><tbody data-stock-rows></tbody></table></div>
 <h3>HISTORIAL DE AJUSTES</h3>
 <div class="tableWrap"><table><thead><tr><th>FECHA</th><th>REPUESTO</th><th>ANTES</th><th>DESPUÉS</th><th>AJUSTE</th><th>REGISTRÓ</th></tr></thead><tbody data-adjustment-rows></tbody></table></div>
