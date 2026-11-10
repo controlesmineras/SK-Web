@@ -121,7 +121,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 .incomeWarning{background:#fff1cf;color:#624100;border-left:4px solid #df9d19;padding:12px;border-radius:5px}
 #incomeEditError{color:#a31515}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=2"></script><script defer src="app.js?v=46-ingresos-reversibles"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=2"></script><script defer src="app.js?v=47-consumos-reales"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -204,7 +204,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <section id="physicalCount" hidden>
 <h2>INVENTARIO FÍSICO</h2>
 <p id="countStatus" class="hint" role="status"></p>
-<p class="hint">INGRESOS incluye ajustes positivos. CONSUMOS incluye ajustes negativos del administrador.</p>
+<p id="countAdjustmentNote" class="hint">INGRESOS y CONSUMOS muestran movimientos reales. Los ajustes anteriores se muestran por separado en AJUSTES y forman parte del saldo esperado.</p>
 <form id="countForm">
 <label>INVENTARIO<select name="origin"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
 <label>FECHA DE INVENTARIO<input name="date" inputmode="numeric" placeholder="dd/mm/aaaa" required></label>
