@@ -276,7 +276,7 @@ function stockSummaryText(part,origin,value){
  const signed=number=>number>0?'+'+number:String(number);
  const pending=(state.pending||[]).find(row=>row.kind==='adjustment'&&row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId));
  const lines=[totals.closed?'PERÍODO: DESDE EL INVENTARIO DEL '+displayDate(totals.closed.date)+'.':'PERÍODO: TODOS LOS MOVIMIENTOS · SIN INVENTARIO CERRADO.',
-  'INGRESOS: '+totals.incomes+' · CONSUMOS: '+totals.consumptions+' · AJUSTES CONFIRMADOS: '+signed(totals.adjustments)+'.'];
+  'INGRESOS: '+totals.incomes+' · CONSUMOS: '+totals.consumptions+'.'];
  if(totals.closed&&totals.opening!=null)lines.push('SALDO DEL ÚLTIMO INVENTARIO: '+totals.opening+'.');
  else if(initial)lines.push('SALDO INICIAL REGISTRADO: '+initial.cantidad+' · FECHA: '+displayDate(initial.fechaISO)+'.');
  lines.push('EXISTENCIA ACTUAL: '+current+(stockBreakdown(part,origin)?.pending?' · CON MOVIMIENTOS PENDIENTES.':'.'));
