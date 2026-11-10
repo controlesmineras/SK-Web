@@ -148,10 +148,10 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <h2>EDITAR EXISTENCIAS</h2>
 <form id="productionStockEdit">
 <label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
+<label>Fecha<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
 <div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="stockPartOptions"></label>
 <div id="stockPartOptions" class="machineOptions partOptions" hidden></div>
 <input type="hidden" name="partId"></div>
-<label>Fecha<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
 <label>Saldo inicial<input name="cantidad" type="number" min="0" step="1" placeholder="0" required></label>
 <p data-stock-balance class="hint"></p>
 <button type="submit">Guardar saldo inicial</button>
