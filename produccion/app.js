@@ -181,7 +181,19 @@ function compareParts(left,right){
  return leftGroup-rightGroup||leftOrder-rightOrder||left.nombre.localeCompare(right.nombre,'es');
 }
 const catalog=()=>window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]).sort(compareParts);
-const incomeMovements=()=>[...(state.incomes||[]),...(state.pending||[]).filter(row=>row.kind)];
+function incomeMovements(current=state){
+ const rows=new Map((current.incomes||[]).map(row=>[row.id,row]));
+ for(const row of current.pending||[]){
+  if(row.kind==='initialCorrection'){
+   const initial=rows.get(row.initialId);
+   if(initial)rows.set(initial.id,{...initial,cantidad:row.cantidad});
+  }else if(row.kind)rows.set(row.id,row);
+ }
+ return [...rows.values()];
+}
+function findInitial(rows,part,origin){
+ return rows.find(row=>row.kind==='initial'&&row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId));
+}
 function stockFor(part,origin){
  const matches=row=>row.origen===origin&&(row.partId===part.id||Boolean(part.criterionId)&&row.partId===part.criterionId);
  const income=incomeMovements().filter(matches);
@@ -211,6 +223,7 @@ function paintStockView({form:stockForm,panel,kind}){
  const picker=stockForm.querySelector('.partOptions');
  if(!picker.hidden)paintPartCards(picker,filterParts(options,part?'':incomeFields.search.value),origin,row=>{
   incomeFields.partId.value=row.id;
+  if(kind==='initial')incomeFields.cantidad.value=findInitial(incomeMovements(),row,origin)?.cantidad??'';
   incomeFields.search.value=partLabel(row);
   picker.hidden=true;
   paintStockView({form:stockForm,panel,kind});
@@ -218,7 +231,16 @@ function paintStockView({form:stockForm,panel,kind}){
  const enabled=Array.isArray(state.incomes);
  const allowed=canSaveStock(kind,session?.user.role);
  panel.querySelector('[data-stock-balance]').textContent=!enabled?'El servidor debe actualizarse y sincronizarse antes de registrar movimientos.':part?'Existencia registrada: '+stockFor(part,origin):options.length?'Selecciona un repuesto para ver su existencia.':'Sin repuestos que coincidan.';
- stockForm.querySelector('button[type=submit]').disabled=saving||!enabled||!allowed||!part;
+ const submit=stockForm.querySelector('button[type=submit]');
+ submit.disabled=saving||!enabled||!allowed||!part;
+ if(kind==='initial'){
+  const initial=part&&findInitial(incomeMovements(),part,origin);
+  const date=incomeFields.fechaISO;
+  if(initial)date.value=displayDate(initial.fechaISO);
+  else if(date.readOnly)date.value=displayDate(today());
+  date.readOnly=Boolean(initial);
+  submit.textContent=initial?'Corregir saldo inicial':'Guardar saldo inicial';
+ }
  if(kind==='initial')paintBalances(panel.querySelector('[data-stock-rows]'),options,origin,enabled);
 }
 function paintBalances(body,parts,origin,enabled){
@@ -252,12 +274,16 @@ async function saveStock(event,{form:stockForm,kind}){
  if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(row.kind==='initial'?0:1))return;
  saving=true;
  try{
+  const part=catalog().find(item=>item.id===row.partId);
+  let corrected=false;
   const record={...row,id:crypto.randomUUID(),createdAt:new Date().toISOString()};
   const fresh=await changeState(active.user.document,current=>{
-   if(row.kind==='initial'&&[...(current.incomes||[]),...(current.pending||[])].some(x=>x.kind==='initial'&&x.partId===row.partId&&x.origen===row.origen))throw new Error('El repuesto ya tiene un saldo inicial.');
-   return {...current,pending:[...(current.pending||[]),record]};
+   const initial=kind==='initial'&&part&&findInitial(incomeMovements(current),part,row.origen);
+   corrected=Boolean(initial);
+   const operation=initial?{id:record.id,kind:'initialCorrection',initialId:initial.id,cantidad:row.cantidad}:record;
+   return {...current,pending:[...(current.pending||[]),operation]};
   });
-  if(session===active){state=fresh;cantidad.value='';status(kind==='initial'?'Saldo inicial guardado.':'Ingreso guardado.');}
+  if(session===active){state=fresh;cantidad.value='';status(corrected?'Corrección guardada en este dispositivo.':kind==='initial'?'Saldo inicial guardado.':'Ingreso guardado.');}
  }catch(error){if(session===active)status(error.message)}
  finally{saving=false;if(session===active)paint()}
  if(session===active&&navigator.onLine)await sync();
@@ -451,7 +477,7 @@ async function sync(){
    const local=await changeState(document),pending=(local.pending||[]).slice(0,1000);
    const data=await api('productionSync',{token:active.token,pending});
    const acknowledged=new Set(Array.isArray(data.ack)?data.ack:[]);
-   const savedIds=new Set([...(data.incomes||[]),...(data.consumptions||[])].map(row=>row.id));
+   const savedIds=new Set([...(data.incomes||[]).flatMap(row=>[row.id,...(row.correctionIds||[])]),...(data.consumptions||[]).map(row=>row.id)]);
    if(pending.some(row=>!acknowledged.has(row.id)||!savedIds.has(row.id))){
     throw new Error('La base central no confirmó todos los movimientos. Siguen pendientes para reintentar.');
    }
