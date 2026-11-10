@@ -77,13 +77,14 @@ main form,main .tableWrap{color:#172033}
 .productionViews button[aria-pressed="true"]{background:#214b63;color:#fff;border-color:#7696ac}
 #queries .queryTabs{max-width:100%}
 #queries .queryTabs button{min-width:0;white-space:normal}
+#queries table{min-width:580px}
 #queries .filterChip{max-width:100%;flex-wrap:wrap}
 .productionToolbar button,.productionViews button{font-size:.85rem;line-height:1.2;text-transform:uppercase;padding-inline:6px}
 #login .productionLoginText{display:inline-block;transform:scale(1.32);text-transform:uppercase}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=24-cerrar-equipo"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=24-cerrar-equipo"></script><script defer src="../consumption-query-v2.js?v=lista-produccion"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -152,6 +153,6 @@ main form,main .tableWrap{color:#172033}
 <button type="submit"><span class="productionSaveText">Guardar consumos</span></button>
 </form>
 </div>
-<section id="queries" hidden></section>
+<section id="queries" data-compact-detail hidden></section>
 </section>
 </main></body></html>
