@@ -32,17 +32,17 @@ function runtime(){
  const form={elements:{origen:{value:'YT29'},partId:{value:part.id},fechaISO:{value:'10/11/2026'},cantidad:{value:'4'}}};
  return {c,form,save:()=>c.saveStock({preventDefault(){}},{form,kind:'adjustment'}),read:()=>local,central:()=>central,backend};
 }
-test('offline save changes the local display from 24 to 4, persists the request and later confirms it',async()=>{
+test('legacy pending adjustments sync to history without changing the opening-based display',async()=>{
  const r=runtime();r.c.navigator.onLine=false;let calls=0;const api=r.c.api;r.c.api=async(...args)=>{calls++;return api(...args)};
  await r.save();assert.equal(calls,0);assert.equal(r.read().pending.length,1);
- assert.equal(r.c.stockFor(part,'YT29'),4);assert.equal(r.read().pending[0].baseQuantity,24);
+ assert.equal(r.c.stockFor(part,'YT29'),24);assert.equal(r.read().pending[0].baseQuantity,24);
  assert.match(r.c.formMessage,/GUARDADO EN ESTE EQUIPO/);assert.match(r.c.formMessage,/PENDIENTE/);
  r.c.navigator.onLine=true;await r.c.sync();assert.equal(r.read().pending.length,0);assert.equal(r.central().incomes.at(-1).target,4);
- r.form.elements.cantidad.value='0';await r.save();await r.c.sync();assert.equal(r.c.stockFor(part,'YT29'),0);
+ r.form.elements.cantidad.value='0';await r.save();await r.c.sync();assert.equal(r.c.stockFor(part,'YT29'),24);assert.equal(r.read().pending[0].syncRejected,true);
 });
 test('an expired online token does not prevent saving locally',async()=>{
  const r=runtime();r.c.session.expiresAt=1;await r.save();
- assert.equal(r.read().pending.length,1);assert.equal(r.c.stockFor(part,'YT29'),4);
+ assert.equal(r.read().pending.length,1);assert.equal(r.c.stockFor(part,'YT29'),24);
  const result=await r.c.sync();assert.equal(result.ok,false);assert.match(result.error,/renovar/);
 });
 test('a lost response retries the same ID without applying an adjustment twice',async()=>{
@@ -50,7 +50,7 @@ test('a lost response retries the same ID without applying an adjustment twice',
  await r.save();r.c.api=async(...args)=>{await api(...args);throw new Error('Respuesta perdida')};
  await r.c.sync();assert.equal(r.read().pending.length,1);assert.equal(r.central().incomes.at(-1).target,4);
  r.c.api=api;await r.c.sync();assert.equal(r.read().pending.length,0);
- assert.equal(r.central().incomes.filter(row=>row.kind==='adjustment').length,1);assert.equal(r.c.stockFor(part,'YT29'),4);
+ assert.equal(r.central().incomes.filter(row=>row.kind==='adjustment').length,1);assert.equal(r.c.stockFor(part,'YT29'),24);
 });
 test('a rejected consumption no longer blocks an independent stock adjustment',async()=>{
  const r=runtime();await r.c.sync();
@@ -58,7 +58,7 @@ test('a rejected consumption no longer blocks an independent stock adjustment',a
  await r.c.changeState('doc',current=>({...current,pending:[bad]}));r.c.state=await r.c.changeState('doc');
  await r.save();const result=await r.c.sync();
  assert.equal(result.ok,false);assert.equal(r.read().pending.length,1);assert.equal(r.read().pending[0].id,bad.id);assert.equal(r.read().pending[0].syncRejected,true);
- assert.equal(r.central().incomes.at(-1).target,4);assert.equal(r.c.stockFor(part,'YT29'),4);
+ assert.equal(r.central().incomes.at(-1).target,4);assert.equal(r.c.stockFor(part,'YT29'),24);
 });
 test('a stock change from another device rejects the stale correction and shows the central balance',async()=>{
  const r=runtime();await r.c.sync();await r.save();
@@ -72,15 +72,15 @@ test('a previous server cannot silently apply a local adjustment without checkin
  const r=runtime(),api=r.c.api;let sentAdjustments=0;
  r.c.api=async(action,payload)=>{sentAdjustments+=payload.pending.filter(row=>row.kind==='adjustment').length;const data=await api(action,{...payload,syncProtocol:undefined});delete data.stockAdjustmentLocalV1;return data;};
  await r.save();await r.c.sync();assert.equal(sentAdjustments,0);assert.equal(r.read().pending.length,1);assert.match(r.read().pending[0].syncError,/Code.gs/);
- r.c.api=api;await r.c.sync();assert.equal(r.read().pending.length,0);assert.equal(r.c.stockFor(part,'YT29'),4);
+ r.c.api=api;await r.c.sync();assert.equal(r.read().pending.length,0);assert.equal(r.c.stockFor(part,'YT29'),24);
 });
 test('an income before an offline adjustment and a consumption afterwards preserve operation order',async()=>{
  const r=runtime();r.c.navigator.onLine=false;
  r.form.elements.cantidad.value='6';await r.c.saveStock({preventDefault(){}},{form:r.form,kind:'income'});
  r.form.elements.cantidad.value='4';await r.save();assert.equal(r.read().pending[1].baseQuantity,30);
  await r.c.changeState('doc',current=>({...current,pending:[...current.pending,movement('consume-after-001',undefined,1,{tipoEquipo:'YT',assetId:'machine',responsableId:'person',turno:'D'})]}));r.c.state=await r.c.changeState('doc');
- assert.equal(r.c.stockFor(part,'YT29'),3);
- r.c.navigator.onLine=true;await r.c.sync();assert.equal(r.read().pending.length,0);assert.equal(r.c.stockFor(part,'YT29'),3);
+ assert.equal(r.c.stockFor(part,'YT29'),29);
+ r.c.navigator.onLine=true;await r.c.sync();assert.equal(r.read().pending.length,0);assert.equal(r.c.stockFor(part,'YT29'),29);
 });
 test('a double tap and a second target cannot duplicate or replace the pending operation',async()=>{
  const r=runtime();await Promise.all([r.save(),r.save()]);assert.equal(r.read().pending.length,1);
