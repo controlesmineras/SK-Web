@@ -96,14 +96,15 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #queries .filterChip{max-width:100%;flex-wrap:wrap}
 .productionToolbar button,.productionViews button{font-size:.85rem;line-height:1.2;text-transform:uppercase;padding-inline:6px}
 #login .productionLoginText{display:inline-block;transform:scale(1.32);text-transform:uppercase}
+.productionHeaderLogo{transform:scale(1.2);transform-origin:left center}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=26-ingresos"></script><script defer src="../consumption-query-v2.js?v=consulta-pc-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=27-existencias"></script><script defer src="../consumption-query-v2.js?v=consulta-pc-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
-<header id="productionHeader" hidden><strong style="display:flex;align-items:center;gap:8px"><img src="./produccion-yt-192.png" width="44" height="44" alt="">PRODUCCIÓN</strong><div id="productionSync" hidden><button id="sync" type="button"><span class="plazaSyncCloud" aria-hidden="true">☁</span><svg class="plazaSyncArrows" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M16 16h4v4"/></svg><span id="syncLabel" class="plazaSyncLabel">SINCRONIZAR</span><span id="pendingBadge" class="pendingBadge" aria-live="polite"></span></button><small id="headerLastSync" class="headerLastSync">SIN SINCRONIZAR</small></div></header>
+<header id="productionHeader" hidden><img class="productionHeaderLogo" src="./produccion-yt-192.png" width="44" height="44" alt="Producción"><div id="productionSync" hidden><button id="sync" type="button"><span class="plazaSyncCloud" aria-hidden="true">☁</span><svg class="plazaSyncArrows" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M16 16h4v4"/></svg><span id="syncLabel" class="plazaSyncLabel">SINCRONIZAR</span><span id="pendingBadge" class="pendingBadge" aria-live="polite"></span></button><small id="headerLastSync" class="headerLastSync">SIN SINCRONIZAR</small></div></header>
 <main>
 <div id="installBeforeLogin">
 <button type="button" id="installProduction" aria-describedby="installProductionHelp">INSTALAR</button>
