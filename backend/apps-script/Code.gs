@@ -775,7 +775,14 @@ function productionSync_(q){
   let changed=false;
   for(const row of pending){
    if(!row||!/^[-a-zA-Z0-9]{16,100}$/.test(String(row.id||'')))throw new Error('Identificador de consumo no válido');
-   if(known.has(row.id)||incomes.has(row.id))continue;
+   const existingIncome=incomes.get(row.id);
+   if(known.has(row.id)||existingIncome&&(!row.correctionId||existingIncome.correctionId===row.correctionId))continue;
+   if(existingIncome){
+    if(user.role!=='admin'||existingIncome.kind!=='initial'||row.kind!=='initial'||!/^[-a-zA-Z0-9]{16,100}$/.test(String(row.correctionId))||!Number.isSafeInteger(row.cantidad)||row.cantidad<0)throw new Error('Corrección de saldo inicial no válida.');
+    incomes.set(row.id,Object.assign({},existingIncome,{cantidad:row.cantidad,correctionId:row.correctionId,updatedAt:new Date().toISOString()}));
+    changed=true;
+    continue;
+   }
    if(row.kind==='initial'||row.kind==='income'){
     if(user.role!=='admin'&&(row.kind==='initial'||user.role!=='assistant'))throw new Error('Tu rol no permite este ingreso.');
     const part=parts.find(x=>x.id===row.partId&&!x.deleted&&x.active!==false&&String(x.clase).toLowerCase()+String(x.detalle)===String(row.origen).toLowerCase());
@@ -784,7 +791,7 @@ function productionSync_(q){
     if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(row.kind==='initial'?0:1)||!/^\d{4}-\d{2}-\d{2}$/.test(String(row.fechaISO||'')))throw new Error('Cantidad o fecha de ingreso no válida.');
     const partId=part?.id||criterion.id;
     if(row.kind==='initial'&&Array.from(incomes.values()).some(x=>x.kind==='initial'&&x.partId===partId&&x.origen===row.origen))throw new Error('El repuesto ya tiene un saldo inicial.');
-    incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document});
+    incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,...(row.kind==='initial'&&row.correctionId?{correctionId:row.correctionId}:{})});
     changed=true;
     continue;
    }
