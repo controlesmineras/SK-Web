@@ -101,7 +101,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
 #countTable{min-width:1050px}#countTable input{width:100%;min-width:85px}#countForm button{grid-column:auto}#physicalCount label{min-width:0}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=38-ajustar-existencia"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=39-auditoria-produccion"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -166,6 +166,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <section id="physicalCount" hidden>
 <h2>INVENTARIO FÍSICO</h2>
 <p id="countStatus" class="hint" role="status"></p>
+<p class="hint">INGRESOS incluye ajustes positivos. CONSUMOS incluye ajustes negativos del administrador.</p>
 <form id="countForm">
 <label>INVENTARIO<select name="origin"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
 <label>FECHA DE INVENTARIO<input name="date" inputmode="numeric" placeholder="dd/mm/aaaa" required></label>
