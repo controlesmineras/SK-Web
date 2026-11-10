@@ -171,9 +171,12 @@ function paintStockView({form:stockForm,panel,kind}){
  const allowed=canSaveStock(kind,session?.user.role);
  panel.querySelector('[data-stock-balance]').textContent=!enabled?'El servidor debe actualizarse y sincronizarse antes de registrar movimientos.':part?'Existencia registrada: '+stockFor(part,origin):'Sin repuestos que coincidan.';
  stockForm.querySelector('button').disabled=saving||!enabled||!allowed||!part;
- panel.querySelector('[data-stock-rows]').replaceChildren(...incomeMovements().filter(row=>row.kind===kind).reverse().map(row=>{
+ if(kind==='initial')paintStockRows(panel.querySelector('[data-stock-rows]'),kind,rows);
+}
+function paintStockRows(body,kind,rows=catalog()){
+ body.replaceChildren(...incomeMovements().filter(row=>row.kind===kind).reverse().map(row=>{
   const tr=document.createElement('tr'),item=rows.find(x=>x.id===row.partId);
-  for(const value of [row.fechaISO,item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':'Ingreso manual',row.cantidad]){
+  for(const value of [row.fechaISO,item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':row.origen,row.cantidad]){
    const td=document.createElement('td');td.textContent=value;tr.append(td);
   }
   return tr;
@@ -340,7 +343,10 @@ function paint(){
  paintParts();paintPeople();paintDraft();
  for(const view of stockViews)if(!view.panel.hidden)paintStockView(view);
  paintSync();
- if(!byId('queries').hidden)window.dispatchEvent(new Event('skweb-consumption-changed'));
+ if(!byId('productionQueries').hidden){
+  if(!byId('incomeQueries').hidden)paintIncomeQueries();
+  else window.dispatchEvent(new Event('skweb-consumption-changed'));
+ }
 }
 function paintSync(){
  const count=(state.pending||[]).length,badge=byId('pendingBadge'),button=byId('sync');
@@ -394,14 +400,30 @@ function showConsumptionView(showQueries,stockView){
   view.button.setAttribute('aria-pressed',String(selected));
   if(selected)paintStockView(view);
  }
- byId('queries').hidden=!showQueries;
+ byId('productionQueries').hidden=!showQueries;
  byId('showRecord').setAttribute('aria-pressed',String(!showQueries&&!stockView));
  byId('showConsumptionQueries').setAttribute('aria-pressed',String(showQueries));
- if(showQueries)window.dispatchEvent(new Event('skweb-open-queries'));
+ if(showQueries)showQueryType(byId('queryIncome').getAttribute('aria-pressed')==='true');
+}
+function paintIncomeQueries(){
+ const notice=byId('incomeQueryStatus');
+ notice.textContent=!Array.isArray(state.incomes)?'Sincroniza para cargar los ingresos.':'Aún no hay ingresos registrados.';
+ notice.hidden=incomeMovements().some(row=>row.kind==='income');
+ paintStockRows(byId('incomeQueryRows'),'income');
+}
+function showQueryType(incomes){
+ byId('queryIncome').setAttribute('aria-pressed',String(incomes));
+ byId('queryConsumption').setAttribute('aria-pressed',String(!incomes));
+ byId('incomeQueries').hidden=!incomes;
+ byId('queries').hidden=incomes;
+ if(incomes)paintIncomeQueries();
+ else window.dispatchEvent(new Event('skweb-open-queries'));
 }
 for(const view of stockViews)view.button.onclick=()=>showConsumptionView(false,view);
 byId('showRecord').onclick=()=>showConsumptionView(false);
 byId('showConsumptionQueries').onclick=()=>showConsumptionView(true);
+byId('queryIncome').onclick=()=>showQueryType(true);
+byId('queryConsumption').onclick=()=>showQueryType(false);
 function placeInstallControls(container){
  container.append(byId('installProduction'),byId('installProductionHelp'));
 }
