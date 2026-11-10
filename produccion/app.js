@@ -31,7 +31,7 @@ function createDeviceAccess(namespace) {
 const deviceAccess=createDeviceAccess('sk-production');
 const sessionKey='sk-production-session';
 const db=true;
-async function all(name){return name==='consumptions'?[...(state.consumptions||[]),...(state.pending||[])]:state[name]||[]}
+async function all(name){return name==='consumptions'?[...(state.consumptions||[]),...(state.pending||[]).filter(row=>!row.kind)]:state[name]||[]}
 let syncFailed=false;
 let session=null,state={},draft=[],syncing=false,saving=false;
 try{session=JSON.parse(localStorage.getItem(sessionKey)||'null')}catch{}
@@ -137,6 +137,65 @@ setupPicker(partSearch,partCards,()=>{
  partCards.hidden=false;
  paintParts();
 },closeParts);
+const incomeForm=byId('productionIncome'),incomeFields=incomeForm.elements;
+const catalog=()=>window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]);
+const incomeMovements=()=>[...(state.incomes||[]),...(state.pending||[]).filter(row=>row.kind)];
+function stockFor(part,origin){
+ const matches=row=>row.origen===origin&&(row.partId===part.id||Boolean(part.criterionId)&&row.partId===part.criterionId);
+ const income=incomeMovements().filter(matches);
+ const initial=income.find(row=>row.kind==='initial');
+ const since=row=>!initial||row.fechaISO>=initial.fechaISO;
+ const received=income.filter(row=>row.kind==='income'&&since(row)).reduce((sum,row)=>sum+row.cantidad,0);
+ const used=[...(state.consumptions||[]),...(state.pending||[])]
+  .filter(row=>!row.kind&&!row.deleted&&matches(row)&&since(row)).reduce((sum,row)=>sum+row.cantidad,0);
+ return (initial?.cantidad||0)+received-used;
+}
+function paintIncome(){
+ const rows=catalog(),origin=incomeFields.origen.value;
+ const search=norm(byId('incomeSearch').value);
+ const options=window.SKSpareCatalog.filter(rows,origin.replace(/\d+$/,''),origin)
+  .filter(row=>norm([row.numero,row.nombre].join(' ')).includes(search));
+ const selected=incomeFields.partId.value;
+ incomeFields.partId.replaceChildren(...options.map(row=>new Option([row.numero,row.nombre].filter(Boolean).join(' · '),row.id)));
+ if(options.some(row=>row.id===selected))incomeFields.partId.value=selected;
+ const part=options.find(row=>row.id===incomeFields.partId.value);
+ const enabled=Array.isArray(state.incomes);
+ const allowed=['admin','assistant'].includes(session?.user.role);
+ incomeFields.kind.options[1].disabled=session?.user.role!=='admin';
+ if(incomeFields.kind.options[1].disabled)incomeFields.kind.value='income';
+ incomeFields.cantidad.min=incomeFields.kind.value==='initial'?'0':'1';
+ byId('incomeBalance').textContent=!enabled?'El servidor debe actualizarse y sincronizarse antes de registrar ingresos.':part?'Existencia registrada: '+stockFor(part,origin):'Sin repuestos que coincidan.';
+ incomeForm.querySelector('button').disabled=saving||!enabled||!allowed||!part;
+ byId('incomeRows').replaceChildren(...incomeMovements().slice().reverse().map(row=>{
+  const tr=document.createElement('tr'),item=rows.find(x=>x.id===row.partId);
+  for(const value of [row.fechaISO,item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':'Ingreso manual',row.cantidad]){
+   const td=document.createElement('td');td.textContent=value;tr.append(td);
+  }
+  return tr;
+ }));
+}
+incomeForm.addEventListener('change',paintIncome);
+byId('incomeSearch').addEventListener('input',paintIncome);
+incomeForm.onsubmit=async event=>{
+ event.preventDefault();
+ const active=session;
+ if(!active||saving||!Array.isArray(state.incomes))return;
+ const row=Object.fromEntries(new FormData(incomeForm));
+ if(active.user.role!=='admin'&&(active.user.role!=='assistant'||row.kind==='initial'))return;
+ row.cantidad=Number(row.cantidad);
+ if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(row.kind==='initial'?0:1))return;
+ saving=true;
+ try{
+  const record={...row,id:crypto.randomUUID(),createdAt:new Date().toISOString()};
+  const fresh=await changeState(active.user.document,current=>{
+   if(row.kind==='initial'&&[...(current.incomes||[]),...(current.pending||[])].some(x=>x.kind==='initial'&&x.partId===row.partId&&x.origen===row.origen))throw new Error('El repuesto ya tiene un saldo inicial.');
+   return {...current,pending:[...(current.pending||[]),record]};
+  });
+  if(session===active){state=fresh;incomeFields.cantidad.value='';status('Ingreso guardado.');}
+ }catch(error){if(session===active)status(error.message)}
+ finally{saving=false;if(session===active)paint()}
+ if(session===active&&navigator.onLine)await sync();
+};
 function paintParts(){
  if(partCards.hidden)return;
  const terms=norm(partSearch.value).trim().split(/\s+/);
@@ -144,7 +203,7 @@ function paintParts(){
  partCards.replaceChildren(...rows.map(row=>{
   const button=document.createElement('button');
   button.type='button';
-  button.textContent=[row.numero,row.nombre].filter(Boolean).join(' · ');
+  button.textContent=[row.numero,row.nombre,Array.isArray(state.incomes)?'Existencia: '+stockFor(row,fields.tipoEquipo.value+inventoryOrigin):''].filter(Boolean).join(' · ');
   button.onclick=()=>{
    if(saving)return;
    draft.push({partId:row.id,itemId:row.criterionId||'',noItem:row.numero||'',nombreRepuesto:row.nombre,cantidad:1,origen:fields.tipoEquipo.value+inventoryOrigin,tipoEquipo:fields.tipoEquipo.value});
@@ -272,6 +331,7 @@ function paint(){
  if(!machines.length)byId('machineOptions').textContent='No hay equipos disponibles para este tipo.';
  filterMachines();
  paintParts();paintPeople();paintDraft();
+ if(!byId('incomePanel').hidden)paintIncome();
  paintSync();
  if(!byId('queries').hidden)window.dispatchEvent(new Event('skweb-consumption-changed'));
 }
@@ -284,7 +344,7 @@ function paintSync(){
  byId('syncLabel').textContent=label;
  badge.className='pendingBadge'+(syncFailed?' error':!syncing&&complete?' synced':'');
  badge.textContent=count?String(count):syncing?'↻':syncFailed?'!':complete?'✓':'0';
- badge.title=count?count+(count===1?' consumo pendiente':' consumos pendientes'):syncing?label:syncFailed?'Error de sincronización':complete?'Todo sincronizado':'Sin sincronizar';
+ badge.title=count?count+(count===1?' movimiento pendiente':' movimientos pendientes'):syncing?label:syncFailed?'Error de sincronización':complete?'Todo sincronizado':'Sin sincronizar';
  badge.setAttribute('aria-label',badge.title);
  const date=new Date(state.lastSyncAt);
  byId('headerLastSync').textContent=Number.isNaN(date.getTime())?'SIN SINCRONIZAR':
@@ -310,18 +370,25 @@ async function sync(){
     byId('accessStatus').textContent=error.message+'. Los consumos pendientes siguen guardados.';
    }
   }
-  if(session===active)syncFailed=true;
+  if(session===active){
+   syncFailed=true;
+   if(error.centralResponse)status(error.message);
+  }
   console.error('Sincronización de Producción:',error);
  }
  finally{syncing=false;paintSync()}
 }
-function showConsumptionView(showQueries){
- byId('recordPanel').hidden=showQueries;
+function showConsumptionView(showQueries,showIncome=false){
+ byId('recordPanel').hidden=showQueries||showIncome;
+ byId('incomePanel').hidden=!showIncome;
+ byId('showIncome').setAttribute('aria-pressed',String(showIncome));
+ if(showIncome)paintIncome();
  byId('queries').hidden=!showQueries;
- byId('showRecord').setAttribute('aria-pressed',String(!showQueries));
+ byId('showRecord').setAttribute('aria-pressed',String(!showQueries&&!showIncome));
  byId('showConsumptionQueries').setAttribute('aria-pressed',String(showQueries));
  if(showQueries)window.dispatchEvent(new Event('skweb-open-queries'));
 }
+byId('showIncome').onclick=()=>showConsumptionView(false,true);
 byId('showRecord').onclick=()=>showConsumptionView(false);
 byId('showConsumptionQueries').onclick=()=>showConsumptionView(true);
 function placeInstallControls(container){
@@ -334,7 +401,7 @@ async function openWorkspace(){
  byId('access').hidden=true;byId('productionHeader').hidden=false;byId('workspace').hidden=false;byId('productionSync').hidden=false;syncFailed=false;
  byId('operatorName').textContent=session.user.name;
  byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
- fields.fechaISO.value=today();manualShift=false;refreshShift();showConsumptionView(false);paint();if(navigator.onLine)await sync();
+ incomeFields.fechaISO.value=today();fields.fechaISO.value=today();manualShift=false;refreshShift();showConsumptionView(false);paint();if(navigator.onLine)await sync();
 }
 form.onsubmit=async event=>{
  event.preventDefault();if(saving)return;
