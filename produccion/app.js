@@ -185,7 +185,9 @@ function compareParts(left,right){
  return leftGroup-rightGroup||leftOrder-rightOrder||left.nombre.localeCompare(right.nombre,'es');
 }
 const catalog=()=>window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]).sort(compareParts);
-const incomeMovements=()=>Array.from(new Map([...(state.incomes||[]),...(state.pending||[]).filter(row=>row.kind)].map(row=>[row.id,row])).values());
+const incomeMovements=(snapshot=state)=>Array.from(new Map([...(snapshot.incomes||[]),...(snapshot.pending||[]).filter(row=>row.kind)].map(row=>[row.id,row])).values());
+const initialFor=(part,origin,snapshot=state)=>incomeMovements(snapshot).reverse().find(row=>
+ !row.deleted&&row.kind==='initial'&&row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId));
 function countTotals(origin,date,parts){
  const closed=(state.inventoryLatest||[]).find(row=>row.origin===origin&&(!date||row.date<date));
  const prior=new Map(),aliases=new Map(),totals=new Map();
@@ -209,10 +211,13 @@ function countTotals(origin,date,parts){
  return totals;
 }
 let stockCacheState,stockCache=new Map();
-function stockFor(part,origin){
+function stockBreakdown(part,origin){
  if(stockCacheState!==state){stockCacheState=state;stockCache=new Map();}
  if(!stockCache.has(origin))stockCache.set(origin,countTotals(origin,'',window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin)));
- const total=stockCache.get(origin).get(part.id);
+ return stockCache.get(origin).get(part.id);
+}
+function stockFor(part,origin){
+ const total=stockBreakdown(part,origin);
  return total?total.opening+total.incomes-total.consumptions:0;
 }
 function filterParts(parts,search){
@@ -241,6 +246,13 @@ function paintStockView({form:stockForm,panel,kind}){
  const enabled=Array.isArray(state.incomes);
  const allowed=canSaveStock(kind,session?.user.role);
  panel.querySelector('[data-stock-balance]').textContent=!enabled?'El servidor debe actualizarse y sincronizarse antes de registrar movimientos.':part?'Existencia registrada: '+stockFor(part,origin):options.length?'Selecciona un repuesto para ver su existencia.':'Sin repuestos que coincidan.';
+ if(kind==='initial'&&part&&enabled){
+  const initial=initialFor(part,origin),total=stockBreakdown(part,origin);
+  const pending=initial&&(state.pending||[]).some(row=>row.id===initial.id);
+  const detail=initial?' · Saldo inicial '+(pending?'pendiente de sincronizar':'guardado')+': '+initial.cantidad:' · Sin saldo inicial registrado';
+  const opening=total.cutoff?' · Cierre del '+displayDate(total.cutoff)+': '+total.opening:'';
+  panel.querySelector('[data-stock-balance]').textContent+=detail+opening+' · Ingresos: '+total.incomes+' · Consumos: '+total.consumptions;
+ }
  stockForm.querySelector('button[type=submit]').disabled=saving||!enabled||!allowed||!part;
  if(kind==='initial')paintBalances(panel.querySelector('[data-stock-rows]'),options,origin,enabled);
 }
@@ -279,8 +291,7 @@ async function saveStock(event,{form:stockForm,kind}){
   const fresh=await changeState(active.user.document,current=>{
    const pending=current.pending||[];
    const part=catalog().find(item=>item.id===row.partId);
-   const existing=kind==='initial'&&[...pending,...(current.incomes||[])].find(item=>
-    item.kind==='initial'&&item.origen===row.origen&&(item.partId===row.partId||item.partId===part?.criterionId));
+   const existing=kind==='initial'&&initialFor(part||{id:row.partId},row.origen,current);
    const movement=existing?{...existing,cantidad:row.cantidad,correctionId:record.id}:record;
    return {...current,pending:[...pending.filter(item=>item.id!==movement.id),movement]};
   });
@@ -480,7 +491,10 @@ async function sync(){
    const data=await api('productionSync',{token:active.token,pending,inventoryRequest});
    const acknowledged=new Set(Array.isArray(data.ack)?data.ack:[]);
    const savedRows=new Map([...(data.incomes||[]),...(data.consumptions||[])].map(row=>[row.id,row]));
-   const confirmed=row=>acknowledged.has(row.id)&&savedRows.has(row.id)&&savedRows.get(row.id).correctionId===row.correctionId;
+   const confirmed=row=>{
+    const saved=savedRows.get(row.id);
+    return acknowledged.has(row.id)&&saved&&saved.correctionId===row.correctionId&&saved.cantidad===row.cantidad;
+   };
    if(pending.some(row=>!confirmed(row))){
     throw new Error('La base central no confirmó todos los movimientos. Siguen pendientes para reintentar.');
    }
