@@ -10,6 +10,7 @@
 [hidden]{display:none!important}main{max-width:900px;margin:auto}header{justify-content:space-between}section{margin:16px 0}fieldset{border:0;padding:0;margin:0;display:grid;gap:12px}form{margin:12px 0}label{min-width:0}select,input{max-width:100%}.tableWrap{overflow:auto}li{margin:6px 0}#status{white-space:pre-wrap}
 body>main{max-width:900px;color:#f8fafc}
 main form,main .tableWrap{color:#172033}
+.productionToolbar:empty{display:none}
 .productionToolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}
 .productionToolbar #installProductionHelp{grid-column:1/-1;margin:0}
 .productionToolbar button{min-height:44px;background:#f8fafc;color:#173d59}
@@ -42,8 +43,9 @@ main form,main .tableWrap{color:#172033}
 .quantityStepper input{width:100%;min-width:0;text-align:center;appearance:textfield}
 .quantityStepper input::-webkit-inner-spin-button{-webkit-appearance:none}
 #draft small{display:block;color:#43576b}
-#logout{display:inline-grid;place-items:center;width:44px;height:44px;padding:0;background:#eef4f8;color:#102f45;white-space:nowrap}
+#logout,#updateProduction{display:inline-grid;place-items:center;width:44px;height:44px;padding:0;background:#eef4f8;color:#102f45;white-space:nowrap}
 .productionIdentity{display:grid;grid-template-columns:44px minmax(0,1fr) 44px;align-items:center;gap:8px;margin:12px 0}
+#updateProduction{grid-column:1}
 #operator{grid-column:2;display:grid;gap:3px;text-align:center;overflow-wrap:anywhere}
 #operatorRole{font-size:.9rem}
 .productionIdentity #logout{grid-column:3}
@@ -93,7 +95,7 @@ main form,main .tableWrap{color:#172033}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=24-cerrar-equipo"></script><script defer src="../consumption-query-v2.js?v=consulta-pc-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=25-icono-actualizar"></script><script defer src="../consumption-query-v2.js?v=consulta-pc-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -113,12 +115,11 @@ main form,main .tableWrap{color:#172033}
 </section>
 <section id="workspace" hidden>
 <div class="productionIdentity">
+<button id="updateProduction" type="button" aria-label="Actualizar app" title="Actualizar app"><svg aria-hidden="true" width="25" height="25" viewBox="0 0 28 28" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path stroke="#bc343a" d="M14 2a12 12 0 0 0-12 12m0 0-1-3m1 3 3-2m9 14a12 12 0 0 0 12-12m0 0-3 2m3-2 1 3"/><path fill="#226b9c" d="M12 5h4l.5 2.4 1.6.9 2.4-.8 2 3.5-1.8 1.7v2.6l1.8 1.7-2 3.5-2.4-.8-1.6.9-.5 2.4h-4l-.5-2.4-1.6-.9-2.4.8-2-3.5 1.8-1.7v-2.6L5.5 11l2-3.5 2.4.8 1.6-.9z"/><circle cx="14" cy="14" r="4" fill="#eef4f8" stroke="#bc343a"/></svg></button>
 <div id="operator"><strong id="operatorName"></strong><span id="operatorRole"></span></div>
 <button id="logout" type="button" aria-label="Cerrar sesión"><svg aria-hidden="true" width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></button>
 </div>
-<div class="productionToolbar">
-<button id="updateProduction" type="button">Actualizar app</button>
-</div>
+<div class="productionToolbar"></div>
 <div class="productionViews" role="group" aria-label="Consumo de repuestos">
 <button type="button" id="showRecord" aria-controls="recordPanel" aria-pressed="true">Registrar consumo</button>
 <button type="button" id="showConsumptionQueries" aria-controls="queries" aria-pressed="false">Consultar consumos</button>
