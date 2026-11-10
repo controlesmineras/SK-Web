@@ -47,7 +47,7 @@ function currentShift(date=new Date()){
  return hour<6||hour>=22?'S':hour<14?'D':'T';
 }
 let manualShift=false;
-fields.turno.onchange=()=>{manualShift=true};
+for(const radio of fields.turno)radio.onchange=()=>{manualShift=true};
 function refreshShift(){
  if(!manualShift)fields.turno.value=currentShift();
 }
