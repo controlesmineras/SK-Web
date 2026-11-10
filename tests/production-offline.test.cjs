@@ -14,7 +14,8 @@ async function database(){
 }
 async function context(){
  const db=await database();
- const ctx=vm.createContext({database:Promise.resolve(db)});
+ const ctx=vm.createContext({database:Promise.resolve(db),window:{addEventListener(){}},document:{addEventListener(){}},setTimeout:()=>1,clearTimeout(){},setInterval(){},scheduleSync(){}});
+ vm.runInContext(fs.readFileSync('produccion/sync-protocol.js','utf8'),ctx);
  vm.runInContext(app.slice(app.indexOf('async function changeState('),app.indexOf('async function api(')),ctx);
  return ctx;
 }
@@ -55,9 +56,9 @@ test('sync keeps a movement saved while an earlier request is in flight',async()
   api:async(action,{pending})=>{
    calls++;
    if(calls===1)await c.changeState('account',current=>({...current,pending:[...current.pending,later]}));
-   return {incomes:[],consumptions:calls===1?[initial]:[initial,later],ack:pending.map(row=>row.id),inventoryCounts:[],inventoryLatest:[]};
+   return {ok:true,personal:[],assets:[],parts:[],inventoryCriteria:[],incomes:[],consumptions:calls===1?[initial]:[initial,later],ack:pending.map(row=>row.id),inventoryCounts:[],inventoryLatest:[]};
   }});
- vm.runInContext(app.slice(app.indexOf('async function sync(){'),app.indexOf('function showConsumptionView(')),c);
+ vm.runInContext(app.slice(app.indexOf('let syncRequested=false'),app.indexOf('function showConsumptionView(')),c);
  await c.sync();
  assert.equal(calls,2);assert.equal((await c.changeState('account')).pending.length,0);
  assert.equal(c.syncFailed,false);
@@ -67,8 +68,8 @@ test('a server that echoes an ID without the corrected amount cannot mark it syn
  const request={id:'one',kind:'adjustment',cantidad:4};
  await c.changeState('account',()=>({pending:[request]}));
  Object.assign(c,{session:{user:{document:'account'}},state:await c.changeState('account'),navigator:{onLine:true},canSync:()=>true,syncing:false,syncRequested:false,syncFailed:false,
-  paintSync(){},paint(){},status(){},console:{error(){}},api:async()=>({incomes:[{id:'one',kind:'adjustment',cantidad:0,target:24}],consumptions:[],ack:['one']})});
- vm.runInContext(app.slice(app.indexOf('async function sync(){'),app.indexOf('function showConsumptionView(')),c);
+  paintSync(){},paint(){},status(){},console:{error(){}},api:async()=>({ok:true,personal:[],assets:[],parts:[],inventoryCriteria:[],incomes:[{id:'one',kind:'adjustment',cantidad:0,target:24}],consumptions:[],ack:['one']})});
+ vm.runInContext(app.slice(app.indexOf('let syncRequested=false'),app.indexOf('function showConsumptionView(')),c);
  await c.sync();
  assert.equal((await c.changeState('account')).pending.length,1);assert.equal(c.syncFailed,true);
 });
