@@ -215,7 +215,7 @@ function countTotals(origin,date,parts){
   const total=get(row);
   if(total&&!total.cutoff&&row.kind==='initial'){total.opening=row.cantidad;total.initialDate=row.fechaISO;}
  }
- const include=(row,total)=>total&&(total.cutoff?(row.fechaISO>total.cutoff||row.fechaISO===total.cutoff&&(row.recordedAt||row.createdAt)>total.closedAt):!total.initialDate||row.fechaISO>=total.initialDate);
+ const include=(row,total)=>total&&(total.cutoff?(row.fechaISO>total.cutoff||row.fechaISO===total.cutoff&&(row.recordedAt||row.createdAt)>total.closedAt):true);
  for(const row of incomes){const total=get(row);if(include(row,total)){if(row.kind==='income'||row.kind==='adjustment'&&row.target!=null&&row.cantidad>=0)total.incomes+=row.cantidad;else if(row.kind==='adjustment'&&row.target!=null)total.consumptions-=row.cantidad;}}
  const movements=new Map((state.consumptions||[]).map(row=>[row.id,row]));
  for(const row of movements.values()){const total=get(row);if(include(row,total))total.consumptions+=row.cantidad;}
@@ -273,18 +273,14 @@ function stockPeriodSummary(part,origin){
 }
 function stockSummaryText(part,origin,value){
  const totals=stockPeriodSummary(part,origin),current=stockFor(part,origin),initial=initialFor(part,origin);
- const signed=number=>number>0?'+'+number:String(number);
- const pending=(state.pending||[]).find(row=>row.kind==='adjustment'&&row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId));
  const lines=[totals.closed?'PERÍODO: DESDE EL INVENTARIO DEL '+displayDate(totals.closed.date)+'.':'PERÍODO: TODOS LOS MOVIMIENTOS · SIN INVENTARIO CERRADO.',
-  'INGRESOS: '+totals.incomes+' · CONSUMOS: '+totals.consumptions+'.'];
- if(totals.closed&&totals.opening!=null)lines.push('SALDO DEL ÚLTIMO INVENTARIO: '+totals.opening+'.');
- else if(initial)lines.push('SALDO INICIAL REGISTRADO: '+initial.cantidad+' · FECHA: '+displayDate(initial.fechaISO)+'.');
- lines.push('EXISTENCIA ACTUAL: '+current+(stockBreakdown(part,origin)?.pending?' · CON MOVIMIENTOS PENDIENTES.':'.'));
- if(pending)lines.push(pending.syncRejected?'CANTIDAD RECHAZADA: '+pending.cantidad+' · REQUIERE REVISIÓN.':'SALDO SOLICITADO: '+pending.cantidad+' · PENDIENTE DE CONFIRMACIÓN.');
- else if(value==='')lines.push('SALDO DESPUÉS DEL CAMBIO: — · ESCRIBE LA CANTIDAD.');
- else{
-  const target=Number(value);
-  lines.push(Number.isSafeInteger(target)&&target>=0?'SALDO DESPUÉS DEL CAMBIO: '+target+' · AJUSTE A REALIZAR: '+signed(target-current)+' (VISTA PREVIA).':'SALDO DESPUÉS DEL CAMBIO: — · INGRESA UNA CANTIDAD ENTERA DESDE CERO.');
+  'INGRESOS: '+totals.incomes+' · CONSUMOS: '+totals.consumptions+'.',
+  'SALDO DE APERTURA REGISTRADO: '+(initial?.cantidad??0)+'.',
+  'SALDO ESPERADO ACTUAL: '+current+'.'];
+ if(totals.closed)lines.push('El período actual parte del último inventario cerrado: '+totals.opening+'.');
+ else if(value!==''){
+  const opening=Number(value);
+  lines.push(Number.isSafeInteger(opening)&&opening>=0?'SALDO ESPERADO CON ESTA APERTURA: '+(current-(initial?.cantidad??0)+opening)+' (VISTA PREVIA).':'INGRESA UNA CANTIDAD ENTERA DESDE CERO.');
  }
  if(totals.pending)lines.push('MOVIMIENTOS DEL PERÍODO PENDIENTES DE SINCRONIZAR: '+totals.pending+'.');
  return lines.join('\n');
@@ -326,8 +322,9 @@ function paintStockView({form:stockForm,panel,kind}){
  panel.querySelector('[data-stock-balance]').textContent=!enabled?'El servidor debe actualizarse y sincronizarse antes de registrar movimientos.':part?'Existencia registrada: '+stockFor(part,origin):options.length?'Selecciona un repuesto para ver su existencia.':'Sin repuestos que coincidan.';
  stockForm.querySelector('button[type=submit]').disabled=saving||!enabled||!allowed||!part;
  if(kind==='adjustment'){
-  const pending=(state.pending||[]).find(row=>row.kind==='adjustment'&&row.origen===origin&&(row.partId===part?.id||row.partId===part?.criterionId));
+  const pending=(state.pending||[]).find(row=>['initial','adjustment'].includes(row.kind)&&row.origen===origin&&(row.partId===part?.id||row.partId===part?.criterionId));
   incomeFields.cantidad.disabled=Boolean(pending);
+  if(part&&!pending&&stockForm.dataset.openingPart!==partKey){incomeFields.cantidad.value=initialFor(part,origin)?.cantidad??0;stockForm.dataset.openingPart=partKey;}
   byId('reviewStockAdjustment').hidden=!pending?.syncRejected;
   if(pending){
    stockForm.dataset.pendingStockId=pending.id;incomeFields.cantidad.value=pending.cantidad;
@@ -335,7 +332,7 @@ function paintStockView({form:stockForm,panel,kind}){
    stockStatus(stockForm,pending.syncError||'GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.',Boolean(pending.syncError),false);
   }else if(stockForm.dataset.pendingStockId){
    const saved=(state.incomes||[]).find(row=>row.id===stockForm.dataset.pendingStockId);
-   if(saved)stockStatus(stockForm,'EXISTENCIA CONFIRMADA EN LA BASE CENTRAL: '+saved.target+'.',false,false);
+   if(saved)stockStatus(stockForm,'SALDO DE APERTURA CONFIRMADO EN LA BASE CENTRAL: '+saved.cantidad+'.',false,false);
    delete stockForm.dataset.pendingStockId;
   }
   paintBalances(panel.querySelector('[data-stock-rows]'),options,origin,Array.isArray(state.incomes));
@@ -387,12 +384,13 @@ async function saveStock(event,{form:stockForm,kind}){
  const date=kind==='adjustment'?today():readDate(fechaISO),quantity=Number(cantidad.value);
  if(!date){fechaISO.reportValidity();return;}
  if(!Number.isSafeInteger(quantity)||quantity<(kind==='adjustment'?0:1)){tell('Escribe una cantidad entera válida.',true);return;}
- const record={kind,origen:origen.value,partId:partId.value,fechaISO:date,cantidad:quantity,id:crypto.randomUUID(),createdAt:new Date().toISOString(),syncState:'pending'};
- if(kind==='adjustment')record.baseQuantity=stockFor(part,record.origen);
+ const initial=kind==='adjustment'?initialFor(part,origen.value):null;
+ const record={kind:kind==='adjustment'?'initial':kind,origen:origen.value,partId:partId.value,fechaISO:date,cantidad:quantity,id:crypto.randomUUID(),createdAt:new Date().toISOString(),syncState:'pending'};
+ if(kind==='adjustment'&&initial){record.id=initial.id;record.fechaISO=initial.fechaISO;record.correctionId=crypto.randomUUID();}
  saving=true;
  try{
   const fresh=await changeState(active.user.document,current=>{
-   if(kind==='adjustment'&&(current.pending||[]).some(row=>row.kind===kind&&row.origen===record.origen&&(row.partId===part.id||row.partId===part.criterionId)))throw new Error('Este repuesto ya tiene un ajuste pendiente. Revisa su estado antes de guardar otro.');
+   if(kind==='adjustment'&&(current.pending||[]).some(row=>['initial','adjustment'].includes(row.kind)&&row.origen===record.origen&&(row.partId===part.id||row.partId===part.criterionId)))throw new Error('Este repuesto ya tiene un ajuste pendiente. Revisa su estado antes de guardar otro.');
    return {...current,pending:[...(current.pending||[]),record]};
   });
   if(session!==active)return;
@@ -426,7 +424,7 @@ byId('reviewStockAdjustment').onclick=async()=>{
  const active=session,fields=stockEditForm.elements;
  if(!active||active.user.role!=='admin'||saving)return;
  const part=catalog().find(row=>row.id===fields.partId.value);
- const pending=(state.pending||[]).find(row=>row.kind==='adjustment'&&(row.partId===part?.id||row.partId===part?.criterionId)&&row.origen===fields.origen.value&&row.syncRejected);
+ const pending=(state.pending||[]).find(row=>['initial','adjustment'].includes(row.kind)&&(row.partId===part?.id||row.partId===part?.criterionId)&&row.origen===fields.origen.value&&row.syncRejected);
  if(!pending||!confirm('Este ajuste fue rechazado por la base central. ¿Retirarlo de este equipo para revisar y guardar una nueva cantidad?'))return;
  try{
   if(sync.promise)await sync.promise;
