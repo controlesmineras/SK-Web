@@ -843,6 +843,16 @@ function productionSync_(q){
     rejected.set(row?.id||'',String(error.message||error));
    }
   }
+  const incomeChangeReceipts=[];
+  const incomeChanges=protocol&&Array.isArray(q.incomeChanges)?q.incomeChanges:[];
+  if(incomeChanges.length>1000)throw new Error('Envía un máximo de 1000 cambios de ingresos.');
+  for(const operation of incomeChanges){
+   try{
+    const result=productionIncomeChange_(operation,incomes,data,user,recorder);
+    changed=changed||result.changed;
+    incomeChangeReceipts.push({id:operation.id,status:result.changed?'accepted':'already-applied'});
+   }catch(error){incomeChangeReceipts.push({id:operation?.id||'',status:'rejected',error:String(error.message||error)});}
+  }
   const consumptions=Array.from(known.values());
   let inventoryResult;
   if(q.inventoryRequest){
@@ -860,10 +870,44 @@ function productionSync_(q){
   const deliveries=(central.blendingDeliveries||[]).filter(row=>!row.deleted&&cargoNorm_(row.destination)==='produccion'&&spareIds.has(row.itemId)).map(row=>({id:row.id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,createdAt:row.createdAt,reversed:row.reversed===true||row.reversado===true}));
   // Igual que Plaza: los recibos se emiten solo después de guardar en Drive.
   const acknowledgements=protocol?pending.map(row=>({id:row?.id||'',status:rejected.has(row?.id||'')?'rejected':priorIds.has(row.id)?'already-applied':'accepted',...(rejected.has(row?.id||'')?{error:rejected.get(row?.id||'')}:{})})):undefined;
-  return json_({ok:true,...(protocol?{syncProtocol:'production-receipts-v1',acknowledgements}:{}),productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,inventoryResult,stockAdjustment:true,stockAdjustmentLocalV1:true,
+  return json_({ok:true,incomeChangesV1:true,incomeChangeReceipts,incomeHistory:(data.incomeHistory||[]).filter(row=>Date.now()-Date.parse(row.at)<=30*86400000||incomeChanges.some(op=>op.id===row.id)),...(protocol?{syncProtocol:'production-receipts-v1',acknowledgements}:{}),productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,inventoryResult,stockAdjustment:true,stockAdjustmentLocalV1:true,
    inventoryCounts:counts.filter(row=>row.status!=='closed'&&(row.owner===user.document||user.role==='admin'&&row.status==='submitted')),
    inventoryLatest:Array.from(latest.values()),incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.filter(row=>!rejected.has(row?.id||'')).map(row=>row.id),superseded:pending.filter(row=>row.correctionId&&incomes.get(row.id)?.correctionId!==row.correctionId&&(incomes.get(row.id)?.appliedCorrections||[]).includes(row.correctionId)).map(row=>({id:row.id,correctionId:row.correctionId}))});
  }finally{lock.releaseLock()}
+}
+
+// Ingresos: borrado recuperable, control de versión y reversión durante 30 días.
+function productionIncomeChange_(op,incomes,data,user,recorder){
+ if(user.role!=='admin')throw new Error('Solo el administrador puede editar, eliminar o revertir ingresos.');
+ if(!op||!/^[-a-zA-Z0-9]{16,100}$/.test(String(op.id||''))||!['edit','delete','revert'].includes(op.action))throw new Error('Cambio de ingreso no válido.');
+ const history=data.incomeHistory||[];
+ const prior=history.find(row=>row.id===op.id);
+ if(prior){
+  if(JSON.stringify(prior.operation)!==JSON.stringify(op))throw new Error('El identificador corresponde a otro cambio.');
+  return {changed:false};
+ }
+ const before=incomes.get(op.incomeId);
+ if(!before||before.kind!=='income')throw new Error('Selecciona un ingreso registrado; los saldos de apertura se corrigen en Existencias.');
+ if(op.baseRevision!==(before.revision||'original'))throw new Error('Este ingreso cambió en otro dispositivo. Sincroniza y revisa el registro.');
+ const latest=(data.inventoryCounts||[]).filter(row=>row.origin===before.origen&&row.status==='closed').sort((a,b)=>b.date.localeCompare(a.date))[0];
+ if(latest&&!productionAfterClose_(before,latest.date,latest.closedAt))throw new Error('Este ingreso pertenece a un inventario cerrado y no se puede modificar.');
+ let values,original;
+ if(op.action==='revert'){
+  original=history.find(row=>row.id===op.historyId&&row.incomeId===before.id&&row.action!=='revert');
+  if(!original||original.revertedBy||before.revision!==original.id)throw new Error('Solo se puede revertir el cambio vigente de este ingreso.');
+  if(Date.now()-Date.parse(original.at)>30*86400000)throw new Error('El plazo de 30 días para revertir este cambio terminó.');
+  values={cantidad:original.before.cantidad,fechaISO:original.before.fechaISO,deleted:Boolean(original.before.deleted)};
+ }else{
+  if(before.deleted)throw new Error('El ingreso está eliminado. Usa Revertir para recuperarlo.');
+  values=op.action==='delete'?{cantidad:before.cantidad,fechaISO:before.fechaISO,deleted:true}:{cantidad:op.cantidad,fechaISO:op.fechaISO,deleted:false};
+  if(!Number.isSafeInteger(values.cantidad)||values.cantidad<1||!productionDate_(values.fechaISO)||values.fechaISO>Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'))throw new Error('Escribe una cantidad entera mayor que cero y una fecha válida hasta hoy.');
+ }
+ const after=Object.assign({},before,values,{revision:op.id,updatedAt:new Date().toISOString()});
+ if(latest&&!productionAfterClose_(after,latest.date,latest.closedAt))throw new Error('La fecha corresponde a un inventario cerrado.');
+ const entry={id:op.id,incomeId:before.id,action:op.action,at:after.updatedAt,before:Object.assign({},before),after:Object.assign({},after),operation:op};
+ if(original)original.revertedBy=op.id;
+ data.incomeHistory=[...history,entry];incomes.set(before.id,after);
+ return {changed:true};
 }
 
 function productionCount_(request,data,user,recorder,parts,criteria,incomes,consumptions){

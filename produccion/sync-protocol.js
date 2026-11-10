@@ -18,7 +18,8 @@
   }
   return selected;
  }
- function reconcile(result,sent,current,inventoryRequest){
+ const selectIncomeChanges=current=>current.incomeChangesV1===true?(current.incomeChanges||[]).filter(row=>!row.syncRejected).slice(0,1000).map(row=>{const clean={...row};delete clean.syncError;delete clean.syncRejected;return clean}):[];
+ function reconcile(result,sent,current,inventoryRequest,sentChanges=[]){
   const tables=['personal','assets','parts','inventoryCriteria','incomes','consumptions'];
   if(result?.ok!==true||tables.some(name=>!Array.isArray(result[name])))throw new Error('La respuesta central está incompleta. Los pendientes se conservaron.');
   const individual=result.syncProtocol===protocol;
@@ -57,9 +58,24 @@
      .map(row=>row.id===inventoryRequest.id?{...row,baseRevision:returned.revision}:row);
    }
   }
-  const {inventoryResult,acknowledgements,ack,superseded:ignored,...snapshot}=result;
-  const complete=!pending.length&&!countQueue.length,time=new Date().toISOString();
-  return {...current,...snapshot,pending,countQueue,countSyncError,lastFetchedAt:time,lastSyncAt:complete?time:current.lastSyncAt,stockAdjustmentLocalV1:result.stockAdjustmentLocalV1===true};
+  let incomeChanges=current.incomeChanges||[];
+  if(sentChanges.length){
+   if(result.incomeChangesV1!==true||!Array.isArray(result.incomeChangeReceipts)||!Array.isArray(result.incomeHistory))throw new Error('La base central no confirmó los cambios de ingresos.');
+   const receipts=new Map(result.incomeChangeReceipts.map(row=>[row.id,row])),history=new Map(result.incomeHistory.map(row=>[row.id,row]));
+   if(receipts.size!==result.incomeChangeReceipts.length)throw new Error('Confirmaciones de ingresos repetidas.');
+   for(const op of sentChanges){
+    const receipt=receipts.get(op.id),saved=history.get(op.id);
+    if(!receipt||!['accepted','already-applied','rejected'].includes(receipt.status)||receipt.status!=='rejected'&&(!saved||saved.incomeId!==op.incomeId||!samePendingRow(saved.operation,op)))throw new Error('La confirmación no coincide con el cambio de ingreso.');
+   }
+   incomeChanges=incomeChanges.flatMap(op=>{
+    const sent=sentChanges.find(row=>row.id===op.id);if(!samePendingRow(sent,op))return [op];
+    const receipt=receipts.get(op.id);return receipt.status==='rejected'?[{...op,syncRejected:true,syncError:receipt.error}]:[];
+   });
+  }
+  if(result.incomeChangesV1!==true)incomeChanges=incomeChanges.map(op=>({...op,syncError:'Falta actualizar Code.gs para confirmar la edición, eliminación o reversión del ingreso.'}));
+  const {inventoryResult,acknowledgements,ack,superseded:ignored,incomeChangeReceipts,...snapshot}=result;
+  const complete=!pending.length&&!countQueue.length&&!incomeChanges.length,time=new Date().toISOString();
+  return {...current,...snapshot,pending,countQueue,incomeChanges,incomeChangesV1:result.incomeChangesV1===true,countSyncError,lastFetchedAt:time,lastSyncAt:complete?time:current.lastSyncAt,stockAdjustmentLocalV1:result.stockAdjustmentLocalV1===true};
  }
- window.SKProductionSync={protocol,samePendingRow,reconcile,selectPending,adjustmentUpgrade};
+ window.SKProductionSync={protocol,samePendingRow,reconcile,selectPending,selectIncomeChanges,adjustmentUpgrade};
 })();

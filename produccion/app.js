@@ -189,6 +189,10 @@ const catalog=()=>window.SKSpareCatalog.merge(state.parts||[],state.inventoryCri
 const incomeMovements=(snapshot=state)=>{
  const rows=new Map((snapshot.incomes||[]).map(row=>[row.id,row]));
  for(const row of snapshot.pending||[])if(!row.syncRejected&&row.kind&&(row.kind!=='adjustment'||!rows.has(row.id)))rows.set(row.id,row);
+ for(const op of snapshot.incomeChanges||[]){
+  const row=rows.get(op.incomeId);
+  if(!op.syncRejected&&row?.kind==='income'&&(row.revision||'original')===op.baseRevision)rows.set(row.id,{...row,...op.after,revision:op.id});
+ }
  return Array.from(rows.values());
 };
 const partMatches=(row,part,origin,snapshot=state)=>row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId||(snapshot.inventoryCriteria||[]).some(item=>item.id===row.partId&&item.productionPartId===part.id&&window.SKSpareCatalog.equipment(item)===origin.toLowerCase()));
@@ -232,6 +236,7 @@ function countTotals(origin,date,parts){
    if(delta>=0)total.incomes+=delta;else total.consumptions-=delta;
   }else if(!row.kind)total.consumptions+=row.cantidad;
  }
+ for(const op of state.incomeChanges||[])if(!op.syncRejected){const row=(state.incomes||[]).find(row=>row.id===op.incomeId);const total=row&&aliases.get(row.partId);if(total&&row.origen===origin)total.pending=true;}
  return totals;
 }
 let stockCacheState,stockCacheDay,stockCache=new Map();
@@ -257,7 +262,7 @@ function stockPeriodSummary(part,origin){
  for(const row of state.inventoryCriteria||[])if(row.productionPartId===part.id&&window.SKSpareCatalog.equipment(row)===origin.toLowerCase())aliases.add(row.id);
  const opening=closed?.rows?.find(row=>(row.aliases||[row.partId]).some(id=>aliases.has(id)));
  for(const id of opening?.aliases||[])aliases.add(id);
- const rows=new Map([...(state.incomes||[]),...(state.consumptions||[])].map(row=>[row.id,row]));
+ const rows=new Map([...incomeMovements({...state,pending:[]}),...(state.consumptions||[])].map(row=>[row.id,row]));
  const pendingIds=new Set();
  for(const row of state.pending||[])if(!row.syncRejected&&!rows.has(row.id)){rows.set(row.id,row);pendingIds.add(row.id);}
  const result={closed,opening:opening?.physical,incomes:0,consumptions:0,adjustments:0,pending:0};
@@ -361,7 +366,7 @@ function paintBalances(body,parts,origin,enabled){
  }));
 }
 function paintStockRows(body,kind,rows=catalog()){
- body.replaceChildren(...incomeMovements().filter(row=>row.kind===kind).reverse().map(row=>{
+ body.replaceChildren(...incomeMovements().filter(row=>row.kind===kind&&!row.deleted).reverse().map(row=>{
   const tr=document.createElement('tr'),item=rows.find(x=>x.id===row.partId);
   const values=[displayDate(row.fechaISO),item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':row.origen,row.cantidad];
   for(const value of values){
@@ -597,7 +602,7 @@ function paint(){
  }
 }
 function paintSync(){
- const count=(state.pending||[]).length+(state.countQueue||[]).length,badge=byId('pendingBadge'),button=byId('sync');
+ const count=(state.pending||[]).length+(state.countQueue||[]).length+(state.incomeChanges||[]).length,badge=byId('pendingBadge'),button=byId('sync');
  const complete=Boolean(state.lastSyncAt)&&!count;
  const label=syncing?'Sincronizando':'Sincronizar';
  button.disabled=syncing;
@@ -632,7 +637,7 @@ async function sync(){
   if(sync.promise===task)sync.promise=null;
   if(session===active&&session&&(syncFailed||syncRequested)){
    retryAfter=syncFailed?Date.now()+60000:0;
-   if((state.pending||[]).some(row=>!row.syncRejected)||(state.countQueue||[]).length||syncRequested)scheduleSync(300);
+   if((state.pending||[]).some(row=>!row.syncRejected)||(state.countQueue||[]).length||(state.incomeChanges||[]).some(row=>!row.syncRejected)||syncRequested)scheduleSync(300);
   }else retryAfter=0;
  }
 }
@@ -645,23 +650,23 @@ async function performSync(){
  try{
   do{
    syncRequested=false;
-   const local=await changeState(document),pending=window.SKProductionSync.selectPending(local);
+   const local=await changeState(document),pending=window.SKProductionSync.selectPending(local),incomeChanges=window.SKProductionSync.selectIncomeChanges(local);
    const inventoryRequest=countAttempted?undefined:(local.countQueue||[])[0];countAttempted=Boolean(inventoryRequest)||countAttempted;
    // Un servidor antiguo ignora checkedPending: nunca aplica un ajuste sin validar el saldo.
    const movements=pending.some(row=>row.kind==='adjustment')?{pending:[],checkedPending:pending}:{pending};
-   const result=await api('productionSync',{token:active.token,syncProtocol:window.SKProductionSync.protocol,...movements,inventoryRequest});
-   const fresh=await changeState(document,current=>window.SKProductionSync.reconcile(result,pending,current,inventoryRequest));
+   const result=await api('productionSync',{token:active.token,syncProtocol:window.SKProductionSync.protocol,...movements,inventoryRequest,incomeChanges});
+   const fresh=await changeState(document,current=>window.SKProductionSync.reconcile(result,pending,current,inventoryRequest,incomeChanges));
    if(session===active){
     state=fresh;
     if(result.inventoryResult?.count?.status==='closed'&&countSelection===result.inventoryResult.count.id){countReport=result.inventoryResult.count;countSelection='';countValues=new Map();}
     if(!countDirty&&!countSaving&&countSelection){const selected=selectedCount();countValues=new Map((selected?.values||[]).map(row=>[row.partId,row.physical]));countEditRevision=selected?.revision||'';if(!selected)countSelection='';}
-    syncFailed=Boolean(fresh.pending.length||fresh.countQueue.length);
-    syncError=fresh.pending.find(row=>row.syncError)?.syncError||fresh.countSyncError||'';
-    status(syncFailed?'Sincronización parcial · '+(fresh.pending.length+fresh.countQueue.length)+' pendiente(s). '+syncError:'SINCRONIZADO · todos los registros confirmados.');
+    syncFailed=Boolean(fresh.pending.length||fresh.countQueue.length||fresh.incomeChanges.length);
+    syncError=fresh.pending.find(row=>row.syncError)?.syncError||fresh.incomeChanges.find(row=>row.syncError)?.syncError||fresh.countSyncError||'';
+    status(syncFailed?'Sincronización parcial · '+(fresh.pending.length+fresh.countQueue.length+fresh.incomeChanges.length)+' pendiente(s). '+syncError:'SINCRONIZADO · todos los registros confirmados.');
     paint();
    }
    const sentIds=new Set(pending.map(row=>row.id));
-   again=syncRequested||window.SKProductionSync.selectPending(fresh).some(row=>!sentIds.has(row.id));
+   again=syncRequested||window.SKProductionSync.selectPending(fresh).some(row=>!sentIds.has(row.id))||window.SKProductionSync.selectIncomeChanges(fresh).some(row=>!incomeChanges.some(sent=>sent.id===row.id));
   }while(session===active&&navigator.onLine&&again);
  }catch(error){
   syncError=error.message;
@@ -700,12 +705,92 @@ function showConsumptionView(showQueries,stockView,physical=false){
  if(physical)paintCount();
  if(showQueries)showQueryType(byId('queryIncome').getAttribute('aria-pressed')==='true');
 }
-function paintIncomeQueries(){
- const notice=byId('incomeQueryStatus');
- notice.textContent=!Array.isArray(state.incomes)?'Sincroniza para cargar los ingresos.':'Aún no hay ingresos registrados.';
- notice.hidden=incomeMovements().some(row=>row.kind==='income');
- paintStockRows(byId('incomeQueryRows'),'income');
+function incomeEditable(row){
+ if(!row||row.kind!=='income'||session?.user.role!=='admin')return false;
+ const latest=(state.inventoryLatest||[]).filter(x=>x.origin===row.origen&&x.status==='closed').sort((a,b)=>b.date.localeCompare(a.date))[0];
+ return !latest||row.fechaISO>latest.date||row.fechaISO===latest.date&&(row.recordedAt||row.createdAt)>latest.closedAt;
 }
+function incomeAction(label,callback,disabled=false){
+ const button=document.createElement('button');button.type='button';button.textContent=label;button.disabled=disabled;button.onclick=callback;return button;
+}
+function incomeRowCells(values){
+ const tr=document.createElement('tr');for(const value of values){const td=document.createElement('td');td.textContent=value??'—';tr.append(td);}return tr;
+}
+function paintIncomeQueries(){
+ const notice=byId('incomeQueryStatus'),admin=session?.user.role==='admin';
+ const rows=incomeMovements().filter(row=>row.kind==='income'&&!row.deleted).reverse(),parts=catalog();
+ notice.textContent=!Array.isArray(state.incomes)?'Sincroniza para cargar los ingresos.':'Aún no hay ingresos registrados.';notice.hidden=rows.length>0;
+ byId('incomeQueryRows').replaceChildren(...rows.map(row=>{
+  const part=parts.find(part=>partMatches(row,part,row.origen)),tr=incomeRowCells([displayDate(row.fechaISO),part?partLabel(part):row.partId,row.origen,row.cantidad]),actions=document.createElement('td');
+  const pending=(state.incomeChanges||[]).some(op=>op.incomeId===row.id)||(state.pending||[]).some(op=>op.id===row.id);
+  if(admin){
+   const disabled=saving||pending||!incomeEditable(row);
+   actions.append(incomeAction('EDITAR',()=>openIncomeEditor(row),disabled),incomeAction('ELIMINAR',()=>deleteIncome(row),disabled));
+   if(pending)actions.append(document.createTextNode(' PENDIENTE'));
+   else if(!incomeEditable(row))actions.append(document.createTextNode(' INVENTARIO CERRADO'));
+  }else actions.textContent='—';
+  tr.append(actions);return tr;
+ }));
+ byId('incomeChangeLog').hidden=!admin;
+ if(!admin)return;
+ byId('incomeChangeAvailability').hidden=state.incomeChangesV1===true;
+ const history=(state.incomeHistory||[]).filter(entry=>Date.now()-Date.parse(entry.at)<=30*86400000).slice().reverse();
+ byId('incomeChangeRows').replaceChildren(...history.map(entry=>{
+  const current=(state.incomes||[]).find(row=>row.id===entry.incomeId),part=parts.find(part=>partMatches(entry.before,part,entry.before.origen));
+  const show=row=>(row.deleted?'ELIMINADO':row.cantidad)+' · '+displayDate(row.fechaISO);
+  const tr=incomeRowCells([new Date(entry.at).toLocaleString('es-CO',{timeZone:'America/Bogota'}),part?partLabel(part):entry.before.partId,entry.before.origen,({edit:'Edición',delete:'Eliminación',revert:'Reversión'})[entry.action],show(entry.before),show(entry.after)]),action=document.createElement('td');
+  if(entry.action!=='revert'&&!entry.revertedBy&&current?.revision===entry.id&&incomeEditable(current))action.append(incomeAction('REVERTIR',()=>revertIncome(entry),saving||(state.incomeChanges||[]).some(op=>op.incomeId===entry.incomeId)));
+  else action.textContent=entry.revertedBy?'REVERTIDO':entry.action==='revert'?'RESTAURADO':'CAMBIO POSTERIOR O CIERRE';
+  tr.append(action);return tr;
+ }));
+ byId('incomeChangePending').replaceChildren(...(state.incomeChanges||[]).map(op=>{
+  const p=document.createElement('p');p.textContent=({edit:'Edición',delete:'Eliminación',revert:'Reversión'})[op.action]+' · '+(op.label||op.incomeId)+' · '+(op.syncError||'GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.');
+  if(op.syncRejected)p.append(incomeAction('RETIRAR CAMBIO RECHAZADO',()=>discardIncomeChange(op),saving));return p;
+ }));
+}
+function openIncomeEditor(row){
+ const dialog=byId('incomeEditDialog'),form=byId('incomeEditForm');
+ dialog.incomeRow={...row};form.elements.cantidad.value=row.cantidad;form.elements.fechaISO.value=displayDate(row.fechaISO);
+ byId('incomeEditLabel').textContent=row.origen+' · '+(catalog().find(part=>partMatches(row,part,row.origen))?.nombre||row.partId);
+ byId('incomeEditError').textContent='';dialog.showModal();
+}
+async function queueIncomeChange(row,action,values,historyId){
+ const active=session;if(!active||active.user.role!=='admin'||saving)return false;
+ saving=true;
+ try{
+  const operation={id:crypto.randomUUID(),incomeId:row.id,baseRevision:row.revision||'original',action,...(historyId?{historyId}:{}),...(action==='edit'?{cantidad:values.cantidad,fechaISO:values.fechaISO}:{}),after:values,label:row.origen+' · '+(catalog().find(part=>partMatches(row,part,row.origen))?.nombre||row.partId)};
+  const fresh=await changeState(active.user.document,current=>{
+   const stored=(current.incomes||[]).find(x=>x.id===row.id);
+   if(!stored||stored.kind!=='income'||(stored.revision||'original')!==operation.baseRevision)throw new Error('El ingreso cambió. Revisa la versión actual.');
+   if((current.incomeChanges||[]).some(op=>op.incomeId===row.id)||(current.pending||[]).some(op=>op.id===row.id))throw new Error('Sincroniza el cambio pendiente antes de modificar este ingreso.');
+   return {...current,incomeChanges:[...(current.incomeChanges||[]),operation]};
+  });
+  if(session===active){state=fresh;status('CAMBIO GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.');scheduleSync(300);}return true;
+ }catch(error){if(session===active){status(error.message);byId('incomeEditError').textContent=error.message;}return false;}
+ finally{saving=false;if(session===active)paint();}
+}
+async function deleteIncome(row){
+ if(!confirm('Borrar este registro afectará el Saldo esperado en el módulo Inventario.\n\n'+row.origen+' · '+row.cantidad+' unidades · '+displayDate(row.fechaISO)+'\nPodrás recuperarlo durante 30 días en el registro temporal.\n\n¿Confirmas la eliminación?'))return;
+ await queueIncomeChange(row,'delete',{cantidad:row.cantidad,fechaISO:row.fechaISO,deleted:true});
+}
+async function revertIncome(entry){
+ const row=(state.incomes||[]).find(row=>row.id===entry.incomeId);
+ if(!row||!confirm('Revertir este cambio restaurará el registro anterior y recalculará el Saldo esperado en Inventario. ¿Deseas continuar?'))return;
+ await queueIncomeChange(row,'revert',{cantidad:entry.before.cantidad,fechaISO:entry.before.fechaISO,deleted:Boolean(entry.before.deleted)},entry.id);
+}
+async function discardIncomeChange(op){
+ const active=session;if(!active||active.user.role!=='admin'||saving||!confirm('Retirar este cambio rechazado conservará el ingreso confirmado en la base central. ¿Continuar?'))return;
+ if(sync.promise)await sync.promise;if(session!==active)return;
+ try{const fresh=await changeState(active.user.document,current=>({...current,incomeChanges:(current.incomeChanges||[]).filter(row=>!(row.id===op.id&&row.syncRejected))}));if(session===active){state=fresh;paint();}}catch(error){status(error.message);}
+}
+byId('incomeEditCancel').onclick=()=>byId('incomeEditDialog').close();
+byId('incomeEditForm').onsubmit=async event=>{
+ event.preventDefault();const edit=event.currentTarget,row=byId('incomeEditDialog').incomeRow;
+ const cantidad=Number(edit.elements.cantidad.value),fechaISO=readDate(edit.elements.fechaISO);
+ if(!Number.isSafeInteger(cantidad)||cantidad<1||!fechaISO||fechaISO>today()){byId('incomeEditError').textContent='Escribe una cantidad entera mayor que cero y una fecha válida hasta hoy.';return;}
+ if(!confirm('Editar este registro afectará la cantidad en el módulo Inventario, en la columna Saldo esperado.\n\nCantidad: '+row.cantidad+' → '+cantidad+'\nFecha: '+displayDate(row.fechaISO)+' → '+displayDate(fechaISO)+'\n\n¿Confirmas la edición?'))return;
+ if(await queueIncomeChange(row,'edit',{cantidad,fechaISO,deleted:false}))byId('incomeEditDialog').close();
+};
 function showQueryType(incomes){
  byId('queryIncome').setAttribute('aria-pressed',String(incomes));
  byId('queryConsumption').setAttribute('aria-pressed',String(!incomes));

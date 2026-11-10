@@ -111,8 +111,17 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #stockEditPanel [data-stock-balance]{grid-column:1/-1;white-space:pre-line;line-height:1.6}
 [data-stock-status]{grid-column:1/-1;margin:0;color:#173d59;font-weight:650}
 [data-stock-status].stockError{background:#fff0e8;color:#8a290e;border:1px solid #e2aa8c}
+#incomeQueries td:last-child{min-width:170px}
+#incomeQueries td button{margin:3px;padding:8px 12px;min-height:44px}
+#incomeEditDialog{border:1px solid #cbd7df;border-radius:12px;max-width:480px;width:calc(100% - 40px);padding:20px;color:#173d59}
+#incomeEditDialog::backdrop{background:#0008}
+#incomeEditDialog h2{text-align:center}
+#incomeEditForm{display:grid;gap:12px}
+#incomeEditForm label{display:grid;gap:5px}
+.incomeWarning{background:#fff1cf;color:#624100;border-left:4px solid #df9d19;padding:12px;border-radius:5px}
+#incomeEditError{color:#a31515}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=1"></script><script defer src="app.js?v=45-saldo-apertura"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=2"></script><script defer src="app.js?v=46-ingresos-reversibles"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -263,8 +272,26 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <section id="incomeQueries" hidden>
 <h2>CONSULTAR INGRESOS</h2>
 <p id="incomeQueryStatus" class="hint" hidden></p>
-<div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Repuesto</th><th>Inventario</th><th>Cantidad</th></tr></thead><tbody id="incomeQueryRows"></tbody></table></div>
+<div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Repuesto</th><th>Inventario</th><th>Cantidad</th><th>Acciones</th></tr></thead><tbody id="incomeQueryRows"></tbody></table></div>
+<div id="incomeChangeLog" hidden>
+<h3>REGISTRO TEMPORAL DE CAMBIOS</h3>
+<p class="hint">Ediciones y eliminaciones de los últimos 30 días. Revertir recupera el valor anterior del cambio vigente y recalcula el saldo esperado. Los ingresos de inventarios cerrados conservan sus valores.</p>
+<p id="incomeChangeAvailability" class="hint" hidden>Los cambios quedarán pendientes hasta actualizar el servicio de sincronización.</p>
+<div id="incomeChangePending" role="status" aria-live="polite"></div>
+<div class="tableWrap"><table><thead><tr><th>Fecha del cambio</th><th>Repuesto</th><th>Inventario</th><th>Acción</th><th>Antes</th><th>Después</th><th>Recuperar</th></tr></thead><tbody id="incomeChangeRows"></tbody></table></div>
+</div>
 </section>
+<dialog id="incomeEditDialog" aria-labelledby="incomeEditTitle">
+<h2 id="incomeEditTitle">EDITAR INGRESO</h2>
+<p id="incomeEditLabel"></p>
+<form id="incomeEditForm">
+<label>Fecha<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
+<label>Cantidad<input name="cantidad" type="number" min="1" step="1" required></label>
+<p class="incomeWarning">Editar este registro afectará la cantidad en el módulo Inventario, en la columna Saldo esperado.</p>
+<p id="incomeEditError" role="alert"></p>
+<button type="submit">GUARDAR CAMBIOS</button><button type="button" id="incomeEditCancel">CANCELAR</button>
+</form>
+</dialog>
 <section id="queries" data-compact-detail></section>
 </div>
 </section>
