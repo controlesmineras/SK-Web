@@ -16,6 +16,7 @@ main form,main .tableWrap{color:#172033}
 .productionToolbar button:disabled{background:#dbe4ec;color:#43576b}
 #record .productionField{grid-column:1/-1;min-width:0}
 .equipmentTypes{grid-template-columns:repeat(2,minmax(0,1fr))}
+.shiftOptions{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
 .equipmentTypes legend{padding:0;margin-bottom:6px;font-weight:650;text-transform:uppercase}
 .equipmentTypes label{flex-direction:row;align-items:center;justify-content:center;min-height:44px;border:1px solid #cbd3da;border-radius:8px}
 .equipmentTypes label:has(:checked){background:#e4f1fa;border-color:#416a89}
@@ -74,7 +75,7 @@ main form,main .tableWrap{color:#172033}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.2)}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=20-access-logo"></script><script defer src="../consumption-query-v2.js"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=21-shift-options"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -109,7 +110,12 @@ main form,main .tableWrap{color:#172033}
 <form id="record">
 <div class="productionField recordDateShift">
 <label>Fecha<input name="fechaISO" type="date" required></label>
-<label>Turno<select name="turno" required><option value="D">D</option><option value="T">T</option><option value="S">S</option></select></label>
+<fieldset class="productionField equipmentTypes shiftOptions">
+<legend>Turno</legend>
+<label><input type="radio" name="turno" value="D" checked required> Día</label>
+<label><input type="radio" name="turno" value="T"> Tarde</label>
+<label><input type="radio" name="turno" value="S"> Serena</label>
+</fieldset>
 </div>
 <fieldset class="productionField equipmentTypes">
 <legend>Tipo de equipo</legend>
