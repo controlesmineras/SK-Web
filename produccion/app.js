@@ -186,15 +186,34 @@ function compareParts(left,right){
 }
 const catalog=()=>window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]).sort(compareParts);
 const incomeMovements=()=>Array.from(new Map([...(state.incomes||[]),...(state.pending||[]).filter(row=>row.kind)].map(row=>[row.id,row])).values());
+function countTotals(origin,date,parts){
+ const closed=(state.inventoryLatest||[]).find(row=>row.origin===origin&&(!date||row.date<date));
+ const prior=new Map(),aliases=new Map(),totals=new Map();
+ for(const row of closed?.rows||[])for(const id of row.aliases||[row.partId])prior.set(id,row);
+ for(const part of parts){
+  const ids=[part.id,part.criterionId].filter(Boolean),previous=ids.map(id=>prior.get(id)).find(Boolean);
+  const total={opening:previous?.physical??0,incomes:0,consumptions:0,cutoff:previous?closed.date:'',initialDate:''};
+  totals.set(part.id,total);
+  for(const id of ids)aliases.set(id,total);
+ }
+ const get=row=>row.origen===origin&&!row.deleted&&(!date||row.fechaISO<=date)&&aliases.get(row.partId);
+ const incomes=incomeMovements();
+ for(const row of incomes){
+  const total=get(row);
+  if(total&&!total.cutoff&&row.kind==='initial'){total.opening=row.cantidad;total.initialDate=row.fechaISO;}
+ }
+ const include=(row,total)=>total&&(total.cutoff?row.fechaISO>total.cutoff:!total.initialDate||row.fechaISO>=total.initialDate);
+ for(const row of incomes){const total=get(row);if(row.kind==='income'&&include(row,total))total.incomes+=row.cantidad;}
+ const movements=new Map([...(state.consumptions||[]),...(state.pending||[]).filter(row=>!row.kind)].map(row=>[row.id,row]));
+ for(const row of movements.values()){const total=get(row);if(include(row,total))total.consumptions+=row.cantidad;}
+ return totals;
+}
+let stockCacheState,stockCache=new Map();
 function stockFor(part,origin){
- const matches=row=>row.origen===origin&&(row.partId===part.id||Boolean(part.criterionId)&&row.partId===part.criterionId);
- const income=incomeMovements().filter(matches);
- const initial=income.find(row=>row.kind==='initial');
- const since=row=>!initial||row.fechaISO>=initial.fechaISO;
- const received=income.filter(row=>row.kind==='income'&&since(row)).reduce((sum,row)=>sum+row.cantidad,0);
- const used=[...(state.consumptions||[]),...(state.pending||[])]
-  .filter(row=>!row.kind&&!row.deleted&&matches(row)&&since(row)).reduce((sum,row)=>sum+row.cantidad,0);
- return (initial?.cantidad||0)+received-used;
+ if(stockCacheState!==state){stockCacheState=state;stockCache=new Map();}
+ if(!stockCache.has(origin))stockCache.set(origin,countTotals(origin,'',window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin)));
+ const total=stockCache.get(origin).get(part.id);
+ return total?total.opening+total.incomes-total.consumptions:0;
 }
 function filterParts(parts,search){
  const query=norm(search).trim();
@@ -424,14 +443,14 @@ function paint(){
  filterMachines();
  paintParts();paintPeople();paintDraft();
  for(const view of stockViews)if(!view.panel.hidden)paintStockView(view);
- paintSync();
+ paintCount();paintSync();
  if(!byId('productionQueries').hidden){
   if(!byId('incomeQueries').hidden)paintIncomeQueries();
   else window.dispatchEvent(new Event('skweb-consumption-changed'));
  }
 }
 function paintSync(){
- const count=(state.pending||[]).length,badge=byId('pendingBadge'),button=byId('sync');
+ const count=(state.pending||[]).length+(state.countQueue||[]).length,badge=byId('pendingBadge'),button=byId('sync');
  const complete=Boolean(state.lastSyncAt)&&!count;
  const label=syncing?'Sincronizando':'Sincronizar';
  button.disabled=syncing;
@@ -457,16 +476,34 @@ async function sync(){
   do{
    syncRequested=false;
    const local=await changeState(document),pending=(local.pending||[]).slice(0,1000);
-   const data=await api('productionSync',{token:active.token,pending});
+   const inventoryRequest=(local.countQueue||[])[0];
+   const data=await api('productionSync',{token:active.token,pending,inventoryRequest});
    const acknowledged=new Set(Array.isArray(data.ack)?data.ack:[]);
    const savedRows=new Map([...(data.incomes||[]),...(data.consumptions||[])].map(row=>[row.id,row]));
    const confirmed=row=>acknowledged.has(row.id)&&savedRows.has(row.id)&&savedRows.get(row.id).correctionId===row.correctionId;
    if(pending.some(row=>!confirmed(row))){
     throw new Error('La base central no confirmó todos los movimientos. Siguen pendientes para reintentar.');
    }
-   const fresh=await changeState(document,current=>({...data,lastSyncAt:new Date().toISOString(),pending:(current.pending||[]).filter(row=>!confirmed(row))}));
-   if(session===active){state=fresh;paint()}
-  }while(session===active&&navigator.onLine&&(syncRequested||state.pending.length));
+   const {inventoryResult,...snapshot}=data;
+   const countError=inventoryRequest&&(inventoryResult?.error||(!inventoryResult?.count?'Actualiza Apps Script para sincronizar el inventario físico.':''));
+   const fresh=await changeState(document,current=>{
+    let countQueue=current.countQueue||[];
+    if(inventoryRequest&&!countError){
+     countQueue=countQueue.filter(row=>!(row.id===inventoryRequest.id&&row.revision===inventoryRequest.revision&&row.action===inventoryRequest.action))
+      .map(row=>row.id===inventoryRequest.id?{...row,baseRevision:inventoryResult.count.revision}:row);
+    }
+    return {...snapshot,lastSyncAt:new Date().toISOString(),countQueue,countSyncError:countError||'',pending:(current.pending||[]).filter(row=>!confirmed(row))};
+   });
+   if(session===active){
+    state=fresh;
+    if(inventoryResult?.count?.status==='closed'&&countSelection===inventoryResult.count.id){
+     countReport=inventoryResult.count;countSelection='';countValues=new Map();
+    }
+    if(countError)syncFailed=true;
+    paint();
+   }
+   if(countError&&!fresh.pending.length)break;
+  }while(session===active&&navigator.onLine&&(syncRequested||state.pending.length||state.countQueue.length));
  }catch(error){
   if(error.centralResponse&&/revocada|sesión no válida|inicia sesión/i.test(error.message)){
    deviceAccess.revokeToken(active.token);
@@ -483,9 +520,11 @@ async function sync(){
  }
  finally{syncing=false;paintSync()}
 }
-function showConsumptionView(showQueries,stockView){
+function showConsumptionView(showQueries,stockView,physical=false){
  if(stockView?.kind==='initial'&&session?.user.role!=='admin')return;
- byId('recordPanel').hidden=showQueries||Boolean(stockView);
+ byId('physicalCount').hidden=!physical;
+ byId('showPhysicalCount').setAttribute('aria-pressed',String(physical));
+ byId('recordPanel').hidden=showQueries||Boolean(stockView)||physical;
  for(const view of stockViews){
   const selected=view===stockView;
   view.panel.hidden=!selected;
@@ -493,8 +532,9 @@ function showConsumptionView(showQueries,stockView){
   if(selected)paintStockView(view);
  }
  byId('productionQueries').hidden=!showQueries;
- byId('showRecord').setAttribute('aria-pressed',String(!showQueries&&!stockView));
+ byId('showRecord').setAttribute('aria-pressed',String(!showQueries&&!stockView&&!physical));
  byId('showConsumptionQueries').setAttribute('aria-pressed',String(showQueries));
+ if(physical)paintCount();
  if(showQueries)showQueryType(byId('queryIncome').getAttribute('aria-pressed')==='true');
 }
 function paintIncomeQueries(){
@@ -511,6 +551,164 @@ function showQueryType(incomes){
  if(incomes)paintIncomeQueries();
  else window.dispatchEvent(new Event('skweb-open-queries'));
 }
+const countForm=byId('countForm'),countFields=countForm.elements;
+const countHeaders=['FECHA DE INVENTARIO','INVENTARIO','REPUESTO','SALDO DE APERTURA','INGRESOS','CONSUMOS','SALDO ESPERADO','EXISTENCIA FÍSICA','DIFERENCIA','SALDO DE CIERRE'];
+const countStatus=message=>{byId('countStatus').textContent=message};
+let countSelection='',countValues=new Map(),countReport=null,countDirty=false,countAccount='';
+const canCount=()=>['admin','assistant'].includes(session?.user.role);
+function countRecords(){
+ const records=new Map((state.inventoryCounts||[]).map(row=>[row.id,row]));
+ for(const row of state.countQueue||[])if(['save','submit'].includes(row.action))
+  records.set(row.id,{...row,owner:session?.user.document,status:'draft'});
+ return [...records.values()];
+}
+const selectedCount=()=>countRecords().find(row=>row.id===countSelection);
+function selectCount(id){
+ countSelection=id;
+ const selected=selectedCount();
+ countValues=new Map((selected?.values||[]).map(row=>[row.partId,row.physical]));
+ countDirty=false;
+ if(selected){countFields.origin.value=selected.origin;countFields.date.value=displayDate(selected.date);}
+ paintCount();
+}
+function countReportRows(report){
+ return report.rows.map(row=>[displayDate(report.date),report.origin,row.name,row.opening,row.incomes,row.consumptions,row.expected,row.physical,row.difference,row.physical]);
+}
+function paintCount(){
+ if(byId('physicalCount').hidden)return;
+ const enabled=Array.isArray(state.inventoryCounts),records=countRecords(),selected=selectedCount();
+ const queued=(state.countQueue||[]).find(row=>row.id===countSelection);
+ const review=selected?.status==='submitted',admin=session?.user.role==='admin';
+ const editable=enabled&&!countReport&&!review&&queued?.action!=='submit'&&(!selected||selected.owner===session?.user.document);
+ countFields.record.replaceChildren(new Option('NUEVO CONTEO',''),...records.map(row=>new Option(
+  [row.origin,displayDate(row.date),({draft:'BORRADOR',submitted:'PENDIENTE DE APROBACIÓN',returned:'DEVUELTO'})[row.status],row.countedBy].filter(Boolean).join(' · '),row.id)));
+ countFields.record.value=countSelection;
+ countFields.origin.disabled=Boolean(selected)||Boolean(countValues.size);
+ countFields.date.disabled=Boolean(selected)||review;
+ countForm.querySelector('[type=submit]').disabled=!editable;
+ byId('submitCount').disabled=!editable;
+ byId('approveCount').hidden=byId('returnCount').hidden=!(admin&&review);
+ byId('approveCount').disabled=byId('returnCount').disabled=Boolean(queued);
+ byId('discardCount').hidden=!queued||!state.countSyncError;
+ if(!enabled)countStatus('Sincroniza después de actualizar Apps Script para habilitar el inventario físico.');
+ else if(state.countSyncError)countStatus(state.countSyncError);
+ else if(queued)countStatus('PENDIENTE DE SINCRONIZAR');
+ else if(countReport){
+  const late=[...(state.incomes||[]),...(state.consumptions||[])].some(row=>row.kind!=='initial'&&!row.deleted&&row.origen===countReport.origin&&row.fechaISO<=countReport.date&&row.createdAt>countReport.closedAt);
+  countStatus('CIERRE APROBADO POR '+countReport.approvedBy+(late?' · Hay movimientos del período recibidos después del cierre. Revísalos en Consultas.':''));
+ }
+ else if(review)countStatus('PENDIENTE DE APROBACIÓN');
+ else if(selected?.status==='returned')countStatus('DEVUELTO PARA CORRECCIÓN · '+selected.note);
+ else if(selected)countStatus('BORRADOR SINCRONIZADO');
+ else countStatus('Registra la cantidad física. Usa 0 si contaste el repuesto y no había unidades.');
+ const table=byId('countTable'),origin=countFields.origin.value,date=readDate(countFields.date);
+ const reportRows=countReport?countReportRows(countReport):null;
+ const headers=reportRows?countHeaders:countHeaders.slice(2,9);
+ const header=document.createElement('tr');
+ for(const title of headers){const th=document.createElement('th');th.scope='col';th.textContent=title;header.append(th)}
+ table.tHead.replaceChildren(header);
+ const parts=window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin);
+ const totals=reportRows?null:countTotals(origin,date,parts);
+ const rows=reportRows||filterParts(parts,countFields.search.value).map(part=>{
+  const total=totals.get(part.id),expected=total.opening+total.incomes-total.consumptions;
+  const amount=countValues.get(part.id),input=document.createElement('input');
+  input.type='number';input.min='0';input.step='1';input.inputMode='numeric';input.disabled=!editable;
+  input.value=amount??'';input.setAttribute('aria-label','Existencia física de '+partLabel(part));
+  const difference=document.createElement('span');
+  difference.textContent=amount==null?'—':amount-expected;
+  input.oninput=()=>{
+   countValues.set(part.id,input.value===''?null:input.valueAsNumber);
+   countDirty=true;
+   difference.textContent=input.value===''||!input.validity.valid?'—':input.valueAsNumber-expected;
+  };
+  return [partLabel(part),total.opening,total.incomes,total.consumptions,expected,input,difference];
+ });
+ table.tBodies[0].replaceChildren(...rows.map(values=>{
+  const tr=document.createElement('tr');
+  for(const value of values){const td=document.createElement('td');if(value instanceof Node)td.append(value);else td.textContent=value;tr.append(td)}
+  return tr;
+ }));
+ byId('countExcel').disabled=byId('countPdf').disabled=!countReport;
+}
+async function queueCount(action,note){
+ const active=session,selected=selectedCount();
+ if(!active||!canCount()||!Array.isArray(state.inventoryCounts)||countReport)return;
+ const revision=crypto.randomUUID(),id=selected?.id||crypto.randomUUID();
+ let request={id,action,revision:selected?.revision,note};
+ if(action==='save'||action==='submit'){
+  const date=readDate(countFields.date),origin=countFields.origin.value;
+  if(!date||date>today()){countStatus('Ingresa una fecha de inventario válida, hasta hoy.');return}
+  const values=[...countValues].filter(([,value])=>value!==null).map(([partId,physical])=>({partId,physical}));
+  if(values.some(row=>!Number.isSafeInteger(row.physical)||row.physical<0)){countStatus('Registra cantidades enteras de cero en adelante.');return}
+  if(action==='submit'&&window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin).some(part=>!values.some(row=>row.partId===part.id))){
+   countStatus('Completa todos los repuestos antes de solicitar autorización.');return;
+  }
+  request={id,action,revision,origin,date,values,baseRevision:selected?.baseRevision??selected?.revision??''};
+ }else if(!navigator.onLine){countStatus('Conéctate para aprobar o devolver el inventario.');return;}
+ try{
+  const fresh=await changeState(active.user.document,current=>({...current,countSyncError:'',countQueue:[...(current.countQueue||[]).filter(row=>row.id!==id),request]}));
+  if(session!==active)return;
+  state=fresh;countSelection=id;countDirty=false;paintCount();paintSync();
+  if(navigator.onLine)await sync();
+ }catch(error){if(session===active)countStatus(error.message)}
+}
+countForm.onsubmit=event=>{event.preventDefault();queueCount('save')};
+byId('submitCount').onclick=()=>queueCount('submit');
+byId('approveCount').onclick=()=>{if(confirm('¿Confirmar el cierre con las existencias físicas registradas?'))queueCount('approve')};
+byId('returnCount').onclick=()=>{const note=prompt('OBSERVACIÓN PARA CORRECCIÓN');if(note?.trim())queueCount('return',note)};
+byId('discardCount').onclick=async()=>{
+ const active=session,id=countSelection;
+ if(!active||!confirm('¿Descartar el cambio pendiente y recuperar la versión sincronizada?'))return;
+ try{
+  const fresh=await changeState(active.user.document,current=>({...current,countSyncError:'',countQueue:(current.countQueue||[]).filter(row=>row.id!==id)}));
+  if(session===active){state=fresh;selectCount(id);paintSync();}
+ }catch(error){if(session===active)countStatus(error.message)}
+};
+countFields.record.onchange=()=>{
+ if(countDirty&&!confirm('Hay cambios sin guardar. ¿Cambiar de registro?')){countFields.record.value=countSelection;return;}
+ countReport=null;selectCount(countFields.record.value);
+};
+for(const field of [countFields.origin,countFields.date])field.onchange=()=>{countReport=null;paintCount()};
+countFields.search.oninput=()=>paintCount();
+countFields.date.oninput=()=>countFields.date.setCustomValidity('');
+async function loadCountHistory(id){
+ const active=session;
+ if(!active||!canSync())return;
+ try{
+  const result=await api('productionSync',{token:active.token,inventoryRequest:{action:'history',id}});
+  if(session!==active)return;
+  if(!result.inventoryResult||result.inventoryResult.error)throw new Error(result.inventoryResult?.error||'Actualiza Apps Script para consultar los cierres.');
+  const {history,report}=result.inventoryResult,picker=byId('countHistory');
+  picker.replaceChildren(new Option('Selecciona un cierre',''),...history.sort((a,b)=>b.date.localeCompare(a.date)).map(row=>new Option(row.origin+' · '+displayDate(row.date),row.id)));
+  picker.disabled=false;picker.value=id||'';countReport=report;paintCount();
+ }catch(error){if(session===active)countStatus(error.message)}
+}
+byId('newPhysicalCount').onclick=()=>{
+ if(countDirty&&!confirm('Hay cambios sin guardar. ¿Iniciar un nuevo conteo?'))return;
+ countReport=null;countFields.date.value=displayDate(today());countFields.search.value='';
+ byId('countHistory').value='';selectCount('');
+};
+byId('loadCountHistory').onclick=()=>loadCountHistory();
+byId('countHistory').onchange=()=>loadCountHistory(byId('countHistory').value);
+byId('countExcel').onclick=()=>{if(countReport)window.SKDownloadTableExcel([countHeaders,...countReportRows(countReport)],'Inventario_'+countReport.origin+'_'+countReport.date+'.xlsx')};
+byId('countPdf').onclick=()=>{
+ if(!countReport)return;
+ const report=window.open('','_blank');
+ if(!report){countStatus('Permite las ventanas emergentes para guardar el PDF.');return}
+ const doc=report.document;
+ doc.title='Inventario '+countReport.origin+' '+countReport.date;
+ const style=doc.createElement('style');
+ style.textContent='@page{size:A4 landscape;margin:10mm}body{font:12px system-ui}table{width:100%;border-collapse:collapse}th,td{border:1px solid #777;padding:6px}th{background:#e7edf1}thead{display:table-header-group}tr{break-inside:avoid}';
+ doc.head.append(style);
+ const title=doc.createElement('h1');title.textContent='CIERRE DE INVENTARIO FÍSICO';
+ const info=doc.createElement('p');info.textContent='CONTEO: '+countReport.countedBy+' · APROBACIÓN: '+countReport.approvedBy;
+ const table=doc.createElement('table'),head=table.createTHead().insertRow(),body=table.createTBody();
+ for(const text of countHeaders){const th=doc.createElement('th');th.textContent=text;head.append(th)}
+ for(const row of countReportRows(countReport)){const tr=body.insertRow();for(const value of row)tr.insertCell().textContent=value}
+ doc.body.append(title,info,table);report.focus();report.print();
+};
+
+byId('showPhysicalCount').onclick=()=>showConsumptionView(false,undefined,true);
 for(const view of stockViews)view.button.onclick=()=>showConsumptionView(false,view);
 byId('showRecord').onclick=()=>showConsumptionView(false);
 byId('showConsumptionQueries').onclick=()=>showConsumptionView(true);
@@ -522,6 +720,13 @@ function placeInstallControls(container){
 async function openWorkspace(){
  if(!session)return;
  state=await changeState(session.user.document);
+ byId('showPhysicalCount').hidden=!canCount();
+ if(countAccount!==session.user.document){
+  countAccount=session.user.document;countSelection='';countValues=new Map();countReport=null;countDirty=false;
+  countFields.date.value=displayDate(today());countFields.search.value='';
+  byId('countHistory').replaceChildren(new Option('Selecciona un cierre',''));
+  byId('countHistory').disabled=true;
+ }
  placeInstallControls(document.querySelector('.productionToolbar'));
  byId('access').hidden=true;byId('productionHeader').hidden=false;byId('workspace').hidden=false;byId('productionSync').hidden=false;syncFailed=false;
  byId('operatorName').textContent=session.user.name;
@@ -613,6 +818,7 @@ const workerRegistration=navigator.serviceWorker?.register('sw.js',{updateViaCac
 byId('updateProduction').onclick=async event=>{
  const button=event.currentTarget;
  if(saving||syncing)return status('Espera a que termine el guardado o la sincronización.');
+ if(countDirty)return status('Guarda el borrador de inventario antes de actualizar.');
  if(draft.length)return status('Guarda o quita los repuestos seleccionados antes de actualizar.');
  button.disabled=true;
  status('Buscando la versión más reciente de Producción…');
