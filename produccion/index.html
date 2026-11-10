@@ -111,7 +111,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 [data-stock-status]{grid-column:1/-1;margin:0;color:#173d59;font-weight:650}
 [data-stock-status].stockError{background:#fff0e8;color:#8a290e;border:1px solid #e2aa8c}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=41-confirmar-existencias"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=1"></script><script defer src="app.js?v=42-protocolo-local"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -184,6 +184,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <p data-stock-balance class="hint"></p>
 <p data-stock-status class="hint" role="status" aria-live="polite" hidden></p>
 <button type="submit">GUARDAR EXISTENCIA ACTUAL</button>
+<button id="reviewStockAdjustment" type="button" hidden>RETIRAR AJUSTE RECHAZADO</button>
 </form>
 <p class="hint">Escribe la cantidad que debe quedar hoy. El ajuste se registra en el historial y conserva los movimientos anteriores.</p>
 <div class="tableWrap"><table><thead><tr><th>Inventario</th><th>N.º de ítem</th><th>Repuesto</th><th>Existencia actual</th></tr></thead><tbody data-stock-rows></tbody></table></div>
