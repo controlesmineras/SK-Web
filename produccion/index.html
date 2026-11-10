@@ -73,9 +73,8 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 @media(max-width:310px){.recordDateShift{grid-template-columns:minmax(0,1fr)}}
 
 .recordDateShift > .shiftOptions{min-width:0}
-.recordDateShift input[type="date"]{width:100%;min-width:0;max-width:100%;height:45px;box-sizing:border-box}
-.recordDateShift input[type="date"]{-webkit-appearance:none;appearance:none;display:block}
-.recordDateShift input[type="date"]::-webkit-date-and-time-value{min-width:0;margin:0;text-align:left}
+.recordDateShift input[name="fechaISO"]{width:100%;min-width:0;max-width:100%;height:45px;box-sizing:border-box}
+.recordDateShift input[name="fechaISO"]{-webkit-appearance:none;appearance:none;display:block}
 #accessStatus{margin:8px 0}
 #accessStatus:empty{display:none}
 .productionViews{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-bottom:16px}
@@ -101,7 +100,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=32-catalogo-existencias"></script><script defer src="../consumption-query-v2.js?v=consulta-pc-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=33-fechas-colombia"></script><script defer src="../consumption-query-v2.js?v=fechas-colombia-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -139,7 +138,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="incomePartOptions"></label>
 <div id="incomePartOptions" class="machineOptions partOptions" hidden></div>
 <input type="hidden" name="partId"></div>
-<label>Fecha<input name="fechaISO" type="date" required></label>
+<label>Fecha<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
 <label>Cantidad<input name="cantidad" type="number" min="1" step="1" required></label>
 <p data-stock-balance class="hint"></p>
 <button type="submit">Guardar ingreso</button>
@@ -152,7 +151,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="stockPartOptions"></label>
 <div id="stockPartOptions" class="machineOptions partOptions" hidden></div>
 <input type="hidden" name="partId"></div>
-<label>Fecha<input name="fechaISO" type="date" required></label>
+<label>Fecha<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
 <label>Saldo inicial<input name="cantidad" type="number" min="0" step="1" placeholder="0" required></label>
 <p data-stock-balance class="hint"></p>
 <button type="submit">Guardar saldo inicial</button>
@@ -164,7 +163,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <h2>CONSUMO DE REPUESTOS</h2>
 <form id="record">
 <div class="productionField recordDateShift">
-<label>Fecha<input name="fechaISO" type="date" required></label>
+<label>Fecha<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
 <fieldset class="equipmentTypes shiftOptions">
 <legend>Turno</legend>
 <label><input type="radio" name="turno" value="D" checked required> Día</label>
