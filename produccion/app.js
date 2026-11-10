@@ -129,6 +129,10 @@ setupPicker(machineSearch,machineOptions,()=>{
  machineOptions.hidden=false;
  filterMachines();
 },closeMachine);
+const machinePicker=byId('machinePicker');
+document.addEventListener('click',event=>{
+ if(!machineOptions.hidden&&!machinePicker.contains(event.target))closeMachine();
+},true);
 setupPicker(partSearch,partCards,()=>{
  partCards.hidden=false;
  paintParts();
