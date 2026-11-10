@@ -40,6 +40,25 @@ if(session&&Number(session.expiresAt)<=Date.now()){
 }
 
 const invitation=new URLSearchParams(location.hash.slice(1)).get('invitation');
+const displayDate=value=>value?value.split('-').reverse().join('/'):'';
+function parseDate(value){
+ const match=value.trim().match(/^(\d{2})(\/?)(\d{2})\2(\d{4})$/);
+ if(!match)return '';
+ const [,day,,month,year]=match,iso=year+'-'+month+'-'+day;
+ const date=new Date(iso+'T00:00:00Z');
+ return !Number.isNaN(date.getTime())&&date.toISOString().slice(0,10)===iso?iso:'';
+}
+function readDate(input){
+ const iso=parseDate(input.value);
+ input.setCustomValidity(input.value&&!iso?'Escribe una fecha válida en formato DD/MM/AAAA.':'');
+ if(iso)input.value=displayDate(iso);
+ return iso;
+}
+window.SKProductionDates={displayDate,readDate};
+document.querySelectorAll('input[name="fechaISO"]').forEach(input=>{
+ input.oninput=()=>input.setCustomValidity('');
+ input.onchange=()=>readDate(input);
+});
 const today=()=>new Intl.DateTimeFormat('sv-SE',{timeZone:'America/Bogota'}).format(new Date());
 const bogotaHour=new Intl.DateTimeFormat('en-GB',{timeZone:'America/Bogota',hour:'2-digit',hourCycle:'h23'});
 function currentShift(date=new Date()){
@@ -203,7 +222,7 @@ function paintBalances(body,parts,origin,enabled){
 function paintStockRows(body,kind,rows=catalog()){
  body.replaceChildren(...incomeMovements().filter(row=>row.kind===kind).reverse().map(row=>{
   const tr=document.createElement('tr'),item=rows.find(x=>x.id===row.partId);
-  const values=[row.fechaISO,item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':row.origen,row.cantidad];
+  const values=[displayDate(row.fechaISO),item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':row.origen,row.cantidad];
   for(const value of values){
    const td=document.createElement('td');td.textContent=value;tr.append(td);
   }
@@ -216,7 +235,9 @@ async function saveStock(event,{form:stockForm,kind}){
  if(!active||saving||!Array.isArray(state.incomes)||!canSaveStock(kind,active.user.role))return;
  const {origen,partId,fechaISO,cantidad}=stockForm.elements;
  if(!partId.value||cantidad.value==='')return;
- const row={kind,origen:origen.value,partId:partId.value,fechaISO:fechaISO.value,cantidad:Number(cantidad.value)};
+ const date=readDate(fechaISO);
+ if(!date){fechaISO.reportValidity();return}
+ const row={kind,origen:origen.value,partId:partId.value,fechaISO:date,cantidad:Number(cantidad.value)};
  if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(row.kind==='initial'?0:1))return;
  saving=true;
  try{
@@ -403,7 +424,7 @@ function paintSync(){
  badge.setAttribute('aria-label',badge.title);
  const date=new Date(state.lastSyncAt);
  byId('headerLastSync').textContent=Number.isNaN(date.getTime())?'SIN SINCRONIZAR':
-  'Sinc. '+date.toLocaleDateString('es-CO',{timeZone:'America/Bogota',day:'numeric',month:'numeric'})+' '+date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
+  'Sinc. '+date.toLocaleDateString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'})+' '+date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
 }
 let syncRequested=false;
 async function sync(){
@@ -486,8 +507,8 @@ async function openWorkspace(){
  byId('operatorName').textContent=session.user.name;
  byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
  byId('showStockEdit').hidden=session.user.role!=='admin';
- for(const view of stockViews)view.form.elements.fechaISO.value=today();
- fields.fechaISO.value=today();manualShift=false;refreshShift();showConsumptionView(false);paint();if(navigator.onLine)await sync();
+ for(const view of stockViews)view.form.elements.fechaISO.value=displayDate(today());
+ fields.fechaISO.value=displayDate(today());manualShift=false;refreshShift();showConsumptionView(false);paint();if(navigator.onLine)await sync();
 }
 form.onsubmit=async event=>{
  event.preventDefault();if(saving)return;
@@ -501,7 +522,8 @@ form.onsubmit=async event=>{
   if(lines.some(row=>!Number.isSafeInteger(row.cantidad)||row.cantidad<1))throw new Error('Ingresa una cantidad entera mayor que cero para cada repuesto.');
   if(lines.some(row=>row.tipoEquipo!==fields.tipoEquipo.value))throw new Error('Todos los repuestos deben corresponder al tipo de equipo seleccionado.');
   refreshShift();
-  const shared={turno:fields.turno.value,assetId:fields.assetId.value,responsableId:fields.responsableId.value,fechaISO:fields.fechaISO.value};
+  const shared={turno:fields.turno.value,assetId:fields.assetId.value,responsableId:fields.responsableId.value,fechaISO:readDate(fields.fechaISO)};
+  if(!shared.fechaISO){fields.fechaISO.reportValidity();return}
   if(!shared.responsableId)throw new Error('Selecciona el mecánico o responsable de la reparación.');
   const records=lines.map(row=>({...shared,...row,syncState:'pending',registradoPorNombre:active.user.name,id:crypto.randomUUID(),createdAt:new Date().toISOString()}));
   const fresh=await changeState(active.user.document,current=>({...current,pending:[...(current.pending||[]),...records]}));
