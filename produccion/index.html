@@ -17,7 +17,7 @@ main form,main .tableWrap{color:#172033}
 #record .productionField{grid-column:1/-1;min-width:0}
 .equipmentTypes{grid-template-columns:repeat(2,minmax(0,1fr))}
 .shiftOptions{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
-.shiftOptions label{position:relative;min-height:36px;font-size:.75rem;padding:0 2px}
+.equipmentTypes.shiftOptions label{position:relative;min-height:36px;font-size:.75rem;padding:0 2px}
 .shiftOptions input{position:absolute;width:1px;height:1px;margin:0;opacity:0}
 .shiftOptions label:has(:focus-visible){outline:2px solid #416a89;outline-offset:2px}
 .equipmentTypes legend{padding:0;margin-bottom:6px;font-weight:650;text-transform:uppercase}
@@ -63,7 +63,9 @@ main form,main .tableWrap{color:#172033}
 }
 @keyframes productionSyncSpin{to{transform:rotate(360deg)}}
 @keyframes productionSyncPulse{from{background:#397aa5}to{background:#2f765a;box-shadow:0 0 11px #35d87980}}
-.recordDateShift{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
+.recordDateShift{display:flex;flex-wrap:wrap;align-items:start;gap:8px}
+.recordDateShift > label{flex:1 1 115px}
+.recordDateShift > .shiftOptions{flex:2 1 155px;min-width:0}
 .recordDateShift input[type="date"]{width:100%;min-width:0;max-width:100%;height:45px;box-sizing:border-box}
 .recordDateShift input[type="date"]{-webkit-appearance:none;appearance:none;display:block}
 .recordDateShift input[type="date"]::-webkit-date-and-time-value{min-width:0;margin:0;text-align:left}
@@ -78,7 +80,7 @@ main form,main .tableWrap{color:#172033}
 .productionToolbar button,.productionViews button{font-size:.85rem;line-height:1.2;text-transform:uppercase;padding-inline:6px}
 #login .productionLoginText{display:inline-block;transform:scale(1.32);text-transform:uppercase}
 .productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
-#record .productionSaveText{display:inline-block;transform:scale(1.2)}
+#record .productionSaveText{display:inline-block;transform:scale(1.4)}
 </style>
 <script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="app.js?v=23-equipo-cantidad"></script><script defer src="../consumption-query-v2.js"></script>
 <script defer src="install-ui.js?v=1"></script>
@@ -115,7 +117,7 @@ main form,main .tableWrap{color:#172033}
 <form id="record">
 <div class="productionField recordDateShift">
 <label>Fecha<input name="fechaISO" type="date" required></label>
-<fieldset class="productionField equipmentTypes shiftOptions">
+<fieldset class="equipmentTypes shiftOptions">
 <legend>Turno</legend>
 <label><input type="radio" name="turno" value="D" checked required> Día</label>
 <label><input type="radio" name="turno" value="T"> Tarde</label>
