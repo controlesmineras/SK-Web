@@ -194,7 +194,7 @@ function paintStockView({form:stockForm,panel,kind}){
 function paintStockRows(body,kind,rows=catalog()){
  body.replaceChildren(...incomeMovements().filter(row=>row.kind===kind).reverse().map(row=>{
   const tr=document.createElement('tr'),item=rows.find(x=>x.id===row.partId);
-  for(const value of [row.fechaISO,item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':row.origen,row.cantidad]){
+  for(const value of [row.fechaISO,item?.numero ?? '—',item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':row.origen,row.cantidad]){
    const td=document.createElement('td');td.textContent=value;tr.append(td);
   }
   return tr;
