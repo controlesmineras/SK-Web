@@ -776,6 +776,17 @@ function productionSync_(q){
   for(const row of pending){
    if(!row||!/^[-a-zA-Z0-9]{16,100}$/.test(String(row.id||'')))throw new Error('Identificador de consumo no válido');
    if(known.has(row.id)||incomes.has(row.id))continue;
+   if(row.kind==='initialCorrection'){
+    if(user.role!=='admin')throw new Error('Solo el administrador puede corregir saldos iniciales.');
+    const initial=incomes.get(row.initialId);
+    if(initial?.kind!=='initial')throw new Error('Saldo inicial no disponible.');
+    const correctionIds=initial.correctionIds||[];
+    if(correctionIds.includes(row.id))continue;
+    if(!Number.isSafeInteger(row.cantidad)||row.cantidad<0)throw new Error('Cantidad de saldo inicial no válida.');
+    incomes.set(initial.id,{...initial,cantidad:row.cantidad,correctionIds:[...correctionIds,row.id]});
+    changed=true;
+    continue;
+   }
    if(row.kind==='initial'||row.kind==='income'){
     if(user.role!=='admin'&&(row.kind==='initial'||user.role!=='assistant'))throw new Error('Tu rol no permite este ingreso.');
     const part=parts.find(x=>x.id===row.partId&&!x.deleted&&x.active!==false&&String(x.clase).toLowerCase()+String(x.detalle)===String(row.origen).toLowerCase());
