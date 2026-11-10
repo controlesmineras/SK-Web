@@ -99,7 +99,6 @@ function partOptions(){
  return window.SKSpareCatalog.filter(rows,fields.tipoEquipo.value,inventoryOrigin);
 }
 const machineSearch=byId('machineSearch'),partSearch=byId('partSearch');
-const selectPart=byId('selectPart');
 const machineOptions=byId('machineOptions'),partCards=byId('partOptions');
 let selectedMachineLabel='';
 function setupPicker(input,container,open,close){
@@ -123,7 +122,6 @@ function closeMachine(){
 }
 function closeParts(){
  partCards.hidden=true;
- selectPart.setAttribute('aria-expanded','false');
  partSearch.value='';
 }
 setupPicker(machineSearch,machineOptions,()=>{
@@ -137,21 +135,10 @@ document.addEventListener('click',event=>{
 },true);
 function openParts(){
  partCards.hidden=false;
- selectPart.setAttribute('aria-expanded','true');
  paintParts();
 }
 setupPicker(partSearch,partCards,openParts,closeParts);
-selectPart.onclick=()=>{
- if(partCards.hidden)openParts();
- else closeParts();
-};
 const partPicker=byId('partPicker');
-partPicker.addEventListener('keydown',event=>{
- if(event.key==='Escape'&&!partCards.hidden){
-  selectPart.focus();
-  closeParts();
- }
-});
 document.addEventListener('click',event=>{
  if(!partCards.hidden&&!partPicker.contains(event.target))closeParts();
 },true);
@@ -188,22 +175,35 @@ function filterParts(parts,search){
 function paintStockView({form:stockForm,panel,kind}){
  const incomeFields=stockForm.elements;
  const rows=catalog(),origin=incomeFields.origen.value;
- const options=filterParts(window.SKSpareCatalog.filter(rows,origin.replace(/\d+$/,''),origin),incomeFields.search.value);
- const selected=incomeFields.partId.value;
- incomeFields.partId.replaceChildren(new Option('Selecciona un repuesto',''),...options.map(row=>new Option([row.numero,row.nombre].filter(Boolean).join(' · '),row.id)));
- if(options.some(row=>row.id===selected))incomeFields.partId.value=selected;
+ const options=window.SKSpareCatalog.filter(rows,origin.replace(/\d+$/,''),origin);
  const part=options.find(row=>row.id===incomeFields.partId.value);
+ if(!part)incomeFields.partId.value='';
+ const picker=stockForm.querySelector('.partOptions');
+ if(!picker.hidden)paintPartCards(picker,filterParts(options,part?'':incomeFields.search.value),origin,row=>{
+  incomeFields.partId.value=row.id;
+  incomeFields.search.value=partLabel(row);
+  picker.hidden=true;
+  paintStockView({form:stockForm,panel,kind});
+ });
  const enabled=Array.isArray(state.incomes);
  const allowed=canSaveStock(kind,session?.user.role);
  panel.querySelector('[data-stock-balance]').textContent=!enabled?'El servidor debe actualizarse y sincronizarse antes de registrar movimientos.':part?'Existencia registrada: '+stockFor(part,origin):options.length?'Selecciona un repuesto para ver su existencia.':'Sin repuestos que coincidan.';
- stockForm.querySelector('button').disabled=saving||!enabled||!allowed||!part;
- if(kind==='initial')paintStockRows(panel.querySelector('[data-stock-rows]'),kind,rows);
+ stockForm.querySelector('button[type=submit]').disabled=saving||!enabled||!allowed||!part;
+ if(kind==='initial')paintBalances(panel.querySelector('[data-stock-rows]'),options,origin,enabled);
+}
+function paintBalances(body,parts,origin,enabled){
+ body.replaceChildren(...parts.map(part=>{
+  const tr=document.createElement('tr');
+  for(const value of [origin,part.numero||'—',part.nombre,enabled?stockFor(part,origin):'—']){
+   const td=document.createElement('td');td.textContent=value;tr.append(td);
+  }
+  return tr;
+ }));
 }
 function paintStockRows(body,kind,rows=catalog()){
  body.replaceChildren(...incomeMovements().filter(row=>row.kind===kind).reverse().map(row=>{
   const tr=document.createElement('tr'),item=rows.find(x=>x.id===row.partId);
   const values=[row.fechaISO,item?.nombre||row.partId,row.kind==='initial'?'Saldo inicial':row.origen,row.cantidad];
-  if(kind==='initial')values.splice(1,0,item?.numero||'—');
   for(const value of values){
    const td=document.createElement('td');td.textContent=value;tr.append(td);
   }
@@ -215,7 +215,7 @@ async function saveStock(event,{form:stockForm,kind}){
  const active=session;
  if(!active||saving||!Array.isArray(state.incomes)||!canSaveStock(kind,active.user.role))return;
  const {origen,partId,fechaISO,cantidad}=stockForm.elements;
- if(cantidad.value==='')return;
+ if(!partId.value||cantidad.value==='')return;
  const row={kind,origen:origen.value,partId:partId.value,fechaISO:fechaISO.value,cantidad:Number(cantidad.value)};
  if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(row.kind==='initial'?0:1))return;
  saving=true;
@@ -231,27 +231,41 @@ async function saveStock(event,{form:stockForm,kind}){
  if(session===active&&navigator.onLine)await sync();
 }
 for(const view of stockViews){
- view.form.addEventListener('change',()=>paintStockView(view));
- view.form.elements.search.addEventListener('input',()=>paintStockView(view));
+ const {search,partId,origen}=view.form.elements;
+ const picker=view.form.querySelector('.partOptions');
+ const close=()=>{picker.hidden=true;if(!partId.value)search.value=''};
+ const open=()=>{picker.hidden=false;paintStockView(view)};
+ setupPicker(search,picker,()=>{
+  if(partId.value)search.select();
+  open();
+ },close);
+ search.oninput=()=>{partId.value='';open()};
+ origen.onchange=()=>{partId.value='';close();paintStockView(view)};
+ document.addEventListener('click',event=>{
+  if(!picker.hidden&&!search.closest('.productionField').contains(event.target))close();
+ },true);
  view.form.addEventListener('submit',event=>saveStock(event,view));
+}
+const partLabel=row=>[row.numero,row.nombre].filter(Boolean).join(' · ');
+function paintPartCards(container,rows,origin,choose){
+ container.replaceChildren(...rows.map(row=>{
+  const button=document.createElement('button');
+  button.type='button';
+  button.textContent=partLabel(row)+(Array.isArray(state.incomes)?' · Existencia: '+stockFor(row,origin):'');
+  button.onclick=()=>{if(!saving)choose(row)};
+  return button;
+ }));
+ if(!rows.length)container.textContent='No hay repuestos que coincidan.';
 }
 function paintParts(){
  if(partCards.hidden)return;
- const rows=filterParts(partOptions(),partSearch.value);
- partCards.replaceChildren(...rows.map(row=>{
-  const button=document.createElement('button');
-  button.type='button';
-  button.textContent=[row.numero,row.nombre,Array.isArray(state.incomes)?'Existencia: '+stockFor(row,fields.tipoEquipo.value+inventoryOrigin):''].filter(Boolean).join(' · ');
-  button.onclick=()=>{
-   if(saving)return;
-   draft.push({partId:row.id,itemId:row.criterionId||'',noItem:row.numero||'',nombreRepuesto:row.nombre,cantidad:1,origen:fields.tipoEquipo.value+inventoryOrigin,tipoEquipo:fields.tipoEquipo.value});
-   selectPart.focus();
-   closeParts();
-   paintDraft();
-  };
-  return button;
- }));
- if(!rows.length)partCards.textContent='No hay repuestos que coincidan.';
+ const origin=fields.tipoEquipo.value+inventoryOrigin;
+ paintPartCards(partCards,filterParts(partOptions(),partSearch.value),origin,row=>{
+  draft.push({partId:row.id,itemId:row.criterionId||'',noItem:row.numero||'',nombreRepuesto:row.nombre,cantidad:1,origen:origin,tipoEquipo:fields.tipoEquipo.value});
+  partSearch.blur();
+  closeParts();
+  paintDraft();
+ });
 }
 const personSearch=byId('personSearch'),responsibleOptions=byId('responsibleOptions');
 setupPicker(personSearch,responsibleOptions,()=>{
