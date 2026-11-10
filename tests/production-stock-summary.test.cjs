@@ -54,9 +54,9 @@ test('historical aliases saved in the closed inventory still identify the select
 test('preview replaces opening and retains movements, accepts zero and never changes stored records',()=>{
  const c=runtime({incomes:[movement('initial','initial',4),movement('income','income',20),movement('adjust','adjustment',-20,{target:4})]});
  const before=JSON.stringify(c.state);
- assert.match(c.stockSummaryText(part,'YT29','7'),/SALDO ESPERADO CON ESTA APERTURA: 7 \(VISTA PREVIA\)/);
- assert.match(c.stockSummaryText(part,'YT29','0'),/SALDO ESPERADO CON ESTA APERTURA: 0/);
- assert.match(c.stockSummaryText(part,'YT29','4'),/SALDO ESPERADO CON ESTA APERTURA: 4/);
+ assert.match(c.stockSummaryText(part,'YT29','7'),/SALDO ESPERADO CON ESTA APERTURA: 27 \(VISTA PREVIA\)/);
+ assert.match(c.stockSummaryText(part,'YT29','0'),/SALDO ESPERADO CON ESTA APERTURA: 20/);
+ assert.match(c.stockSummaryText(part,'YT29','4'),/SALDO ESPERADO CON ESTA APERTURA: 24/);
  assert.match(c.stockSummaryText(part,'YT29',''),/ESCRIBE LA CANTIDAD/);
  for(const value of ['-1','1.5','invalid','9007199254740992'])assert.match(c.stockSummaryText(part,'YT29',value),/INGRESA UNA CANTIDAD ENTERA DESDE CERO/);
  assert.equal(JSON.stringify(c.state),before);
@@ -64,7 +64,7 @@ test('preview replaces opening and retains movements, accepts zero and never cha
 test('an unconfirmed or rejected target is never reported as a confirmed adjustment or real consumption',()=>{
  const base=movement('initial','initial',24),pending=movement('pending','adjustment',4,{baseQuantity:24});
  const c=runtime({incomes:[base],pending:[pending]});
- assert.match(c.stockSummaryText(part,'YT29','4'),/SALDO ESPERADO ACTUAL: 4/);
+ assert.match(c.stockSummaryText(part,'YT29','4'),/SALDO ESPERADO ACTUAL: 24/);
  assert.match(c.stockSummaryText(part,'YT29','4'),/AJUSTE ANTERIOR: 4 · PENDIENTE DE CONFIRMACIÓN/);
  assert.equal(c.stockPeriodSummary(part,'YT29').consumptions,0);assert.equal(c.stockPeriodSummary(part,'YT29').adjustments,0);
  c.state={...c.state,pending:[{...pending,syncRejected:true}]};

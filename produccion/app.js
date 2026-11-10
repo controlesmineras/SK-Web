@@ -232,7 +232,7 @@ function countTotals(origin,date,parts){
   if(row.kind==='initial'||confirmedIds.has(row.id)||row.syncRejected)continue;
   if(row.kind==='income')total.incomes+=row.cantidad;
   else if(row.kind==='adjustment'){
-   const delta=row.cantidad-(total.opening+total.incomes-total.consumptions+total.adjustments);
+   const delta=row.cantidad-(total.opening+total.incomes-total.consumptions);
    total.adjustments+=delta;
   }else if(!row.kind)total.consumptions+=row.cantidad;
  }
@@ -248,7 +248,7 @@ function stockBreakdown(part,origin){
 }
 function stockFor(part,origin){
  const total=stockBreakdown(part,origin);
- return total?total.opening+total.incomes-total.consumptions+total.adjustments:0;
+ return total?total.opening+total.incomes-total.consumptions:0;
 }
 let stockSummaryState,stockSummaryDay,stockSummaryCache=new Map();
 function stockPeriodSummary(part,origin){
@@ -863,7 +863,7 @@ function paintCount(){
  const parts=window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin);
  const totals=reportRows?null:countTotals(origin,date,parts);
  const rows=reportRows||filterParts(parts,countFields.search.value).map(part=>{
-  const total=totals.get(part.id),expected=total.opening+total.incomes-total.consumptions+total.adjustments;
+  const total=totals.get(part.id),expected=total.opening+total.incomes-total.consumptions;
   const amount=countValues.get(part.id),input=document.createElement('input');
   input.type='number';input.min='0';input.step='1';input.inputMode='numeric';input.disabled=!editable;
   input.value=amount??'';input.setAttribute('aria-label','Existencia física de '+partLabel(part));

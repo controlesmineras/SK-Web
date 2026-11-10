@@ -976,7 +976,7 @@ function productionCountRows_(count,counts,parts,criteria,incomes,consumptions){
  for(const movement of incomes){const row=get(movement);if(include(row,movement)){if(movement.kind==='income')row.incomes+=movement.cantidad;else if(movement.kind==='adjustment')row.adjustments+=movement.cantidad;}}
  for(const movement of consumptions){const row=get(movement);if(include(row,movement))row.consumptions+=movement.cantidad;}
  return Array.from(catalog.values(),({partId,name,aliases,opening,incomes,consumptions,adjustments})=>{
-  const expected=opening+incomes-consumptions+adjustments,physical=counted.get(partId);
+  const expected=opening+incomes-consumptions,physical=counted.get(partId);
   return {partId,name,aliases,opening,incomes,consumptions,adjustments,expected,physical,difference:physical-expected};
  });
 }

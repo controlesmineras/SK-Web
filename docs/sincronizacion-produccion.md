@@ -13,7 +13,7 @@ Se adapta el flujo existente de Plaza Blending y SK Web Admin a la base independ
 
 ## SALDOS LOCALES Y CONFLICTOS
 
-Los movimientos pendientes se proyectan sobre el saldo descargado en su orden de registro. Un ajuste fija el saldo local solicitado; los consumos posteriores se descuentan de él. Un ajuste rechazado no altera la proyección del saldo confirmado y permanece disponible para revisar.
+Los movimientos pendientes se proyectan sobre el saldo descargado en su orden de registro. La apertura define la base del saldo local; se suman los ingresos y se restan los consumos. Los ajustes absolutos antiguos solo se conservan como historial. Un ajuste rechazado no altera la proyección del saldo confirmado y permanece disponible para revisar.
 
 El servidor procesa hasta 1000 movimientos por solicitud. Valida cada operación antes de modificar los mapas en memoria y escribe la base una vez por solicitud; no clona ni escribe la base por cada registro. El cliente continúa con el siguiente lote sin reenviar los registros rechazados en cada intento.
 
@@ -37,7 +37,7 @@ Pruebas con datos ficticios y el código real de las funciones: 24→4→0, guar
 
 El formulario EXISTENCIAS → EDITAR SALDO DE APERTURA guarda `kind: initial`, exclusivo del administrador. La cantidad reemplaza la apertura del mismo repuesto e inventario; no genera un ingreso ni un ajuste absoluto. Admite cero y correcciones sucesivas, también sin conexión. Las correcciones pendientes reemplazan la versión local del mismo ID con un nuevo `correctionId`; una respuesta anterior no descarta una edición posterior.
 
-Antes del primer cierre, saldo esperado = apertura + ingresos − consumos, incluyendo los movimientos ya registrados. Los ajustes absolutos de versiones anteriores conservan su historial y efecto. Un cierre aprobado sigue siendo la apertura del período siguiente; corregir la apertura inicial no modifica cierres aprobados. El conteo físico y el informe central usan la misma regla. Actualizar Code.gs es necesario para incluir en el cierre movimientos anteriores a la fecha de la apertura inicial.
+Antes del primer cierre, saldo esperado = apertura + ingresos − consumos, incluyendo los movimientos ya registrados. Los ajustes absolutos de versiones anteriores conservan su historial, pero quedan excluidos de las existencias actuales y de los nuevos cierres. Un cierre aprobado sigue siendo la apertura del período siguiente; corregir la apertura inicial no modifica cierres aprobados. El conteo físico y el informe central usan la misma regla. Actualizar Code.gs es necesario para incluir en el cierre movimientos anteriores a la fecha de la apertura inicial.
 
 ## EDICIÓN Y ELIMINACIÓN DE INGRESOS
 
@@ -49,6 +49,8 @@ Las operaciones se guardan en `incomeChanges` dentro de la misma cuenta de Index
 
 ## MOVIMIENTOS REALES Y AJUSTES
 
-El cálculo del inventario físico y los nuevos cierres separa internamente los ajustes administrativos, con signo. La columna AJUSTES se omite de la tabla y de las exportaciones; su historial permanece en Existencias. INGRESOS incluye únicamente registros `income`; CONSUMOS incluye únicamente consumos. SALDO ESPERADO = apertura + ingresos − consumos + ajustes. La clasificación no altera existencias ni borra historial: una corrección de −10 deja CONSUMOS en cero cuando no existen consumos reales.
+La fórmula vigente es SALDO ESPERADO = SALDO DE APERTURA + INGRESOS − CONSUMOS. Los registros `adjustment`, positivos, negativos o pendientes, no participan en ese saldo ni en las existencias de los selectores. Se conservan como historial. La columna AJUSTES permanece oculta en la tabla y las exportaciones.
 
-La pantalla local se corrige con la actualización de la app. Code.gs debe actualizarse para guardar esa misma separación en nuevos cierres. Los informes aprobados anteriores conservan sus cifras y muestran una nota cuando todavía incluyen ajustes dentro de ingresos/consumos.
+La misma fórmula se aplica al conteo local, a la vista previa de apertura y a los nuevos cierres centrales. Una apertura de 4 con cero ingresos y consumos resulta en 4 aunque exista un ajuste antiguo de −10. Los cierres ya aprobados conservan sus cifras y su saldo físico de cierre sigue siendo la apertura del siguiente período.
+
+Actualizar la app corrige el saldo local; publicar el Code.gs actualizado en la implementación existente aplica la fórmula a los próximos cierres.
