@@ -30,7 +30,7 @@ function runtime(){
  vm.runInContext(source.slice(source.indexOf('async function saveStock('),source.indexOf('for(const view of stockViews){')),c);
  vm.runInContext(source.slice(source.indexOf('let syncRequested=false'),source.indexOf('function showConsumptionView(')),c);
  const form={elements:{origen:{value:'YT29'},partId:{value:part.id},fechaISO:{value:'10/11/2026'},cantidad:{value:'4'}}};
- return {c,form,save:()=>c.saveStock({preventDefault(){}},{form,kind:'adjustment'}),read:()=>local,central:()=>central,backend};
+ return {c,form,save:()=>c.saveStock({preventDefault(){}},{form,kind:'initial'}),read:()=>local,central:()=>central,backend};
 }
 test('opening correction keeps incomes, updates physical expected balance, syncs and accepts zero',async()=>{
  const r=runtime();r.c.navigator.onLine=false;
@@ -47,4 +47,44 @@ test('opening correction keeps incomes, updates physical expected balance, syncs
 test('opening preview includes all income and retains historical stock adjustments',()=>{
  const r=runtime();assert.match(r.c.stockSummaryText(part,'YT29','7'),/SALDO ESPERADO CON ESTA APERTURA: 27/);
  assert.equal(r.central().incomes[1].cantidad,20);
+});
+
+test('repeated offline edits replace one opening, synchronize once and never create income or adjustments',async()=>{
+ const r=runtime();r.c.navigator.onLine=false;
+ // A new inventory starts with no stock movements.
+ r.central().incomes.length=0;
+ await r.c.changeState('doc',x=>({...x,incomes:[]}));r.c.state=await r.c.changeState('doc');
+ let id;
+ for(const quantity of [4,9,0,7]){
+  r.form.elements.cantidad.value=String(quantity);await r.save();
+  assert.equal(r.read().pending.length,1);id??=r.read().pending[0].id;assert.equal(r.read().pending[0].id,id);
+  const totals=r.c.countTotals('YT29','',[part]).get(part.id);
+  assert.equal(totals.opening,quantity);assert.equal(totals.incomes,0);assert.equal(totals.consumptions,0);
+  assert.equal(r.c.stockFor(part,'YT29'),quantity);
+ }
+ r.c.navigator.onLine=true;await r.c.sync();
+ assert.equal(r.read().pending.length,0);assert.equal(r.central().incomes.length,1);
+ assert.equal(r.central().incomes[0].kind,'initial');assert.equal(r.central().incomes[0].cantidad,7);
+ const rows=r.backend.productionCountRows_({origin:'YT29',date,values:[{partId:part.id,physical:7}]},[],[part],[],r.central().incomes,[]);
+ assert.equal(rows[0].opening,7);assert.equal(rows[0].incomes,0);assert.equal(rows[0].expected,7);
+});
+test('editing an opening while its previous value is in flight preserves the newest correction',async()=>{
+ const r=runtime();r.form.elements.cantidad.value='7';await r.save();
+ const api=r.c.api;let release,started;const began=new Promise(resolve=>started=resolve);
+ r.c.api=async(...args)=>{const response=await api(...args);started();await new Promise(resolve=>release=resolve);return response};
+ const sync=r.c.sync();await began;
+ r.form.elements.cantidad.value='9';await r.save();release();
+ r.c.api=api;await sync;await r.c.sync();
+ assert.equal(r.read().pending.length,0);assert.equal(r.central().incomes.find(x=>x.kind==='initial').cantidad,9);
+ assert.equal(r.c.stockFor(part,'YT29'),29);
+});
+test('new consumption and income update stock after an opening correction',async()=>{
+ const r=runtime();r.form.elements.cantidad.value='7';await r.save();await r.c.sync();
+ r.backend.productionSync_({pending:[movement('consume-after-001',undefined,3,{tipoEquipo:'YT',assetId:'machine',responsableId:'person',turno:'D'}),movement('income-after-0001','income',2)]});
+ await r.c.sync();assert.equal(r.c.stockFor(part,'YT29'),26);
+ const totals=r.c.countTotals('YT29','',[part]).get(part.id);assert.equal(totals.opening,7);assert.equal(totals.incomes,22);assert.equal(totals.consumptions,3);
+});
+test('opening remains administrator-only and rejects fractional, negative or blank quantities',async()=>{
+ const r=runtime();r.c.session.user.role='assistant';await r.save();assert.equal(r.read().pending.length,0);
+ r.c.session.user.role='admin';for(const quantity of ['','-1','1.5']){r.form.elements.cantidad.value=quantity;await r.save();assert.equal(r.read().pending.length,0);}
 });
