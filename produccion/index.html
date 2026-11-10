@@ -16,7 +16,10 @@ main form,main .tableWrap{color:#172033}
 .productionToolbar button:disabled{background:#dbe4ec;color:#43576b}
 #record .productionField{grid-column:1/-1;min-width:0}
 .equipmentTypes{grid-template-columns:repeat(2,minmax(0,1fr))}
-.shiftOptions{grid-template-columns:repeat(3,minmax(0,1fr));gap:6px}
+.shiftOptions{grid-template-columns:repeat(3,minmax(0,1fr));gap:4px}
+.shiftOptions label{position:relative;min-height:36px;font-size:.75rem;padding:0 2px}
+.shiftOptions input{position:absolute;width:1px;height:1px;margin:0;opacity:0}
+.shiftOptions label:has(:focus-visible){outline:2px solid #416a89;outline-offset:2px}
 .equipmentTypes legend{padding:0;margin-bottom:6px;font-weight:650;text-transform:uppercase}
 .equipmentTypes label{flex-direction:row;align-items:center;justify-content:center;min-height:44px;border:1px solid #cbd3da;border-radius:8px}
 .equipmentTypes label:has(:checked){background:#e4f1fa;border-color:#416a89}
@@ -61,7 +64,7 @@ main form,main .tableWrap{color:#172033}
 @keyframes productionSyncSpin{to{transform:rotate(360deg)}}
 @keyframes productionSyncPulse{from{background:#397aa5}to{background:#2f765a;box-shadow:0 0 11px #35d87980}}
 .recordDateShift{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px}
-.recordDateShift input,.recordDateShift select{width:100%;min-width:0;max-width:100%;height:45px;box-sizing:border-box}
+.recordDateShift input[type="date"]{width:100%;min-width:0;max-width:100%;height:45px;box-sizing:border-box}
 .recordDateShift input[type="date"]{-webkit-appearance:none;appearance:none;display:block}
 .recordDateShift input[type="date"]::-webkit-date-and-time-value{min-width:0;margin:0;text-align:left}
 #accessStatus{margin:8px 0}
