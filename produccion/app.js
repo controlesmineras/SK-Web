@@ -32,7 +32,7 @@ const deviceAccess=createDeviceAccess('sk-production');
 const sessionKey='sk-production-session';
 const db=true;
 async function all(name){return name==='consumptions'?[...(state.consumptions||[]),...(state.pending||[]).filter(row=>!row.kind)]:state[name]||[]}
-let syncFailed=false;
+let syncFailed=false,syncConnectionFailed=false;
 let session=null,state={},draft=[],syncing=false,saving=false;
 try{session=JSON.parse(localStorage.getItem(sessionKey)||'null')}catch{}
 if(session&&Number(session.expiresAt)<=Date.now()){
@@ -96,7 +96,7 @@ async function changeState(document,update){
  });
 }
 async function api(action,data={}){
- if(!navigator.onLine)throw new Error('Sin conexión. Conéctate a internet e inténtalo de nuevo.');
+ if(!navigator.onLine){const error=new Error('Sin conexión. Conéctate a internet e inténtalo de nuevo.');error.connectionFailure=true;throw error;}
  const controller=new AbortController();
  const timeout=setTimeout(()=>controller.abort(),30000);
  let response,result;
@@ -104,8 +104,9 @@ async function api(action,data={}){
   response=await fetch(window.SK_SYNC_CONFIG.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action,...data}),signal:controller.signal,cache:'no-store',credentials:'omit'});
   if(response.ok)result=await response.json();
  }catch(error){
-  if(controller.signal.aborted)throw new Error('El servidor tardó demasiado en responder. Inténtalo de nuevo.');
-  throw new Error('No se pudo conectar con el servidor de Producción. Revisa la conexión e inténtalo de nuevo.');
+  const failure=new Error(controller.signal.aborted?'El servidor tardó demasiado en responder. Inténtalo de nuevo.':'No se pudo conectar con el servidor de Producción. Revisa la conexión e inténtalo de nuevo.');
+  failure.connectionFailure=true;
+  throw failure;
  }finally{clearTimeout(timeout)}
  if(!response.ok)throw new Error('Error de conexión ('+response.status+')');
  if(!result.ok){
@@ -488,15 +489,17 @@ function paintSync(){
  const date=new Date(state.lastSyncAt);
  byId('headerLastSync').textContent=Number.isNaN(date.getTime())?'SIN SINCRONIZAR':
   'Sinc. '+date.toLocaleDateString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'})+' '+date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
+ byId('refreshOfflineData').disabled=syncing;
+ paintOfflineEntry();
 }
 let syncRequested=false;
 async function sync(){
  if(!session)return;
  if(syncing){syncRequested=true;return}
- if(!navigator.onLine){syncFailed=true;paintSync();return}
+ if(!navigator.onLine){syncFailed=true;syncConnectionFailed=true;paintSync();return}
  if(!canSync()){syncFailed=true;paintSync();status('Vuelve a iniciar sesión con internet para sincronizar. Tus registros siguen guardados.');return}
  const active=session,document=active.user.document;
- syncing=true;syncFailed=false;paintSync();
+ syncing=true;syncFailed=false;syncConnectionFailed=false;paintSync();
  try{
   do{
    syncRequested=false;
@@ -550,7 +553,7 @@ async function sync(){
    }
   }
   if(session===active){
-   syncFailed=true;
+   syncFailed=true;syncConnectionFailed=error.connectionFailure===true;
    status(error.name==='AbortError'?'La sincronización tardó demasiado. Puedes volver a intentarlo.':error.message);
   }
   console.error('Sincronización de Producción:',error);
@@ -767,9 +770,12 @@ byId('queryConsumption').onclick=()=>showQueryType(false);
 function placeInstallControls(container){
  container.append(byId('installProduction'),byId('installProductionHelp'));
 }
-async function openWorkspace(){
+async function openWorkspace({offlineAccess=!navigator.onLine}={}){
  if(!session)return;
- state=await changeState(session.user.document);
+ const active=session;
+ const stored=await changeState(active.user.document);
+ if(session!==active)return;
+ state=stored;
  byId('showPhysicalCount').hidden=!canCount();
  if(countAccount!==session.user.document){
   countAccount=session.user.document;countSelection='';countValues=new Map();countReport=null;countDirty=false;
@@ -778,12 +784,17 @@ async function openWorkspace(){
   byId('countHistory').disabled=true;
  }
  placeInstallControls(document.querySelector('.productionToolbar'));
- byId('access').hidden=true;byId('productionHeader').hidden=false;byId('workspace').hidden=false;byId('productionSync').hidden=false;syncFailed=false;
+ byId('access').hidden=true;byId('productionHeader').hidden=false;byId('workspace').hidden=offlineAccess;byId('productionSync').hidden=offlineAccess;byId('offlineEntry').hidden=true;syncFailed=false;
  byId('operatorName').textContent=session.user.name;
  byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
  byId('showStockEdit').hidden=session.user.role!=='admin';
  for(const view of stockViews)view.form.elements.fechaISO.value=displayDate(today());
- fields.fechaISO.value=displayDate(today());manualShift=false;refreshShift();showConsumptionView(false);paint();if(navigator.onLine)await sync();
+ fields.fechaISO.value=displayDate(today());manualShift=false;refreshShift();showConsumptionView(false);paint();
+ if(offlineAccess)showOfflineEntry();
+ else if(navigator.onLine){
+  await sync();
+  if(session===active&&syncConnectionFailed)showOfflineEntry();
+ }
 }
 form.onsubmit=async event=>{
  event.preventDefault();if(saving)return;
@@ -817,7 +828,7 @@ function submitAccess(id,handler){
 }
 submitAccess('login',async values=>{
  const {document,password}=values;
- let nextSession;
+ let nextSession,offlineAccess=false;
  try{
   const data=await api('productionLogin',values);
   nextSession={token:data.token,expiresAt:data.expiresAt,user:data.user};
@@ -828,11 +839,12 @@ submitAccess('login',async values=>{
    throw error;
   }
   nextSession=await deviceAccess.verify(document,password);
+  offlineAccess=true;
   if(!nextSession)throw new Error(navigator.onLine?error.message:'Acceso local no disponible. Verifica la contraseña o inicia sesión con internet en este dispositivo.');
  }
  session=nextSession;
  localStorage.setItem(sessionKey,JSON.stringify(session));
- await openWorkspace();byId('login').reset();
+ await openWorkspace({offlineAccess});byId('login').reset();
 });
 byId('login').querySelector('button').disabled=false;
 byId('accessStatus').textContent='';
@@ -850,7 +862,7 @@ byId('logout').onclick=()=>{
  fields.responsableId.value='';personSearch.value='';responsibleOptions.hidden=true;
  placeInstallControls(byId('installBeforeLogin'));
  session=null;state={};draft=[];fields.assetId.value='';closeParts();closeMachine();localStorage.removeItem(sessionKey);
- byId('workspace').hidden=true;byId('productionHeader').hidden=true;byId('productionSync').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
+ byId('offlineEntry').hidden=true;byId('workspace').hidden=true;byId('productionHeader').hidden=true;byId('productionSync').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
 };
 window.addEventListener('beforeunload',event=>{if(countDirty||countSaving){event.preventDefault();event.returnValue='';}});
 byId('sync').onclick=sync;window.addEventListener('online',sync);
@@ -859,6 +871,62 @@ for(const radio of fields.tipoEquipo)radio.onchange=()=>{
  paint();
 };
 partSearch.oninput=openParts;personSearch.oninput=()=>{fields.responsableId.value='';paintPeople()};
+function syncAge(lastSyncAt,now=Date.now()){
+ const stamp=Date.parse(lastSyncAt);
+ if(!Number.isFinite(stamp))return 'SIN SINCRONIZACIONES GUARDADAS';
+ const elapsed=now-stamp;
+ if(elapsed < -60000)return 'REVISA LA FECHA Y HORA DEL DISPOSITIVO';
+ const minutes=Math.max(0,Math.floor(elapsed/60000));
+ if(minutes<1)return 'Hace menos de un minuto';
+ if(minutes<60)return 'Hace '+minutes+(minutes===1?' minuto':' minutos');
+ const hours=Math.floor(minutes/60);
+ if(hours<24)return 'Hace '+hours+(hours===1?' hora':' horas');
+ const days=Math.floor(hours/24),remaining=hours%24;
+ return 'Hace '+days+(days===1?' día':' días')+(remaining?' y '+remaining+(remaining===1?' hora':' horas'):'');
+}
+function paintOfflineEntry(){
+ if(byId('offlineEntry').hidden)return;
+ const stamp=Date.parse(state.lastSyncAt),date=new Date(stamp),valid=Number.isFinite(stamp);
+ byId('offlineLastSync').textContent=valid?date.toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'AÚN NO SE HA SINCRONIZADO';
+ byId('offlineDataAge').textContent=syncAge(state.lastSyncAt);
+ byId('offlineSyncAdvice').textContent=valid?
+  'Cuando tengas internet, inicia sesión con conexión y sincroniza para obtener datos recientes y enviar tus registros pendientes.':
+  'La cuenta tiene acceso local, pero aún falta descargar los datos. Conéctate e inicia sesión para completar la primera sincronización.';
+}
+function showOfflineEntry(){
+ if(!session)return;
+ byId('workspace').hidden=true;byId('productionSync').hidden=true;
+ byId('status').textContent='';
+ byId('offlineEntry').hidden=false;byId('offlineEntryStatus').textContent='';
+ paintOfflineEntry();byId('offlineEntryTitle').focus();
+}
+byId('continueOffline').onclick=()=>{
+ if(!session)return;
+ byId('offlineEntry').hidden=true;byId('workspace').hidden=false;byId('productionSync').hidden=false;
+ paint();byId('showRecord').focus();
+};
+byId('refreshOfflineData').onclick=async event=>{
+ const active=session,button=event.currentTarget,feedback=byId('offlineEntryStatus');
+ if(!active)return;
+ if(syncing){feedback.textContent='Actualizando los datos…';return;}
+ if(!navigator.onLine){feedback.textContent='Todavía no hay conexión. Puedes continuar con los datos guardados.';paintOfflineEntry();return;}
+ if(!canSync()){
+  byId('logout').click();
+  byId('login').elements.document.value=active.user.document;
+  byId('accessStatus').textContent='Inicia sesión con conexión para renovar el acceso y obtener datos recientes.';
+  byId('login').elements.password.focus();return;
+ }
+ button.disabled=true;feedback.textContent='Actualizando los datos…';
+ try{
+  await sync();
+  if(session!==active)return;
+  if(syncFailed){feedback.textContent=byId('status').textContent||'No se pudo actualizar. Puedes continuar con los datos guardados.';paintOfflineEntry();}
+  else byId('continueOffline').click();
+ }finally{button.disabled=false}
+};
+window.addEventListener('focus',paintOfflineEntry);
+window.addEventListener('online',paintOfflineEntry);
+setInterval(paintOfflineEntry,60000);
 if(invitation){
  byId('login').hidden=true;
  api('accessInvitationInfo',{invitation}).then(info=>{
