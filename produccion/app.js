@@ -186,7 +186,11 @@ function compareParts(left,right){
  return leftGroup-rightGroup||leftOrder-rightOrder||left.nombre.localeCompare(right.nombre,'es');
 }
 const catalog=()=>window.SKSpareCatalog.merge(state.parts||[],state.inventoryCriteria||[]).sort(compareParts);
-const incomeMovements=(snapshot=state)=>Array.from(new Map([...(snapshot.incomes||[]),...(snapshot.pending||[]).filter(row=>row.kind)].map(row=>[row.id,row])).values());
+const incomeMovements=(snapshot=state)=>{
+ const rows=new Map((snapshot.incomes||[]).map(row=>[row.id,row]));
+ for(const row of snapshot.pending||[])if(row.kind&&(row.kind!=='adjustment'||!rows.has(row.id)))rows.set(row.id,row);
+ return Array.from(rows.values());
+};
 const initialFor=(part,origin,snapshot=state)=>incomeMovements(snapshot).reverse().find(row=>
  !row.deleted&&row.kind==='initial'&&row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId));
 function countTotals(origin,date,parts){
@@ -258,7 +262,8 @@ function paintStockView({form:stockForm,panel,kind}){
   const pending=initial&&(state.pending||[]).some(row=>row.id===initial.id);
   const detail=initial?' · Saldo inicial '+(pending?'pendiente de sincronizar':'guardado')+': '+initial.cantidad:' · Sin saldo inicial registrado';
   const opening=total.cutoff?' · Cierre del '+displayDate(total.cutoff)+': '+total.opening:'';
-  panel.querySelector('[data-stock-balance]').textContent+=detail+opening+' · Entradas y ajustes positivos: '+total.incomes+' · Salidas y ajustes negativos: '+total.consumptions;
+  const adjustment=(state.pending||[]).find(row=>row.kind==='adjustment'&&row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId));
+  panel.querySelector('[data-stock-balance]').textContent+=detail+opening+' · Entradas y ajustes positivos: '+total.incomes+' · Salidas y ajustes negativos: '+total.consumptions+(adjustment?' · AJUSTE PENDIENTE DE CONFIRMAR: '+adjustment.cantidad:'');
  }
  stockForm.querySelector('button[type=submit]').disabled=saving||!enabled||!allowed||!part;
  if(kind==='adjustment'){
@@ -291,29 +296,59 @@ function paintStockRows(body,kind,rows=catalog()){
   return tr;
  }));
 }
+function stockStatus(stockForm,message,isError=false){
+ const feedback=stockForm.querySelector('[data-stock-status]');
+ feedback.textContent=message;feedback.hidden=!message;
+ feedback.classList.toggle('stockError',isError);
+ status(message);
+}
 async function saveStock(event,{form:stockForm,kind}){
  event.preventDefault();
  const active=session;
- if(!active||saving||!Array.isArray(state.incomes)||!canSaveStock(kind,active.user.role))return;
+ if(!active||saving)return;
+ const tell=(message,isError=false)=>stockStatus(stockForm,message,isError);
+ if(!canSaveStock(kind,active.user.role)){tell('Tu cuenta no tiene permiso para guardar este movimiento.',true);return;}
+ if(!Array.isArray(state.incomes)){tell('Sincroniza para descargar los datos antes de guardar.',true);return;}
  const {origen,partId,fechaISO,cantidad}=stockForm.elements;
- if(!partId.value||cantidad.value==='')return;
- if(kind==='adjustment'&&(!state.stockAdjustment||!navigator.onLine)){status('Conéctate y sincroniza con el Apps Script actualizado para ajustar la existencia.');return}
+ if(!partId.value){tell('Selecciona un repuesto de la lista.',true);return;}
+ if(cantidad.value===''){tell('Escribe la cantidad que deseas guardar.',true);return;}
+ if(kind==='adjustment'&&!state.stockAdjustment){tell('Actualiza la implementación de Apps Script y sincroniza para habilitar los ajustes.',true);return;}
+ if(kind==='adjustment'&&!navigator.onLine){tell('Conéctate a internet para confirmar la nueva existencia. La cantidad escrita se conserva.',true);return;}
+ if(kind==='adjustment'&&!canSync()){tell('Inicia sesión con internet para renovar el acceso y guardar la nueva existencia.',true);return;}
  const date=kind==='adjustment'?today():readDate(fechaISO);
- if(!date){fechaISO.reportValidity();return}
+ if(!date){fechaISO.reportValidity();return;}
  const row={kind,origen:origen.value,partId:partId.value,fechaISO:date,cantidad:Number(cantidad.value)};
- if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(kind==='adjustment'?0:1))return;
- saving=true;
+ if(!Number.isSafeInteger(row.cantidad)||row.cantidad<(kind==='adjustment'?0:1)){tell(kind==='adjustment'?'Escribe una cantidad entera igual o mayor que cero.':'Escribe una cantidad entera mayor que cero.',true);return;}
+ const entered=cantidad.value;
+ const matching=item=>item.kind===kind&&item.partId===row.partId&&item.origen===row.origen;
+ saving=true;paint();tell(kind==='adjustment'?'CONFIRMANDO NUEVA EXISTENCIA…':'GUARDANDO INGRESO…');
  try{
-  const record={...row,id:crypto.randomUUID(),createdAt:new Date().toISOString()};
+  // A previous target may already have reached the server. Confirm it before sending a new target.
+  if(kind==='adjustment'&&(state.pending||[]).some(item=>matching(item)&&item.cantidad!==row.cantidad)){
+   const result=await sync();
+   if(session!==active)return;
+   if((state.pending||[]).some(matching))throw new Error(result?.error||'Hay un ajuste anterior pendiente. No se ha reemplazado; vuelve a intentar la sincronización.');
+  }
+  let record;
   const fresh=await changeState(active.user.document,current=>{
-   const pending=current.pending||[];
-   if(kind==='adjustment'&&pending.some(item=>item.kind===kind&&item.partId===row.partId&&item.origen===row.origen))throw new Error('Ya hay un ajuste pendiente para este repuesto. Sincroniza primero.');
-   return {...current,pending:[...pending,record]};
+   const pending=current.pending||[],previous=kind==='adjustment'&&pending.find(matching);
+   if(previous&&previous.cantidad!==row.cantidad)throw new Error('Hay otro ajuste pendiente para este repuesto. Sincroniza y vuelve a intentarlo.');
+   record=previous||{...row,id:crypto.randomUUID(),createdAt:new Date().toISOString()};
+   return {...current,pending:previous?pending:[...pending,record]};
   });
-  if(session===active){state=fresh;cantidad.value='';status(kind==='adjustment'?'Ajuste pendiente de confirmación del servidor.':'Ingreso guardado.');}
- }catch(error){if(session===active)status(error.message)}
- finally{saving=false;if(session===active)paint()}
- if(session===active&&navigator.onLine)await sync();
+  if(session!==active)return;
+  state=fresh;paint();
+  if(kind==='adjustment'){
+   const result=await sync();
+   if(session!==active)return;
+   const saved=(state.incomes||[]).find(item=>item.id===record.id&&item.kind==='adjustment'&&item.target===row.cantidad);
+   if(!saved||(state.pending||[]).some(item=>item.id===record.id))throw new Error(result?.error||'El servidor aún no confirmó la nueva existencia. El ajuste queda pendiente y puedes reintentarlo.');
+   tell('EXISTENCIA GUARDADA Y CONFIRMADA: '+row.cantidad+'.');
+  }else tell('Ingreso guardado en este dispositivo'+(navigator.onLine?'.':'; pendiente de sincronizar.'));
+  if(partId.value===row.partId&&origen.value===row.origen&&cantidad.value===entered)cantidad.value='';
+ }catch(error){if(session===active)tell(error.message,true);}
+ finally{saving=false;if(session===active)paint();}
+ if(kind!=='adjustment'&&session===active&&navigator.onLine)await sync();
 }
 for(const view of stockViews){
  const {search,partId,origen}=view.form.elements;
@@ -494,11 +529,16 @@ function paintSync(){
 }
 let syncRequested=false;
 async function sync(){
- if(!session)return;
- if(syncing){syncRequested=true;return}
- if(!navigator.onLine){syncFailed=true;syncConnectionFailed=true;paintSync();return}
- if(!canSync()){syncFailed=true;paintSync();status('Vuelve a iniciar sesión con internet para sincronizar. Tus registros siguen guardados.');return}
+ if(sync.promise){syncRequested=true;return sync.promise;}
+ const task=performSync();sync.promise=task;
+ try{return await task;}finally{if(sync.promise===task)sync.promise=null;}
+}
+async function performSync(){
+ if(!session)return {ok:false,error:'Inicia sesión para sincronizar.'};
+ if(!navigator.onLine){syncFailed=true;syncConnectionFailed=true;paintSync();return {ok:false,error:'Sin conexión. Los registros siguen guardados para reintentar.'};}
+ if(!canSync()){syncFailed=true;paintSync();const error='Vuelve a iniciar sesión con internet para sincronizar. Tus registros siguen guardados.';status(error);return {ok:false,error};}
  const active=session,document=active.user.document;
+ let syncError='';
  syncing=true;syncFailed=false;syncConnectionFailed=false;paintSync();
  try{
   do{
@@ -513,9 +553,7 @@ async function sync(){
     const saved=savedRows.get(row.id);
     return acknowledged.has(row.id)&&saved&&(superseded(row)||saved.correctionId===row.correctionId&&(row.kind==='adjustment'?saved.target===row.cantidad:saved.cantidad===row.cantidad));
    };
-   if(pending.some(row=>!confirmed(row))){
-    throw new Error('La base central no confirmó todos los movimientos. Siguen pendientes para reintentar.');
-   }
+   const unconfirmed=pending.filter(row=>!confirmed(row));
    const {inventoryResult,...snapshot}=data;
    const countError=inventoryRequest&&(inventoryResult?.error||(!inventoryResult?.count?'Actualiza Apps Script para sincronizar el inventario físico.':''));
    const fresh=await changeState(document,current=>{
@@ -529,7 +567,7 @@ async function sync(){
    if(session===active){
     state=fresh;
     if(pending.some(superseded))status('La base central conserva una corrección más reciente del saldo inicial.');
-    if(pending.some(row=>row.kind==='adjustment'))status('Existencia actual ajustada y sincronizada.');
+    if(pending.some(row=>row.kind==='adjustment'&&confirmed(row)))status('Existencia actual ajustada y sincronizada.');
     if(inventoryResult?.count?.status==='closed'&&countSelection===inventoryResult.count.id){
      countReport=inventoryResult.count;countSelection='';countValues=new Map();
     }
@@ -542,9 +580,11 @@ async function sync(){
     if(countError)syncFailed=true;
     paint();
    }
+   if(unconfirmed.length)throw new Error('La base central no confirmó '+unconfirmed.length+' movimiento(s). Los cambios confirmados ya se actualizaron; los demás siguen pendientes.');
    if(countError&&!fresh.pending.length)break;
   }while(session===active&&navigator.onLine&&(syncRequested||state.pending.length||state.countQueue.length));
  }catch(error){
+  syncError=error.message;
   if(error.centralResponse&&/revocada|sesión no válida|inicia sesión/i.test(error.message)){
    deviceAccess.revokeToken(active.token);
    if(session===active){
@@ -559,6 +599,7 @@ async function sync(){
   console.error('Sincronización de Producción:',error);
  }
  finally{syncing=false;paintSync()}
+ return {ok:!syncFailed,error:syncError||state.countSyncError||''};
 }
 function showConsumptionView(showQueries,stockView,physical=false){
  if(countSaving)return;
