@@ -23,7 +23,8 @@ test('without a closed inventory all historical incomes and consumptions are sho
  assert.equal(summary.closed,undefined);assert.equal(summary.incomes,25);assert.equal(summary.consumptions,5);assert.equal(summary.adjustments,-2);
  const text=c.stockSummaryText(part,'YT29','');
  assert.match(text,/TODOS LOS MOVIMIENTOS · SIN INVENTARIO CERRADO/);
- assert.match(text,/INGRESOS: 25 · CONSUMOS: 5 · AJUSTES CONFIRMADOS: -2/);
+ assert.match(text,/INGRESOS: 25 · CONSUMOS: 5\./);
+ assert.doesNotMatch(text,/AJUSTES CONFIRMADOS/);
 });
 test('the last closed inventory cuts history at the real registration time, including movements on the closing day',()=>{
  const latest=close();
