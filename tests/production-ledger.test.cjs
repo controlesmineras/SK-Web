@@ -134,11 +134,11 @@ test('pending and rejected legacy adjustments do not create phantom consumption'
  const rejected=balances({incomes:[initial],pending:[{...adjustment,syncRejected:true}]});
  assert.equal(rejected.countTotals('YT29','',parts).get('part10').consumptions,0);assert.equal(rejected.stockFor(parts[0],'YT29'),20);
 });
-test('report exports preserve column positions and distinguish old approved reports without reclassifying them',()=>{
+test('report exports omit adjustment column, preserve expected balance and distinguish old approved reports',()=>{
  const c=vm.createContext({displayDate:x=>x});
  vm.runInContext(client.slice(client.indexOf('function countReportRows('),client.indexOf('function paintCount('))+';globalThis.note=countAdjustmentNote;',c);
  const report={date:today,origin:'YT29',rows:[{name:'O-ring',opening:20,incomes:0,consumptions:0,adjustments:-10,expected:10,physical:10,difference:0}]};
- const values=c.countReportRows(report)[0];assert.equal(values.length,11);assert.equal(values[5],0);assert.equal(values[6],-10);assert.equal(values[7],10);assert.match(c.note(report),/por separado/);
+ const values=c.countReportRows(report)[0];assert.equal(values.length,10);assert.equal(values[5],0);assert.equal(values[6],10);assert.equal(values[7],10);assert.equal(values[8],0);assert.equal(values[9],10);assert.match(c.note(report),/únicamente movimientos reales/);
  const old={...report,rows:[{...report.rows[0],adjustments:undefined,consumptions:10}]};const frozen=JSON.stringify(old);
- assert.equal(c.countReportRows(old)[0][5],10);assert.equal(c.countReportRows(old)[0][6],'—');assert.match(c.note(old),/CIERRE ANTERIOR/);assert.equal(JSON.stringify(old),frozen);
+ assert.equal(c.countReportRows(old)[0][5],10);assert.equal(c.countReportRows(old)[0][6],10);assert.match(c.note(old),/CIERRE ANTERIOR/);assert.equal(JSON.stringify(old),frozen);
 });

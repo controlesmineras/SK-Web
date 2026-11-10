@@ -49,6 +49,6 @@ Las operaciones se guardan en `incomeChanges` dentro de la misma cuenta de Index
 
 ## MOVIMIENTOS REALES Y AJUSTES
 
-El inventario físico y los nuevos cierres separan los ajustes administrativos en la columna AJUSTES, con signo. INGRESOS incluye únicamente registros `income`; CONSUMOS incluye únicamente consumos. SALDO ESPERADO = apertura + ingresos − consumos + ajustes. La clasificación no altera existencias ni borra historial: una corrección de −10 deja CONSUMOS en cero cuando no existen consumos reales.
+El cálculo del inventario físico y los nuevos cierres separa internamente los ajustes administrativos, con signo. La columna AJUSTES se omite de la tabla y de las exportaciones; su historial permanece en Existencias. INGRESOS incluye únicamente registros `income`; CONSUMOS incluye únicamente consumos. SALDO ESPERADO = apertura + ingresos − consumos + ajustes. La clasificación no altera existencias ni borra historial: una corrección de −10 deja CONSUMOS en cero cuando no existen consumos reales.
 
 La pantalla local se corrige con la actualización de la app. Code.gs debe actualizarse para guardar esa misma separación en nuevos cierres. Los informes aprobados anteriores conservan sus cifras y muestran una nota cuando todavía incluyen ajustes dentro de ingresos/consumos.
