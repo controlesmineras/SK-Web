@@ -115,3 +115,24 @@ test('a failed central write issues no success receipt and keeps the correction 
  r.backend.DriveApp.getFilesByName=()=>{let used=false;return {hasNext:()=>!used,next:()=>{used=true;return {getBlob:()=>({getDataAsString:()=>JSON.stringify(r.central())}),setContent(){throw Error('Drive unavailable')}}}}};
  await r.c.sync();assert.equal(r.read().incomeChanges.length,1);assert.equal(r.central().incomes.find(x=>x.kind==='income').cantidad,20);assert.equal((r.central().incomeHistory||[]).length,0);
 });
+
+test('nineteen stale deletions remain reviewable without blocking a new income; explicit discard finishes sync',async()=>{
+ const r=runtime();
+ for(let i=1;i<19;i++)r.central().incomes.push(movement('income-'+String(i).padStart(16,'0'),'income',2));
+ await r.c.sync();
+ for(const row of r.c.state.incomes.filter(row=>row.kind==='income'))await r.c.deleteIncome(row);
+ const queued=r.read().incomeChanges;
+ r.backend.productionSync_({syncProtocol:'production-receipts-v1',incomeChanges:queued.map(op=>({...op,id:randomUUID()}))});
+ const newIncome=movement(randomUUID(),'income',3);
+ await r.c.changeState('doc',current=>({...current,pending:[newIncome]}));
+ await r.c.sync();
+ assert.equal(r.read().incomeChanges.length,19);assert.ok(r.read().incomeChanges.every(op=>op.syncRejected));
+ assert.equal(r.read().pending.length,0);assert.equal(r.c.stockFor(part,'YT29'),7);
+ assert.match(r.c.message,/0 por enviar · 19 requieren revisión/);
+ assert.equal(r.c.window.SKProductionSync.selectIncomeChanges(r.read()).length,0);
+ const centralBefore=structuredClone(r.central());
+ r.c.confirm=()=>false;await r.c.discardRejectedIncomeChanges();assert.equal(r.read().incomeChanges.length,19);
+ r.c.confirm=()=>true;await r.c.discardRejectedIncomeChanges();assert.equal(r.read().incomeChanges.length,0);
+ assert.deepEqual(r.central(),centralBefore);assert.equal(r.c.stockFor(part,'YT29'),7);
+ await r.c.sync();assert.equal(r.c.syncFailed,false);assert.match(r.c.message,/SINCRONIZADO/);
+});
