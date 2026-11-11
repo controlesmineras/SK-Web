@@ -47,6 +47,8 @@ Las operaciones se guardan en `incomeChanges` dentro de la misma cuenta de Index
 
 `incomeHistory` conserva antes/después y la operación; la interfaz muestra los últimos 30 días. Un borrado marca `deleted`, conservando el registro recuperable. Revertir recupera la cantidad y fecha previas; no puede sobrescribir un cambio posterior ni modificar un cierre aprobado. El registro central de auditoría no se purga automáticamente. Es necesario reemplazar Code.gs y publicar una nueva versión de la implementación existente para habilitar la confirmación central de estas operaciones.
 
+Los rechazos se distinguen de los registros por enviar. El botón REVISAR CAMBIOS RECHAZADOS abre el registro temporal y muestra la versión central junto al cambio solicitado. El administrador puede retirar uno o todos los rechazos revisados, con confirmación; únicamente se quitan operaciones locales que siguen rechazadas y coinciden con la versión revisada. Los ingresos, consumos, conteos, historial y operaciones nuevas se conservan. Después se programa otra sincronización. La cabecera muestra la fecha de los datos descargados con la etiqueta Datos mientras queden operaciones pendientes; `lastSyncAt` sigue reservada para una sincronización completa. Esta mejora de revisión solo requiere actualizar la app.
+
 ## MOVIMIENTOS REALES Y AJUSTES
 
 La fórmula vigente es SALDO ESPERADO = SALDO DE APERTURA + INGRESOS − CONSUMOS. Los registros `adjustment`, positivos, negativos o pendientes, no participan en ese saldo ni en las existencias de los selectores. Se conservan como historial. La columna AJUSTES permanece oculta en la tabla y las exportaciones.

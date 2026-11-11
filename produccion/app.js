@@ -602,7 +602,7 @@ function paint(){
  }
 }
 function paintSync(){
- const count=(state.pending||[]).length+(state.countQueue||[]).length+(state.incomeChanges||[]).length,badge=byId('pendingBadge'),button=byId('sync');
+ const summary=window.SKProductionSync.pendingSummary(state),count=summary.total,badge=byId('pendingBadge'),button=byId('sync');
  const complete=Boolean(state.lastSyncAt)&&!count;
  const label=syncing?'Sincronizando':'Sincronizar';
  button.disabled=syncing;
@@ -610,11 +610,14 @@ function paintSync(){
  byId('syncLabel').textContent=label;
  badge.className='pendingBadge'+(syncFailed?' error':!syncing&&complete?' synced':'');
  badge.textContent=count?String(count):syncing?'↻':syncFailed?'!':complete?'✓':'0';
- badge.title=count?count+(count===1?' movimiento pendiente':' movimientos pendientes'):syncing?label:syncFailed?'Error de sincronización':complete?'Todo sincronizado':'Sin sincronizar';
+ badge.title=count?summary.waiting+' por enviar · '+summary.rejected+' requieren revisión':syncing?label:syncFailed?'Error de sincronización':complete?'Todo sincronizado':'Sin sincronizar';
  badge.setAttribute('aria-label',badge.title);
- const date=new Date(state.lastSyncAt);
+ const review=byId('reviewIncomeConflicts');
+ review.hidden=!summary.incomeRejected||session?.user.role!=='admin';
+ review.textContent='REVISAR CAMBIOS RECHAZADOS ('+summary.incomeRejected+')';
+ const date=new Date(state.lastFetchedAt||state.lastSyncAt);
  byId('headerLastSync').textContent=Number.isNaN(date.getTime())?'SIN SINCRONIZAR':
-  'Sinc. '+date.toLocaleDateString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'})+' '+date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
+  (count?'Datos: ':'Sinc. ')+date.toLocaleDateString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'})+' '+date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
  byId('refreshOfflineData').disabled=syncing;
  paintOfflineEntry();
 }
@@ -662,7 +665,10 @@ async function performSync(){
     if(!countDirty&&!countSaving&&countSelection){const selected=selectedCount();countValues=new Map((selected?.values||[]).map(row=>[row.partId,row.physical]));countEditRevision=selected?.revision||'';if(!selected)countSelection='';}
     syncFailed=Boolean(fresh.pending.length||fresh.countQueue.length||fresh.incomeChanges.length);
     syncError=fresh.pending.find(row=>row.syncError)?.syncError||fresh.incomeChanges.find(row=>row.syncError)?.syncError||fresh.countSyncError||'';
-    status(syncFailed?'Sincronización parcial · '+(fresh.pending.length+fresh.countQueue.length+fresh.incomeChanges.length)+' pendiente(s). '+syncError:'SINCRONIZADO · todos los registros confirmados.');
+    const summary=window.SKProductionSync.pendingSummary(fresh);
+    status(!syncFailed?'SINCRONIZADO · todos los registros confirmados.':summary.rejected?
+     'Datos actualizados · '+summary.waiting+' por enviar · '+summary.rejected+' requieren revisión. '+(summary.incomeRejected?'Abre REVISAR CAMBIOS RECHAZADOS para ver el motivo y conservar la versión central.':syncError):
+     'Sincronización parcial · '+summary.waiting+' pendiente(s). '+syncError);
     paint();
    }
    const sentIds=new Set(pending.map(row=>row.id));
@@ -734,6 +740,11 @@ function paintIncomeQueries(){
  byId('incomeChangeLog').hidden=!admin;
  if(!admin)return;
  byId('incomeChangeAvailability').hidden=state.incomeChangesV1===true;
+ const rejected=(state.incomeChanges||[]).filter(op=>op.syncRejected);
+ byId('incomeConflictNotice').hidden=!rejected.length;
+ const discard=byId('discardRejectedIncomeChanges');
+ discard.hidden=!rejected.length;discard.disabled=saving;
+ discard.textContent='CONSERVAR VERSIÓN CENTRAL Y RETIRAR '+rejected.length+' CAMBIO(S) RECHAZADO(S)';
  const history=(state.incomeHistory||[]).filter(entry=>Date.now()-Date.parse(entry.at)<=30*86400000).slice().reverse();
  byId('incomeChangeRows').replaceChildren(...history.map(entry=>{
   const current=(state.incomes||[]).find(row=>row.id===entry.incomeId),part=parts.find(part=>partMatches(entry.before,part,entry.before.origen));
@@ -745,6 +756,12 @@ function paintIncomeQueries(){
  }));
  byId('incomeChangePending').replaceChildren(...(state.incomeChanges||[]).map(op=>{
   const p=document.createElement('p');p.textContent=({edit:'Edición',delete:'Eliminación',revert:'Reversión'})[op.action]+' · '+(op.label||op.incomeId)+' · '+(op.syncError||'GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.');
+  if(op.syncRejected){
+   const central=(state.incomes||[]).find(row=>row.id===op.incomeId),details=document.createElement('span');
+   const describe=row=>!row?'No disponible':(row.deleted?'ELIMINADO':row.cantidad+' unidades')+' · '+displayDate(row.fechaISO);
+   details.textContent=' Base central: '+describe(central)+'. Cambio solicitado: '+describe(op.after)+'. ';
+   p.append(details);
+  }
   if(op.syncRejected)p.append(incomeAction('RETIRAR CAMBIO RECHAZADO',()=>discardIncomeChange(op),saving));return p;
  }));
 }
@@ -779,10 +796,32 @@ async function revertIncome(entry){
  await queueIncomeChange(row,'revert',{cantidad:entry.before.cantidad,fechaISO:entry.before.fechaISO,deleted:Boolean(entry.before.deleted)},entry.id);
 }
 async function discardIncomeChange(op){
- const active=session;if(!active||active.user.role!=='admin'||saving||!confirm('Retirar este cambio rechazado conservará el ingreso confirmado en la base central. ¿Continuar?'))return;
- if(sync.promise)await sync.promise;if(session!==active)return;
- try{const fresh=await changeState(active.user.document,current=>({...current,incomeChanges:(current.incomeChanges||[]).filter(row=>!(row.id===op.id&&row.syncRejected))}));if(session===active){state=fresh;paint();}}catch(error){status(error.message);}
+ await discardRejectedIncomeChanges([op]);
 }
+async function discardRejectedIncomeChanges(reviewed=(state.incomeChanges||[]).filter(op=>op.syncRejected)){
+ const active=session;
+ if(!active||active.user.role!=='admin'||saving||!reviewed.length)return;
+ if(!confirm('Se retirarán '+reviewed.length+' cambio(s) rechazado(s) de este equipo y se conservará la versión confirmada en la base central.\n\nLos ingresos, consumos y demás registros por enviar se conservarán. Después podrás registrar una nueva corrección si hace falta.\n\n¿Continuar?'))return;
+ saving=true;
+ try{
+  if(sync.promise)await sync.promise;if(session!==active)return;
+  let removed=0;
+  const fresh=await changeState(active.user.document,current=>{
+   const next=window.SKProductionSync.discardRejectedIncomeChanges(current,reviewed);
+   removed=(current.incomeChanges||[]).length-next.incomeChanges.length;return next;
+  });
+  if(session===active){state=fresh;status(removed+' cambio(s) rechazado(s) retirado(s). Se conserva la versión central.');scheduleSync(300);}
+ }catch(error){if(session===active)status(error.message);}
+ finally{saving=false;if(session===active)paint();}
+}
+byId('discardRejectedIncomeChanges').onclick=()=>discardRejectedIncomeChanges();
+byId('reviewIncomeConflicts').onclick=()=>{
+ showConsumptionView(true);
+ if(byId('productionQueries').hidden)return;
+ showQueryType(true);
+ byId('incomeChangeLog').scrollIntoView({block:'start'});
+ byId('incomeChangeLog').focus({preventScroll:true});
+};
 byId('incomeEditCancel').onclick=()=>byId('incomeEditDialog').close();
 byId('incomeEditForm').onsubmit=async event=>{
  event.preventDefault();const edit=event.currentTarget,row=byId('incomeEditDialog').incomeRow;

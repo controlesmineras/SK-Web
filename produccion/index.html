@@ -120,8 +120,12 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #incomeEditForm label{display:grid;gap:5px}
 .incomeWarning{background:#fff1cf;color:#624100;border-left:4px solid #df9d19;padding:12px;border-radius:5px}
 #incomeEditError{color:#a31515}
+#reviewIncomeConflicts{width:100%;margin:0 0 16px;background:#fff1cf;color:#624100;white-space:normal}
+#discardRejectedIncomeChanges{max-width:100%;white-space:normal}
+#incomeChangePending p{padding:12px;border:1px solid #7896a8;border-radius:8px;overflow-wrap:anywhere}
+#incomeChangePending span{display:block;margin:8px 0}
 </style>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=2"></script><script defer src="app.js?v=49-formula-apertura-movimientos"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=3"></script><script defer src="app.js?v=50-revision-conflictos"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script>
 </head>
 <body>
@@ -155,6 +159,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 </div>
 </section>
 <section id="workspace" hidden>
+<button id="reviewIncomeConflicts" type="button" aria-controls="incomeChangeLog" hidden>REVISAR CAMBIOS RECHAZADOS</button>
 <div class="productionIdentity">
 <button id="updateProduction" type="button" aria-label="Actualizar app" title="Actualizar app"><svg aria-hidden="true" width="42" height="42" viewBox="-3 -3 34 34" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path stroke="#bc343a" stroke-width="2.1" d="M14 0a14 14 0 0 0-14 14m0 0-1.5-4m1.5 4 4-2.8m11 16a14 14 0 0 0 14-14m0 0-4 2.8m4-2.8 1.5 4"/><path fill="#226b9c" d="M12 5h4l.5 2.4 1.6.9 2.4-.8 2 3.5-1.8 1.7v2.6l1.8 1.7-2 3.5-2.4-.8-1.6.9-.5 2.4h-4l-.5-2.4-1.6-.9-2.4.8-2-3.5 1.8-1.7v-2.6L5.5 11l2-3.5 2.4.8 1.6-.9z"/><circle cx="14" cy="14" r="4" fill="#eef4f8" stroke="#bc343a"/></svg></button>
 <div id="operator"><strong id="operatorName"></strong><span id="operatorRole"></span></div>
@@ -273,10 +278,12 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <h2>CONSULTAR INGRESOS</h2>
 <p id="incomeQueryStatus" class="hint" hidden></p>
 <div class="tableWrap"><table><thead><tr><th>Fecha</th><th>Repuesto</th><th>Inventario</th><th>Cantidad</th><th>Acciones</th></tr></thead><tbody id="incomeQueryRows"></tbody></table></div>
-<div id="incomeChangeLog" hidden>
+<div id="incomeChangeLog" tabindex="-1" hidden>
 <h3>REGISTRO TEMPORAL DE CAMBIOS</h3>
 <p class="hint">Ediciones y eliminaciones de los últimos 30 días. Revertir recupera el valor anterior del cambio vigente y recalcula el saldo esperado. Los ingresos de inventarios cerrados conservan sus valores.</p>
 <p id="incomeChangeAvailability" class="hint" hidden>Los cambios quedarán pendientes hasta actualizar el servicio de sincronización.</p>
+<p id="incomeConflictNotice" class="incomeWarning" hidden>Los cambios rechazados no se aplicaron. Revisa la versión central y el cambio solicitado de cada ingreso. Volver a sincronizar no reenvía los rechazados; puedes retirarlos conservando la versión central y registrar una nueva corrección si hace falta.</p>
+<button id="discardRejectedIncomeChanges" type="button" hidden>CONSERVAR VERSIÓN CENTRAL Y RETIRAR CAMBIOS RECHAZADOS</button>
 <div id="incomeChangePending" role="status" aria-live="polite"></div>
 <div class="tableWrap"><table><thead><tr><th>Fecha del cambio</th><th>Repuesto</th><th>Inventario</th><th>Acción</th><th>Antes</th><th>Después</th><th>Recuperar</th></tr></thead><tbody id="incomeChangeRows"></tbody></table></div>
 </div>

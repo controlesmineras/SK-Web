@@ -19,6 +19,15 @@
   return selected;
  }
  const selectIncomeChanges=current=>current.incomeChangesV1===true?(current.incomeChanges||[]).filter(row=>!row.syncRejected).slice(0,1000).map(row=>{const clean={...row};delete clean.syncError;delete clean.syncRejected;return clean}):[];
+ function pendingSummary(current){
+  const rows=[...(current.pending||[]),...(current.incomeChanges||[]),...(current.countQueue||[])];
+  const rejected=rows.filter(row=>row.syncRejected).length;
+  return {total:rows.length,rejected,waiting:rows.length-rejected,incomeRejected:(current.incomeChanges||[]).filter(row=>row.syncRejected).length};
+ }
+ function discardRejectedIncomeChanges(current,reviewed){
+  const selected=new Map(reviewed.filter(row=>row.syncRejected).map(row=>[row.id,row]));
+  return {...current,incomeChanges:(current.incomeChanges||[]).filter(row=>!row.syncRejected||!samePendingRow(row,selected.get(row.id)))};
+ }
  function reconcile(result,sent,current,inventoryRequest,sentChanges=[]){
   const tables=['personal','assets','parts','inventoryCriteria','incomes','consumptions'];
   if(result?.ok!==true||tables.some(name=>!Array.isArray(result[name])))throw new Error('La respuesta central está incompleta. Los pendientes se conservaron.');
@@ -77,5 +86,5 @@
   const complete=!pending.length&&!countQueue.length&&!incomeChanges.length,time=new Date().toISOString();
   return {...current,...snapshot,pending,countQueue,incomeChanges,incomeChangesV1:result.incomeChangesV1===true,countSyncError,lastFetchedAt:time,lastSyncAt:complete?time:current.lastSyncAt,stockAdjustmentLocalV1:result.stockAdjustmentLocalV1===true};
  }
- window.SKProductionSync={protocol,samePendingRow,reconcile,selectPending,selectIncomeChanges,adjustmentUpgrade};
+ window.SKProductionSync={protocol,samePendingRow,reconcile,selectPending,selectIncomeChanges,pendingSummary,discardRejectedIncomeChanges,adjustmentUpgrade};
 })();

@@ -46,3 +46,27 @@ test('a hard deadline settles even if fetch or the response body ignores abort',
   await assert.rejects(pending,/45 segundos/);
  }
 });
+
+test('discarding reviewed rejections preserves unsent work, newer conflicts and all central records',()=>{
+ const rejected={id:'old',syncRejected:true,action:'delete',incomeId:'income',baseRevision:'original'};
+ const changed={...rejected,id:'changed',baseRevision:'new'};
+ const unseen={...rejected,id:'unseen'},waiting={...rejected,id:'waiting',syncRejected:false};
+ const current={incomes:[{id:'income',cantidad:8}],consumptions:[{id:'consumption'}],incomeHistory:[{id:'history'}],pending:[{id:'pending'}],countQueue:[{id:'count'}],incomeChanges:[rejected,changed,unseen,waiting]};
+ const result=context.window.SKProductionSync.discardRejectedIncomeChanges(current,[rejected,{...changed,baseRevision:'original'},waiting]);
+ assert.deepEqual(Array.from(result.incomeChanges,row=>row.id),['changed','unseen','waiting']);
+ for(const key of ['incomes','consumptions','incomeHistory','pending','countQueue'])assert.strictEqual(result[key],current[key]);
+ assert.equal(current.incomeChanges.length,4);
+ const summary=context.window.SKProductionSync.pendingSummary(result);
+ assert.equal(summary.total,5);assert.equal(summary.rejected,2);assert.equal(summary.waiting,3);
+});
+
+test('header shows the latest downloaded data while still identifying unresolved work',()=>{
+ const app=fs.readFileSync('produccion/app.js','utf8'),nodes=new Map();
+ const byId=id=>{if(!nodes.has(id))nodes.set(id,{classList:{toggle(){}},setAttribute(){}});return nodes.get(id)};
+ const c=vm.createContext({window:context.window,state:{lastSyncAt:'2026-11-10T23:04:00Z',lastFetchedAt:'2026-11-11T10:36:00Z',incomeChanges:[{syncRejected:true}]},session:{user:{role:'admin'}},syncing:false,syncFailed:true,byId,paintOfflineEntry(){}});
+ vm.runInContext(app.slice(app.indexOf('function paintSync('),app.indexOf('let syncRequested=false')),c);c.paintSync();
+ assert.match(byId('headerLastSync').textContent,/Datos: 11\/11\/2026/);
+ assert.match(byId('pendingBadge').title,/0 por enviar · 1 requieren revisión/);
+ assert.equal(byId('reviewIncomeConflicts').hidden,false);
+ c.session.user.role='assistant';c.paintSync();assert.equal(byId('reviewIncomeConflicts').hidden,true);
+});
