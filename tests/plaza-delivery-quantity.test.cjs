@@ -16,7 +16,7 @@ function formClient(){
   const ctx=vm.createContext({document:{querySelector:query},window:{alert:message=>alerts.push(message)},
     alert:message=>alerts.push(message),sessionStorage:{getItem:()=>null},localStorage:{getItem:()=>null},
     Event:class {constructor(type){this.type=type}},Option:class {constructor(text,value){this.text=text;this.value=value}},console});
-  vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
+  vm.runInContext(read('spare-groups.js'),ctx);vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
   const prefix=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
   vm.runInContext(prefix+`\nwindow.testing={matchesAssetSearch,selectionLabel:assetSelectionLabel,historyLabel:assetLabel,set:value=>{data=value},mode:value=>{deliveryMode=value},update:updateDeliveryFields,capture:currentDeliveryItem,add:addDeliveryItem,draft:()=>deliveryDraft,recipientChanged:recipientDestinationChanged};})();`,ctx);
   const api=ctx.window.testing,data={
@@ -131,4 +131,16 @@ test('specific asset searches match partial serials, marks, models and multiple 
   for(const query of ['stihl','57952','Makita AAG'])assert.equal(c.api.matchesAssetSearch(asset,query),false,query);
   assert.equal(c.api.matchesAssetSearch({clase:'Columna',serial:'HIDDEN-SERIAL',marcaPrevia:'15',modelo:'29'},'hidden-serial'),false);
   assert.equal(c.api.matchesAssetSearch({clase:'Columna',marcaPrevia:'15',modelo:'29'},'15 29'),true);
+});
+
+
+test('a grouped spare capture keeps the criterion ID and explicit name for stock and Production',()=>{
+  const c=formClient();c.api.mode('assignment');
+  c.data.inventoryCriteria.push({id:'criterion-resorte',isYtSpare:true,spareEquipment:'YT 29',spareItemNumber:'1',spareItemName:'Resorte del pin del cabezal',productionPartId:'legacy-part-1',name:'Repuesto YT 29 - Ítem 1 - Resorte'});
+  c.data.inventoryStock.push({id:'stock-resorte',itemId:'criterion-resorte',quantity:8});
+  c.select('criterion-resorte');c.fields.quantity.value='2';
+  const row=c.api.capture();
+  assert.equal(row.itemId,'criterion-resorte');assert.equal(row.itemName,'REPUESTO DE YT29 · ÍTEM 1 · Resorte del pin del cabezal');
+  assert.equal(row.destination,'Producción');assert.equal(row.assetId,'');assert.equal(row.quantity,2);
+  c.api.add();assert.equal(c.api.draft()[0].itemId,'criterion-resorte');assert.equal(c.fields.itemId.value,'');
 });
