@@ -21,16 +21,16 @@ test('exact numbers, accents, aliases and model names can locate a group or a sp
  assert.ok(api.entries(items,'YT 29').some(entry=>entry.item?.id==='machine-yt29'));
  for(const query of ['Repuesto de YT29','REPUESTO DE YT 29','Repuestos de YT29']){
    const found=api.entries(items,query);
-   assert.equal(found.length,1);assert.equal(found[0].label,'REPUESTO DE YT29');assert.equal(found[0].type,'YT 29');
+   assert.equal(found.length,1);assert.equal(found[0].label,'Repuestos de YT29');assert.equal(found[0].type,'YT 29');
  }
- assert.equal(api.entries(items,'Repuesto de YT28')[0].label,'REPUESTO DE YT28');
- assert.equal(api.entries(items,'Repuesto de columna 29')[0].label,'REPUESTO DE COLUMNA 29');
+ assert.equal(api.entries(items,'Repuesto de YT28')[0].label,'Repuestos de YT28');
+ assert.equal(api.entries(items,'Repuesto de columna 29')[0].label,'Repuestos de columna 29');
 });
 test('records describe a spare, including its model and number; common items and unknown metadata remain visible',()=>{
  const api=model(),items=fixtures();
- assert.equal(api.recordName(items[0]),'REPUESTO DE YT29 · ÍTEM 1 · Resorte');
- assert.equal(api.recordName(items[4]),'REPUESTO DE COLUMNA 29 · ÍTEM 1 · Resorte');
- assert.equal(api.recordName(items[6]),'REPUESTO DE YT29 · Lubricador');
+ assert.equal(api.recordName(items[0]),'Repuesto de YT29 · Ítem 1 · Resorte');
+ assert.equal(api.recordName(items[4]),'Repuesto de columna 29 · Ítem 1 · Resorte');
+ assert.equal(api.recordName(items[6]),'Repuesto de YT29 · Lubricador');
  assert.equal(api.recordName(items[7]),'Guantes');
  const unusual={id:'unknown',name:'Pieza especial',isYtSpare:true,spareEquipment:'Otro'};
  assert.equal(api.entries([unusual])[0].item,unusual);
@@ -87,7 +87,7 @@ test('zero stock is unavailable for delivery and selectable for income; refresh 
 });
 test('keyboard selects a concrete item and escape closes the menu; refreshing preserves selections and updates captions',()=>{
  const c=picker();c.group('YT 29');c.type('1');c.detail.input.dispatchEvent({type:'keydown',key:'Enter',preventDefault(){}});assert.equal(c.select.value,'yt1');
- c.refresh();assert.equal(c.select.value,'yt1');assert.equal(c.main.input.value,'REPUESTO DE YT29');
+ c.refresh();assert.equal(c.select.value,'yt1');assert.equal(c.main.input.value,'Repuestos de YT29');
  c.setLoan(true);c.refresh();assert.equal(c.detail.input.attributes['aria-label'],'BUSCA EL ÍTEM A PRESTAR');
  c.detail.open();c.detail.input.dispatchEvent({type:'keydown',key:'Escape'});assert.equal(c.detail.menu.hidden,true);
 });
@@ -110,7 +110,7 @@ test('the unchanged backend confirms each named spare once and Production receiv
  assert.equal(cloud.inventoryStock.find(row=>row.itemId==='yt1').quantity,8);
  assert.equal(cloud.inventoryStock.find(row=>row.itemId==='yt28').quantity,7);
  assert.equal(cloud.inventoryStock.find(row=>row.itemId==='col29').quantity,10);
- assert.equal(cloud.blendingDeliveries[0].itemName,'REPUESTO DE YT29 · ÍTEM 1 · Resorte');
+ assert.equal(cloud.blendingDeliveries[0].itemName,'Repuesto de YT29 · Ítem 1 · Resorte');
  const production=ctx.productionSync_({token:'test',pending:[]});
  assert.deepEqual(production.deliveries.map(row=>row.itemId),['yt1','yt28']);
  assert.ok(ctx.productionCatalog_(cloud.parts,cloud.inventoryCriteria,'YT29').get('legacy-yt1').aliases.includes('yt1'));
