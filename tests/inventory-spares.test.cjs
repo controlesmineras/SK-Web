@@ -3,20 +3,24 @@ const fs=require('node:fs'),vm=require('node:vm'),{webcrypto}=require('node:cryp
 const {IDBFactory}=require('fake-indexeddb');
 async function harness(){
  const status={},button={},elements={},events=[];
+ const sourceText=fs.readFileSync('inventory-admin.js','utf8');
+ const typeButtons=Array.from(sourceText.matchAll(/data-spare-filter="([^"]+)"/g),m=>({dataset:{spareFilter:m[1]},attributes:{},setAttribute(k,v){this.attributes[k]=v},closest(){return this}}));
+ const nodes=new Map();
+ const node=s=>{if(!nodes.has(s))nodes.set(s,{dataset:{},handlers:{},value:'',innerHTML:'',textContent:'',querySelectorAll:()=>[],addEventListener(t,fn){this.handlers[t]=fn}});return nodes.get(s)};
  for(const key of ['allowAccessories','id','name','secondaryName','tertiaryName','unit','initialQuantity','containerUnit','spareEquipment','spareItemNumber','spareItemName','spareApplication','isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable']){
   const label={hidden:false};elements[key]={value:'',checked:false,dataset:{},options:[{value:'Unidad'}],closest:()=>label,focus(){}};
  }
- const form={elements,dataset:{},reportValidity(){},scrollIntoView(){},closest:()=>form,querySelectorAll:()=>[],querySelector:()=>null,reset(){for(const field of Object.values(elements)){field.value='';field.checked=false;}}};
+ const form={elements,dataset:{},addEventListener(){},reportValidity(){},scrollIntoView(){},closest:()=>form,querySelectorAll:()=>[],querySelector:()=>null,reset(){for(const field of Object.values(elements)){field.value='';field.checked=false;}}};
  elements.unit.value='Unidad';elements.initialQuantity.value='0';
  elements.isYtSpare.checked=true;elements.spareEquipment.value='YT 29';elements.spareItemNumber.value='27';elements.spareItemName.value='Pieza de prueba';
  const window={addEventListener(){},dispatchEvent:e=>events.push(e.type)};
- const ctx=vm.createContext({window,indexedDB:new IDBFactory(),crypto:webcrypto,document:{querySelector:s=>s==='#inventoryItemForm'?form:s==='#inventoryItemSave'?button:s==='#inventoryItemStatus'?status:{}},setTimeout(){},Event:class{constructor(type){this.type=type}},console:{error(){}}});
+ const ctx=vm.createContext({window,indexedDB:new IDBFactory(),crypto:webcrypto,document:{querySelector:s=>s==='#inventoryItemForm'?form:s==='#inventoryItemSave'?button:s==='#inventoryItemStatus'?status:node(s),querySelectorAll:s=>s==='[data-spare-filter]'?typeButtons:[]},setTimeout(){},Event:class{constructor(type){this.type=type}},console:{error(){}}});
  vm.runInContext(fs.readFileSync('app.js','utf8').split('const PARTS=')[0],ctx);await ctx.openDB();
  vm.runInContext(fs.readFileSync('spare-groups.js','utf8'),ctx);
- const source=fs.readFileSync('inventory-admin.js','utf8').replace('window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities}', 'window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities,save,edit,syncSpareFields}');
- vm.runInContext(source,ctx);
+ const source=fs.readFileSync('inventory-admin.js','utf8').replace('window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities}', 'window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities,save,edit,syncSpareFields,bind}');
+ vm.runInContext(source,ctx);window.SKInventoryAdmin.bind();
  const rows=async()=>{const out=[];for(const table of ['inventoryCriteria','inventoryStock','incomes'])for(const row of await ctx.all(table))out.push({table,row});return out};
- return {api:window.SKInventoryAdmin,form,status,button,events,ctx,db:vm.runInContext('db',ctx),rows,save:()=>window.SKInventoryAdmin.save({currentTarget:form,preventDefault(){}})};
+ return {api:window.SKInventoryAdmin,form,status,button,events,ctx,typeButtons,node,selectType:async type=>{const target=typeButtons.find(b=>b.dataset.spareFilter===type);assert.ok(target);node('#spareCatalogFilter').handlers.click({target});await window.SKInventoryAdmin.render()},db:vm.runInContext('db',ctx),rows,save:()=>window.SKInventoryAdmin.save({currentTarget:form,preventDefault(){}})};
 }
 test('guarda repuesto, saldo e ingreso inicial offline; limpia el formulario al confirmar la transacción',async()=>{
  const h=await harness();h.form.elements.initialQuantity.value='12';await h.save();
@@ -106,4 +110,38 @@ test('el protocolo existente sincroniza la aplicación y su borrado con otro Adm
   const production=server.productionSync_({token:'test',pending:[]}).inventoryCriteria.find(x=>x.id===item.id);
   for(const row of [admin,plaza,production]){assert.equal(row.spareApplication,value);assert.equal(row.syncState,'synced');assert.equal(row.spareItemName,item.spareItemName);}
  }
+});
+
+
+test('los cuatro botones son el único tipo del formulario y el filtro, y guardar conserva la selección',async()=>{
+ const h=await harness();h.api.openKind('spare');
+ assert.equal(h.typeButtons.length,4);assert.equal(h.form.elements.spareEquipment.value,'YT 29');
+ for(const type of ['YT 29','YT 28','Columna 29','Columna 28']){
+  await h.selectType(type);
+  assert.equal(h.form.elements.spareEquipment.value,type);
+  assert.deepEqual(h.typeButtons.filter(b=>b.attributes['aria-pressed']==='true').map(b=>b.dataset.spareFilter),[type]);
+  h.form.elements.spareItemNumber.value='1';h.form.elements.spareItemName.value='Resorte';h.form.elements.spareApplication.value='Va con el pin';h.form.elements.initialQuantity.value='3';
+  await h.save();
+  const criteria=await h.ctx.all('inventoryCriteria'),item=criteria.find(x=>x.spareEquipment===type);
+  assert.ok(item);assert.equal(item.spareItemName,'Resorte');assert.equal(item.spareApplication,'Va con el pin');
+  assert.equal(h.form.elements.spareEquipment.value,type);assert.equal(h.form.elements.spareItemName.value,'');assert.equal(h.form.elements.id.value,'');
+  const listed=Array.from(h.node('#inventoryItemList').innerHTML.matchAll(/data-inv-id="([^"]+)"/g),m=>m[1]);assert.deepEqual(listed,[item.id]);
+  await h.selectType(type);assert.equal(h.form.elements.spareEquipment.value,type);assert.equal(h.typeButtons.filter(b=>b.attributes['aria-pressed']==='true').length,1);
+ }
+ assert.equal((await h.ctx.all('inventoryCriteria')).length,4);
+ const source=fs.readFileSync('inventory-admin.js','utf8');assert.doesNotMatch(source,/<select[^>]*name="spareEquipment"/);assert.match(source,/<input type="hidden" name="spareEquipment"/);
+});
+
+test('editar marca el tipo del registro y cambiarlo en los botones se guarda con el mismo identificador',async()=>{
+ const h=await harness();h.api.openKind('spare');await h.selectType('Columna 28');
+ h.form.elements.spareItemNumber.value='8';h.form.elements.spareItemName.value='Tuerca';h.form.elements.secondaryName.value='Tuerca para el tubo de aire';h.form.elements.initialQuantity.value='6';await h.save();
+ const item=(await h.ctx.all('inventoryCriteria'))[0],stock=(await h.ctx.all('inventoryStock'))[0];
+ await h.selectType('YT 29');await h.api.edit(item.id);
+ assert.equal(h.form.elements.spareEquipment.value,'Columna 28');assert.deepEqual(h.typeButtons.filter(b=>b.attributes['aria-pressed']==='true').map(b=>b.dataset.spareFilter),['Columna 28']);
+ await h.selectType('YT 28');
+ assert.equal(h.form.elements.id.value,item.id);assert.equal(h.form.elements.spareItemName.value,'Tuerca');assert.equal(h.form.elements.secondaryName.value,'Tuerca para el tubo de aire');
+ assert.equal((await h.ctx.all('inventoryCriteria'))[0].spareEquipment,'Columna 28','la selección no escribe hasta guardar');
+ await h.save();const updated=(await h.ctx.all('inventoryCriteria'))[0];assert.equal(updated.id,item.id);assert.equal(updated.spareEquipment,'YT 28');assert.equal(updated.name,'Repuesto de YT28 · Ítem 8 · Tuerca');assert.deepEqual((await h.ctx.all('inventoryStock'))[0],stock);
+ h.api.openKind('common');assert.equal(h.node('#inventoryFormTitle').textContent,'Datos del elemento');assert.equal(h.node('#spareCatalogFilter').hidden,true);assert.equal(h.form.elements.spareEquipment.disabled,true);
+ h.api.openKind('spare');assert.equal(h.node('#spareCatalogFilter').hidden,false);assert.equal(h.form.elements.spareEquipment.value,'YT 28');
 });
