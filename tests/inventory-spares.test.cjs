@@ -21,14 +21,14 @@ async function harness(){
 test('guarda repuesto, saldo e ingreso inicial offline; limpia el formulario al confirmar la transacción',async()=>{
  const h=await harness();h.form.elements.initialQuantity.value='12';await h.save();
  const rows=await h.rows(),item=rows.find(r=>r.table==='inventoryCriteria').row;
- assert.equal(item.name,'REPUESTO DE YT29 · ÍTEM 27 · Pieza de prueba');assert.equal(item.spareItemNumber,'27');assert.equal(item.spareItemName,'Pieza de prueba');
+ assert.equal(item.name,'Repuesto de YT29 · Ítem 27 · Pieza de prueba');assert.equal(item.spareItemNumber,'27');assert.equal(item.spareItemName,'Pieza de prueba');
  assert.equal(rows.find(r=>r.table==='inventoryStock').row.quantity,12);assert.equal(rows.find(r=>r.table==='incomes').row.itemId,item.id);
  assert.ok(rows.every(r=>r.row.syncState==='pending'));assert.equal(h.form.elements.name.value,'');assert.equal(h.form.elements.spareItemName.value,'');assert.equal(h.button.disabled,false);
  assert.ok(h.events.includes('skweb-local-change'));assert.match(h.status.textContent,/guardado en este dispositivo/);
 });
 test('el número es opcional y admite Columna 29',async()=>{
  const h=await harness();h.form.elements.spareEquipment.value='Columna 29';h.form.elements.spareItemNumber.value='';await h.save();
- assert.equal((await h.rows())[0].row.name,'REPUESTO DE COLUMNA 29 · Pieza de prueba');
+ assert.equal((await h.rows())[0].row.name,'Repuesto de columna 29 · Pieza de prueba');
 });
 test('un elemento común no conserva los campos de repuesto',async()=>{
  const h=await harness();h.form.elements.isYtSpare.checked=false;h.form.elements.name.value='Guantes';await h.save();
@@ -69,5 +69,5 @@ test('new wording rejects duplicate legacy spares and renamed imported items ret
  await h.api.edit(old.id);h.form.elements.spareItemName.value='Resorte del pin del cabezal';await h.save();
  const rows=await h.rows(),item=rows.find(x=>x.table==='inventoryCriteria').row;
  assert.equal(item.id,old.id);assert.equal(item.productionPartId,'legacy-part');assert.equal(rows.find(x=>x.table==='inventoryStock').row.quantity,8);
- assert.equal(item.name,'REPUESTO DE YT29 · ÍTEM 27 · Resorte del pin del cabezal');
+ assert.equal(item.name,'Repuesto de YT29 · Ítem 27 · Resorte del pin del cabezal');
 });
