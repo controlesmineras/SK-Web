@@ -9,8 +9,8 @@
     return types.find(type=>normalize(type).replace(/ /g,'')===normalize(item.spareEquipment).replace(/ /g,''))||'';
   }
   const typeName=type=>type.startsWith('YT ')?type.replace('YT ','YT'):type.toUpperCase();
-  const groupName=type=>'REPUESTOS DE '+typeName(type);
   const typeLabel=type=>'REPUESTO DE '+typeName(type);
+  const groupName=typeLabel;
   const partName=item=>[clean(item?.spareItemNumber),clean(item?.spareItemName)||rawName(item)].filter(Boolean).join(' · ');
   function recordName(item){
     const type=key(item);
@@ -34,9 +34,9 @@
     });
   }
   function entries(items,query=''){
-    const active=items.filter(item=>!item.deleted&&item.active!==false),q=normalize(query);
+    const active=items.filter(item=>!item.deleted&&item.active!==false),q=normalize(query).replace(/\brepuestos\b/g,'repuesto').replace(/\byt\s+(?=\d)/g,'yt');
     const groups=types.map(type=>({type,label:groupName(type),items:parts(active,type)})).filter(group=>group.items.length&&(!q||normalize(group.label).includes(q)||group.items.some(item=>matches(item,q))));
-    return [...groups,...active.filter(item=>!key(item)&&matches(item,q)).map(item=>({item}))];
+    return [...groups,...active.filter(item=>!key(item)&&matches(item,query)).map(item=>({item}))];
   }
   window.SKSpareGroups={types,key,typeLabel,groupName,partName,recordName,matches,parts,entries};
 })();
