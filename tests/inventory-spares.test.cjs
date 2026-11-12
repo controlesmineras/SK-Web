@@ -3,7 +3,7 @@ const fs=require('node:fs'),vm=require('node:vm'),{webcrypto}=require('node:cryp
 const {IDBFactory}=require('fake-indexeddb');
 async function harness(){
  const status={},button={},elements={},events=[];
- for(const key of ['allowAccessories','id','name','secondaryName','tertiaryName','unit','initialQuantity','containerUnit','spareEquipment','spareItemNumber','spareItemName','isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable']){
+ for(const key of ['allowAccessories','id','name','secondaryName','tertiaryName','unit','initialQuantity','containerUnit','spareEquipment','spareItemNumber','spareItemName','spareApplication','isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable']){
   const label={hidden:false};elements[key]={value:'',checked:false,dataset:{},options:[{value:'Unidad'}],closest:()=>label,focus(){}};
  }
  const form={elements,dataset:{},reportValidity(){},scrollIntoView(){},closest:()=>form,querySelectorAll:()=>[],querySelector:()=>null,reset(){for(const field of Object.values(elements)){field.value='';field.checked=false;}}};
@@ -31,9 +31,9 @@ test('el número es opcional y admite Columna 29',async()=>{
  assert.equal((await h.rows())[0].row.name,'Repuesto de columna 29 · Pieza de prueba');
 });
 test('un elemento común no conserva los campos de repuesto',async()=>{
- const h=await harness();h.form.elements.isYtSpare.checked=false;h.form.elements.name.value='Guantes';await h.save();
+ const h=await harness();h.form.elements.spareApplication.value='Texto solo para repuestos';h.form.elements.isYtSpare.checked=false;h.form.elements.name.value='Guantes';await h.save();
  const item=(await h.rows())[0].row;assert.equal(item.name,'Guantes');assert.equal(item.spareItemName,'');assert.equal(item.spareEquipment,'');assert.equal(item.spareItemNumber,'');
- assert.equal(h.form.elements.spareItemName.closest().hidden,true);assert.equal(h.form.elements.spareItemName.disabled,true);
+ assert.equal(h.form.elements.spareItemName.closest().hidden,true);assert.equal(h.form.elements.spareItemName.disabled,true);assert.equal(item.spareApplication,'');assert.equal(h.form.elements.spareApplication.closest().hidden,true);assert.equal(h.form.elements.spareApplication.disabled,true);assert.equal(h.form.elements.spareApplication.required,false);
 });
 test('equipos desconocidos o nombres vacíos no guardan nada',async()=>{
  for(const invalid of ['Otro 29','']){const h=await harness();if(invalid)h.form.elements.spareEquipment.value=invalid;else h.form.elements.spareItemName.value=' ';await h.save();assert.equal((await h.rows()).length,0);assert.equal(h.button.disabled,false);}
@@ -70,4 +70,40 @@ test('new wording rejects duplicate legacy spares and renamed imported items ret
  const rows=await h.rows(),item=rows.find(x=>x.table==='inventoryCriteria').row;
  assert.equal(item.id,old.id);assert.equal(item.productionPartId,'legacy-part');assert.equal(rows.find(x=>x.table==='inventoryStock').row.quantity,8);
  assert.equal(item.name,'Repuesto de YT29 · Ítem 27 · Resorte del pin del cabezal');
+});
+
+
+test('ubicación o aplicación es opcional, se guarda offline y permite editarla o quitarla sin alterar el saldo',async()=>{
+ const h=await harness(),application='Va con el pin de ajuste del cabezal';
+ h.form.elements.initialQuantity.value='12';h.form.elements.spareApplication.value='  '+application+'  ';h.form.elements.secondaryName.value='Muelle';await h.save();
+ let rows=await h.rows(),item=rows.find(x=>x.table==='inventoryCriteria').row;
+ assert.equal(item.spareApplication,application);assert.equal(item.secondaryName,'Muelle');assert.equal(item.syncState,'pending');assert.equal(h.form.elements.spareApplication.value,'');
+ const stock=rows.find(x=>x.table==='inventoryStock').row,income=rows.find(x=>x.table==='incomes').row;
+ await h.api.edit(item.id);
+ assert.equal(h.form.elements.spareApplication.value,application);assert.equal(h.form.elements.spareApplication.required,false);assert.equal(h.form.elements.spareApplication.disabled,false);assert.equal(h.form.elements.spareApplication.closest().hidden,false);
+ h.form.elements.spareApplication.value='En el cabezal';await h.save();await h.api.edit(item.id);assert.equal(h.form.elements.spareApplication.value,'En el cabezal');
+ h.form.elements.spareApplication.value='';await h.save();await h.api.edit(item.id);assert.equal(h.form.elements.spareApplication.value,'');
+ rows=await h.rows();item=rows.find(x=>x.table==='inventoryCriteria').row;assert.equal(item.spareApplication,'');assert.equal(item.secondaryName,'Muelle');
+ assert.deepEqual(rows.find(x=>x.table==='inventoryStock').row,stock);assert.deepEqual(rows.find(x=>x.table==='incomes').row,income);
+ // Un catálogo anterior sin este campo también se puede abrir y guardar.
+ delete item.spareApplication;await h.ctx.put('inventoryCriteria',item);await h.api.edit(item.id);assert.equal(h.form.elements.spareApplication.value,'');await h.save();assert.match(h.status.textContent,/Cambios guardados/);
+});
+
+test('el protocolo existente sincroniza la aplicación y su borrado con otro Admin, Plaza y Producción',async()=>{
+ const h=await harness();h.form.elements.spareApplication.value='Va con el pin de ajuste del cabezal';await h.save();
+ const item=(await h.rows()).find(x=>x.table==='inventoryCriteria').row,clone=x=>JSON.parse(JSON.stringify(x));
+ let cloud={assets:[],parts:[],personal:[{id:'person-test',documento:'test',nombre:'Prueba'}],inventoryCriteria:[],inventoryStock:[],blendingIncomes:[],blendingDeliveries:[]};
+ const server=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},DriveApp:{getFilesByName:()=>({hasNext:()=>false})}});
+ vm.runInContext(fs.readFileSync('backend/apps-script/Code.gs','utf8'),server);
+ server.findFile_=()=> 'test';server.readFile_=()=>clone(cloud);server.writeFile_=(_,data)=>{cloud=clone(data)};server.json_=clone;
+ server.verifyToken_=()=>({role:'plaza_operator',document:'test'});server.verifyProductionToken_=()=>({role:'admin',document:'test',personId:'person-test'});
+ const owner={role:'owner',username:'test'};
+ for(const value of [item.spareApplication,'']){
+  const pending={...item,spareApplication:value,updatedAt:new Date(Date.parse(cloud.updatedAt||item.updatedAt)+1).toISOString(),syncState:'pending'};
+  server.adminSyncAuthorized_({inventoryCriteria:[pending]},'',owner);
+  const admin=server.adminSyncAuthorized_({},'',owner).data.inventoryCriteria.find(x=>x.id===item.id);
+  const plaza=server.plazaSync_({token:'test',data:{}}).data.inventoryCriteria.find(x=>x.id===item.id);
+  const production=server.productionSync_({token:'test',pending:[]}).inventoryCriteria.find(x=>x.id===item.id);
+  for(const row of [admin,plaza,production]){assert.equal(row.spareApplication,value);assert.equal(row.syncState,'synced');assert.equal(row.spareItemName,item.spareItemName);}
+ }
 });
