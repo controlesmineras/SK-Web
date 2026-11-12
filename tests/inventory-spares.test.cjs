@@ -12,7 +12,8 @@ async function harness(){
  const window={addEventListener(){},dispatchEvent:e=>events.push(e.type)};
  const ctx=vm.createContext({window,indexedDB:new IDBFactory(),crypto:webcrypto,document:{querySelector:s=>s==='#inventoryItemForm'?form:s==='#inventoryItemSave'?button:s==='#inventoryItemStatus'?status:{}},setTimeout(){},Event:class{constructor(type){this.type=type}},console:{error(){}}});
  vm.runInContext(fs.readFileSync('app.js','utf8').split('const PARTS=')[0],ctx);await ctx.openDB();
- const source=fs.readFileSync('inventory-admin.js','utf8').replace('window.SKInventoryAdmin={mount,render,openKind}','window.SKInventoryAdmin={mount,render,openKind,save,edit,syncSpareFields}');
+ vm.runInContext(fs.readFileSync('spare-groups.js','utf8'),ctx);
+ const source=fs.readFileSync('inventory-admin.js','utf8').replace('window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities}', 'window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities,save,edit,syncSpareFields}');
  vm.runInContext(source,ctx);
  const rows=async()=>{const out=[];for(const table of ['inventoryCriteria','inventoryStock','incomes'])for(const row of await ctx.all(table))out.push({table,row});return out};
  return {api:window.SKInventoryAdmin,form,status,button,events,ctx,db:vm.runInContext('db',ctx),rows,save:()=>window.SKInventoryAdmin.save({currentTarget:form,preventDefault(){}})};
@@ -20,14 +21,14 @@ async function harness(){
 test('guarda repuesto, saldo e ingreso inicial offline; limpia el formulario al confirmar la transacción',async()=>{
  const h=await harness();h.form.elements.initialQuantity.value='12';await h.save();
  const rows=await h.rows(),item=rows.find(r=>r.table==='inventoryCriteria').row;
- assert.equal(item.name,'Repuesto YT 29 - Ítem 27 - Pieza de prueba');assert.equal(item.spareItemNumber,'27');assert.equal(item.spareItemName,'Pieza de prueba');
+ assert.equal(item.name,'REPUESTO DE YT29 · ÍTEM 27 · Pieza de prueba');assert.equal(item.spareItemNumber,'27');assert.equal(item.spareItemName,'Pieza de prueba');
  assert.equal(rows.find(r=>r.table==='inventoryStock').row.quantity,12);assert.equal(rows.find(r=>r.table==='incomes').row.itemId,item.id);
  assert.ok(rows.every(r=>r.row.syncState==='pending'));assert.equal(h.form.elements.name.value,'');assert.equal(h.form.elements.spareItemName.value,'');assert.equal(h.button.disabled,false);
  assert.ok(h.events.includes('skweb-local-change'));assert.match(h.status.textContent,/guardado en este dispositivo/);
 });
 test('el número es opcional y admite Columna 29',async()=>{
  const h=await harness();h.form.elements.spareEquipment.value='Columna 29';h.form.elements.spareItemNumber.value='';await h.save();
- assert.equal((await h.rows())[0].row.name,'Repuesto Columna 29 - Pieza de prueba');
+ assert.equal((await h.rows())[0].row.name,'REPUESTO DE COLUMNA 29 · Pieza de prueba');
 });
 test('un elemento común no conserva los campos de repuesto',async()=>{
  const h=await harness();h.form.elements.isYtSpare.checked=false;h.form.elements.name.value='Guantes';await h.save();
@@ -57,4 +58,16 @@ test('editar actualiza el saldo local y limpia el formulario sin crear otro ingr
 });
 test('una cantidad negativa mantiene el formulario sin guardar parcialmente',async()=>{
  const h=await harness();h.form.elements.initialQuantity.value='-1';await h.save();assert.equal((await h.rows()).length,0);assert.equal(h.form.elements.spareItemName.value,'Pieza de prueba');assert.match(h.status.textContent,/cantidad/);
+});
+
+
+test('new wording rejects duplicate legacy spares and renamed imported items retain their IDs',async()=>{
+ const h=await harness();
+ const old={id:'legacy-criterion',name:'Repuesto YT 29 - Ítem 27 - Pieza de prueba',isYtSpare:true,spareEquipment:'YT 29',spareItemNumber:'27',spareItemName:'Pieza de prueba',productionPartId:'legacy-part',unit:'Unidad'};
+ await h.ctx.put('inventoryCriteria',old);await h.ctx.put('inventoryStock',{id:'stock-legacy',itemId:old.id,quantity:8});
+ await h.save();assert.equal((await h.rows()).length,2);assert.match(h.status.textContent,/ya está utilizado/);
+ await h.api.edit(old.id);h.form.elements.spareItemName.value='Resorte del pin del cabezal';await h.save();
+ const rows=await h.rows(),item=rows.find(x=>x.table==='inventoryCriteria').row;
+ assert.equal(item.id,old.id);assert.equal(item.productionPartId,'legacy-part');assert.equal(rows.find(x=>x.table==='inventoryStock').row.quantity,8);
+ assert.equal(item.name,'REPUESTO DE YT29 · ÍTEM 27 · Resorte del pin del cabezal');
 });
