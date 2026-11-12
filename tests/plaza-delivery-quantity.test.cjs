@@ -140,7 +140,7 @@ test('a grouped spare capture keeps the criterion ID and explicit name for stock
   c.data.inventoryStock.push({id:'stock-resorte',itemId:'criterion-resorte',quantity:8});
   c.select('criterion-resorte');c.fields.quantity.value='2';
   const row=c.api.capture();
-  assert.equal(row.itemId,'criterion-resorte');assert.equal(row.itemName,'REPUESTO DE YT29 · ÍTEM 1 · Resorte del pin del cabezal');
+  assert.equal(row.itemId,'criterion-resorte');assert.equal(row.itemName,'Repuesto de YT29 · Ítem 1 · Resorte del pin del cabezal');
   assert.equal(row.destination,'Producción');assert.equal(row.assetId,'');assert.equal(row.quantity,2);
   c.api.add();assert.equal(c.api.draft()[0].itemId,'criterion-resorte');assert.equal(c.fields.itemId.value,'');
 });
