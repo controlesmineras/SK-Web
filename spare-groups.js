@@ -8,14 +8,14 @@
     if(item?.isYtSpare!==true)return '';
     return types.find(type=>normalize(type).replace(/ /g,'')===normalize(item.spareEquipment).replace(/ /g,''))||'';
   }
-  const typeName=type=>type.startsWith('YT ')?type.replace('YT ','YT'):type.toUpperCase();
-  const typeLabel=type=>'REPUESTO DE '+typeName(type);
-  const groupName=typeLabel;
+  const typeName=type=>type.startsWith('YT ')?type.replace('YT ','YT'):type.toLowerCase();
+  const typeLabel=type=>'Repuesto de '+typeName(type);
+  const groupName=type=>'Repuestos de '+typeName(type);
   const partName=item=>[clean(item?.spareItemNumber),clean(item?.spareItemName)||rawName(item)].filter(Boolean).join(' · ');
   function recordName(item){
     const type=key(item);
     if(!type||!clean(item.spareItemName))return rawName(item);
-    return[typeLabel(type),clean(item.spareItemNumber)?'ÍTEM '+clean(item.spareItemNumber):'',clean(item.spareItemName)].filter(Boolean).join(' · ');
+    return[typeLabel(type),clean(item.spareItemNumber)?'Ítem '+clean(item.spareItemNumber):'',clean(item.spareItemName)].filter(Boolean).join(' · ');
   }
   function matches(item,query){
     let q=normalize(query);if(!q)return true;
@@ -35,7 +35,7 @@
   }
   function entries(items,query=''){
     const active=items.filter(item=>!item.deleted&&item.active!==false),q=normalize(query).replace(/\brepuestos\b/g,'repuesto').replace(/\byt\s+(?=\d)/g,'yt');
-    const groups=types.map(type=>({type,label:groupName(type),items:parts(active,type)})).filter(group=>group.items.length&&(!q||normalize(group.label).includes(q)||group.items.some(item=>matches(item,q))));
+    const groups=types.map(type=>({type,label:groupName(type),items:parts(active,type)})).filter(group=>group.items.length&&(!q||normalize(typeLabel(group.type)).includes(q)||group.items.some(item=>matches(item,q))));
     return [...groups,...active.filter(item=>!key(item)&&matches(item,query)).map(item=>({item}))];
   }
   window.SKSpareGroups={types,key,typeLabel,groupName,partName,recordName,matches,parts,entries};
