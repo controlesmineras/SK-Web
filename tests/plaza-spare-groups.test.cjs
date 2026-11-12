@@ -17,6 +17,14 @@ test('exact numbers, accents, aliases and model names can locate a group or a sp
  assert.equal(api.entries(items,'YT29')[0].type,'YT 29');
  assert.equal(api.entries(items,'repuestos de columna 28')[0].type,'Columna 28');
  assert.equal(api.entries(items,'guantes')[0].item.id,'common');
+ items.push({id:'machine-yt29',name:'YT 29',isFixedAsset:true});
+ assert.ok(api.entries(items,'YT 29').some(entry=>entry.item?.id==='machine-yt29'));
+ for(const query of ['Repuesto de YT29','REPUESTO DE YT 29','Repuestos de YT29']){
+   const found=api.entries(items,query);
+   assert.equal(found.length,1);assert.equal(found[0].label,'REPUESTO DE YT29');assert.equal(found[0].type,'YT 29');
+ }
+ assert.equal(api.entries(items,'Repuesto de YT28')[0].label,'REPUESTO DE YT28');
+ assert.equal(api.entries(items,'Repuesto de columna 29')[0].label,'REPUESTO DE COLUMNA 29');
 });
 test('records describe a spare, including its model and number; common items and unknown metadata remain visible',()=>{
  const api=model(),items=fixtures();
@@ -79,7 +87,7 @@ test('zero stock is unavailable for delivery and selectable for income; refresh 
 });
 test('keyboard selects a concrete item and escape closes the menu; refreshing preserves selections and updates captions',()=>{
  const c=picker();c.group('YT 29');c.type('1');c.detail.input.dispatchEvent({type:'keydown',key:'Enter',preventDefault(){}});assert.equal(c.select.value,'yt1');
- c.refresh();assert.equal(c.select.value,'yt1');assert.equal(c.main.input.value,'REPUESTOS DE YT29');
+ c.refresh();assert.equal(c.select.value,'yt1');assert.equal(c.main.input.value,'REPUESTO DE YT29');
  c.setLoan(true);c.refresh();assert.equal(c.detail.input.attributes['aria-label'],'BUSCA EL ÍTEM A PRESTAR');
  c.detail.open();c.detail.input.dispatchEvent({type:'keydown',key:'Escape'});assert.equal(c.detail.menu.hidden,true);
 });
