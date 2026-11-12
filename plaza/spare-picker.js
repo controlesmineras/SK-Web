@@ -44,7 +44,7 @@
       stock.className='itemStock '+badge.className;stock.textContent=badge.text;button.append(names,stock);return button;
     }
     function empty(menu){if(!menu.children.length){const message=document.createElement('p');message.textContent='No hay elementos que coincidan.';menu.append(message)}}
-    const main=picker(label,'ItemSearch','Escribe para buscar un elemento o grupo…',(menu,input)=>{
+    const main=picker(label,'ItemSearch','Ej.: Repuesto de YT29, guantes…',(menu,input)=>{
       const query=selectedGroup||select.value?'':input.value;
       const entries=groups.entries(available(),query).slice(0,80);
       menu.replaceChildren(...entries.map((entry,index)=>{
