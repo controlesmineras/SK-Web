@@ -69,10 +69,10 @@ body:not([data-admin-role="owner"]) #adminUserManagement{display:none}
 <script src="asset-seed-3.js?v=20260908-3"></script>
 <script src="asset-seed.js?v=20261009-assets-1"></script>
 <script src="spare-groups.js?v=20261112-spare-wording-3"></script>
-<script src="inventory-admin.js?v=20261112-spare-wording-3"></script>
+<script src="inventory-admin.js?v=20261112-criteria-yt-column-1"></script>
 <script src="production-spares.js?v=20261010-1"></script>
 <script src="inventory-stock-query.js?v=20260914-1"></script>
-<script src="actas-admin.js?v=20261106-new-acta-action-row-13"></script><script src="document-query.js?v=20261106-acta-not-created-4"></script><script src="admin-home-navigation.js?v=20261108-personal-query-menu-1"></script>
+<script src="actas-admin.js?v=20261106-new-acta-action-row-13"></script><script src="document-query.js?v=20261106-acta-not-created-4"></script><script src="admin-home-navigation.js?v=20261112-criteria-yt-column-1"></script>
 <script src="form-option-catalog.js?v=20261018-assignment-area-1"></script>
 <script>{const button=document.querySelector('#adminHomeInfoToggle'),dialog=document.querySelector('#adminHomeInfoDialog'),close=document.querySelector('#adminHomeInfoClose');const dismiss=()=>{dialog.hidden=true;button.focus()};button?.addEventListener('click',()=>{dialog.hidden=false;close.focus()});dialog?.addEventListener('click',dismiss);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dialog.hidden)dismiss()})}window.addEventListener('load',()=>{let tries=0;const t=setInterval(async()=>{tries++;if(typeof db!=='undefined'&&db){clearInterval(t);try{await seedPersonal();await seedAssets();await refresh();document.querySelector('#syncStatus').textContent=window.skSyncApi?.configured()?'Base local lista · sincronización automática activa.':'Base local lista. Personal y activos cargados.'}catch(e){console.error(e)}}else if(tries>40)clearInterval(t)},250)})</script>
 <script src="admin-language.js?v=20261108-menu-dots-1"></script><script src="production-access-admin.js?v=20261108-production-roles-1"></script><dialog id="skLinksDialog" aria-labelledby="skLinksTitle" style="width:min(480px,90vw);box-sizing:border-box;border:0;border-radius:14px;padding:18px;color:#102f45;background:#fff">
