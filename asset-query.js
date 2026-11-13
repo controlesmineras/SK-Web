@@ -60,14 +60,16 @@
   const assigned=projection.assigned||{name:person?.nombre,document:person?.documento,area:person?.area,cargo:person?.cargo};
   const column=/^columnas?\b/i.test(text(a.clase));
   const selfRescuer=/autorrescatador/i.test(text(a.clase));
+  const singleMark=!!text(a.nuevaMarca)&&text(a.nuevaMarca).toLowerCase()!=='no aplica'&&!/^(yt(?:\b|\d)|columnas?\b)/i.test(text(a.clase));
+  const previousMark=[a.marcaPrevia,canonical.marcaActual].find(value=>text(value)&&text(value).toLowerCase()!=='no aplica'&&text(value).toLowerCase()!==text(a.nuevaMarca).toLowerCase());
   host.innerHTML=`<article class="assetQueryCard" aria-labelledby="assetQueryTitle">
    <span class="assetQueryBadge">SOLO LECTURA</span>
    <h3 id="assetQueryTitle" tabindex="-1">${esc(window.SKAssetOwnership.label(a))}</h3>
    ${group('Información principal',[
     field('Clase',a.clase),field('Número de clase',canonical.numeroClase),
     field('Modelo',a.modelo),field('Marca comercial',a.fabricante),
-    field('MARCA',canonical.marcaActual),field('No. de marca actual',canonical.numeroMarcaActual),
-    field('Nueva marca',a.nuevaMarca),field('Marca anterior',a.marcaPrevia),
+    field('MARCA',singleMark?a.nuevaMarca:canonical.marcaActual),
+    singleMark?(previousMark?field('MARCA ANTERIOR',previousMark):''):field('No. de marca actual',canonical.numeroMarcaActual)+field('Nueva marca',a.nuevaMarca)+field('Marca anterior',a.marcaPrevia),
     column&&window.SKAssetOwnership.isSK(a)?'':field('Serial',a.serial||window.SKAssetRules?.serialStatusLabel(a)),
     column||text(a.largo)?field('Largo (ft)',a.largo):'',
     selfRescuer||text(a.estadoVisor)?field('Color del visor',a.estadoVisor):'',
