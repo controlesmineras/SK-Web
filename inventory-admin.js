@@ -29,6 +29,7 @@ function injectStyle(){if(document.querySelector('#inventoryAdminStyle'))return;
 #inventoryItemForm .invActions>button{height:auto!important;min-height:44px!important;padding:10px 14px!important;align-self:center!important;flex:0 1 auto!important;margin:0!important}
 #inventoryItemForm .invActions>button[hidden],#inventoryItemStatus[hidden]{display:none!important}
 #inventoryItemForm>#inventoryItemStatus{position:static!important;margin:0;align-self:start}
+@media(min-width:1024px){#inventoryItemForm .invPerms{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}#inventoryItemForm .invSwitchRow{min-width:0}#inventoryItemForm .invContainerUnit{grid-column:1/-1}}
 @media(max-width:760px){#inventoryItemForm .invActions>button{flex:1 1 100%!important;width:100%!important}}.invDanger{background:#fff;border:1px solid #a33;color:#922}@media(max-width:760px){#inventoryItems .invGrid{grid-template-columns:1fr}#inventoryItemList,#inventoryItemForm{grid-column:1}.invSwitchRow{padding:12px 11px!important}.invPerms{gap:6px}.invContainerUnit{padding-left:11px;padding-right:11px}}`;document.head.append(s)}
 const sw=(name,label,checked='')=>`<label class="invSwitchRow"><span>${label}</span><input name="${name}" type="checkbox" ${checked}><span class="invSwitchControl"><span class="invSwitch"></span><span class="invSwitchText">No</span></span></label>`;
 function syncSwitchText(root=document){root.querySelectorAll('.invSwitchRow input[type="checkbox"]').forEach(i=>{const t=i.parentElement.querySelector('.invSwitchText');if(t)t.textContent=i.checked?'Sí':'No'})}
