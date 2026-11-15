@@ -51,7 +51,12 @@
         if(entry.item)return itemButton(entry.item,index,'ItemOption');
         const button=document.createElement('button'),names=document.createElement('span'),strong=document.createElement('strong'),detail=document.createElement('span');
         button.type='button';button.id=form.id+'GroupOption'+index;button.dataset.spareGroup=entry.type;button.setAttribute('role','option');button.setAttribute('aria-selected',String(selectedGroup===entry.type));
-        names.className='itemSearchNames';strong.textContent=entry.label;detail.textContent=entry.items.length+(entry.items.length===1?' repuesto':' repuestos')+' · Buscar ítem';names.append(strong,detail);button.append(names);return button;
+        names.className='itemSearchNames';strong.textContent=entry.label;
+        if(entry.type==='YT 29'||entry.type==='Columna 29'){
+          const folder=document.createElement('span');folder.className='spareGroupIcon';folder.textContent='📂';folder.setAttribute('aria-hidden','true');
+          button.className='spareGroupOption';button.append(folder);detail.textContent='Selecciona para elegir el repuesto';
+        }else detail.textContent=entry.items.length+(entry.items.length===1?' repuesto':' repuestos')+' · Buscar ítem';
+        names.append(strong,detail);button.append(names);return button;
       }));empty(menu);
     },button=>{
       if(button.dataset.spareGroup){

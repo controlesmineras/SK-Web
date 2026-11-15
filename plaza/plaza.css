@@ -3,6 +3,10 @@
 /* La tarjeta de turno usa solo el espacio superior del contenedor. */
 #plazaShift{margin-top:0}
 
+.itemSearchMenu button.spareGroupOption{grid-template-columns:auto minmax(0,1fr);align-items:start;column-gap:10px}
+.spareGroupOption .spareGroupIcon{font-size:1.15rem;line-height:1.2}
+.spareGroupOption .itemSearchNames span{white-space:normal;line-height:1.35}
+
 .assetReturnFilters{display:grid;grid-template-columns:minmax(0,1fr);gap:12px}
 .assetReturnState{min-width:0;margin:0;padding:0;border:0}
 .assetReturnState legend{padding:0;margin-bottom:6px;font-size:.86rem;font-weight:750}
