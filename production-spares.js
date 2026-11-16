@@ -35,7 +35,7 @@
  }
  let busy=false;
  async function importCatalog(event){
-  if(busy||!window.SKAdminAuth?.isOwner?.()||event?.detail?.source!=='api'||event.detail.acknowledged||event.detail.notModified)return;
+  if(busy||!window.SKAdminAuth?.isAdmin?.()||event?.detail?.source!=='api'||event.detail.acknowledged||event.detail.notModified)return;
   busy=true;
   try{
    const [parts,criteria,stocks]=await Promise.all(['parts','inventoryCriteria','inventoryStock'].map(all)),changes=plan(parts,criteria,stocks,new Date().toISOString());
@@ -55,7 +55,7 @@
  window.addEventListener('skweb-synced',importCatalog);
  // La copia se realiza después de leer la base completa y solo con sesión propietaria.
  async function readFullCatalog(){
-  if(!window.SKAdminAuth?.isOwner?.())return;
+  if(!window.SKAdminAuth?.isAdmin?.())return;
   // Si había una sincronización en curso, esperar antes de pedir la lectura completa.
   await window.skSyncApi?.sync?.({silent:true});
   await window.skSyncApi?.sync?.({silent:true,forceFull:true});

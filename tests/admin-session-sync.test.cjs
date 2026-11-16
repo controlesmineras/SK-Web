@@ -16,7 +16,7 @@ function client({role='assistant',pending=[],respond,background,renew}={}){
  fetch:async(_,options)=>{const payload=JSON.parse(options.body);requests.push(payload);return {ok:true,json:async()=>respond(payload,requests.length)}}});
  return {store,sync:options=>window.skSyncApi.sync(options),requests,status,states,alerts,get prompts(){return prompts},get waits(){return waits},get writes(){return writes}};
 }
-for(const role of ['assistant','owner'])test(role+': expired cached token waits for ongoing login and retries with fresh token',async()=>{
+for(const role of ['assistant','admin','owner'])test(role+': expired cached token waits for ongoing login and retries with fresh token',async()=>{
  const c=client({role,background:async set=>set('fresh'),respond:(payload,n)=>n===1?{ok:false,error:'La sesión de Web Admin venció'}:{ok:true,notModified:true}});
  assert.equal(await c.sync({silent:true}),true);assert.deepEqual(c.requests.map(x=>x.token),['old','fresh']);assert.equal(c.prompts,0);assert.equal(c.waits,1);
 });

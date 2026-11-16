@@ -90,3 +90,22 @@ Se utiliza el campo existente `marcaPrevia`; el estado de la casilla se deduce d
 Administrador y auxiliares pueden crear, editar y eliminar fichas, corregir la fecha de ingreso, gestionar accesorios, solicitar marca nueva y corregir marcas duplicadas. Las validaciones de seriales, marcas, duplicados y conservación de historial se mantienen. Los permisos de otros módulos y la administración de usuarios siguen siendo los existentes.
 
 Para activar los permisos centrales, reemplazar `backend/apps-script/Code.gs` y publicar una nueva versión de la implementación existente de Apps Script, conservando la URL. Publicar GitHub Pages solo actualiza el cliente. Después, usar **Actualizar app** en los dispositivos.
+## Rol Administrador en SK Web Admin
+
+En **Usuarios Web Admin → Nuevo acceso**, selecciona el funcionario y el rol
+**Auxiliar administrativo** o **Administrador** antes de generar el enlace.
+En **Gestionar accesos** también puedes cambiar el rol; se aplica cuando el
+funcionario usa el nuevo enlace. La cuenta conserva su identidad y los tokens
+del rol anterior dejan de ser válidos en el servidor.
+
+Administrador tiene los permisos administrativos de módulos y usuarios.
+La cuenta principal sigue siendo independiente y no puede ser reemplazada,
+modificada ni desactivada desde la administración de accesos. Se conserva el
+requisito de pertenecer a Seguridad física para conceder acceso a Web Admin.
+
+Para activar este cambio, reemplaza `backend/apps-script/Code.gs` en el servicio
+central y publica una **nueva versión de la implementación existente**,
+conservando la misma URL. Después pulsa **Actualizar app** en SK Web Admin.
+GitHub Pages no despliega Apps Script. Si el servidor todavía no anuncia soporte
+del nuevo rol, la interfaz muestra la instrucción de actualizar y no genera un
+enlace de administrador.

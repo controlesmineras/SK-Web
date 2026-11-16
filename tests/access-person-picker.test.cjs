@@ -11,7 +11,7 @@ const seed=[
  {id:'deleted',nombre:'Borrado',documento:'222',deleted:true},
  {id:'inactive',nombre:'Inactivo',documento:'333',active:false}
 ];
-function app(scope='plaza',{owner=true,failAccess=false}={}){
+function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant','admin']}={}){
  let click,dialog;const nodes={},requests=[];
  const document={readyState:'loading',activeElement:null,querySelector:()=>null,getElementById:()=>null,
   addEventListener(type,handler){if(type==='click')click=handler},createElement:make,body:{append(node){dialog=node}}};
@@ -31,11 +31,11 @@ function app(scope='plaza',{owner=true,failAccess=false}={}){
   }});
   return node;
  }
- const window={addEventListener(){},SKAdminAuth:{isOwner:()=>owner,async request(action,data){
+ const window={addEventListener(){},SKAdminAuth:{isAdmin:()=>owner,async request(action,data){
   requests.push({action,data});
-  if(action==='adminUsersList'){if(failAccess)throw Error('Offline');return {users:[]}}
+  if(action==='adminUsersList'){if(failAccess)throw Error('Offline');return {users:[],adminRoles}}
   if(action==='productionUsers')return {users:[]};
-  if(action==='accessInvitationCreate')return {token:'test-token',plazaRole:data.plazaRole,productionRole:data.productionRole};
+  if(action==='accessInvitationCreate')return {token:'test-token',plazaRole:data.plazaRole,productionRole:data.productionRole,adminRole:data.adminRole};
   throw Error('Unexpected request: '+action);
  }}};
  vm.runInNewContext(source,{document,window,console,all:async()=>structuredClone(seed),URL,location:{href:'https://example.test/SK-Web/'},queueMicrotask,
@@ -45,6 +45,7 @@ function app(scope='plaza',{owner=true,failAccess=false}={}){
  const search=async value=>{const input=nodes['#accessPersonSearch'];input.focus();input.value=value;input.oninput();await tick()};
  const results=()=>nodes['[data-results]'].children;
  return{open,search,results,nodes,requests,dialog:()=>dialog,
+  role(value){nodes['[data-manage]'].children.flatMap(node=>node.children).find(node=>node.tag==='select').value=value},
   choose(index=0){results()[index].onclick()},
   generate:async()=>{nodes['[data-manage]'].children.find(node=>node.tag==='button').onclick();await tick()}};
 }
@@ -56,6 +57,14 @@ test('despliega nombres y documentos, filtra sin tildes y conserva los accesos e
  await s.search('123');assert.equal(s.results()[0].children[0].textContent,'Ana María');
  await s.search('inexistente');assert.equal(s.results().length,0);assert.match(s.nodes['[data-results]'].textContent,/No hay/);
  assert.equal(s.requests.some(row=>row.action==='accessInvitationCreate'),false);
+});
+test('ofrece Administrador en Web Admin y exige que el servidor lo soporte antes de generar',async()=>{
+ const s=app('admin');await s.open();await s.search('ana');s.choose();s.role('admin');await s.generate();
+ assert.equal(s.requests.at(-1).data.adminRole,'admin');assert.ok(s.nodes['[data-copy]'].children.length);
+ // An old server omits the capability; explicitly simulate the assistant-only result.
+ const legacy=app('admin',{adminRoles:['assistant']});await legacy.open();await legacy.search('ana');legacy.choose();legacy.role('admin');await legacy.generate();
+ assert.equal(legacy.requests.some(row=>row.action==='accessInvitationCreate'),false);
+ assert.match(legacy.nodes['[role=status]'].textContent,/Actualiza Code.gs/);assert.equal(legacy.nodes['[data-copy]'].children.length,0);
 });
 test('seleccionar homónimos conserva el ID elegido y cambiar la búsqueda limpia el acceso anterior',async()=>{
  const s=app();await s.open();await s.search('jose');s.choose(1);

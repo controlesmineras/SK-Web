@@ -38,7 +38,7 @@
  }
  let cleaning=false;
  async function cleanDeletedSpareHistory(){
-  if(cleaning||!window.SKAdminAuth?.isOwner?.())return;cleaning=true;
+  if(cleaning||!window.SKAdminAuth?.isAdmin?.())return;cleaning=true;
   try{
    const values=await Promise.all(deletionStores.map(all)),snapshot=Object.fromEntries(deletionStores.map((key,i)=>[key,values[i]]));let changed=false;
    for(const item of snapshot.inventoryCriteria.filter(row=>row.deleted&&row.permanentSpareDeleted&&row.isYtSpare)){

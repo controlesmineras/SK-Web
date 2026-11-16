@@ -5,7 +5,7 @@ const $=s=>document.querySelector(s),esc=v=>String(v??'').replace(/[&<>"']/g,c=>
 let tab='delivery',reversing=false;
 const store=()=>tab==='delivery'?'blendingDeliveries':'blendingIncomes';
 const days=()=>tab==='delivery'?7:30;
-const owner=()=>window.SKAdminAuth?.isOwner?.()===true;
+const owner=()=>window.SKAdminAuth?.isAdmin?.()===true;
 function movementOperator(row,people,peopleByDocument){
   const document=String(row.actorDocument||row.operatorDocument||'').trim();
   const person=(document?peopleByDocument.get(document):null)||people.get(row.operatorId);

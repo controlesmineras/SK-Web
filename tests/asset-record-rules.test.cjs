@@ -56,11 +56,22 @@ function adminPermissions(role,{validated=true,token=true}={}){
  vm.runInNewContext(source,{window:authWindow,document:{querySelector:()=>null,addEventListener(){}},sessionStorage:storage,localStorage:storage});
  authWindow.setTestSession(role,validated,token);return authWindow.SKAdminAuth;
 }
-test('dueño y auxiliar comparten edición y eliminación de activos con sesión válida',async()=>{
- for(const role of ['owner','assistant']){
+test('principal, administrador y auxiliar comparten edición de activos con sesión válida',async()=>{
+ for(const role of ['owner','admin','assistant']){
   const auth=adminPermissions(role),ui=deletionUI({auth});assert.equal(auth.canManageAssets(),true);assert.equal(auth.isOwner(),role==='owner');
   ui.mode(true);assert.equal(ui.remove.hidden,false);assert.notEqual(ui.form.elements.id.disabled,true);
   await ui.run();assert.equal(ui.stats().writes,1);assert.equal(ui.rows()[0].deletedBy,'test');
+ }
+});
+test('Administrador abre los módulos administrativos sin convertirse en la cuenta principal',()=>{
+ const admin=adminPermissions('admin');assert.equal(admin.isAdmin(),true);assert.equal(admin.isOwner(),false);
+ for(const view of ['inventoryItems','importData','incomes','optionCatalog','plazaAccess'])assert.equal(admin.canView(view),true,view);
+ assert.equal(adminPermissions('assistant').isAdmin(),false);assert.equal(adminPermissions('owner').isAdmin(),true);
+ for(const options of [{validated:false},{token:false}])assert.equal(adminPermissions('admin',options).isAdmin(),false);
+ // Both the initial page and injected auth styles must show management to this role.
+ for(const file of ['index.html','admin-auth.js']){
+  const css=fs.readFileSync(path.join(__dirname,'..',file),'utf8');
+  assert.doesNotMatch(css,/body:not\(\[data-admin-role="owner"\]\)(?!:not\(\[data-admin-role="admin"\]\))/);
  }
 });
 test('el permiso de activos no cambia el rol ni abre otros módulos; sesiones incompletas no editan',()=>{

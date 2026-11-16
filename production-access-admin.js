@@ -14,7 +14,7 @@ function mount(){
 }
 
 const apps={
- admin:{name:'SK Web Admin',roles:{assistant:'Auxiliar administrativo'}},
+ admin:{name:'SK Web Admin',roles:{assistant:'Auxiliar administrativo',admin:'Administrador'}},
  plaza:{name:'Plaza Blending',roles:{assistant:'Auxiliar',operator:'Bodeguero/a',supervisor:'Supervisor/a'}},
  production:{name:'Producción',roles:{mechanic:'Mecánico',assistant:'Auxiliar',admin:'Administrador'}}
 };
@@ -30,7 +30,7 @@ function button(label,action){
 }
 let dialog;
 async function open(scope){
- if(!auth()?.isOwner()||dialog?.open)return;
+ if(!auth()?.isAdmin()||dialog?.open)return;
  const app=apps[scope];
  if(!dialog){
   dialog=document.createElement('dialog');
@@ -43,7 +43,7 @@ async function open(scope){
  find('h2').textContent='Accesos a '+app.name;
  find('[data-close]').onclick=()=>dialog.close();
  const request=(action,data)=>auth().request(action,data);
- let people=[],selected=null,inviteUrl='',busy=false;
+ let people=[],selected=null,inviteUrl='',busy=false,adminRoles=['assistant'];
  const access={admin:null,plaza:null,production:null};
  function clearInvite(){inviteUrl='';copy.replaceChildren()}
  function identity(p){return [personName(p)||'Sin nombre',doc(p),p.cargo].filter(Boolean).join(' · ')}
@@ -97,13 +97,13 @@ async function open(scope){
   const title=document.createElement('h3');
   title.textContent=(existing?'Gestionar accesos de ':'Nuevo acceso para ')+identity(row);
   manage.replaceChildren(title);
-  let role;
-  if(scope!=='admin'){
-   const label=document.createElement('label');
-   label.textContent='Rol en '+app.name;role=document.createElement('select');
-   for(const key of scope==='production'?Object.keys(app.roles):['assistant','operator'])role.add(new Option(app.roles[key],key));
-   if(scope==='plaza'&&row.role==='supervisor')role.add(new Option(app.roles.supervisor,'supervisor'));
-   role.value=row.role||'assistant';label.append(role);manage.append(label);
+  const role=document.createElement('select'),label=document.createElement('label');
+  label.textContent='Rol en '+app.name;
+  for(const key of scope==='plaza'?['assistant','operator']:Object.keys(app.roles))role.add(new Option(app.roles[key],key));
+  if(scope==='plaza'&&row.role==='supervisor')role.add(new Option(app.roles.supervisor,'supervisor'));
+  role.value=row.role||'assistant';label.append(role);manage.append(label);
+  if(scope==='admin'&&!adminRoles.includes('admin')){
+   const note=document.createElement('p');note.className='hint';note.textContent='Para habilitar el rol Administrador, actualiza Code.gs y publica una nueva versión del servicio central.';manage.append(note);
   }
   manage.append(button(existing?'Generar enlace con el rol seleccionado':'Generar enlace',()=>generate(row,role?.value||row.role)));
   if(existing)manage.append(button('Quitar acceso',()=>disable(row)));
@@ -117,12 +117,15 @@ async function open(scope){
  function generate(row,role){
   if(busy)return;
   clearInvite();
+  if(scope==='admin'&&role==='admin'&&!adminRoles.includes('admin')){status.textContent='Actualiza Code.gs y su implementación antes de generar un acceso de Administrador.';return}
   if(!row.personId){status.textContent='Esta cuenta no está vinculada a un colaborador de Personal.';return}
   run('Generando invitación para '+identity(row)+'…',async()=>{
    const data={scope,personId:row.personId};
+   if(scope==='admin')data.adminRole=role||'assistant';
    if(scope==='plaza')data.plazaRole=role;
    if(scope==='production')data.productionRole=role;
    const result=await request('accessInvitationCreate',data);
+   if(scope==='admin'&&((result.adminRole&&result.adminRole!==data.adminRole)||(data.adminRole==='admin'&&result.adminRole!=='admin')))throw new Error('El servicio no confirmó el rol seleccionado. Actualiza Code.gs y su implementación.');
    if(scope==='plaza'&&result.plazaRole!==role)throw new Error('El servicio devolvió un rol distinto. Revisa la versión de Code.gs.');
    if(scope==='production'&&result.productionRole!==role)throw new Error('Actualiza y despliega Code.gs para asignar roles de Producción.');
    if(!result.token)throw new Error('El servicio no devolvió una invitación.');
@@ -183,10 +186,13 @@ async function open(scope){
    people=local.value.filter(person=>!person.deleted).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
    access.plaza=people.filter(person=>person.plazaEnabled).map(person=>({...person,personId:person.id,role:person.plazaRole||'operator'}));
   }
-  if(admin.status==='fulfilled')access.admin=(admin.value.users||[]).filter(row=>row.enabled).map(row=>{
-   const person=people.find(p=>same({personId:p.id,document:doc(p)},row));
-   return {...row,personId:row.personId||person?.id};
-  });
+  if(admin.status==='fulfilled'){
+   adminRoles=Array.isArray(admin.value.adminRoles)?admin.value.adminRoles:['assistant'];
+   access.admin=(admin.value.users||[]).filter(row=>row.enabled).map(row=>{
+    const person=people.find(p=>same({personId:p.id,document:doc(p)},row));
+    return {...row,personId:row.personId||person?.id};
+   });
+  }
   if(production.status==='fulfilled')access.production=(production.value.users||[]).filter(row=>row.enabled!==false).map(row=>{
    const person=people.find(p=>same({personId:p.id,document:doc(p)},row));
    return {...person,...row,nombre:person?.nombre||row.name||row.nombre,role:row.role||'assistant'};
@@ -198,11 +204,11 @@ async function open(scope){
 }
 document.addEventListener('click',event=>{
  const trigger=event.target.closest('#adminUsersBtn,.plazaAccessBtn,#productionUsersBtn');
- if(!trigger||!auth()?.isOwner())return;
+ if(!trigger||!auth()?.isAdmin())return;
  event.preventDefault();event.stopImmediatePropagation();
  open(trigger.id==='adminUsersBtn'?'admin':trigger.id==='productionUsersBtn'?'production':'plaza');
 },true);
-function permissions(){mount();const button=document.getElementById('productionUsersBtn');if(button){button.hidden=!auth()?.isOwner();if(button.hidden)button.style.setProperty('display','none','important');else button.style.removeProperty('display')}}
+function permissions(){mount();const button=document.getElementById('productionUsersBtn');if(button){button.hidden=!auth()?.isAdmin();if(button.hidden)button.style.setProperty('display','none','important');else button.style.removeProperty('display')}}
 window.addEventListener('skadmin-permissions',permissions);
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',permissions);else permissions();
 })();

@@ -9,7 +9,7 @@ function app(owner=true){
   let documentClick,load,resets=0;
   const node=selector=>nodes[selector]??={addEventListener(type,fn){handlers[selector+':'+type]=fn},reset(){resets++}};
   const document={querySelector:node,addEventListener(type,fn){if(type==='click')documentClick=fn}};
-  const window={addEventListener(type,fn){if(type==='load')load=fn},SKAdminAuth:{isOwner:()=>owner},SKAdminNav:{go:id=>visits.push(id)}};
+  const window={addEventListener(type,fn){if(type==='load')load=fn},SKAdminAuth:{isAdmin:()=>owner},SKAdminNav:{go:id=>visits.push(id)}};
   vm.runInNewContext(source,{document,window,all:async()=>[{id:'p1',nombre:'Ana',documento:'123',cargo:'Bodeguera',plazaEnabled:true},{id:'p2',nombre:'Borrado',deleted:true}],showView(){throw new Error('Legacy navigation failed')}});
   load();
   return{nodes,visits,open:()=>handlers['.plazaAccessBtn:click'](),back:()=>documentClick({target:{closest:selector=>selector==='#plazaAccess [data-return-home]'?{}:null},preventDefault(){}}),resets:()=>resets};

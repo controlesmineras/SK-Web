@@ -95,7 +95,7 @@ test('los permisos completos de activos no permiten gestionar usuarios ni revert
  const ctx=vm.createContext({PropertiesService:{getScriptProperties:()=>({getProperty:()=> 'configured'})}});vm.runInContext(source,ctx);
  ctx.adminUsers_=()=>[{role:'owner'}];ctx.verifyAdminToken_=()=>({role:'assistant',username:'aux'});ctx.json_=clone;
  for(const action of ['adminUsersList','accessInvitationCreate','adminUserSave','adminUserDisable','plazaUserAdmin','adminReverseMovement','adminReverseMovementV2','adminDeleteMovement']){
-  const result=ctx.doPost({postData:{contents:JSON.stringify({action,token:'test'})}});assert.equal(result.ok,false,action);assert.match(result.error,/rol Administrador principal/,action);
+  const result=ctx.doPost({postData:{contents:JSON.stringify({action,token:'test'})}});assert.equal(result.ok,false,action);assert.match(result.error,/rol Administrador/,action);
  }
  for(const role of ['plaza_operator','plaza_supervisor','',null])assert.equal(ctx.canManageAssets_({role}),false);
  assert.equal(ctx.canManageAssets_(null),false);

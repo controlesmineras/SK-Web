@@ -14,10 +14,12 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionUsers'||q.action==='productionDisable'){requireOwner_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireOwner_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireOwner_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireOwner_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireOwner_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireOwner_(auth);return plazaUserAdmin_(q)}if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireOwner_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireOwner_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Invitaciones de un solo uso: el enlace contiene un secreto aleatorio, nunca una contraseña.
 function invitationKey_(token){return 'SK_INVITE_'+hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token),Utilities.Charset.UTF_8))}
+function assignableAdminRole_(role){if(!['assistant','admin'].includes(role))throw new Error('Rol de Web Admin no válido');return role}
+function isAdmin_(auth){return Boolean(auth&&['owner','admin'].includes(auth.role))}
 function accessInvitationCreate_(q){
  const scope=['plaza','admin','production'].includes(q.scope)?q.scope:'';
  if(!scope)throw new Error('Aplicación no válida');
@@ -28,8 +30,10 @@ function accessInvitationCreate_(q){
   if(scope==='admin'){
    const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
    if(area!=='seguridad fisica')throw new Error('Solo se permite acceso a Web Admin a personal de Seguridad física');
-   if(adminUsers_().some(x=>x.role==='owner'&&x.document===String(person.documento).trim()))throw new Error('No se puede reemplazar el acceso principal');
+   if(adminUsers_().some(x=>x.role==='owner'&&(x.personId===person.id||x.document===String(person.documento).trim()||x.username===String(person.documento).trim())))throw new Error('No se puede reemplazar el acceso principal');
   }
+  const currentAdmin=scope==='admin'?adminUsers_().find(x=>x.personId===person.id||x.document===String(person.documento).trim()):null;
+  const adminAccess=scope==='admin'?{adminRole:assignableAdminRole_(q.adminRole??currentAdmin?.role??'assistant')}:{};
   const document=String(person.documento).trim(),props=PropertiesService.getScriptProperties(),old=props.getProperties();
   Object.keys(old).filter(k=>k.indexOf('SK_INVITE_')===0).forEach(k=>{try{const v=JSON.parse(old[k]);if(v.expires<Date.now()||(v.scope===scope&&v.document===document))props.deleteProperty(k)}catch(_){props.deleteProperty(k)}});
   const secret=[Utilities.getUuid(),Utilities.getUuid(),Utilities.getUuid()].join('').replace(/-/g,'');
@@ -37,8 +41,8 @@ function accessInvitationCreate_(q){
   const plazaRole=q.plazaRole==='supervisor'&&person.plazaEnabled&&person.plazaRole==='supervisor'?'supervisor':q.plazaRole==='assistant'?'assistant':'operator';
   const plazaAccess=scope==='plaza'?{plazaRole}:{};
   const productionAccess=scope==='production'?{productionRole:productionRole_(q.productionRole||productionAccess_(document)?.role)}:{};
-  props.setProperty(invitationKey_(secret),JSON.stringify({scope:scope,personId:person.id,document:document,expires:expires,...plazaAccess,...productionAccess}));
-  return json_({ok:true,token:secret,document:document,name:person.nombre||'',...plazaAccess,...productionAccess,expiresAt:new Date(expires).toISOString()});
+  props.setProperty(invitationKey_(secret),JSON.stringify({scope:scope,personId:person.id,document:document,expires:expires,...plazaAccess,...productionAccess,...adminAccess}));
+  return json_({ok:true,token:secret,document:document,name:person.nombre||'',...plazaAccess,...productionAccess,...adminAccess,expiresAt:new Date(expires).toISOString()});
  }finally{lock.releaseLock()}
 }
 function revokeInvitations_(scope,document){const props=PropertiesService.getScriptProperties();Object.keys(props.getProperties()).filter(k=>k.indexOf('SK_INVITE_')===0).forEach(k=>{try{const row=JSON.parse(props.getProperty(k));if(row.scope===scope&&row.document===document)props.deleteProperty(k)}catch(_){props.deleteProperty(k)}})}
@@ -50,22 +54,22 @@ function accessInvitationAccept_(q){const password=String(q.password||'');if(pas
   if(!person)throw new Error('El colaborador ya no está disponible en Personal');const now=new Date().toISOString();
   if(row.scope==='plaza'){(cloud.personal||[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()===document).forEach(x=>{x.pinHash=hashPin_(document,password);x.plazaEnabled=true;x.plazaRole=['assistant','supervisor'].includes(row.plazaRole)?row.plazaRole:'operator';x.updatedAt=now});cloud.updatedAt=nextRevision_(cloud.updatedAt);writeFile_(fileId,cloud)}
   else if(row.scope==='production'){saveProductionAccess_(person,hashPin_(document,password),row.productionRole)}
-  else if(row.scope==='admin'){const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');if(area!=='seguridad fisica')throw new Error('El colaborador ya no pertenece a Seguridad física');const users=adminUsers_();let user=users.find(x=>x.role!=='owner'&&(x.personId===person.id||x.document===document));if(!user){if(users.some(x=>x.username===document))throw new Error('El documento ya está registrado como otro usuario');user={id:'ADMIN-'+Utilities.getUuid(),createdAt:now};users.push(user)}user.personId=person.id;user.document=document;user.username=document;user.name=person.nombre||document;user.role='assistant';user.enabled=true;user.passwordHash=hashPin_(document,password);user.updatedAt=now;saveAdminUsers_(users)}
+  else if(row.scope==='admin'){const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');if(area!=='seguridad fisica')throw new Error('El colaborador ya no pertenece a Seguridad física');const users=adminUsers_();if(users.some(x=>x.role==='owner'&&(x.personId===person.id||x.document===document||x.username===document)))throw new Error('No se puede reemplazar el acceso principal');const adminRole=assignableAdminRole_(row.adminRole??'assistant');let user=users.find(x=>x.role!=='owner'&&(x.personId===person.id||x.document===document));if(!user){if(users.some(x=>x.username===document))throw new Error('El documento ya está registrado como otro usuario');user={id:'ADMIN-'+Utilities.getUuid(),createdAt:now};users.push(user)}user.personId=person.id;user.document=document;user.username=document;user.name=person.nombre||document;user.role=adminRole;user.enabled=true;user.passwordHash=hashPin_(document,password);user.updatedAt=now;saveAdminUsers_(users)}
   else throw new Error('Aplicación no válida');PropertiesService.getScriptProperties().deleteProperty(invite.key);return json_({ok:true,scope:row.scope});
  }finally{lock.releaseLock()}}
 function adminUsers_(){const raw=PropertiesService.getScriptProperties().getProperty('SK_ADMIN_USERS');if(!raw)return[];try{const rows=JSON.parse(raw);return Array.isArray(rows)?rows:[]}catch(e){throw new Error('La configuración de usuarios Web Admin está dañada')}}
 function saveAdminUsers_(rows){PropertiesService.getScriptProperties().setProperty('SK_ADMIN_USERS',JSON.stringify(rows))}
-function publicAdminUser_(x){return{id:x.id,personId:x.personId||'',document:x.document||'',username:x.username,name:x.name||x.username,role:x.role==='owner'?'owner':'assistant',enabled:x.enabled!==false,createdAt:x.createdAt||'',updatedAt:x.updatedAt||''}}
+function publicAdminUser_(x){return{id:x.id,personId:x.personId||'',document:x.document||'',username:x.username,name:x.name||x.username,role:['owner','admin'].includes(x.role)?x.role:'assistant',enabled:x.enabled!==false,createdAt:x.createdAt||'',updatedAt:x.updatedAt||''}}
 function adminStatus_(){return json_({ok:true,configured:adminUsers_().length>0})}
 function validAdminUsername_(value){const username=String(value||'').trim().toLowerCase();if(!/^[a-z0-9._-]{4,40}$/.test(username))throw new Error('El usuario debe tener entre 4 y 40 caracteres y usar solo letras, números, punto, guion o guion bajo');return username}
 function adminBootstrap_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{if(adminUsers_().length)throw new Error('El administrador principal ya fue creado');const username=validAdminUsername_(q.username),password=String(q.password||''),name=String(q.name||'').trim();if(password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');if(!name)throw new Error('Escribe el nombre del administrador');const now=new Date().toISOString(),user={id:'ADMIN-'+Utilities.getUuid(),username:username,name:name,role:'owner',enabled:true,passwordHash:hashPin_(username,password),createdAt:now,updatedAt:now};saveAdminUsers_([user]);return adminSession_(user)}finally{lock.releaseLock()}}
 function adminLogin_(q){const username=validAdminUsername_(q.username),password=String(q.password||''),user=adminUsers_().find(x=>x.username===username&&x.enabled!==false);if(!user||!safeEqual_(String(user.passwordHash||''),hashPin_(username,password)))throw new Error('Usuario o contraseña incorrectos');return adminSession_(user)}
-function adminSession_(user){const expires=Date.now()+12*60*60*1000,payload=[user.username,user.role==='owner'?'owner':'assistant',expires].join('|'),token=Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload);return json_({ok:true,token:token,user:publicAdminUser_(user),expiresAt:new Date(expires).toISOString()})}
-function verifyAdminToken_(token){const bits=String(token||'').split('.');if(bits.length!==2)throw new Error('Inicia sesión en Web Admin');const payload=Utilities.newBlob(Utilities.base64DecodeWebSafe(bits[0])).getDataAsString(),parts=payload.split('|');if(parts.length!==3||!safeEqual_(bits[1],sign_(payload))||Number(parts[2])<Date.now())throw new Error('La sesión de Web Admin venció');const user=adminUsers_().find(x=>x.username===parts[0]&&x.enabled!==false);if(!user||!['owner','assistant'].includes(parts[1])||parts[1]!==user.role)throw new Error('La cuenta ya no tiene acceso a Web Admin');return{username:user.username,name:user.name||user.username,role:user.role}}
-function canManageAssets_(auth){return Boolean(auth&&['owner','assistant'].includes(auth.role))}
+function adminSession_(user){const expires=Date.now()+12*60*60*1000,payload=[user.username,['owner','admin'].includes(user.role)?user.role:'assistant',expires].join('|'),token=Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload);return json_({ok:true,token:token,user:publicAdminUser_(user),expiresAt:new Date(expires).toISOString()})}
+function verifyAdminToken_(token){const bits=String(token||'').split('.');if(bits.length!==2)throw new Error('Inicia sesión en Web Admin');const payload=Utilities.newBlob(Utilities.base64DecodeWebSafe(bits[0])).getDataAsString(),parts=payload.split('|');if(parts.length!==3||!safeEqual_(bits[1],sign_(payload))||Number(parts[2])<Date.now())throw new Error('La sesión de Web Admin venció');const user=adminUsers_().find(x=>x.username===parts[0]&&x.enabled!==false);if(!user||!['owner','admin','assistant'].includes(parts[1])||parts[1]!==user.role)throw new Error('La cuenta ya no tiene acceso a Web Admin');return{username:user.username,name:user.name||user.username,role:user.role}}
+function canManageAssets_(auth){return Boolean(auth&&['owner','admin','assistant'].includes(auth.role))}
 function requireAssetManager_(auth){if(!canManageAssets_(auth))throw new Error('Inicia sesión en Web Admin para administrar activos fijos')}
-function requireOwner_(auth){if(!auth||auth.role!=='owner')throw new Error('Esta operación requiere el rol Administrador principal')}
-function adminUsersList_(){return json_({ok:true,users:adminUsers_().map(publicAdminUser_)})}
+function requireAdmin_(auth){if(!isAdmin_(auth))throw new Error('Esta operación requiere el rol Administrador')}
+function adminUsersList_(){return json_({ok:true,users:adminUsers_().map(publicAdminUser_),adminRoles:['assistant','admin']})}
 function adminUserSave_(q){
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
@@ -84,18 +88,19 @@ function adminUserSave_(q){
   if(!document||!name)throw new Error('Completa el nombre y documento del colaborador en Personal');
   if(user&&user.personId&&user.personId!==personId)throw new Error('No se puede transferir una cuenta a otro colaborador');
   if(rows.some(x=>x.id!==id&&(x.personId===personId||(x.document&&String(x.document).trim()===document))))throw new Error('Este colaborador ya tiene una cuenta Web Admin');
+  const adminRole=assignableAdminRole_(q.adminRole??user?.role??'assistant');
   const username=validAdminUsername_(q.username),password=String(q.password||''),previousUsername=user&&user.username;
   if(rows.some(x=>x.username===username&&x.id!==id))throw new Error('Ese nombre de usuario ya está registrado');
   if(!user){if(password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');user={id:'ADMIN-'+Utilities.getUuid(),createdAt:now};rows.push(user)}
   else if(password&&password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');
   if(previousUsername&&previousUsername!==username&&!password)throw new Error('Al cambiar el usuario también debes asignar una contraseña nueva');
-  user.username=username;user.name=name;user.personId=personId;user.document=document;user.role='assistant';user.enabled=q.enabled!==false;
+  user.username=username;user.name=name;user.personId=personId;user.document=document;user.role=adminRole;user.enabled=q.enabled!==false;
   if(password)user.passwordHash=hashPin_(username,password);
   user.updatedAt=now;saveAdminUsers_(rows);return json_({ok:true,user:publicAdminUser_(user)});
  }finally{lock.releaseLock()}
 }
 function adminUserDisable_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const rows=adminUsers_(),user=rows.find(x=>x.id===String(q.id||''));if(!user)throw new Error('El usuario no existe');if(user.role==='owner')throw new Error('No se puede desactivar al Administrador principal');user.enabled=false;user.updatedAt=new Date().toISOString();revokeInvitations_('admin',user.document);saveAdminUsers_(rows);return json_({ok:true,user:publicAdminUser_(user)})}finally{lock.releaseLock()}}
-function adminSyncAuthorized_(incoming,since,auth){if(auth.role!=='owner'){const allowed=['personal','actas','consumptions','novelties','assets'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,auth.role!=='owner'&&['novelties','assets'].some(name=>(incoming[name]||[]).some(row=>row&&row.syncState==='pending'))?'':since,auth)}
+function adminSyncAuthorized_(incoming,since,auth){if(!isAdmin_(auth)){const allowed=['personal','actas','consumptions','novelties','assets'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,!isAdmin_(auth)&&['novelties','assets'].some(name=>(incoming[name]||[]).some(row=>row&&row.syncState==='pending'))?'':since,auth)}
 
 // Se ejecuta bajo el mismo bloqueo de sincronización. El registro de marcas nunca
 // se borra al dar de baja un activo ni se acepta desde un cliente.
@@ -305,7 +310,7 @@ function prepareAssistantAsset_(row,cloud,known,auth){
 // existentes se conservan y sus cambios de estado se aplican sobre la ficha enviada.
 function prepareAdminNovelties_(incoming,cloud,auth){
  const pending=name=>(Array.isArray(incoming[name])?incoming[name]:[]).filter(row=>row&&row.id&&row.syncState==='pending');
- const novelties=pending('novelties'),assets=pending('assets'),limited=auth&&auth.role!=='owner';
+ const novelties=pending('novelties'),assets=pending('assets'),limited=auth&&!isAdmin_(auth);
  const visorChange=value=>cargoNorm_(value)==='cambio de color del visor';
  const assetMap=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
  const historical=new Map((cloud.novelties||[]).filter(Boolean).map(row=>[row.id,row]));
@@ -411,7 +416,7 @@ function validateLastActaDeletion_(incoming,cloud,auth){
  const pending=(incoming.actas||[]).filter(row=>row&&row.syncState==='pending');
  const deletions=pending.filter(row=>row.deleted).sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo));
  if(!deletions.length)return;
- if(!auth||auth.role!=='owner')throw new Error('Solo el administrador puede eliminar la última acta.');
+ if(!isAdmin_(auth))throw new Error('Solo el administrador puede eliminar la última acta.');
  const finalRows=new Map((cloud.actas||[]).filter(row=>row&&row.id).map(row=>[row.id,row]));
  pending.filter(row=>!row.deleted).forEach(row=>finalRows.set(row.id,row));
  for(const row of deletions){
@@ -431,9 +436,9 @@ function validateActaStatus_(incoming,cloud,auth){
   const old=(cloud.actas||[]).find(x=>x&&x.id===row.id);
   const specialMotive=String(row.motivo||'')==='NO SE REGISTRÓ';
   if(specialMotive&&(row.documentStatus!=='not_created'||row.tipo==='OFICIO'))throw new Error('El motivo «No se registró» solo corresponde a un acta no elaborada.');
-  if(specialMotive&&String(old&&old.motivo||'')!=='NO SE REGISTRÓ'&&(!auth||auth.role!=='owner'))throw new Error('Solo el administrador puede elegir el motivo «No se registró».');
+  if(specialMotive&&String(old&&old.motivo||'')!=='NO SE REGISTRÓ'&&(!isAdmin_(auth)))throw new Error('Solo el administrador puede elegir el motivo «No se registró».');
   const changed=protectedKeys.some(key=>String(row[key]||'')!==String(old&&old[key]||''));
-  if(changed&&(!auth||auth.role!=='owner'))throw new Error('Solo el administrador puede cambiar el estado de elaboración del acta.');
+  if(changed&&(!isAdmin_(auth)))throw new Error('Solo el administrador puede cambiar el estado de elaboración del acta.');
   if(row.documentStatus==='not_created'){
    if(!old||row.tipo==='OFICIO'||!String(row.notCreatedReason||'').trim())throw new Error('Selecciona un acta registrada e indica por qué no fue elaborada.');
   }
@@ -475,7 +480,7 @@ function adminSync_(incoming,since,auth){
 }
 
 function adminSetInventoryQuantity_(q,auth){
- if(!['owner','assistant'].includes(auth.role))throw new Error('Tu rol no permite editar cantidades.');
+ if(!['owner','admin','assistant'].includes(auth.role))throw new Error('Tu rol no permite editar cantidades.');
  const itemId=String(q.itemId||'').trim(),quantity=q.quantity;
  if(!itemId||typeof quantity!=='number'||!Number.isFinite(quantity)||quantity<0)
   throw new Error('Selecciona un elemento e indica una cantidad válida, cero o mayor.');

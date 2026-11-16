@@ -26,7 +26,7 @@ async function updateNumber(number){
 function updateNotCreated(){
  const form=document.getElementById('actaForm');if(!form)return;
  const field=document.getElementById('actaNotCreatedFields');if(!field)return;
- const allowed=Boolean(form.elements.id.value)&&documentType==='ACTA'&&window.SKAdminAuth?.isOwner?.()===true;
+ const allowed=Boolean(form.elements.id.value)&&documentType==='ACTA'&&window.SKAdminAuth?.isAdmin?.()===true;
  field.hidden=!allowed;
  const selected=documentType==='ACTA'&&form.elements.noElaborada.checked;
  const special=form.elements.motivo.querySelector('[data-not-created-motive]');
@@ -73,7 +73,7 @@ function updateMode(){
 async function updateDeleteLast(){
  const button=document.getElementById('actaDeleteLast');if(!button)return;
  const form=document.getElementById('actaForm'),last=(await rows()).find(row=>typeOf(row)==='ACTA');
- const allowed=window.SKAdminAuth?.isOwner?.()===true&&documentType==='ACTA';
+ const allowed=window.SKAdminAuth?.isAdmin?.()===true&&documentType==='ACTA';
  const selected=form?.elements.id.value||'',canDelete=Boolean(allowed&&last&&selected===last.id);
  button.hidden=!allowed;
  button.disabled=!canDelete;
@@ -85,7 +85,7 @@ async function updateDeleteLast(){
 }
 
 async function deleteLastActa(){
- if(window.SKAdminAuth?.isOwner?.()!==true)return;
+ if(window.SKAdminAuth?.isAdmin?.()!==true)return;
  const button=document.getElementById('actaDeleteLast');if(button.disabled)return;
  button.disabled=true;
  try{
@@ -139,18 +139,18 @@ async function save(event){
     const wasNotCreated=existing?.documentStatus==='not_created';
     const reason=String(form.elements.justificacionNoElaborada.value||'').trim()||(requested?'Acta registrada, pero no elaborada.':'');
     if(documentType==='ACTA'&&existing&&(requested!==wasNotCreated||(requested&&reason!==String(existing.notCreatedReason||'')))){
-      if(window.SKAdminAuth?.isOwner?.()!==true)throw new Error('Solo el administrador puede cambiar el estado de elaboración.');
+      if(window.SKAdminAuth?.isAdmin?.()!==true)throw new Error('Solo el administrador puede cambiar el estado de elaboración.');
       if(wasNotCreated&&!requested)throw new Error('El consecutivo de un acta no elaborada se conserva. No puede reutilizarse.');
       if(requested&&!reason)throw new Error('Escribe por qué el acta no fue elaborada.');
     }
     if(form.elements.motivo.value==='NO SE REGISTRÓ'&&!requested)throw new Error('El motivo «No se registró» solo corresponde a un acta no elaborada.');
     if(wasNotCreated&&consecutivo!==Number(existing.consecutivo))throw new Error('El número de un acta no elaborada debe conservarse.');
     const acta=existing||{id:uuid(),createdAt:stamp};
-    if(documentType==='ACTA'&&existing&&requested&&window.SKAdminAuth?.isOwner?.()===true){
+    if(documentType==='ACTA'&&existing&&requested&&window.SKAdminAuth?.isAdmin?.()===true){
       acta.documentStatus='not_created';acta.notCreatedReason=reason;
       acta.notCreatedAt=acta.notCreatedAt||stamp;
     }
-    Object.assign(acta,{tipo:documentType,consecutivo,fecha:form.elements.fecha.value,area:documentType==='ACTA'?(requested?'NO APLICA':form.elements.area.value):'',motivo:documentType==='ACTA'?(requested?(window.SKAdminAuth?.isOwner?.()===true?'NO SE REGISTRÓ':existing?.motivo||''):form.elements.motivo.value):'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:requested?'':form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
+    Object.assign(acta,{tipo:documentType,consecutivo,fecha:form.elements.fecha.value,area:documentType==='ACTA'?(requested?'NO APLICA':form.elements.area.value):'',motivo:documentType==='ACTA'?(requested?(window.SKAdminAuth?.isAdmin?.()===true?'NO SE REGISTRÓ':existing?.motivo||''):form.elements.motivo.value):'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:requested?'':form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
     await put('actas',acta);window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-documents-changed'));status.hidden=false;status.textContent=existing?'Cambios guardados.':`${documentType==='ACTA'?'Acta':'Oficio'} N.º ${consecutivo} ${documentType==='ACTA'?'registrada':'registrado'} y pendiente de sincronización.`;await render();if(!existing)setTimeout(()=>reset({keepRegistrationMode:true}),900);
   }catch(error){status.hidden=false;status.textContent=error?.message||String(error)}
   finally{button.disabled=false}

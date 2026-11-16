@@ -47,7 +47,7 @@ test('no permite revertir una reversión ni repetir reversiones antiguas',()=>{
 test('solicitante obligatorio, permisos y eliminación bloqueada, incluso desde una app anterior',()=>{
  const b=backend();assert.match(b.request({reversalRequestedBy:'  '}).error,/quién solicitó/);assert.match(b.request({reversalRequestedBy:'a'.repeat(201)}).error,/200/);
  assert.match(b.request({action:'adminReverseMovement',reversalRequestedBy:''}).error,/quién solicitó/);assert.match(b.request({action:'adminDeleteMovement'}).error,/conservan/);
- b.ctx.verifyAdminToken_=()=>({role:'assistant'});assert.match(b.request().error,/Administrador principal/);assert.equal(b.writes(),0);
+ b.ctx.verifyAdminToken_=()=>({role:'assistant'});assert.match(b.request().error,/Administrador/);assert.equal(b.writes(),0);
 });
 test('fallo de escritura no confirma la operación y el reintento la aplica una sola vez',()=>{
  const b=backend(),write=b.ctx.writeFile_;b.ctx.writeFile_=()=>{throw Error('Fallo de escritura')};assert.equal(b.request().ok,false);assert.equal(b.cloud().inventoryStock[0].quantity,13);assert.equal(b.locked(),false);
@@ -65,7 +65,7 @@ test('reenviar el original desde Plaza no descuenta otra vez; no acepta reversio
 function admin(data,options={}){
  const nodes=new Map(),alerts=[],calls=[];let saved=data;
  const node=()=>({innerHTML:'',textContent:'',classList:{contains:()=>true,toggle(){}},setAttribute(){},addEventListener(){}});
- const ctx=vm.createContext({document:{querySelector:key=>{if(!nodes.has(key))nodes.set(key,node());return nodes.get(key)},querySelectorAll:()=>[]},window:{addEventListener(){},SKAdminAuth:{isOwner:()=>options.owner!==false,request:async(action,payload)=>{calls.push({action,...payload});if(options.error)throw Error(options.error);return options.backend.request(payload)}},SKAssetRules:{movementLabel:()=>''},writeSyncedSnapshot:async value=>{saved=value}},all:async name=>clone(saved[name]||[]),alert:value=>alerts.push(value),prompt:()=>options.requester===undefined?'Solicitante de prueba':options.requester,confirm:()=>true,refresh:async()=>{}});
+ const ctx=vm.createContext({document:{querySelector:key=>{if(!nodes.has(key))nodes.set(key,node());return nodes.get(key)},querySelectorAll:()=>[]},window:{addEventListener(){},SKAdminAuth:{isAdmin:()=>options.owner!==false,request:async(action,payload)=>{calls.push({action,...payload});if(options.error)throw Error(options.error);return options.backend.request(payload)}},SKAssetRules:{movementLabel:()=>''},writeSyncedSnapshot:async value=>{saved=value}},all:async name=>clone(saved[name]||[]),alert:value=>alerts.push(value),prompt:()=>options.requester===undefined?'Solicitante de prueba':options.requester,confirm:()=>true,refresh:async()=>{}});
  vm.runInContext(read('plaza-movements-admin.js').replace(/\}\)\(\);\s*$/, 'window.audit={render,reverse,setTab:value=>{tab=value}};})();'),ctx);
  return{api:ctx.window.audit,nodes,alerts,calls};
 }
