@@ -20,6 +20,7 @@ const apps={
 };
 const normalize=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const doc=person=>String(person?.documento??person?.document??'').trim();
+const personName=person=>String(person?.nombre||person?.name||[person?.primerNombre,person?.segundoNombre,person?.primerApellido,person?.segundoApellido].filter(Boolean).join(' ')).trim();
 const labels=(scope,row)=>String(apps[scope].roles[row.role]|| (row.role==='owner'?'Administrador principal':row.role||'Usuario')).trim();
 const same=(a,b)=>Boolean((a.personId&&a.personId===b.personId)||(doc(a)&&doc(a)===doc(b)));
 function button(label,action){
@@ -36,16 +37,24 @@ async function open(scope){
   dialog.style.cssText='width:min(680px,94vw);max-height:90dvh;border:0;border-radius:14px;padding:16px;color:#102f45';
   document.body.append(dialog);
  }
- dialog.innerHTML='<div class="sectionHead"><h2></h2><button type="button" data-close>Cerrar</button></div><section class="plazaAccessPeople"><h3>Accesos activos</h3><div data-active class="list" style="max-height:34vh"></div></section><section class="plazaAccessPeople"><h3>Nuevo acceso</h3><input type="search" aria-label="Buscar colaborador" placeholder="Buscar por nombre o documento…" autocomplete="off"><div data-results class="list" style="max-height:26vh"></div></section><section data-manage class="plazaAccessPeople" hidden></section><p role="status" aria-live="polite"></p><div data-copy></div>';
+ dialog.innerHTML='<div class="sectionHead"><h2></h2><button type="button" data-close>Cerrar</button></div><section class="plazaAccessPeople"><h3>Accesos activos</h3><div data-active class="list" style="max-height:34vh"></div></section><section class="plazaAccessPeople"><h3>Nuevo acceso</h3><div class="accessPersonField"><label for="accessPersonSearch">FUNCIONARIO</label><input id="accessPersonSearch" type="search" placeholder="Buscar por nombre o documento…" autocomplete="off" aria-controls="accessPersonResults" aria-expanded="false"><div id="accessPersonResults" data-results class="accessPersonResults" hidden></div></div><div data-person-info class="accessPersonInfo" hidden><label>DOCUMENTO<input data-document readonly tabindex="-1"></label><label>EMPRESA DEL FUNCIONARIO<input data-company readonly tabindex="-1"></label></div></section><section data-manage class="plazaAccessPeople" hidden></section><p role="status" aria-live="polite"></p><div data-copy></div>';
  const find=selector=>dialog.querySelector(selector);
- const active=find('[data-active]'),results=find('[data-results]'),manage=find('[data-manage]'),search=find('input'),status=find('[role=status]'),copy=find('[data-copy]');
+ const active=find('[data-active]'),results=find('[data-results]'),manage=find('[data-manage]'),search=find('#accessPersonSearch'),status=find('[role=status]'),copy=find('[data-copy]'),info=find('[data-person-info]');
  find('h2').textContent='Accesos a '+app.name;
  find('[data-close]').onclick=()=>dialog.close();
  const request=(action,data)=>auth().request(action,data);
  let people=[],selected=null,inviteUrl='',busy=false;
  const access={admin:null,plaza:null,production:null};
  function clearInvite(){inviteUrl='';copy.replaceChildren()}
- function identity(p){return [p.nombre||p.name||'Sin nombre',doc(p),p.cargo].filter(Boolean).join(' · ')}
+ function identity(p){return [personName(p)||'Sin nombre',doc(p),p.cargo].filter(Boolean).join(' · ')}
+ function showResults(show){results.hidden=!show;search.setAttribute('aria-expanded',String(show))}
+ function showPerson(row){
+  const person=people.find(p=>same({personId:p.id,document:doc(p)},row));
+  search.value=personName(row)||doc(row);showResults(false);
+  find('[data-document]').value=doc(row);
+  find('[data-company]').value=row.empresa||person?.empresa||'';
+  info.hidden=false;
+ }
  function rolesFor(row){
   return Object.entries(access).flatMap(([key,list])=>(list||[]).filter(other=>other===row||same(other,row)).map(other=>apps[key].name+' — '+labels(key,other)));
  }
@@ -66,22 +75,25 @@ async function open(scope){
    active.append(card);
   }
  }
- function eligible(person){return doc(person)&&(scope!=='admin'||normalize(person.area).replace(/\s+/g,' ')==='seguridad fisica')}
+ function eligible(person){return person.active!==false&&doc(person)&&(scope!=='admin'||normalize(person.area).replace(/\s+/g,' ')==='seguridad fisica')}
  function renderSearch(){
   results.replaceChildren();
   const query=normalize(search.value);
-  if(!query)return;
-  if(!access[scope]){results.textContent='Carga los accesos activos antes de conceder un acceso.';return}
-  const matches=people.filter(person=>eligible(person)&&normalize([person.nombre,doc(person)].join(' ')).includes(query)&&!access[scope].some(row=>same(row,{personId:person.id,document:doc(person)})));
-  for(const person of matches){
-   const row=button(identity(person),()=>choose({...person,personId:person.id},false));
-   row.className='plazaUserRow';results.append(row);
+  if(!access[scope])results.textContent='Carga los accesos activos antes de conceder un acceso.';
+  else{
+   const matches=people.filter(person=>eligible(person)&&normalize([personName(person),doc(person)].join(' ')).includes(query)&&!access[scope].some(row=>same(row,{personId:person.id,document:doc(person)}))).sort((a,b)=>personName(a).localeCompare(personName(b),'es',{sensitivity:'base'}));
+   for(const person of matches.slice(0,60)){
+    const row=button('',()=>choose({...person,personId:person.id},false)),name=document.createElement('b'),documentNumber=document.createElement('span');
+    name.textContent=personName(person)||'Sin nombre';documentNumber.textContent=doc(person);
+    row.append(name,documentNumber);results.append(row);
+   }
+   if(!matches.length)results.textContent='No hay colaboradores disponibles que coincidan.';
   }
-  if(!matches.length)results.textContent='No hay colaboradores disponibles que coincidan.';
+  showResults(document.activeElement===search);
  }
  function choose(row,existing){
   if(busy)return;
-  selected=row;clearInvite();status.textContent='';manage.hidden=false;
+  selected=row;showPerson(row);clearInvite();status.textContent='';manage.hidden=false;
   const title=document.createElement('h3');
   title.textContent=(existing?'Gestionar accesos de ':'Nuevo acceso para ')+identity(row);
   manage.replaceChildren(title);
@@ -99,8 +111,8 @@ async function open(scope){
  }
  async function run(message,fn){
   if(busy)return;
-  busy=true;status.textContent=message;
-  try{await fn()}catch(error){status.textContent=error.message||String(error)}finally{busy=false}
+  busy=true;search.disabled=true;status.textContent=message;
+  try{await fn()}catch(error){status.textContent=error.message||String(error)}finally{busy=false;search.disabled=false}
  }
  function generate(row,role){
   if(busy)return;
@@ -151,7 +163,19 @@ async function open(scope){
    renderActive();renderSearch();status.textContent='Acceso retirado.';
   });
  }
- search.oninput=renderSearch;
+ search.oninput=()=>{
+  selected=null;manage.hidden=true;manage.replaceChildren();clearInvite();status.textContent='';
+  info.hidden=true;find('[data-document]').value='';find('[data-company]').value='';renderSearch();
+ };
+ search.onfocus=renderSearch;
+ search.onkeydown=event=>{
+  if(event.key==='ArrowDown'){event.preventDefault();renderSearch();results.querySelector('button')?.focus()}
+ };
+ dialog.onpointerdown=event=>{if(!find('.accessPersonField').contains(event.target))showResults(false)};
+ dialog.onkeydown=event=>{
+  if(event.key==='Escape'&&!results.hidden){event.preventDefault();event.stopPropagation();search.focus();showResults(false)}
+ };
+ find('.accessPersonField').onfocusout=()=>queueMicrotask(()=>{if(!find('.accessPersonField').contains(document.activeElement))showResults(false)});
  dialog.showModal();
  await run('Cargando Personal y accesos…',async()=>{
   const [local,admin,production]=await Promise.allSettled([all('personal'),request('adminUsersList'),request('productionUsers')]);
