@@ -8,6 +8,18 @@ const isPreviousActa=form=>documentType==='ACTA'&&!form.elements.id.value&&form.
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 function documentUrl(value){try{const url=new URL(String(value||'').trim());return ['http:','https:'].includes(url.protocol)?url.href:''}catch{return ''}}
 const today=()=>{const d=new Date(),offset=d.getTimezoneOffset();return new Date(d.getTime()-offset*60000).toISOString().slice(0,10)};
+const displayDate=value=>/^\d{4}-\d{2}-\d{2}$/.test(String(value||''))?value.split('-').reverse().join('/'):String(value||'');
+function readDate(input){
+  const match=input.value.trim().match(/^(\d{2})(\/?)(\d{2})\2(\d{4})$/);
+  let iso='';
+  if(match){
+    const [,day,,month,year]=match,candidate=`${year}-${month}-${day}`,date=new Date(candidate+'T00:00:00Z');
+    if(Number(year)>0&&!Number.isNaN(date.getTime())&&date.toISOString().slice(0,10)===candidate)iso=candidate;
+  }
+  input.setCustomValidity(iso?'':'Escribe una fecha válida en formato DD/MM/AAAA.');
+  if(iso)input.value=displayDate(iso);
+  return iso;
+}
 function injectStyles(){
   if(document.getElementById('actasAdminStyles'))return;
   const style=document.createElement('style');
@@ -106,7 +118,7 @@ async function render(){
   const list=(await rows()).filter(x=>typeOf(x)===documentType),host=document.getElementById('actaList');
   if(host)host.innerHTML=list.map(x=>{
     const url=documentUrl(x.enlace),label=`${documentType} N.º ${x.consecutivo}`;
-    return `<div class="actaRow"><button type="button" class="actaEdit" data-acta-id="${esc(x.id)}" aria-label="Editar ${esc(label)}"><span><b>${esc(label)}</b>${x.documentStatus==='not_created'?`<strong style="display:block;background:#fff0b3;color:#713f12;padding:8px;border-radius:6px">⚠ ACTA NO ELABORADA · CONSECUTIVO RESERVADO</strong><small>${esc(x.notCreatedReason||'')}</small>`:''}<small>${esc(x.fecha||'Sin fecha')} · ${esc(documentType==='ACTA'?x.area||'Sin área':x.dirigidoA||'Sin destinatario')} · ${esc(documentType==='ACTA'?x.motivo||'Sin motivo':x.asunto||'Sin asunto')}</small></span></button>${url?`<a class="actaLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(label)}">ABRIR ${documentType} ↗</a>`:`<span class="actaNoLink">${x.enlace?'ENLACE NO VÁLIDO':'SIN ENLACE'}</span>`}</div>`;
+    return `<div class="actaRow"><button type="button" class="actaEdit" data-acta-id="${esc(x.id)}" aria-label="Editar ${esc(label)}"><span><b>${esc(label)}</b>${x.documentStatus==='not_created'?`<strong style="display:block;background:#fff0b3;color:#713f12;padding:8px;border-radius:6px">⚠ ACTA NO ELABORADA · CONSECUTIVO RESERVADO</strong><small>${esc(x.notCreatedReason||'')}</small>`:''}<small>${esc(displayDate(x.fecha)||'Sin fecha')} · ${esc(documentType==='ACTA'?x.area||'Sin área':x.dirigidoA||'Sin destinatario')} · ${esc(documentType==='ACTA'?x.motivo||'Sin motivo':x.asunto||'Sin asunto')}</small></span></button>${url?`<a class="actaLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(label)}">ABRIR ${documentType} ↗</a>`:`<span class="actaNoLink">${x.enlace?'ENLACE NO VÁLIDO':'SIN ENLACE'}</span>`}</div>`;
   }).join('')||`<p class="hint">Aún no hay ${documentType==='ACTA'?'actas':'oficios'} registrados en esta aplicación.</p>`;
   const form=document.getElementById('actaForm');if(form&&!form.elements.id.value)await updateNumber();
   await updateDeleteLast();
@@ -114,13 +126,14 @@ async function render(){
 async function reset({keepRegistrationMode=false}={}){
   const form=document.getElementById('actaForm');if(!form)return;
   const mode=keepRegistrationMode?form.elements.modoRegistro.value:'nuevo';
-  delete form._notCreatedDraft;form.reset();form.elements.modoRegistro.value=mode;form.elements.id.value='';form.elements.fecha.value=today();document.getElementById('actaStatus').hidden=true;updateMode();await updateNumber();
+  delete form._notCreatedDraft;form.reset();form.elements.modoRegistro.value=mode;form.elements.id.value='';form.elements.fecha.value=displayDate(today());form.elements.fecha.setCustomValidity('');document.getElementById('actaStatus').hidden=true;updateMode();await updateNumber();
 }
 async function selectMode(type){if(type===documentType)return;documentType=type;await reset();await render()}
 async function edit(id){
   const acta=(await rows()).find(x=>x.id===id);if(!acta)return;documentType=typeOf(acta);
   const form=document.getElementById('actaForm');
   delete form._notCreatedDraft;form.reset();for(const field of ['id','consecutivo','fecha','area','motivo','asunto','dirigidoA','enlace'])if(form.elements[field])form.elements[field].value=acta[field]||'';
+  form.elements.fecha.value=displayDate(acta.fecha);form.elements.fecha.setCustomValidity('');
   form.elements.numeroAnterior.value=String(acta.consecutivo||'');
   form.elements.noElaborada.checked=acta.documentStatus==='not_created';
   form.elements.justificacionNoElaborada.value=acta.notCreatedReason||'';
@@ -145,12 +158,14 @@ async function save(event){
     }
     if(form.elements.motivo.value==='NO SE REGISTRÓ'&&!requested)throw new Error('El motivo «No se registró» solo corresponde a un acta no elaborada.');
     if(wasNotCreated&&consecutivo!==Number(existing.consecutivo))throw new Error('El número de un acta no elaborada debe conservarse.');
+    const fecha=readDate(form.elements.fecha);
+    if(!fecha)throw new Error('Escribe una fecha válida en formato DD/MM/AAAA.');
     const acta=existing||{id:uuid(),createdAt:stamp};
     if(documentType==='ACTA'&&existing&&requested&&window.SKAdminAuth?.isAdmin?.()===true){
       acta.documentStatus='not_created';acta.notCreatedReason=reason;
       acta.notCreatedAt=acta.notCreatedAt||stamp;
     }
-    Object.assign(acta,{tipo:documentType,consecutivo,fecha:form.elements.fecha.value,area:documentType==='ACTA'?(requested?'NO APLICA':form.elements.area.value):'',motivo:documentType==='ACTA'?(requested?(window.SKAdminAuth?.isAdmin?.()===true?'NO SE REGISTRÓ':existing?.motivo||''):form.elements.motivo.value):'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:requested?'':form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
+    Object.assign(acta,{tipo:documentType,consecutivo,fecha,area:documentType==='ACTA'?(requested?'NO APLICA':form.elements.area.value):'',motivo:documentType==='ACTA'?(requested?(window.SKAdminAuth?.isAdmin?.()===true?'NO SE REGISTRÓ':existing?.motivo||''):form.elements.motivo.value):'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:requested?'':form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
     await put('actas',acta);window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-documents-changed'));status.hidden=false;status.textContent=existing?'Cambios guardados.':`${documentType==='ACTA'?'Acta':'Oficio'} N.º ${consecutivo} ${documentType==='ACTA'?'registrada':'registrado'} y pendiente de sincronización.`;await render();if(!existing)setTimeout(()=>reset({keepRegistrationMode:true}),900);
   }catch(error){status.hidden=false;status.textContent=error?.message||String(error)}
   finally{button.disabled=false}
@@ -165,7 +180,7 @@ function mount(){
   <form id="actaForm" class="actaForm"><input type="hidden" name="id"><input type="hidden" name="consecutivo">
   <label class="actaRegistrationMode" style="grid-column:1/-1">TIPO DE REGISTRO<select name="modoRegistro"><option value="nuevo">ACTA NUEVA · NÚMERO AUTOMÁTICO</option><option value="anterior">ACTA ANTERIOR · YA TIENE NÚMERO</option></select></label>
   <label class="actaPreviousNumber" hidden>NÚMERO ORIGINAL DEL ACTA<input name="numeroAnterior" type="number" min="1" step="1" inputmode="numeric" disabled placeholder="Ejemplo: 8"></label>
-  <label>FECHA<input name="fecha" type="date" required></label>
+  <label>FECHA (DD/MM/AAAA)<input name="fecha" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" autocomplete="off" required></label>
   <label class="actaArea">ÁREA<select name="area"><option value="NO APLICA" data-not-created-area hidden disabled>No aplica</option><option value="">SELECCIONAR…</option><option>ADMINISTRATIVA</option><option>BODEGA DE SUPERFICIE</option><option>DESMIN</option><option>DESMIN - OBRAS CIVILES</option><option>PRODUCCIÓN</option><option>SEGURIDAD FÍSICA</option></select></label>
   <label class="actaMotivo">MOTIVO DEL ACTA<select name="motivo"><option value="">Seleccionar…</option><option value="NO SE REGISTRÓ" data-not-created-motive hidden disabled>No se registró · Acta no elaborada</option><option value="DE COMPROMISO">De compromiso</option><option value="DAR DE BAJA HERRAMIENTAS">Dar de baja herramientas</option><option value="INVENTARIO GENERAL">Inventario general</option><option value="ENTREGA DE ELEMENTOS">Entrega de elementos</option></select></label>
   <label class="oficioAsunto" hidden>ASUNTO<input name="asunto" type="text"></label>
@@ -182,6 +197,9 @@ function mount(){
     status.hidden=false;status.textContent='Enlace quitado del formulario. Guarda los cambios para confirmar o pega el enlace del documento corregido.';
   });
   section.querySelector('#actaForm').addEventListener('submit',save);
+  const dateInput=section.querySelector('[name="fecha"]');
+  dateInput.addEventListener('input',()=>dateInput.setCustomValidity(''));
+  dateInput.addEventListener('change',()=>readDate(dateInput));
   section.querySelector('#newActa').addEventListener('click',reset);
   section.querySelector('[name="modoRegistro"]').addEventListener('change',()=>{updateMode();document.getElementById('actaStatus').hidden=true;updateNumber();if(isPreviousActa(document.getElementById('actaForm')))document.querySelector('#actaForm [name="numeroAnterior"]').focus()});
   section.querySelectorAll('[data-document-type]').forEach(button=>button.addEventListener('click',()=>selectMode(button.dataset.documentType)));
@@ -193,3 +211,4 @@ window.addEventListener('skadmin-permissions',()=>{updateDeleteLast();updateNotC
 window.addEventListener('skweb-synced',()=>{if(document.getElementById('actas')?.classList.contains('active'))render()});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();
 })();
+

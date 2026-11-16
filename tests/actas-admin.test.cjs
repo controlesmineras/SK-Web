@@ -10,20 +10,20 @@ const clone=value=>JSON.parse(JSON.stringify(value));
 function app(seed=[]){
   let records=clone(seed),sequence=0;
   const writes=[],timers=[];
-  const elements=Object.fromEntries(['id','consecutivo','modoRegistro','numeroAnterior','fecha','area','motivo','asunto','dirigidoA','enlace','noElaborada','justificacionNoElaborada'].map(name=>[name,{value:name==='modoRegistro'?'nuevo':'',disabled:false,required:false,checked:false}]));
+  const elements=Object.fromEntries(['id','consecutivo','modoRegistro','numeroAnterior','fecha','area','motivo','asunto','dirigidoA','enlace','noElaborada','justificacionNoElaborada'].map(name=>[name,{value:name==='modoRegistro'?'nuevo':'',disabled:false,required:false,checked:false,setCustomValidity(message){this.validationMessage=message}}]));
   const fields={};
   for(const [selector,name] of Object.entries({'.actaRegistrationMode':'modoRegistro','.actaPreviousNumber':'numeroAnterior','.actaArea':'area','.actaMotivo':'motivo','.oficioAsunto':'asunto','.oficioDestinatario':'dirigidoA'}))fields[selector]={hidden:false,firstChild:{textContent:''},querySelector:()=>elements[name]};
   fields['.documentLinkLabel']={firstChild:{textContent:''}};
   const form={elements,querySelector:selector=>fields[selector],reset(){for(const [name,input]of Object.entries(elements))input.value=name==='modoRegistro'?'nuevo':''},scrollIntoView(){}};
   const nodes={actaForm:form,actaNumber:{},actaSave:{},actaStatus:{},newActa:{},actaList:{}};
   const document={readyState:'loading',addEventListener(){},getElementById:id=>nodes[id],querySelectorAll:()=>[]};
-  const window={dispatchEvent(){}};
+  const window={dispatchEvent(){},addEventListener(){}};
   const context=vm.createContext({document,window,Event:class{},db:{},all:async()=>clone(records),uuid:()=>`new-${++sequence}`,setTimeout:fn=>timers.push(fn),put:async(store,row)=>{
     assert.equal(store,'actas');const saved=clone(row),index=records.findIndex(x=>x.id===saved.id);if(index===-1)records.push(saved);else records[index]=saved;writes.push(saved);
   }});
   vm.runInContext(source.replace('window.SKActasAdmin={render,reset,edit};','window.SKActasAdmin={render,reset,save,edit,selectMode,updateMode,nextNumber};'),context);
   const api=window.SKActasAdmin;
-  return{api,elements,fields,nodes,writes,records:()=>clone(records),async previous(number){await api.reset();elements.modoRegistro.value='anterior';elements.numeroAnterior.value=String(number);elements.fecha.value='2025-08-13';elements.area.value='ADMINISTRATIVA';elements.motivo.value='DE COMPROMISO';api.updateMode()},save:()=>api.save({preventDefault(){},currentTarget:form}),async flush(){for(const fn of timers.splice(0))await fn()}};
+  return{api,elements,fields,nodes,writes,records:()=>clone(records),async previous(number){await api.reset();elements.modoRegistro.value='anterior';elements.numeroAnterior.value=String(number);elements.fecha.value='13/08/2025';elements.area.value='ADMINISTRATIVA';elements.motivo.value='DE COMPROMISO';api.updateMode()},save:()=>api.save({preventDefault(){},currentTarget:form}),async flush(){for(const fn of timers.splice(0))await fn()}};
 }
 
 test('registra el número y fecha originales; conserva el siguiente consecutivo y el modo para otra acta',async()=>{
@@ -68,8 +68,43 @@ test('los oficios mantienen numeración independiente y el registro anterior se 
   await s.api.selectMode('ACTA');assert.equal(s.elements.modoRegistro.value,'nuevo');assert.equal(s.fields['.actaRegistrationMode'].hidden,false);assert.equal(await s.api.nextNumber(),9);
 });
 
-test('quitar y reemplazar enlace conserva acta e identidad',async()=>{const s=app([{id:'a',tipo:'ACTA',consecutivo:9,enlace:'https://example.com/old.pdf'}]);await s.api.edit('a');s.elements.enlace.value='';await s.save();assert.equal(s.records()[0].enlace,'');s.elements.enlace.value='https://example.com/new.pdf';await s.save();assert.equal(s.records().length,1);assert.equal(s.records()[0].enlace,'https://example.com/new.pdf');assert.equal(s.records()[0].consecutivo,9)});
+test('quitar y reemplazar enlace conserva acta e identidad',async()=>{const s=app([{id:'a',tipo:'ACTA',consecutivo:9,fecha:'2026-11-16',enlace:'https://example.com/old.pdf'}]);await s.api.edit('a');s.elements.enlace.value='';await s.save();assert.equal(s.records()[0].enlace,'');s.elements.enlace.value='https://example.com/new.pdf';await s.save();assert.equal(s.records().length,1);assert.equal(s.records()[0].enlace,'https://example.com/new.pdf');assert.equal(s.records()[0].consecutivo,9)});
 
 
-test('editar número conserva ID, rechaza repetidos y ajusta max + 1',async()=>{const s=app([{id:'a',tipo:'ACTA',consecutivo:20},{id:'b',tipo:'ACTA',consecutivo:30}]);await s.api.edit('a');s.elements.numeroAnterior.value='30';await s.save();assert.equal(s.writes.length,0);assert.match(s.nodes.actaStatus.textContent,/ya está registrada/);s.elements.numeroAnterior.value='45';await s.save();assert.equal(s.records().find(x=>x.id==='a').consecutivo,45);assert.equal(await s.api.nextNumber(),46);s.elements.numeroAnterior.value='12';await s.save();assert.equal(await s.api.nextNumber(),31);assert.equal(s.records().length,2)});
+test('editar número conserva ID, rechaza repetidos y ajusta max + 1',async()=>{const s=app([{id:'a',tipo:'ACTA',consecutivo:20,fecha:'2026-11-16'},{id:'b',tipo:'ACTA',consecutivo:30}]);await s.api.edit('a');s.elements.numeroAnterior.value='30';await s.save();assert.equal(s.writes.length,0);assert.match(s.nodes.actaStatus.textContent,/ya está registrada/);s.elements.numeroAnterior.value='45';await s.save();assert.equal(s.records().find(x=>x.id==='a').consecutivo,45);assert.equal(await s.api.nextNumber(),46);s.elements.numeroAnterior.value='12';await s.save();assert.equal(await s.api.nextNumber(),31);assert.equal(s.records().length,2)});
 test('sin registros usa 1 y excluye actas eliminadas',async()=>{const s=app([{id:'a',tipo:'ACTA',consecutivo:99,deleted:true}]);assert.equal(await s.api.nextNumber(),1)});
+
+test('actas y oficios muestran día/mes/año y guardan la fecha ISO sin intercambiar día y mes',async()=>{
+  for(const type of ['ACTA','OFICIO']){
+    const s=app();await s.api.reset();await s.api.selectMode(type);
+    assert.match(s.elements.fecha.value,/^\d{2}\/\d{2}\/\d{4}$/);
+    s.elements.fecha.value='04/05/2026';await s.save();
+    assert.equal(s.records()[0].fecha,'2026-05-04');
+    assert.match(s.nodes.actaList.innerHTML,/04\/05\/2026/);
+    await s.api.edit(s.records()[0].id);
+    assert.equal(s.elements.fecha.value,'04/05/2026');
+    await s.save();assert.equal(s.records()[0].fecha,'2026-05-04');
+  }
+});
+
+test('acepta ocho dígitos y fecha bisiesta, normalizando el campo a DD/MM/AAAA',async()=>{
+  const s=app();await s.api.reset();s.elements.fecha.value='29022024';await s.save();
+  assert.equal(s.records()[0].fecha,'2024-02-29');
+  assert.equal(s.elements.fecha.value,'29/02/2024');
+});
+
+test('rechaza fechas imposibles, incompletas o en formato norteamericano sin modificar el registro',async()=>{
+  for(const type of ['ACTA','OFICIO']){
+    const original={id:'original',tipo:type,consecutivo:8,fecha:'2026-11-16'};
+    const s=app([original]);await s.api.edit(original.id);
+    for(const value of ['','31/04/2026','29/02/2025','11/16/2026','1/2/2026','16/11/26','16/11/0000']){
+      s.elements.fecha.value=value;await s.save();
+      assert.equal(s.writes.length,0);assert.deepEqual(s.records(),[original]);
+      assert.match(s.nodes.actaStatus.textContent,/DD\/MM\/AAAA/);
+      assert.ok(s.elements.fecha.validationMessage);
+    }
+    s.elements.fecha.value='17/11/2026';await s.save();
+    assert.equal(s.records()[0].fecha,'2026-11-17');assert.equal(s.elements.fecha.validationMessage,'');
+  }
+});
+
