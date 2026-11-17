@@ -1,10 +1,15 @@
-.skCalendarField{position:relative;display:flex;align-items:center;gap:10px;box-sizing:border-box;width:100%;min-width:0;min-height:46px;padding:10px 12px;border:1px solid #cbd3da;border-radius:8px;background:#fff;color:#173d59;font:inherit;font-weight:400;text-transform:none;line-height:1.4;cursor:pointer}
-.skCalendarField .skCalendarValue{flex:1;min-width:0;white-space:nowrap;font:inherit;color:inherit;pointer-events:none}
-.skCalendarField .skCalendarIcon{display:flex;align-items:center;flex:none;color:#173d59;pointer-events:none}
-.skCalendarField .skCalendarIcon svg{display:block;width:22px;height:22px}
-.skCalendarField.isEmpty .skCalendarValue{color:#6b7b86}
-.skCalendarField:focus-within{outline:2px solid #427b94;outline-offset:2px}
-.skCalendarField.isLocked{background:#edf2f5;cursor:default;color:#687983}
-.skCalendarField.isLocked .skCalendarIcon{opacity:.45}
-.skCalendarField>input.skCalendarPicker{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;opacity:0!important;cursor:inherit;box-sizing:border-box!important;z-index:1}
+.skCalendarField{position:relative;display:block;box-sizing:border-box;width:100%;min-width:0;font:inherit;font-weight:400;text-transform:none;line-height:1.4}
+.skCalendarControls{display:flex;align-items:center;box-sizing:border-box;width:100%;min-width:0;min-height:46px;border:1px solid #cbd3da;border-radius:8px;background:#fff;color:#173d59;overflow:hidden}
+.skCalendarControls>input.skCalendarEditor{flex:1;box-sizing:border-box;min-width:0;width:100%;height:44px;min-height:44px;margin:0;padding:10px 12px;border:0;border-radius:0;outline:0;background:transparent;color:inherit;font:inherit;line-height:1.4;text-align:left;box-shadow:none}
+.skCalendarEditor::placeholder{color:#6b7b86;opacity:1}
+.skCalendarControls>input.skCalendarTime{flex:0 1 130px;box-sizing:border-box;width:130px;min-width:0;height:44px;min-height:44px;padding:8px 4px;margin:0;border:0;border-left:1px solid #dce4e9;border-radius:0;background:transparent;color:inherit;font:inherit}
+.skCalendarField .skCalendarIcon{position:relative;display:flex;align-items:center;justify-content:center;flex:0 0 44px;width:44px;height:44px;color:#173d59;border-left:1px solid #e1e8ed;cursor:pointer}
+.skCalendarField .skCalendarIcon svg{display:block;width:22px;height:22px;pointer-events:none}
+.skCalendarControls:focus-within{outline:2px solid #427b94;outline-offset:2px}
+.skCalendarField.isLocked .skCalendarControls{background:#edf2f5;color:#687983}
+.skCalendarField.isLocked .skCalendarIcon{opacity:.45;cursor:default}
+.skCalendarIcon>input.skCalendarPicker{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;opacity:0!important;cursor:inherit;box-sizing:border-box!important;z-index:1}
+.skCalendarPicker::-webkit-calendar-picker-indicator{position:absolute;inset:0;width:100%;height:100%;padding:0;margin:0;cursor:inherit}
 .skCalendarField>input.skCalendarSource{position:absolute!important;width:1px!important;height:1px!important;min-height:0!important;margin:0!important;padding:0!important;border:0!important;opacity:0!important;pointer-events:none!important;clip-path:inset(50%)}
+.skCalendarField .skCalendarError{display:block;margin-top:5px;color:#a62929;font-size:.8rem;font-weight:400;line-height:1.35;text-transform:none;letter-spacing:normal}
+.skCalendarField .skCalendarError[hidden]{display:none}

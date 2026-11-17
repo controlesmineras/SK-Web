@@ -1,19 +1,27 @@
-# Calendarios de fecha — 17/11/2026
+# Fecha por teclado o calendario — 17/11/2026
 
-SK Web Admin, Plaza Blending y Producción comparten `date-calendar.js` y `date-calendar.css`. Todos los campos editables de fecha de formularios y consultas abren el calendario nativo al tocar el campo. La fecha visible usa DD/MM/AAAA, independientemente del idioma del dispositivo. Los campos de fecha y hora conservan ambos valores.
+SK Web Admin, Plaza Blending y Producción comparten `date-calendar.js` y `date-calendar.css`. El campo de fecha permite escribir con teclado numérico y el icono de la derecha abre el calendario nativo. Al presionar Enter o salir del campo, se completa la fecha en DD/MM/AAAA.
 
-Se mantienen los controles originales, sus nombres, formatos internos, restricciones y eventos. Los campos que antes recibían texto DD/MM/AAAA tienen un selector nativo sin nombre que transmite la selección al control original. Los controles ISO siguen almacenando ISO. La integración detecta también formularios creados después de cargar la página y actualizaciones programáticas de valores, así como reinicios de formulario. Las fechas bloqueadas permanecen bloqueadas.
+- `1711` → `17/11/2026`, usando el año actual de Colombia.
+- `17112025` → `17/11/2025`.
+- También acepta fechas con barras y fechas ISO pegadas.
+- Las fechas imposibles o incompletas muestran un error y bloquean el envío. No se trasladan automáticamente a otro día o mes.
+- Los campos con fecha y hora conservan la hora al cambiar la fecha y permiten editarla por separado.
 
-Los tres service workers precargan los archivos compartidos para uso sin conexión. No requiere modificar Apps Script ni migrar registros.
+Los controles originales mantienen sus nombres, tipos, valores internos, restricciones y eventos. Los campos de texto conservan DD/MM/AAAA y los nativos conservan ISO. El editor visible y el calendario no tienen nombre, por lo que no agregan valores al envío. Se respetan fechas obligatorias, opcionales, límites y solo lectura. Los reinicios de formulario y asignaciones desde la app actualizan la representación visible; se detectan también formularios creados dinámicamente.
+
+Los tres service workers precargan la versión 2 para uso sin conexión. No requiere modificar Apps Script ni migrar registros.
 
 ## Verificación
 
-- 121 pruebas aprobadas: calendario, Producción y registro de actas.
-- Selección real en el calendario de Producción: 18/11/2026 visible y en el campo original de texto.
-- Selección real en Plaza Blending: 10/11/2026 visible y `2026-11-10` en el filtro original. Limpiar filtros restablece ambos valores.
-- Selección real en Admin: 16/11/2026 en el registro de actas. Nueva acta restablece correctamente la fecha actual. El selector conserva la obligatoriedad y no agrega campos con nombre al envío.
-- Revisión visual con datos ficticios y solicitudes de escritura interceptadas en la vista local de prueba.
-- La suite adicional de consulta de documentos presenta 6 fallos preexistentes; su código y pruebas coinciden byte por byte con la revisión anterior. No carga el nuevo selector.
+- 124 pruebas aprobadas: calendario, Producción y registro de actas.
+- Pruebas de calendario: formatos existentes, fecha abreviada, año explícito, años bisiestos, fechas incompletas e imposibles, filtros vacíos y ausencia de inversión entre día y mes.
+- Pruebas en navegador con datos ficticios: Enter, salida del campo, selector de calendario, error `3111`, límite máximo, limpieza de fecha opcional, restablecimiento y asignación programática.
+- FormData conserva únicamente los campos originales y sus formatos; una selección emite un solo cambio. Editar una fecha y hora conserva la hora anterior.
+- Producción: `17112025` → `17/11/2025` y `1711` → `17/11/2026`; teclado configurado como numérico.
+- Plaza Blending: `1011` → `10/11/2026`, con `2026-11-10` en el filtro original; limpiar filtros restablece ambos valores.
+- Admin: `16112025` → `16/11/2025`; nueva acta restablece la fecha actual.
+- Sin escrituras en registros reales durante la revisión. No se probó físicamente el teclado de un teléfono.
+- La suite adicional de consulta de documentos tiene 6 fallos preexistentes identificados en la revisión anterior; su código no cambia ni carga el nuevo selector.
 
-![Calendarios en Plaza Blending](images/calendarios-plaza.jpg)
-![Calendario en documentos de Admin](images/calendarios-admin.jpg)
+![Fecha editable e icono de calendario](images/fecha-teclado-calendario.jpg)
