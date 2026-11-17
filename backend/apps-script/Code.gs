@@ -1070,6 +1070,7 @@ function productionWarehouseAppend_(data,row){
  const saved={...row,revision:data.warehouseRevision};
  (data.warehouseMovements||(data.warehouseMovements=[])).push(saved);return saved;
 }
+function productionWarehouseEpp_(item){return truthy_(item?.isEpp)}
 function productionWarehouseDestination_(row){return row.destinationWarehouseId==='production'||['produccion','inventario de produccion','bodega de produccion'].includes(cargoNorm_(row.destination))}
 function productionSpare_(item,central){
  if(!item?.isYtSpare)return null;
@@ -1087,7 +1088,7 @@ function productionImportPlaza_(data,central){
   // La activación no vuelve a ingresar entregas históricas incluidas en aperturas.
   if(source.deleted||source.reversed||source.reversado||source.reversalOf||source.movementType==='DEVOLUCIÓN'||source.movementType==='REVERSIÓN'||!productionWarehouseDestination_(source)||String(source.createdAt||'')<settings.transferStartAt)continue;
   const id='plaza-'+source.id;if(existing.has(id))continue;
-  const item=criteria.get(source.itemId);if(!item||!Number.isFinite(Number(source.quantity))||Number(source.quantity)<=0)continue;
+  const item=criteria.get(source.itemId);if(!item||productionWarehouseEpp_(item)||!Number.isFinite(Number(source.quantity))||Number(source.quantity)<=0)continue;
   const spare=productionSpare_(item,central),now=new Date().toISOString();
   const event=productionWarehouseAppend_(data,{id,kind:'transfer_in',itemId:item.id,itemName:item.name,quantity:Number(source.quantity),delta:Number(source.quantity),assetId:source.assetId||'',sourceDeliveryId:source.id,sourceLoan:cargoNorm_(source.deliveryType)==='prestamo',source:'plaza',target:spare?'mechanics':'warehouse',createdAt:now,fechaISO:Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'),sourceCreatedAt:source.createdAt,personName:source.recipientName||'',status:'synced'});
   if(spare)(data.incomes||(data.incomes=[])).push({id,kind:'income',...spare,cantidad:event.quantity,fechaISO:Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'),createdAt:now,recordedAt:now,sourceDeliveryId:source.id,registradoPorNombre:'Traslado desde Plaza Blending'});
@@ -1135,6 +1136,7 @@ function productionWarehouseApply_(data,central,request,user){
  if(request.kind==='opening'&&!productionRoles_(user).includes('admin'))throw new Error('Solo el administrador registra saldos de apertura.');
  const item=(central.inventoryCriteria||[]).find(row=>row.id===request.itemId&&!row.deleted&&row.active!==false);
  if(!item)throw new Error('Elemento no disponible en Criterios de inventario.');
+ if(productionWarehouseEpp_(item))throw new Error('Los elementos EPP se administran en Plaza Blending y no están habilitados en Producción.');
  const spare=productionSpare_(item,central),fixed=item.isFixedAsset===true,quantity=Number(request.quantity),outgoing=['delivery','loan','transfer_out'].includes(request.kind);
  if(!Number.isFinite(quantity)||(!item.fractionable&&!fixed&&!spare&&!Number.isInteger(quantity))||quantity<(request.kind==='opening'?0:0.000001)||quantity>1000000000||fixed&&quantity!==1||spare&&!Number.isSafeInteger(quantity))throw new Error('Cantidad no válida.');
  if(spare&&request.kind==='opening')throw new Error('La apertura de repuestos se administra en Mecánica.');
@@ -1269,9 +1271,10 @@ function productionWarehouseSync_(q){
   if(file)data=productionReadData_(file);
   const revision=Number(data.warehouseRevision)||0,cursor=Number(q.cursor)||0,reset=cursor>revision;
   const rows=(data.warehouseMovements||[]).filter(row=>reset||row.revision>cursor);
-  const criteria=(central.inventoryCriteria||[]).filter(row=>!row.deleted&&row.active!==false);
+  const criteria=(central.inventoryCriteria||[]).filter(row=>!row.deleted&&row.active!==false&&!productionWarehouseEpp_(row));
   const balances=criteria.map(item=>({itemId:item.id,quantity:productionWarehouseBalance_(data,item,central)}));
-  const catalogChanged=q.catalogRevision!==central.updatedAt;
-  return json_({ok:true,protocol:'production-warehouse-v1',reset,cursor:revision,rows,receipts,balances,settings:productionWarehouseSettings_(),roles:productionRoles_(user),catalogRevision:central.updatedAt||'',...(catalogChanged?{catalog:{criteria,personal:(central.personal||[]).filter(row=>!row.deleted).map(row=>({id:row.id,nombre:row.nombre,documento:row.documento,empresa:row.empresa})),assets:(central.assets||[]).filter(row=>!row.deleted).map(row=>({id:row.id,clase:row.clase,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,marcaAnterior:row.marcaAnterior,numeroClase:row.numeroClase,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion,updatedAt:row.updatedAt}))}}:{}),syncedAt:new Date().toISOString()});
+  const catalogRevision='production-no-epp-v1|'+(central.updatedAt||'');
+  const catalogChanged=q.catalogRevision!==catalogRevision;
+  return json_({ok:true,protocol:'production-warehouse-v1',reset,cursor:revision,rows,receipts,balances,settings:productionWarehouseSettings_(),roles:productionRoles_(user),catalogRevision,...(catalogChanged?{catalog:{criteria,personal:(central.personal||[]).filter(row=>!row.deleted).map(row=>({id:row.id,nombre:row.nombre,documento:row.documento,empresa:row.empresa})),assets:(central.assets||[]).filter(row=>!row.deleted).map(row=>({id:row.id,clase:row.clase,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,marcaAnterior:row.marcaAnterior,numeroClase:row.numeroClase,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion,updatedAt:row.updatedAt}))}}:{}),syncedAt:new Date().toISOString()});
  }finally{lock.releaseLock()}
 }

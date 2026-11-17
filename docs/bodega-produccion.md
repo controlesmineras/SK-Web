@@ -26,6 +26,14 @@ La actualización del repositorio no actualiza automáticamente la implementaci�
 
 Los botones de Bodega abren sus pantallas aunque falte la activación o haya una sincronización en curso. El registro de movimientos requiere activación y un catálogo descargado; el aviso indica dónde activarla. La sincronización actualiza los selectores sin borrar los datos que se están escribiendo.
 
+## Selector y exclusión de EPP
+
+Bodega utiliza el mismo selector de Plaza Blending: un solo campo para buscar y seleccionar el elemento. Permite buscar por nombre, alias, ítem o aplicación y muestra la disponibilidad de Producción. Los grupos de repuestos conservan el paso para elegir su ítem y la restricción de entrega establecida por el administrador.
+
+Los criterios marcados como EPP se excluyen únicamente de Producción. El cliente los oculta incluso si proceden de un catálogo guardado anteriormente; el servidor los excluye del catálogo y de las nuevas importaciones desde Plaza, y rechaza nuevos movimientos de EPP en Producción. No se borran registros históricos ni se modifica la administración o entrega de EPP en SK Web Admin y Plaza Blending.
+
+Este cambio requiere actualizar `Code.gs` y publicar **Nueva versión** en la implementación existente. Si la versión anterior no reconoce `productionWarehouseSync`, puede responder «La sesión de Web Admin venció» al validar la petición como si fuera de Admin. Producción muestra ahora un aviso para actualizar el servidor, sin borrar los pendientes. Después de publicar, actualizar y sincronizar Producción para descargar el catálogo.
+
 ## Operación y límites
 
 Se requiere una primera sincronización con conexión para descargar criterios y datos de la cuenta. Después, los movimientos se guardan localmente por registro en IndexedDB y permanecen pendientes hasta recibir confirmación individual. Los rechazos se conservan para revisión. En este equipo, los consumos pendientes de Mecánica deben sincronizarse antes de entregar repuestos desde Bodega.
@@ -40,6 +48,8 @@ Las pantallas muestran la última copia sincronizada más los pendientes de Bode
 
 Pruebas automatizadas de roles, separación de cantidades, importación única, reintentos, devoluciones parciales, retorno de préstamos de Plaza, activos nuevos, inventarios cerrados y recuperación ante fallos entre archivos. Pruebas de IndexedDB con colas aisladas por cuenta, confirmaciones incompletas y registros añadidos durante la sincronización. Verificación visual con datos ficticios de selección de módulos, préstamo, reintegro y existencias.
 
+El 17/11/2026 pasaron las 115 pruebas de `tests/production-*.test.cjs` y `tests/plaza-spare-groups.test.cjs`, incluidas la exclusión de EPP solo en Producción, la conservación del catálogo de Plaza, la renovación del catálogo guardado y la autenticación de Bodega. Se verificó visualmente el selector único, la búsqueda por aplicación, la selección con saldo propio y el aviso ante una respuesta de servidor antiguo, usando datos simulados.
+
 La suite general también tiene fallos previos en sus simuladores. Se comparó con `d503378c1c1761ce482253c6ce233fb4ef86c6f6`: esa base presenta 53 fallos. Se conservan fuera del alcance de esta función; no se presenta la suite completa como aprobada.
 
 ## Vista de prueba
@@ -47,3 +57,7 @@ La suite general también tiene fallos previos en sus simuladores. Se comparó c
 Datos ficticios, sin cambios en los inventarios reales:
 
 ![Bodega de Producción con datos ficticios](images/bodega-produccion-prueba.jpg)
+
+Selector único de elementos:
+
+![Selector de Producción sin EPP, con datos ficticios](images/produccion-selector-unico.jpg)

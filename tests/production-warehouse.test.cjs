@@ -21,6 +21,29 @@ function runtime({enabled=true,allowSpareDelivery=false,production={},central={}
 }
 const op=(kind,quantity=1,extra={})=>({id:randomUUID(),kind,itemId:'tool',quantity,fechaISO:date,personId:'person',destination:'Nivel 4',createdAt:new Date().toISOString(),...extra});
 const transfer=(id='source',extra={})=>({id,itemId:'tool',quantity:10,destination:'Producción',createdAt:cutoff,...extra});
+test('EPP is excluded only from Production catalog, balances, imports and new movements',()=>{
+ const epp={id:'epp',name:'Guantes de protección',unit:'Par',isEpp:true,allowLoan:true};
+ const textEpp={...epp,id:'epp-text',isEpp:'true'};
+ const r=runtime({central:{inventoryCriteria:[item,epp,textEpp],inventoryStock:[{id:'epp-stock',itemId:'epp',quantity:20}],blendingDeliveries:[transfer('source-epp',{itemId:'epp'})]}});
+ const first=r.sync([],{catalogRevision:cutoff});
+ assert.ok(first.catalog,'changing the policy forces a fresh catalog even when central data did not change');
+ assert.deepEqual(Array.from(first.catalog.criteria,row=>row.id),['tool']);
+ assert.deepEqual(Array.from(first.balances,row=>row.itemId),['tool']);assert.equal(first.rows.length,0);
+ for(const kind of ['income','opening','delivery','loan','return','transfer_out']){
+  const result=r.sync([op(kind,1,{itemId:'epp'})],{token:'admin'});
+  assert.equal(result.receipts[0].status,'rejected');assert.match(result.receipts[0].error,/EPP/);
+ }
+ const plaza=r.c.plazaSync_({token:'plaza',data:{},syncProtocol:'plaza-receipts-v1'});
+ assert.ok(plaza.data.inventoryCriteria.some(row=>row.id==='epp'&&row.isEpp===true));
+ assert.equal(plaza.data.inventoryStock.find(row=>row.itemId==='epp').quantity,20);
+ assert.equal(r.central.inventoryCriteria.find(row=>row.id==='epp').isEpp,true);
+ assert.equal(r.sync([],{catalogRevision:first.catalogRevision}).catalog,undefined);
+});
+test('warehouse requests are authenticated by Production rather than Web Admin',()=>{
+ const r=runtime();r.c.verifyAdminToken_=()=>{throw Error('Must not validate warehouse access as Web Admin');};
+ const result=r.c.doPost({postData:{contents:JSON.stringify({action:'productionWarehouseSync',token:'warehouse',pending:[]})}});
+ assert.equal(result.ok,true);assert.equal(result.protocol,'production-warehouse-v1');
+});
 test('warehouse uses its own quantities, imports once and excludes pre-activation and reversed deliveries',()=>{
  const r=runtime({central:{blendingDeliveries:[transfer(),transfer('old',{createdAt:'2020-01-01T00:00:00Z'}),transfer('reversed',{reversed:true}),transfer('other',{destination:'Otra bodega'})]}});
  assert.equal(r.sync().balances.find(row=>row.itemId==='tool').quantity,10);

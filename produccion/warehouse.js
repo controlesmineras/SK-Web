@@ -16,22 +16,28 @@
  const navigation=el('nav');navigation.id='productionNavigation';navigation.setAttribute('aria-label','Ubicación en Producción');const breadcrumb=el('span');breadcrumb.id='productionBreadcrumb';navigation.append(change,breadcrumb);
  byId('productionHome').onclick=()=>choose('');
  const panel=el('section');panel.id='warehousePanel';panel.hidden=true;
- panel.innerHTML='<h2>BODEGA DE PRODUCCIÓN</h2><p id="warehouseNote" class="warehouseHint"></p><div class="warehouseActions" role="group" aria-label="Tareas de bodega"></div><p id="warehouseStatus" role="status" aria-live="polite"></p><div id="warehousePending"></div><form id="warehouseForm" hidden><label class="wide">BUSCAR ELEMENTO<input name="itemSearch" type="search" placeholder="Nombre, ítem o aplicación" autocomplete="off"></label><label class="wide">ELEMENTO<select name="itemId" required></select></label><label data-asset-mode class="wide" hidden>ACTIVO<select name="assetMode"><option value="registered">Registrado</option><option value="new">Registrar activo nuevo</option></select></label><div data-new-asset class="wide" hidden><label>SERIAL<input name="newSerial" maxlength="160"></label><label>MODELO<input name="newModel" maxlength="100"></label><label>MARCA COMERCIAL<input name="newBrand" maxlength="100"></label><label>MARCA O NÚMERO ANTERIOR<input name="newMark" maxlength="100"></label><label>NÚMERO DE CLASE (YT / COLUMNA)<input name="newNumber" maxlength="30"></label><label>MINA DE ORIGEN<input name="newMine" value="Sandra K" maxlength="100"></label><label>LONGITUD<input name="newLength" maxlength="40" placeholder="Cuando aplique"></label></div><label data-asset class="wide" hidden>ACTIVO REGISTRADO<select name="assetId"></select></label><label data-loan class="wide" hidden>PRÉSTAMO PENDIENTE<select name="loanId"></select></label><label data-source-loan class="wide" hidden>PRÉSTAMO DE PLAZA A DEVOLVER<select name="sourceLoanId"></select></label><label>FECHA<input name="fechaISO" type="text" placeholder="DD/MM/AAAA" inputmode="numeric" maxlength="10" required></label><label>CANTIDAD<input name="quantity" type="number" min="0.001" step="any" required></label><label data-person class="wide">BUSCAR FUNCIONARIO<input name="personSearch" type="search" placeholder="Nombre o documento" autocomplete="off"></label><label data-person class="wide"><span data-person-label>FUNCIONARIO</span><select name="personId"></select></label><label data-destination class="wide">DÓNDE ESTARÁ EL ELEMENTO<input name="destination" maxlength="160" placeholder="Área, nivel o lugar"></label><label data-income class="wide" hidden>MOTIVO DEL INGRESO<select name="incomeType"><option value="ENTRADA">Entrada externa</option><option value="REPARACIÓN">Reparación</option></select></label><label class="wide">OBSERVACIONES<textarea name="notes" rows="2" maxlength="1000"></textarea></label><p class="wide" data-balance></p><button class="wide" type="submit">GUARDAR</button></form><div id="warehouseFilters"><input type="search" id="warehouseSearch" placeholder="Buscar en la consulta"><select id="warehouseLoanFilter" aria-label="Estado de préstamos" hidden><option value="pending">PENDIENTES</option><option value="returned">DEVUELTOS</option><option value="all">TODOS</option></select></div><div id="warehouseExports"><button type="button" data-excel>EXPORTAR EXCEL</button><button type="button" data-pdf>EXPORTAR PDF</button></div><div class="tableWrap"><table id="warehouseTable"><thead></thead><tbody></tbody></table></div>';
+ panel.innerHTML='<h2>BODEGA DE PRODUCCIÓN</h2><p id="warehouseNote" class="warehouseHint"></p><div class="warehouseActions" role="group" aria-label="Tareas de bodega"></div><p id="warehouseStatus" role="status" aria-live="polite"></p><div id="warehousePending"></div><form id="warehouseForm" hidden><label class="wide" id="warehouseItemField"><span data-item-caption>SELECCIONE ELEMENTO A ENTREGAR</span><select name="itemId" required></select></label><label data-asset-mode class="wide" hidden>ACTIVO<select name="assetMode"><option value="registered">Registrado</option><option value="new">Registrar activo nuevo</option></select></label><div data-new-asset class="wide" hidden><label>SERIAL<input name="newSerial" maxlength="160"></label><label>MODELO<input name="newModel" maxlength="100"></label><label>MARCA COMERCIAL<input name="newBrand" maxlength="100"></label><label>MARCA O NÚMERO ANTERIOR<input name="newMark" maxlength="100"></label><label>NÚMERO DE CLASE (YT / COLUMNA)<input name="newNumber" maxlength="30"></label><label>MINA DE ORIGEN<input name="newMine" value="Sandra K" maxlength="100"></label><label>LONGITUD<input name="newLength" maxlength="40" placeholder="Cuando aplique"></label></div><label data-asset class="wide" hidden>ACTIVO REGISTRADO<select name="assetId"></select></label><label data-loan class="wide" hidden>PRÉSTAMO PENDIENTE<select name="loanId"></select></label><label data-source-loan class="wide" hidden>PRÉSTAMO DE PLAZA A DEVOLVER<select name="sourceLoanId"></select></label><label>FECHA<input name="fechaISO" type="text" placeholder="DD/MM/AAAA" inputmode="numeric" maxlength="10" required></label><label>CANTIDAD<input name="quantity" type="number" min="0.001" step="any" required></label><label data-person class="wide">BUSCAR FUNCIONARIO<input name="personSearch" type="search" placeholder="Nombre o documento" autocomplete="off"></label><label data-person class="wide"><span data-person-label>FUNCIONARIO</span><select name="personId"></select></label><label data-destination class="wide">DÓNDE ESTARÁ EL ELEMENTO<input name="destination" maxlength="160" placeholder="Área, nivel o lugar"></label><label data-income class="wide" hidden>MOTIVO DEL INGRESO<select name="incomeType"><option value="ENTRADA">Entrada externa</option><option value="REPARACIÓN">Reparación</option></select></label><label class="wide">OBSERVACIONES<textarea name="notes" rows="2" maxlength="1000"></textarea></label><button class="wide" type="submit">GUARDAR</button></form><div id="warehouseFilters"><input type="search" id="warehouseSearch" placeholder="Buscar en la consulta"><select id="warehouseLoanFilter" aria-label="Estado de préstamos" hidden><option value="pending">PENDIENTES</option><option value="returned">DEVUELTOS</option><option value="all">TODOS</option></select></div><div id="warehouseExports"><button type="button" data-excel>EXPORTAR EXCEL</button><button type="button" data-pdf>EXPORTAR PDF</button></div><div class="tableWrap"><table id="warehouseTable"><thead></thead><tbody></tbody></table></div>';
  toolbar.after(navigation,home,panel);
  const find=s=>panel.querySelector(s),form=find('form'),f=form.elements,feedback=find('#warehouseStatus');
  const tell=message=>{feedback.textContent=message};
  form.addEventListener('input',()=>{warehouseDirty=true});form.addEventListener('change',()=>{warehouseDirty=true});
- const criteria=()=>snapshot.catalog?.criteria||[],people=()=>snapshot.catalog?.personal||[],assets=()=>snapshot.catalog?.assets||[];
+ const isEpp=row=>row.isEpp===true||['true','si','sí','1','yes'].includes(String(row.isEpp||'').trim().toLowerCase());
+ const criteria=()=>(snapshot.catalog?.criteria||[]).filter(row=>!row.deleted&&row.active!==false&&!isEpp(row)),people=()=>snapshot.catalog?.personal||[],assets=()=>snapshot.catalog?.assets||[];
  const pending=()=>snapshot.pending||[],records=()=>[...(snapshot.records||[])].sort((a,b)=>a.revision-b.revision);
  const item=id=>criteria().find(row=>row.id===id),assetLabel=row=>[row.clase,row.marcaActual||row.marcaInterna||row.marcaAnterior,row.numeroClase&&'N.º '+row.numeroClase,row.serial].filter(Boolean).join(' · ');
  const itemLabel=row=>row.isYtSpare?[row.spareEquipment,'Ítem '+row.spareItemNumber,row.spareItemName||row.name,row.spareApplication||row.application].filter(Boolean).join(' · '):[row.name,row.application||row.ubicacionAplicacion].filter(Boolean).join(' · ');
  const outstanding=loan=>loan.quantity-records().filter(row=>row.kind==='return'&&row.loanId===loan.id).reduce((n,row)=>n+row.quantity,0)-pending().filter(row=>!row.syncRejected&&row.kind==='return'&&row.loanId===loan.id).reduce((n,row)=>n+row.quantity,0);
  function balance(id){let value=Number((snapshot.balances||[]).find(row=>row.itemId===id)?.quantity)||0;for(const row of pending())if(row.itemId===id&&!row.syncRejected)value+=Number(row.quantity)*(['delivery','loan','transfer_out'].includes(row.kind)?-1:1);return value;}
  function selectOptions(select,options,placeholder){const before=select.value;select.replaceChildren(new Option(placeholder,''),...options.map(([value,label])=>new Option(label,value)));if(options.some(([value])=>String(value)===before))select.value=before;}
+ function selectableCriteria(){
+  const sparesBlocked=['delivery','loan','transfer_out'].includes(view)&&!snapshot.settings?.allowSpareDelivery;
+  return criteria().filter(row=>(!sparesBlocked||!row.isYtSpare)&&(view!=='loan'||row.allowLoan)&&(view!=='opening'||!row.isYtSpare)).sort((a,b)=>itemLabel(a).localeCompare(itemLabel(b),'es',{numeric:true,sensitivity:'base'}));
+ }
  function choices(){
-  const query=norm(f.itemSearch.value),sparesBlocked=['delivery','loan','transfer_out'].includes(view)&&!snapshot.settings?.allowSpareDelivery;
-  const rows=criteria().filter(row=>(!query||norm(itemLabel(row)).includes(query))&&(!sparesBlocked||!row.isYtSpare)&&(view!=='loan'||row.allowLoan)&&(view!=='opening'||!row.isYtSpare));
-  selectOptions(f.itemId,rows.map(row=>[row.id,itemLabel(row)]),'Seleccionar elemento');fieldsForItem();
+  const rows=selectableCriteria(),before=f.itemId.value;
+  selectOptions(f.itemId,rows.map(row=>[row.id,itemLabel(row)]),'Seleccionar elemento');
+  if(before&&!rows.some(row=>row.id===before))itemPicker.clear();
+  itemPicker.refresh();fieldsForItem();
  }
  function fieldsForItem(){
   const selected=item(f.itemId.value),fixed=selected?.isFixedAsset,loanMode=view==='return';
@@ -46,7 +52,21 @@
   find('[data-source-loan]').hidden=view!=='transfer_out';
   const sourceLoans=records().filter(row=>row.kind==='transfer_in'&&row.sourceLoan&&row.itemId===selected?.id&&!records().some(out=>out.sourceLoanId===row.sourceDeliveryId)&&!pending().some(out=>!out.syncRejected&&out.sourceLoanId===row.sourceDeliveryId));
   selectOptions(f.sourceLoanId,sourceLoans.map(row=>[row.sourceDeliveryId,`${displayDate(row.fechaISO)} · ${row.assetLabel||row.itemName} · ${row.quantity}`]),'Traslado normal / no corresponde a un préstamo');
-  f.loanId.required=loanMode;find('[data-balance]').textContent=selected?'DISPONIBLE EN PRODUCCIÓN: '+balance(selected.id)+' '+(selected.unit||'unidades'):'';
+  f.loanId.required=loanMode;
+ }
+ const itemPicker=window.SKSparePicker.mount(form,{
+  title:'SELECCIONE ELEMENTO A ENTREGAR',
+  get isDelivery(){return ['delivery','loan','transfer_out'].includes(view)},loan:()=>view==='loan',
+  items:()=>selectableCriteria().map(row=>({...row,CI_ALIAS_SECUNDARIO:[row.CI_ALIAS_SECUNDARIO,row.spareApplication,row.application,row.ubicacionAplicacion].filter(Boolean).join(' ')})),
+  fixed:row=>row.isFixedAsset===true,availability:row=>balance(row.id),
+  aliases:row=>[row.secondaryName,row.tertiaryName,row.spareApplication||row.application||row.ubicacionAplicacion].filter(Boolean),
+  badge:quantity=>quantity<=0?{className:'empty',text:'SIN EXISTENCIAS'}:quantity<=3?{className:'low',text:'QUEDAN: '+quantity}:{className:'available',text:'HAY: '+quantity}
+ });
+ itemPicker.main.input.placeholder='Escribe para buscar un elemento…';
+ itemPicker.detail.input.closest('label').classList.add('wide');
+ function itemCaption(){
+  const action={delivery:'A ENTREGAR',income:'A INGRESAR',loan:'A PRESTAR',return:'A REINTEGRAR',transfer_out:'A ENVIAR A PLAZA',opening:'PARA SALDO DE APERTURA'}[view]||'';
+  const caption='SELECCIONE ELEMENTO '+action;find('[data-item-caption]').textContent=caption;itemPicker.main.input.setAttribute('aria-label',caption);
  }
  function personChoices(){const query=norm(f.personSearch.value);selectOptions(f.personId,people().filter(row=>norm(row.nombre+' '+row.documento).includes(query)).slice(0,100).map(row=>[row.id,row.nombre+' · '+row.documento]),'Seleccionar funcionario');}
  function setView(next){
@@ -54,13 +74,13 @@
   find('.warehouseActions').hidden=view!=='home';find('.tableWrap').hidden=view==='home';
   find('#warehouseLoanFilter').hidden=view!=='loans';find('#warehouseFilters').hidden=!form.hidden||view==='home';find('#warehouseExports').hidden=!form.hidden||view==='home';
   for(const node of panel.querySelectorAll('[data-view]'))node.setAttribute('aria-pressed',String(node.dataset.view===view));
-  if(!form.hidden){form.reset();f.fechaISO.value=displayDate(today());f.quantity.value='';choices();personChoices();f.personId.required=view!=='opening';for(const node of panel.querySelectorAll('[data-person]'))node.hidden=view==='opening';find('[data-person-label]').textContent=['income','return'].includes(view)?'QUIÉN TRAE':'QUIÉN RECIBE';find('[data-destination]').hidden=!['delivery','loan'].includes(view);f.destination.required=['delivery','loan'].includes(view);find('[data-income]').hidden=view!=='income';find('[type=submit]').textContent='GUARDAR '+(kinds[view]||'MOVIMIENTO').toUpperCase();}
+  if(!form.hidden){form.reset();itemPicker.clear();itemCaption();f.fechaISO.value=displayDate(today());f.quantity.value='';choices();personChoices();f.personId.required=view!=='opening';for(const node of panel.querySelectorAll('[data-person]'))node.hidden=view==='opening';find('[data-person-label]').textContent=['income','return'].includes(view)?'QUIÉN TRAE':'QUIÉN RECIBE';find('[data-destination]').hidden=!['delivery','loan'].includes(view);f.destination.required=['delivery','loan'].includes(view);find('[data-income]').hidden=view!=='income';find('[type=submit]').textContent='GUARDAR '+(kinds[view]||'MOVIMIENTO').toUpperCase();}
   renderTable();paintNavigation();
  }
  const actions=[['ENTREGAS','delivery'],['INGRESOS','income'],['PRÉSTAMOS','loan'],['REINTEGROS','return'],['EXISTENCIAS','stock'],['CONSULTAR MOVIMIENTOS','history'],['PRÉSTAMOS PENDIENTES','loans'],['ENVIAR A PLAZA','transfer_out'],['SALDO DE APERTURA','opening']];
  for(const [label,value] of actions){const node=button(label,()=>setView(value));node.dataset.view=value;find('.warehouseActions').append(node);}
  f.sourceLoanId.onchange=()=>{const loan=records().find(row=>row.sourceDeliveryId===f.sourceLoanId.value);if(loan){f.quantity.value=loan.quantity;f.assetId.value=loan.assetId||'';}};
- f.assetMode.onchange=fieldsForItem;f.itemSearch.oninput=choices;f.itemId.onchange=fieldsForItem;f.personSearch.oninput=personChoices;
+ f.assetMode.onchange=fieldsForItem;f.itemId.onchange=fieldsForItem;f.personSearch.oninput=personChoices;
  f.loanId.onchange=()=>{const loan=records().find(row=>row.id===f.loanId.value);if(loan){f.assetId.value=loan.assetId||'';f.quantity.value=outstanding(loan);}};
  find('#warehouseSearch').oninput=renderTable;find('#warehouseLoanFilter').onchange=renderTable;
  function renderTable(){
@@ -167,7 +187,10 @@
      again=(fresh.pending||[]).some(row=>!row.syncRejected);
     }while(again&&navigator.onLine);
     tell(pending().length?'Datos actualizados. Revisa los movimientos rechazados.':'Bodega sincronizada. Todos los movimientos confirmados.');return {ok:!pending().length};
-   }catch(error){tell(error.message);return {ok:false,error:error.message};}
+   }catch(error){
+    const message=/Web Admin|Solicitud no válida/i.test(error.message)?'El servidor aún no reconoce Bodega de Producción. Actualiza Code.gs, publica una nueva versión de la implementación y vuelve a sincronizar. Tus registros pendientes se conservan.':error.message;
+    tell(message);return {ok:false,error:message};
+   }
    finally{busy=false;activeSync=null;if(session===active)paintWarehouse();}
   })();return activeSync;
  }
@@ -177,7 +200,7 @@
   const active=session,selected=item(f.itemId.value),date=readDate(f.fechaISO);
   try{
    if(!snapshot.settings?.enabled)throw new Error('La bodega aún no está activa.');
-   if(!selected||!date)throw new Error('Selecciona el elemento y una fecha válida.');
+   if(!find('#warehouseItemField')._validateItemSearch()||!selected||!date)throw new Error('Selecciona el elemento de la lista y una fecha válida.');
    if(selected.isYtSpare&&['delivery','loan','transfer_out'].includes(view)&&(state.pending||[]).some(row=>!row.kind&&!row.syncRejected))throw new Error('Hay consumos de Mecánica pendientes en este equipo. Sincronízalos antes de entregar repuestos desde Bodega.');
    const quantity=Number(f.quantity.value);if(f.quantity.value===''||!Number.isFinite(quantity)||quantity<(view==='opening'?0:0.000001))throw new Error('Escribe una cantidad válida.');
    if(['delivery','loan','transfer_out'].includes(view)&&!selected.isFixedAsset&&quantity>balance(selected.id))throw new Error('La cantidad supera lo disponible en este equipo.');
