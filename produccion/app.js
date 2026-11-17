@@ -1187,7 +1187,7 @@ if(invitation){
   if(info.scope!=='production')throw new Error('Esta invitación corresponde a otra aplicación');
   byId('activate').elements.document.value=info.document;byId('activate').hidden=false;
  }).catch(error=>{status(error.message);byId('login').hidden=false});
-}else if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>openWorkspace().catch(error=>status(error.message)),{once:true});
+}else if(document.readyState!=='complete')document.addEventListener('DOMContentLoaded',()=>openWorkspace().catch(error=>status(error.message)),{once:true});
 else openWorkspace().catch(error=>status(error.message));
 const workerRegistration=navigator.serviceWorker?.register('sw.js',{updateViaCache:'none'})
  .catch(error=>console.error(error));
