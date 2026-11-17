@@ -15,7 +15,7 @@ La actualización del repositorio no actualiza automáticamente la implementaci�
 
 ## Flujo
 
-- Mecánico: entrada a los botones **REPUESTOS YT** y **REP. COLUMNA**, con los consumos existentes.
+- Mecánico: entrada directa a la interfaz de consumos existente, con selección **YT / COLUMNA** en Tipo de equipo.
 - Bodeguero: entrada directa a **BODEGA**, con entregas, ingresos externos, préstamos, reintegros, existencias y consultas.
 - Ambos roles o Administrador: selección entre **MECÁNICA** y **BODEGA**.
 - Plaza: las salidas cuyo destino es Producción se incorporan una sola vez. En elementos ordinarios se elige **DESTINO → Bodega de Producción**; los repuestos conservan su destino automático.
@@ -23,6 +23,8 @@ La actualización del repositorio no actualiza automáticamente la implementaci�
 - Los préstamos internos permiten reintegros parciales y consulta de pendientes, devueltos o todos.
 - **ENVIAR A PLAZA** descuenta en Producción y registra el ingreso en Plaza. Si corresponde a un préstamo recibido desde Plaza, seleccionarlo: su devolución es completa, conforme al flujo actual de Plaza. Para activos fijos se identifica automáticamente el préstamo importado pendiente del mismo activo.
 - Entregas y préstamos de repuestos desde Bodega quedan bloqueados por defecto. El administrador puede habilitarlos en Web Admin. Mecánica y Bodega utilizan las mismas existencias de repuestos; las salidas de Bodega aparecen separadas de los consumos en el conteo físico.
+
+Los botones de Bodega abren sus pantallas aunque falte la activación o haya una sincronización en curso. El registro de movimientos requiere activación y un catálogo descargado; el aviso indica dónde activarla. La sincronización actualiza los selectores sin borrar los datos que se están escribiendo.
 
 ## Operación y límites
 

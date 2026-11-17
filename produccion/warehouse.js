@@ -1,7 +1,7 @@
 (()=>{
  'use strict';
  const store=window.SKProductionWarehouseStore;
- let account='',snapshot={},view='home',warehouseDirty=false,busy=false,module='',exportRows=[],timer,activeSync;
+ let account='',snapshot={},view='home',warehouseDirty=false,busy=false,savingMovement=false,module='',exportRows=[],timer,activeSync;
  const kinds={income:'Ingreso externo',opening:'Saldo de apertura',delivery:'Entrega',loan:'Préstamo',return:'Reintegro',transfer_in:'Ingreso desde Plaza',transfer_out:'Traslado a Plaza'};
  const roles=user=>Array.isArray(user?.roles)?user.roles:[user?.role||'assistant'];
  const permits=(user,scope)=>roles(user).includes('admin')||(scope==='mechanic'?roles(user).some(role=>['mechanic','assistant'].includes(role)):roles(user).includes('warehouse'));
@@ -50,7 +50,7 @@
  }
  function personChoices(){const query=norm(f.personSearch.value);selectOptions(f.personId,people().filter(row=>norm(row.nombre+' '+row.documento).includes(query)).slice(0,100).map(row=>[row.id,row.nombre+' · '+row.documento]),'Seleccionar funcionario');}
  function setView(next){
-  if(busy||next!==view&&!leaveCurrent())return;view=next;warehouseDirty=false;form.hidden=['home','stock','history','loans'].includes(view);
+  if(savingMovement||next!==view&&!leaveCurrent())return;view=next;warehouseDirty=false;form.hidden=['home','stock','history','loans'].includes(view);
   find('.warehouseActions').hidden=view!=='home';find('.tableWrap').hidden=view==='home';
   find('#warehouseLoanFilter').hidden=view!=='loans';find('#warehouseFilters').hidden=!form.hidden||view==='home';find('#warehouseExports').hidden=!form.hidden||view==='home';
   for(const node of panel.querySelectorAll('[data-view]'))node.setAttribute('aria-pressed',String(node.dataset.view===view));
@@ -82,10 +82,11 @@
  }
  function paintWarehouse(){
   const ready=snapshot.settings?.enabled;
-  find('#warehouseNote').textContent=!snapshot.catalog?'Sincroniza una vez para descargar los criterios y trabajar sin conexión.':!ready?'La bodega está preparada. Un administrador debe activarla desde SK Web Admin.':
+  find('#warehouseNote').textContent=!snapshot.catalog?'Puedes abrir las pantallas. Para registrar movimientos, sincroniza una vez y descarga los criterios de la bodega.':!ready?'BODEGA PENDIENTE DE ACTIVACIÓN. Puedes abrir las pantallas y consultar los datos descargados. Para registrar movimientos: SK Web Admin → USUARIOS DE PRODUCCIÓN → Bodega de Producción → ACTIVAR BODEGA DE PRODUCCIÓN. Después sincroniza aquí.':
    'Cantidades propias de Producción. Ingresos automáticos desde '+new Date(snapshot.settings.transferStartAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+'.'+(!snapshot.settings.allowSpareDelivery?' La entrega de repuestos YT y Columna está bloqueada.':'');
-  for(const node of panel.querySelectorAll('[data-view]')){node.hidden=node.dataset.view==='opening'&&!roles(session?.user).includes('admin');node.disabled=!ready;}
-  find('[type=submit]').disabled=busy||!ready;
+  for(const node of panel.querySelectorAll('[data-view]')){node.hidden=node.dataset.view==='opening'&&!roles(session?.user).includes('admin');node.disabled=false;}
+  find('[type=submit]').disabled=busy||savingMovement||!ready||!snapshot.catalog;
+  if(!form.hidden){choices();personChoices();}
   const box=find('#warehousePending');box.replaceChildren();
   for(const row of pending().filter(row=>row.syncRejected)){
    const message=el('p',(item(row.itemId)?.name||row.itemId)+': '+row.syncError);
@@ -117,7 +118,7 @@
   breadcrumb.textContent=path.join(' / ');byId('productionHome').disabled=!module||!both&&!child;
  }
  function leaveCurrent(){
-  if(busy||saving||countSaving){status('Espera a que termine el guardado o la sincronización.');return false;}
+  if(savingMovement||saving||countSaving){status('Espera a que termine el guardado.');return false;}
   const stock=module==='mechanic'&&!mechanics.hidden?stockViews.find(row=>!row.panel.hidden):null;
   const stockDirty=stock&&(stock.kind==='income'?stock.form.elements.cantidad.value!=='':stock.form.dataset.openingDirty==='true');
   const dirty=module==='warehouse'?warehouseDirty:module==='mechanic'&&(draft.length||countDirty||stockDirty);
@@ -154,7 +155,7 @@
   const active=session;if(!active||!permits(active.user,'warehouse'))return {ok:true};
   if(!navigator.onLine||!canSync()){tell(!navigator.onLine?'Sin conexión. Los movimientos siguen guardados en este equipo.':'Inicia sesión con conexión para sincronizar la bodega.');return {ok:false};}
   activeSync=(async()=>{
-   busy=true;paintHeader();
+   busy=true;find('[type=submit]').disabled=true;paintHeader();
    try{
     let again;
     do{
@@ -171,7 +172,8 @@
   })();return activeSync;
  }
  form.onsubmit=async event=>{
-  event.preventDefault();if(busy||!session)return;
+  event.preventDefault();if(savingMovement||!session)return;
+  if(busy){tell('Sincronizando. Puedes completar el formulario; espera a que termine para guardar.');return;}
   const active=session,selected=item(f.itemId.value),date=readDate(f.fechaISO);
   try{
    if(!snapshot.settings?.enabled)throw new Error('La bodega aún no está activa.');
@@ -185,10 +187,10 @@
    if(selected.isFixedAsset&&!assetId&&!creating)throw new Error('Selecciona el activo registrado.');
    if(view==='transfer_out'&&!confirm('¿Enviar '+quantity+' '+selected.name+' a Plaza Blending? Al sincronizar se descontará en Producción y se registrará el ingreso en Plaza.'))return;
    const row={id:crypto.randomUUID(),kind:view,itemId:selected.id,quantity,fechaISO:date,assetId,personId:f.personId.value,destination:f.destination.value.trim(),loanId:view==='return'?f.loanId.value:'',sourceLoanId:view==='transfer_out'?f.sourceLoanId.value:'',incomeType:view==='income'?f.incomeType.value:'',notes:f.notes.value.trim(),createdAt:new Date().toISOString(),...(creating?{newAsset:{id:crypto.randomUUID(),serial:f.newSerial.value,modelo:f.newModel.value,marcaComercial:f.newBrand.value,marcaAnterior:f.newMark.value,numeroClase:f.newNumber.value,minaOrigen:f.newMine.value,longitud:f.newLength.value}}:{})};
-   busy=true;find('[type=submit]').disabled=true;await store.queue(active.user.document,row);snapshot=await store.read(active.user.document);
-   if(session!==active){busy=false;return;}
-   if(session===active){setTimeout(()=>{busy=false;warehouseDirty=false;setView(view);tell('GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.');paintWarehouse();if(navigator.onLine)void synchronize();},0);}
-  }catch(error){busy=false;tell(error.message);paintWarehouse();}
+   savingMovement=true;find('[type=submit]').disabled=true;await store.queue(active.user.document,row);snapshot=await store.read(active.user.document);
+   if(session!==active){savingMovement=false;return;}
+   if(session===active){setTimeout(()=>{savingMovement=false;warehouseDirty=false;setView(view);tell('GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.');paintWarehouse();if(navigator.onLine)void synchronize();},0);}
+  }catch(error){savingMovement=false;tell(error.message);paintWarehouse();}
  };
  find('[data-excel]').onclick=()=>window.SKDownloadTableExcel?.(exportRows,'Bodega_Produccion_'+today()+'.xlsx');
  find('[data-pdf]').onclick=()=>{
