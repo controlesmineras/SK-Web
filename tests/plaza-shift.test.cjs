@@ -13,25 +13,42 @@ test('Plaza requiere una selección vigente por cuenta y conserva la identidad a
   };
   const ctx=vm.createContext({
     document:{querySelector:node}, window:{alert(){}}, Date:class extends Date{static now(){return now}},
-    sessionStorage:{getItem:()=>null}, localStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)}
+    sessionStorage:{getItem:()=>null}, localStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)}
   });
   const source=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
   vm.runInContext(source+`
     data={personal:[{id:'keeper',documento:'222',nombre:'Bodeguera de turno',plazaEnabled:false}]};
-    window.audit={setUser:documento=>{user={documento}},movementShift};
+    window.audit={setUser:documento=>{user={documento}},movementShift,renderShiftStatus};
   })();`,ctx);
-  const {setUser,movementShift}=ctx.window.audit;
+  const {setUser,movementShift,renderShiftStatus}=ctx.window.audit;
   const select=()=>node('#plazaShiftResults').click({target:{closest:()=>({dataset:{shiftPerson:'222'}})}});
   setUser('111');
   assert.throws(movementShift,/de turno/);
   select();
   const saved=movementShift();
   assert.equal(saved.shiftKeeperName,'Bodeguera de turno');
+  assert.equal(node('#plazaShiftSearch').value,'Bodeguera de turno');
+  assert.equal(node('#plazaShiftSearch').readOnly,true);
+  assert.equal(node('#plazaShiftClear').hidden,false);
+  assert.equal(node('#plazaShiftStatus').hidden,true);
+  assert.equal(node('#plazaShiftStatus').textContent,'');
+  node('#plazaShiftSearch').value='';node('#plazaShiftSearch').readOnly=false;
+  renderShiftStatus();
+  assert.equal(node('#plazaShiftSearch').value,'Bodeguera de turno','restaura la selección guardada');
+  node('#plazaShiftClear').click();
+  assert.equal(node('#plazaShiftSearch').value,'');
+  assert.equal(node('#plazaShiftSearch').readOnly,false);
+  assert.equal(node('#plazaShiftClear').hidden,true);
+  assert.throws(movementShift,/de turno/);
+  assert.equal(saved.shiftKeeperDocument,'222','quitar la selección no cambia movimientos anteriores');
+  select();
   setUser('333');
   assert.throws(movementShift,/de turno/);
   setUser('111');
   now+=60000;
   assert.throws(movementShift,/de turno/);
+  assert.equal(node('#plazaShiftSearch').value,'');
+  assert.equal(node('#plazaShiftClear').hidden,true);
   assert.equal(saved.shiftKeeperDocument,'222');
 });
 

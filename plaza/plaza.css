@@ -4,6 +4,13 @@
 #plazaShift{margin-top:0}
 /* En Inicio, el responsable del turno queda justo debajo del título. */
 #home>#plazaShift{width:100%;max-width:none;margin:20px 0 24px}
+.plazaShiftControl{position:relative;margin-top:6px}
+#plazaShiftSearch[readonly]{padding-right:54px;background:#eef3f7;color:#21344b;font-weight:750;opacity:1}
+#plazaShiftSearch::-webkit-search-cancel-button{display:none}
+#plazaShiftClear{position:absolute;top:50%;right:4px;transform:translateY(-50%);width:44px;height:44px;min-height:44px;padding:0;border-radius:7px;background:transparent;color:#173d59;font-size:1.65rem;line-height:1;cursor:pointer}
+#plazaShiftClear[hidden]{display:none}
+#plazaShiftClear:hover{background:#dfe7ed}
+#plazaShiftClear:focus-visible{outline:3px solid #397497;outline-offset:1px}
 
 .itemSearchMenu button.spareGroupOption{grid-template-columns:auto minmax(0,1fr);align-items:start;column-gap:10px}
 .spareGroupOption .spareGroupIcon{font-size:1.15rem;line-height:1.2}

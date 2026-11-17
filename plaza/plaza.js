@@ -294,11 +294,17 @@ function matchesItemSearch(text,number,query){
     return shiftPeople().find(person=>String(person.documento)===selection.document)||null;
   }
   function renderShiftStatus(){
-    const status=$('#plazaShiftStatus');if(!status)return;
-    const person=selectedShiftPerson();
-    status.textContent=person?`Turno asignado a ${person.nombre}`:'Selecciona quién está de turno antes de guardar.';
+    const search=$('#plazaShiftSearch'),clear=$('#plazaShiftClear'),results=$('#plazaShiftResults'),status=$('#plazaShiftStatus');if(!search)return;
+    const person=selectedShiftPerson(),wasSelected=search.readOnly;
+    search.readOnly=Boolean(person);
+    if(person)search.value=person.nombre;
+    else if(wasSelected)search.value='';
+    if(clear)clear.hidden=!person;
+    if(person||wasSelected){results.innerHTML='';results.hidden=true}
+    if(status){status.hidden=Boolean(person);status.textContent=person?'':'Selecciona quién está de turno antes de guardar.'}
   }
   function renderShiftResults(){
+    if(selectedShiftPerson()){renderShiftStatus();return}
     const search=$('#plazaShiftSearch'),results=$('#plazaShiftResults'),query=norm(search.value.trim());
     const matches=query?shiftPeople().filter(person=>norm(`${person.nombre} ${person.documento}`).includes(query)).slice(0,30):[];
     results.innerHTML=matches.map(person=>`<button type="button" data-shift-person="${esc(person.documento)}"><b>${esc(person.nombre)}</b><span>${esc(person.documento)}</span></button>`).join('');
@@ -314,8 +320,12 @@ function matchesItemSearch(text,number,query){
     const button=event.target.closest('[data-shift-person]');
     if(!button||!user)return;
     localStorage.setItem(shiftStorageKey(),JSON.stringify({shift:plazaShiftId(),document:button.dataset.shiftPerson}));
-    $('#plazaShiftSearch').value='';
-    renderShiftResults();renderShiftStatus();
+    renderShiftStatus();
+  });
+  $('#plazaShiftClear')?.addEventListener('click',()=>{
+    localStorage.removeItem(shiftStorageKey());
+    const search=$('#plazaShiftSearch');search.value='';
+    renderShiftStatus();renderShiftResults();search.focus();
   });
   function render(){showLastSync();renderShiftStatus();const incomeId=$('#incomeForm').elements.itemId.value,deliveryId=$('#deliveryForm').elements.itemId.value;const criteria=(data.inventoryCriteria||[]).filter(item=>!item.deleted&&item.active!==false);$('#incomeForm').elements.itemId.innerHTML=options(criteria,item=>itemName(item)||'Elemento');$('#deliveryForm').elements.itemId.innerHTML=options(deliveryCatalog(),item=>itemName(item)||'Elemento');$('#incomeForm').elements.itemId.value=incomeId;$('#deliveryForm').elements.itemId.value=deliveryId;refreshRecentItemFilters();refreshItemSearches();renderIncomeDraft();window.SKPlaza?.renderRecipients?.();const collaborator=(data.personal||[]).find(person=>person.id===user?.id||String(person.documento||'')===String(user?.documento||''));$('#userName').textContent=collaborator?.nombre||user?.nombre||user?.documento||'';$('#homeUserRole').textContent=user?.role==='plaza_assistant'?'Auxiliar de Plaza Blending':collaborator?.cargo||'Cargo no informado';updateDeliveryFields();updatePendingBadge();renderRecentQueries();renderInventoryQueries();window.SKPlazaReturns?.refresh()}
   function overlayPendingStock(snapshot){
