@@ -84,10 +84,12 @@ body>header .plazaSyncCloud{font-size:1.15rem;line-height:1}
 @media(max-width:720px){body>header{min-height:0;padding:12px}body>header .plazaBrand img{width:48px;height:48px;flex-basis:48px}body>header .plazaHeaderCenter #plazaHeaderHome,body>header .plazaHeaderCenter #plazaHeaderHome.isCurrent{min-height:34px;padding:5px 10px;font-size:.8rem}}
 
 #plazaNavigation{display:flex;align-items:center;flex-wrap:wrap;gap:12px;max-width:760px;margin:12px auto;color:#173d59}
-#plazaNavigation[hidden]{display:none}#plazaBack{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));z-index:60;display:grid;place-items:center;width:52px;height:52px;min-height:52px;margin:0;padding:0;border-radius:50%;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3;box-shadow:0 4px 18px #102d4140;cursor:pointer}
+#plazaNavigation[hidden]{display:none}#plazaBack{position:fixed;left:auto;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:60;display:grid;place-items:center;width:52px;height:52px;min-height:52px;margin:0;padding:0;border-radius:50%;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3;box-shadow:0 4px 18px #102d4140;cursor:pointer}
 #plazaBack svg{display:block;width:28px;height:28px}
 #plazaBack:hover{background:#173d59;color:#fff}
 #plazaBack:focus-visible{outline:3px solid #427b94;outline-offset:3px}
 body:has(#app:not([hidden]) #plazaNavigation:not([hidden])){padding-bottom:calc(80px + env(safe-area-inset-bottom))}
 #plazaBreadcrumb{font-size:.88rem;line-height:1.5}.registerMenuHead [data-close-register],.registerMenuHead [data-close-query]{width:auto;padding:8px 12px;font-size:.8rem}
 @media(max-width:520px){#plazaNavigation{gap:8px}#plazaBreadcrumb{font-size:.78rem}}
+
+body:has(#plazaNavigation:not([hidden])) #deliveryScrollTop{bottom:calc(80px + env(safe-area-inset-bottom))}

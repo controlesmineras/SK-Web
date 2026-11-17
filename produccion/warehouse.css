@@ -21,7 +21,7 @@
 #productionHome{justify-self:center;min-height:54px;padding:10px 21px;border-radius:9px;background:#fff;color:#102f45;border:1px solid #fff;box-shadow:0 2px 8px #0002;font-size:1.1rem;font-weight:750;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
 #productionHome:disabled{opacity:1;cursor:default}
 #productionNavigation{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin:10px 0 18px;color:#f8fafc}
-#productionNavigation #changeProductionModule{position:fixed;left:max(16px,env(safe-area-inset-left));bottom:max(16px,env(safe-area-inset-bottom));z-index:60;display:grid;place-items:center;width:52px;height:52px;min-height:52px;margin:0;padding:0;border-radius:50%;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3;box-shadow:0 4px 18px #102d4140;cursor:pointer}
+#productionNavigation #changeProductionModule{position:fixed;left:auto;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:60;display:grid;place-items:center;width:52px;height:52px;min-height:52px;margin:0;padding:0;border-radius:50%;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3;box-shadow:0 4px 18px #102d4140;cursor:pointer}
 #productionNavigation #changeProductionModule svg{display:block;width:28px;height:28px}
 #productionNavigation #changeProductionModule:hover{background:#173d59;color:#fff}
 #productionNavigation #changeProductionModule:focus-visible{outline:3px solid #427b94;outline-offset:3px}
