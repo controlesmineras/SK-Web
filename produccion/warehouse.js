@@ -14,6 +14,7 @@
  modules.append(button('MECÁNICA',()=>choose('mechanic')),button('BODEGA',()=>choose('warehouse')));home.append(title,intro,modules);
  const change=button('',goBack);change.id='changeProductionModule';change.hidden=true;change.setAttribute('aria-label','Volver a la pantalla anterior');change.title='Volver';change.innerHTML='<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 5 2 12l8 7v-5h3c4.2 0 7 1.8 9 5-.8-6.5-4-10-9-10h-3V5Z"/></svg>';
  const navigation=el('nav');navigation.id='productionNavigation';navigation.setAttribute('aria-label','Ubicación en Producción');const breadcrumb=el('span');breadcrumb.id='productionBreadcrumb';navigation.append(change,breadcrumb);
+ const mechanicTitle=byId('mechanicTitle');mechanicTitle.hidden=true;navigation.append(mechanicTitle);
  byId('productionHome').onclick=()=>choose('');
  const panel=el('section');panel.id='warehousePanel';panel.hidden=true;
  panel.innerHTML='<h2>BODEGA DE PRODUCCIÓN</h2><p id="warehouseNote" class="warehouseHint"></p><div class="warehouseActions" role="group" aria-label="Tareas de bodega"></div><p id="warehouseStatus" role="status" aria-live="polite"></p><div id="warehousePending"></div><form id="warehouseForm" hidden><label class="wide" id="warehouseItemField"><span data-item-caption>SELECCIONE ELEMENTO A ENTREGAR</span><select name="itemId" required></select></label><label data-asset-mode class="wide" hidden>ACTIVO<select name="assetMode"><option value="registered">Registrado</option><option value="new">Registrar activo nuevo</option></select></label><div data-new-asset class="wide" hidden><label>SERIAL<input name="newSerial" maxlength="160"></label><label>MODELO<input name="newModel" maxlength="100"></label><label>MARCA COMERCIAL<input name="newBrand" maxlength="100"></label><label>MARCA O NÚMERO ANTERIOR<input name="newMark" maxlength="100"></label><label>NÚMERO DE CLASE (YT / COLUMNA)<input name="newNumber" maxlength="30"></label><label>MINA DE ORIGEN<input name="newMine" value="Sandra K" maxlength="100"></label><label>LONGITUD<input name="newLength" maxlength="40" placeholder="Cuando aplique"></label></div><label data-asset class="wide" hidden>ACTIVO REGISTRADO<select name="assetId"></select></label><label data-loan class="wide" hidden>PRÉSTAMO PENDIENTE<select name="loanId"></select></label><label data-source-loan class="wide" hidden>PRÉSTAMO DE PLAZA A DEVOLVER<select name="sourceLoanId"></select></label><label>FECHA<input name="fechaISO" type="text" placeholder="DD/MM/AAAA" inputmode="numeric" maxlength="10" required></label><label>CANTIDAD<input name="quantity" type="number" min="0.001" step="any" required></label><label data-person class="wide">BUSCAR FUNCIONARIO<input name="personSearch" type="search" placeholder="Nombre o documento" autocomplete="off"></label><label data-person class="wide"><span data-person-label>FUNCIONARIO</span><select name="personId"></select></label><label data-destination class="wide">DÓNDE ESTARÁ EL ELEMENTO<input name="destination" maxlength="160" placeholder="Área, nivel o lugar"></label><label data-income class="wide" hidden>MOTIVO DEL INGRESO<select name="incomeType"><option value="ENTRADA">Entrada externa</option><option value="REPARACIÓN">Reparación</option></select></label><label class="wide">OBSERVACIONES<textarea name="notes" rows="2" maxlength="1000"></textarea></label><button class="wide" type="submit">GUARDAR</button></form><div id="warehouseFilters"><input type="search" id="warehouseSearch" placeholder="Buscar en la consulta"><select id="warehouseLoanFilter" aria-label="Estado de préstamos" hidden><option value="pending">PENDIENTES</option><option value="returned">DEVUELTOS</option><option value="all">TODOS</option></select></div><div id="warehouseExports"><button type="button" data-excel>EXPORTAR EXCEL</button><button type="button" data-pdf>EXPORTAR PDF</button></div><div class="tableWrap"><table id="warehouseTable"><thead></thead><tbody></tbody></table></div>';
@@ -124,16 +125,12 @@
  async function load(){
   if(!session)return;account=session.user.document;snapshot=await store.read(account);paintWarehouse();
  }
- function mechanicSection(){
-  if(!byId('physicalCount').hidden)return 'Inventario físico';
-  if(!byId('productionQueries').hidden)return 'Consultas';
-  const selected=stockViews.find(row=>!row.panel.hidden);return selected?(selected.kind==='income'?'Ingresos':'Existencias'):'Consumos';
- }
  function paintNavigation(){
   const both=session&&permits(session.user,'warehouse')&&permits(session.user,'mechanic');
-  const child=module==='warehouse'?view!=='home':module==='mechanic'&&mechanicSection()!=='Consumos';
+  const child=module==='warehouse'?view!=='home':module==='mechanic'&&mechanicMenu.hidden;
   change.hidden=!module||!both&&!child;
-  const path=['Inicio'];if(module==='warehouse')path.push('Bodega');if(module==='mechanic')path.push('Mecánica',mechanicSection());
+  mechanicTitle.hidden=module!=='mechanic';breadcrumb.hidden=module==='mechanic';
+  const path=['Inicio'];if(module==='warehouse')path.push('Bodega');
   if(module==='warehouse'&&view!=='home')path.push(actions.find(([,key])=>key===view)?.[0]||view);
   breadcrumb.textContent=path.join(' / ');byId('productionHome').disabled=!module||!both&&!child;
  }
@@ -147,16 +144,21 @@
   if(module==='mechanic'){
    if(draft.length){draft=[];closeParts();paintDraft();}
    if(countDirty)selectCount(countSelection);
-   if(stockDirty){stock.form.elements.cantidad.value='';delete stock.form.dataset.openingDirty;}
+   if(stockDirty){
+    stock.form.elements.cantidad.value='';
+    delete stock.form.dataset.openingDirty;delete stock.form.dataset.openingDateEdited;delete stock.form.dataset.openingPart;
+   }
   }
   return true;
  }
  function goBack(){
-  if(!session||!leaveCurrent())return;
+  if(!session)return;
   if(module==='warehouse'&&view!=='home'){setView('home');return;}
-  if(module==='mechanic'&&mechanicSection()!=='Consumos'){
-   showConsumptionView(false);
-   paintNavigation();return;
+  if(module==='mechanic'&&mechanicMenu.hidden){
+   if(!leaveCurrent())return;
+   const previous=mechanicMenu.querySelector('[aria-pressed="true"]');
+   showConsumptionView();
+   previous?.focus();return;
   }
   choose('');
  }
@@ -167,7 +169,7 @@
   module=next||(!both?(permits(session.user,'warehouse')?'warehouse':'mechanic'):'');
   home.hidden=Boolean(module);panel.hidden=module!=='warehouse';mechanics.hidden=module!=='mechanic';
   byId('reviewIncomeConflicts').hidden=module!=='mechanic'||!window.SKProductionSync.pendingSummary(state).incomeRejected||session.user.role!=='admin';
-  if(module==='warehouse'){setView('home');void load().then(()=>{if(navigator.onLine)void synchronize()});}else if(module==='mechanic'){showConsumptionView(false);paint();paintSync();if(navigator.onLine)scheduleSync(0);}
+  if(module==='warehouse'){setView('home');void load().then(()=>{if(navigator.onLine)void synchronize()});}else if(module==='mechanic'){showConsumptionView();paint();paintSync();if(navigator.onLine)scheduleSync(0);}
   paintNavigation();
  }
  async function synchronize(){

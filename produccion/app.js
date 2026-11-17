@@ -166,6 +166,7 @@ document.addEventListener('click',event=>{
  if(!partCards.hidden&&!partPicker.contains(event.target))closeParts();
 },true);
 const incomeForm=byId('productionIncome'),stockEditForm=byId('productionStockEdit');
+const mechanicMenu=byId('mechanicMenu'),mechanicButtons=mechanicMenu.querySelectorAll('.productionViews button');
 const stockViews=[
  {form:incomeForm,panel:byId('incomePanel'),button:byId('showIncome'),kind:'income'},
  {form:stockEditForm,panel:byId('stockEditPanel'),button:byId('showStockEdit'),kind:'initial'}
@@ -727,25 +728,23 @@ window.addEventListener('online',()=>scheduleSync(300));
 window.addEventListener('focus',resumeSync);window.addEventListener('pageshow',resumeSync);
 document.addEventListener('visibilitychange',resumeSync);
 setInterval(()=>{if(!document.hidden&&!sync.promise)scheduleSync(0);},300000);
-function showConsumptionView(showQueries,stockView,physical=false){
- if(countSaving)return;
- if(!physical&&!byId('physicalCount').hidden&&countDirty&&!confirm('El conteo tiene cambios sin guardar. ¿Salir del inventario físico?'))return;
- if(['initial','adjustment'].includes(stockView?.kind)&&session?.user.role!=='admin')return;
- byId('physicalCount').hidden=!physical;
- byId('showPhysicalCount').setAttribute('aria-pressed',String(physical));
- byId('recordPanel').hidden=showQueries||Boolean(stockView)||physical;
- for(const view of stockViews){
-  const selected=view===stockView;
-  view.panel.hidden=!selected;
-  view.button.setAttribute('aria-pressed',String(selected));
-  if(selected)paintStockView(view);
+function showConsumptionView(button){
+ if(countSaving||button?.hidden)return;
+ if(button!==byId('showPhysicalCount')&&!byId('physicalCount').hidden&&countDirty&&!confirm('El conteo tiene cambios sin guardar. ¿Salir del inventario físico?'))return;
+ mechanicMenu.hidden=Boolean(button);
+ for(const option of mechanicButtons){
+  const selected=option===button;
+  byId(option.getAttribute('aria-controls')).hidden=!selected;
+  option.setAttribute('aria-pressed',String(selected));
  }
- byId('productionQueries').hidden=!showQueries;
- byId('showRecord').setAttribute('aria-pressed',String(!showQueries&&!stockView&&!physical));
- byId('showConsumptionQueries').setAttribute('aria-pressed',String(showQueries));
- if(physical)paintCount();
- if(showQueries)showQueryType(byId('queryIncome').getAttribute('aria-pressed')==='true');
+ const title=byId('mechanicTitle');
+ title.textContent=button?button.textContent.replace(/^\s*\+\s*/,'').trim():'MECÁNICA';
+ const stockView=stockViews.find(view=>view.button===button);
+ if(stockView)paintStockView(stockView);
+ if(button===byId('showPhysicalCount'))paintCount();
+ if(button===byId('showConsumptionQueries'))showQueryType(byId('queryIncome').getAttribute('aria-pressed')==='true');
  window.SKProductionWarehouse?.paintNavigation?.();
+ if(button)title.focus();
 }
 function incomeEditable(row){
  if(!row||row.kind!=='income'||row.sourceDeliveryId||row.sourceWarehouseMovementId||session?.user.role!=='admin')return false;
@@ -852,7 +851,7 @@ async function discardRejectedIncomeChanges(reviewed=(state.incomeChanges||[]).f
 }
 byId('discardRejectedIncomeChanges').onclick=()=>discardRejectedIncomeChanges();
 byId('reviewIncomeConflicts').onclick=()=>{
- showConsumptionView(true);
+ showConsumptionView(byId('showConsumptionQueries'));
  if(byId('productionQueries').hidden)return;
  showQueryType(true);
  byId('incomeChangeLog').scrollIntoView({block:'start'});
@@ -1046,10 +1045,7 @@ byId('countPdf').onclick=()=>{
  doc.body.append(title,info,note,table);report.focus();report.print();
 };
 
-byId('showPhysicalCount').onclick=()=>showConsumptionView(false,undefined,true);
-for(const view of stockViews)view.button.onclick=()=>showConsumptionView(false,view);
-byId('showRecord').onclick=()=>showConsumptionView(false);
-byId('showConsumptionQueries').onclick=()=>showConsumptionView(true);
+for(const button of mechanicButtons)button.onclick=()=>showConsumptionView(button);
 byId('queryIncome').onclick=()=>showQueryType(true);
 byId('queryConsumption').onclick=()=>showQueryType(false);
 function placeInstallControls(container){
@@ -1079,7 +1075,7 @@ async function openWorkspace({offlineAccess=!navigator.onLine}={}){
   delete view.form.dataset.openingDirty;
   delete view.form.dataset.openingDateEdited;
  }
- fields.fechaISO.value=displayDate(today());manualShift=false;refreshShift();showConsumptionView(false);paint();
+ fields.fechaISO.value=displayDate(today());manualShift=false;refreshShift();showConsumptionView();paint();
  await window.SKProductionWarehouse?.open?.();
  if(offlineAccess)showOfflineEntry();
  else if(navigator.onLine){
@@ -1196,7 +1192,10 @@ function showOfflineEntry(){
 byId('continueOffline').onclick=()=>{
  if(!session)return;
  byId('offlineEntry').hidden=true;byId('workspace').hidden=false;byId('productionSync').hidden=false;
- paint();byId('showRecord').focus();
+ paint();
+ const module=window.SKProductionWarehouse?.module;
+ if(module===undefined||module==='mechanic')byId('mechanicTitle').focus();
+ else byId(module==='warehouse'?'warehousePanel':'productionModuleHome')?.querySelector('button:not([hidden])')?.focus();
 };
 byId('refreshOfflineData').onclick=async event=>{
  const active=session,button=event.currentTarget,feedback=byId('offlineEntryStatus');

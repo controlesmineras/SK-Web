@@ -120,14 +120,15 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #incomeEditForm label{display:grid;gap:5px}
 .incomeWarning{background:#fff1cf;color:#624100;border-left:4px solid #df9d19;padding:12px;border-radius:5px}
 #incomeEditError{color:#a31515}
+#mechanicTitle{flex:1;margin:0;text-align:center;font-size:1.25rem}
 #reviewIncomeConflicts{width:100%;margin:0 0 16px;background:#fff1cf;color:#624100;white-space:normal}
 #discardRejectedIncomeChanges{max-width:100%;white-space:normal}
 #incomeChangePending p{padding:12px;border:1px solid #7896a8;border-radius:8px;overflow-wrap:anywhere}
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=7-single-picker"><script defer src="warehouse-store.js?v=1"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><script defer src="app.js?v=55-opening-date"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
-<script defer src="install-ui.js?v=1"></script><script defer src="../spare-groups.js?v=20261112-spare-wording-3"></script><script defer src="../plaza/spare-picker.js?v=20261115-spare-category-hint-1"></script><script defer src="warehouse.js?v=6-single-picker"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><script defer src="app.js?v=56-mechanics-menu"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="install-ui.js?v=1"></script><script defer src="../spare-groups.js?v=20261112-spare-wording-3"></script><script defer src="../plaza/spare-picker.js?v=20261115-spare-category-hint-1"></script><script defer src="warehouse.js?v=7-mechanics-menu"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
 <header id="productionHeader" hidden><img class="productionHeaderLogo" src="./produccion-yt-192.png" width="44" height="44" alt="Producción"><button id="productionHome" type="button">INICIO</button><div id="productionSync" hidden><button id="sync" type="button"><span class="plazaSyncCloud" aria-hidden="true">☁</span><svg class="plazaSyncArrows" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 11a8 8 0 0 0-14-5L4 8"/><path d="M4 4v4h4"/><path d="M4 13a8 8 0 0 0 14 5l2-2"/><path d="M16 16h4v4"/></svg><span id="syncLabel" class="plazaSyncLabel">SINCRONIZAR</span><span id="pendingBadge" class="pendingBadge" aria-live="polite"></span></button><small id="headerLastSync" class="headerLastSync">SIN SINCRONIZAR</small></div></header>
@@ -160,22 +161,24 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 </div>
 </section>
 <section id="workspace" hidden>
-<button id="reviewIncomeConflicts" type="button" aria-controls="incomeChangeLog" hidden>REVISAR CAMBIOS RECHAZADOS</button>
 <div class="productionIdentity">
 <button id="updateProduction" type="button" aria-label="Actualizar app" title="Actualizar app"><svg aria-hidden="true" width="42" height="42" viewBox="-3 -3 34 34" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path stroke="#bc343a" stroke-width="2.1" d="M14 0a14 14 0 0 0-14 14m0 0-1.5-4m1.5 4 4-2.8m11 16a14 14 0 0 0 14-14m0 0-4 2.8m4-2.8 1.5 4"/><path fill="#226b9c" d="M12 5h4l.5 2.4 1.6.9 2.4-.8 2 3.5-1.8 1.7v2.6l1.8 1.7-2 3.5-2.4-.8-1.6.9-.5 2.4h-4l-.5-2.4-1.6-.9-2.4.8-2-3.5 1.8-1.7v-2.6L5.5 11l2-3.5 2.4.8 1.6-.9z"/><circle cx="14" cy="14" r="4" fill="#eef4f8" stroke="#bc343a"/></svg></button>
 <div id="operator"><strong id="operatorName"></strong><span id="operatorRole"></span></div>
 <button id="logout" type="button" aria-label="Cerrar sesión"><svg aria-hidden="true" width="25" height="25" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3h7a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-7"/><path d="M10 17l5-5-5-5"/><path d="M15 12H3"/></svg></button>
 </div>
 <div class="productionToolbar"></div>
-<div class="productionViews" role="group" aria-label="Consumo de repuestos">
+<h2 id="mechanicTitle" tabindex="-1">MECÁNICA</h2>
+<div id="mechanicMenu">
+<div class="productionViews" role="group" aria-label="Opciones de Mecánica">
 <button type="button" id="showIncome" aria-controls="incomePanel" aria-pressed="false"><span aria-hidden="true">+</span> INGRESOS</button>
-<button type="button" id="showRecord" aria-controls="recordPanel" aria-pressed="true"><span aria-hidden="true">+</span> CONSUMOS</button>
+<button type="button" id="showRecord" aria-controls="recordPanel" aria-pressed="false"><span aria-hidden="true">+</span> CONSUMOS</button>
 <button type="button" id="showConsumptionQueries" aria-controls="productionQueries" aria-pressed="false"><svg width="20" height="20" viewBox="0 0 24 24" aria-hidden="true" stroke="#172033" stroke-width="1.6" stroke-linejoin="round"><path d="m8 15-5.5 6a1.7 1.7 0 0 1-2.4-2.4l5.5-6" fill="#ff783b" transform="translate(1 0)"/><circle cx="14" cy="10" r="8.6" fill="#076ab4"/><circle cx="14" cy="10" r="6.9" fill="#9ce6f7"/><path d="M11 6h3.5l2.5 2.5V14h-6z" fill="#fff"/><path d="M14.5 6v2.5H17m-4.5 3.5v-2m2 2v-1" fill="none"/></svg> CONSULTAS</button>
 <button type="button" id="showStockEdit" aria-controls="stockEditPanel" aria-pressed="false" hidden><svg width="18" height="18" viewBox="0 0 24 24" aria-hidden="true"><g stroke="#111" stroke-width="1.8" stroke-linejoin="round"><rect x="2" y="6" width="15.5" height="16" rx="2" fill="#eee"/><path d="m6 18 2-6 10-10 4 4-10 10z" fill="#ffa823"/><path d="m6 18 2-6 4 4z" fill="#ffe184"/><path d="m16 4 2-2q1-1 2 0l2 2q1 1 0 2l-2 2z" fill="#f43c31"/></g></svg> EXISTENCIAS</button>
 <button type="button" id="showPhysicalCount" aria-controls="physicalCount" aria-pressed="false" hidden>INVENTARIO FÍSICO</button>
 </div>
-<section id="incomePanel" hidden>
-<h2>INGRESOS</h2>
+<button id="reviewIncomeConflicts" type="button" aria-controls="incomeChangeLog" hidden>REVISAR CAMBIOS RECHAZADOS</button>
+</div>
+<section id="incomePanel" aria-labelledby="mechanicTitle" hidden>
 <form id="productionIncome">
 <label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
 <div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="incomePartOptions"></label>
@@ -188,8 +191,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <button type="submit">Guardar ingreso</button>
 </form>
 </section>
-<section id="stockEditPanel" hidden>
-<h2>EDITAR SALDO DE APERTURA</h2>
+<section id="stockEditPanel" aria-labelledby="mechanicTitle" hidden>
 <form id="productionStockEdit">
 <label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
 <label>Fecha del saldo de apertura<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
@@ -207,8 +209,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <h3>HISTORIAL DE AJUSTES</h3>
 <div class="tableWrap"><table><thead><tr><th>FECHA</th><th>REPUESTO</th><th>ANTES</th><th>DESPUÉS</th><th>AJUSTE</th><th>REGISTRÓ</th></tr></thead><tbody data-adjustment-rows></tbody></table></div>
 </section>
-<section id="physicalCount" hidden>
-<h2>INVENTARIO FÍSICO</h2>
+<section id="physicalCount" aria-labelledby="mechanicTitle" hidden>
 <form id="countForm">
 <label>INVENTARIO<select name="origin"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
 <label>FECHA DE INVENTARIO<input name="date" inputmode="numeric" placeholder="dd/mm/aaaa" required></label>
@@ -230,8 +231,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 </div>
 <label>CIERRE GUARDADO<select id="countHistory" disabled><option value="">Selecciona un cierre</option></select></label>
 </section>
-<div id="recordPanel">
-<h2>CONSUMO DE REPUESTOS</h2>
+<div id="recordPanel" role="region" aria-labelledby="mechanicTitle" hidden>
 <form id="record">
 <div class="productionField recordDateShift">
 <label>Fecha<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
@@ -269,7 +269,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <button type="submit"><span class="productionSaveText">Guardar consumos</span></button>
 </form>
 </div>
-<div id="productionQueries" hidden>
+<div id="productionQueries" role="region" aria-labelledby="mechanicTitle" hidden>
 <div class="productionViews" role="group" aria-label="Tipo de consulta">
 <button type="button" id="queryIncome" aria-controls="incomeQueries" aria-pressed="false">INGRESOS</button>
 <button type="button" id="queryConsumption" aria-controls="queries" aria-pressed="true">CONSUMOS</button>
