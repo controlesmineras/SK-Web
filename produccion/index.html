@@ -48,7 +48,7 @@ main form,main .tableWrap{color:#172033}
 .productionIdentity{display:grid;grid-template-columns:50px minmax(0,1fr) 50px;align-items:center;gap:8px;margin:0 0 12px}
 #workspace{margin-top:0}
 body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
-#status:empty{display:none}
+#status:empty,#countStatus:empty{display:none}
 #updateProduction{grid-column:1}
 #operator{grid-column:2;display:grid;gap:3px;text-align:center;overflow-wrap:anywhere}
 #operatorRole{font-size:.9rem}
@@ -126,7 +126,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=7-single-picker"><script defer src="warehouse-store.js?v=1"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=3"></script><script defer src="app.js?v=53-direct-mechanics"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=3"></script><script defer src="app.js?v=54-count-layout"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script><script defer src="../spare-groups.js?v=20261112-spare-wording-3"></script><script defer src="../plaza/spare-picker.js?v=20261115-spare-category-hint-1"></script><script defer src="warehouse.js?v=6-single-picker"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
@@ -209,8 +209,6 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 </section>
 <section id="physicalCount" hidden>
 <h2>INVENTARIO FÍSICO</h2>
-<p id="countStatus" class="hint" role="status"></p>
-<p id="countAdjustmentNote" class="hint">INGRESOS y CONSUMOS muestran únicamente movimientos reales.</p>
 <form id="countForm">
 <label>INVENTARIO<select name="origin"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
 <label>FECHA DE INVENTARIO<input name="date" inputmode="numeric" placeholder="dd/mm/aaaa" required></label>
@@ -222,7 +220,8 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <button id="returnCount" type="button" hidden>DEVOLVER PARA CORRECCIÓN</button>
 <button id="discardCount" type="button" hidden>DESCARTAR CAMBIO LOCAL PENDIENTE</button>
 </form>
-<div class="tableWrap"><table id="countTable"><thead></thead><tbody></tbody></table></div>
+<p id="countStatus" class="hint" role="status"></p>
+<div class="tableWrap"><table id="countTable"><caption hidden></caption><thead></thead><tbody></tbody></table></div>
 <div class="productionViews" aria-label="Informes de inventario">
 <button id="newPhysicalCount" type="button">NUEVO CONTEO</button>
 <button id="loadCountHistory" type="button">CONSULTAR CIERRES</button>

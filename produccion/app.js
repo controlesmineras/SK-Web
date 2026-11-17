@@ -865,7 +865,8 @@ function selectCount(id){
 function countReportRows(report){
  return report.rows.map(row=>[displayDate(report.date),report.origin,row.name,row.opening,row.incomes,row.consumptions,row.outgoings||0,row.expected,row.physical,row.difference,row.physical]);
 }
-const countAdjustmentNote=report=>report?.rows.some(row=>row.adjustments==null)?'CIERRE ANTERIOR: sus ingresos y consumos pueden incluir ajustes. Se conservan las cifras aprobadas.':'INGRESOS y CONSUMOS muestran únicamente movimientos reales.';
+const legacyCountNote=report=>report?.rows.some(row=>row.adjustments==null)?'CIERRE ANTERIOR: sus ingresos y consumos pueden incluir ajustes. Se conservan las cifras aprobadas.':'';
+const countAdjustmentNote=report=>legacyCountNote(report)||'INGRESOS y CONSUMOS muestran únicamente movimientos reales.';
 function paintCount(){
  if(byId('physicalCount').hidden)return;
  const enabled=Array.isArray(state.inventoryCounts),records=countRecords(),selected=selectedCount();
@@ -895,10 +896,11 @@ function paintCount(){
  else if(review)countStatus('PENDIENTE DE APROBACIÓN');
  else if(selected?.status==='returned')countStatus('DEVUELTO PARA CORRECCIÓN · '+selected.note);
  else if(selected)countStatus('BORRADOR SINCRONIZADO');
- else countStatus('Registra la cantidad física. Usa 0 si contaste el repuesto y no había unidades.');
+ else countStatus('');
  const table=byId('countTable'),origin=countFields.origin.value,date=readDate(countFields.date);
  const reportRows=countReport?countReportRows(countReport):null;
- byId('countAdjustmentNote').textContent=countAdjustmentNote(countReport);
+ table.caption.textContent=legacyCountNote(countReport);
+ table.caption.hidden=!table.caption.textContent;
  const headers=reportRows?countHeaders:countHeaders.slice(2,10);
  const header=document.createElement('tr');
  for(const title of headers){const th=document.createElement('th');th.scope='col';th.textContent=title;header.append(th)}
