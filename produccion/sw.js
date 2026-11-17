@@ -1,6 +1,6 @@
 
-const CACHE='sk-production-shell-v80-bodega';
-const files=['./warehouse.js?v=1','./warehouse-store.js?v=1','./warehouse.css?v=1','./','./index.html','./app.js?v=51-bodega','./sync-protocol.js?v=3','./install-ui.js?v=1','./manifest.webmanifest','../styles.css','../sync-config.js','../spare-catalog.js','../consumption-query-v2.js?v=exportar-inventario-1','./produccion-yt-192.png','./produccion-yt-512.png'];
+const CACHE='sk-production-shell-v81-navigation';
+const files=['./warehouse.js?v=2-navigation','./warehouse-store.js?v=1','./warehouse.css?v=2-navigation','./','./index.html','./app.js?v=52-navigation','./sync-protocol.js?v=3','./install-ui.js?v=1','./manifest.webmanifest','../styles.css','../sync-config.js','../spare-catalog.js','../consumption-query-v2.js?v=exportar-inventario-1','./produccion-yt-192.png','./produccion-yt-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files.map(file=>new Request(file,{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('sk-production-shell-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
 self.addEventListener('fetch',event=>{

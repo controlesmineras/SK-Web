@@ -713,6 +713,7 @@ function showConsumptionView(showQueries,stockView,physical=false){
  byId('showConsumptionQueries').setAttribute('aria-pressed',String(showQueries));
  if(physical)paintCount();
  if(showQueries)showQueryType(byId('queryIncome').getAttribute('aria-pressed')==='true');
+ window.SKProductionWarehouse?.paintNavigation?.();
 }
 function incomeEditable(row){
  if(!row||row.kind!=='income'||row.sourceDeliveryId||row.sourceWarehouseMovementId||session?.user.role!=='admin')return false;
@@ -1186,7 +1187,8 @@ if(invitation){
   if(info.scope!=='production')throw new Error('Esta invitación corresponde a otra aplicación');
   byId('activate').elements.document.value=info.document;byId('activate').hidden=false;
  }).catch(error=>{status(error.message);byId('login').hidden=false});
-}else openWorkspace().catch(error=>status(error.message));
+}else if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>openWorkspace().catch(error=>status(error.message)),{once:true});
+else openWorkspace().catch(error=>status(error.message));
 const workerRegistration=navigator.serviceWorker?.register('sw.js',{updateViaCache:'none'})
  .catch(error=>console.error(error));
 

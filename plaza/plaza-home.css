@@ -82,3 +82,8 @@ body>header .plazaSyncGroup #syncBtn{order:0!important}
 body>header .plazaSyncGroup .headerLastSync{order:1!important}
 body>header .plazaSyncCloud{font-size:1.15rem;line-height:1}
 @media(max-width:720px){body>header{min-height:0;padding:12px}body>header .plazaBrand img{width:48px;height:48px;flex-basis:48px}body>header .plazaHeaderCenter #plazaHeaderHome,body>header .plazaHeaderCenter #plazaHeaderHome.isCurrent{min-height:34px;padding:5px 10px;font-size:.8rem}}
+
+#plazaNavigation{display:flex;align-items:center;flex-wrap:wrap;gap:12px;max-width:760px;margin:12px auto;color:#173d59}
+#plazaNavigation[hidden]{display:none}#plazaBack{min-height:44px;padding:10px 18px;background:#eef3f7;color:#173d59;border:1px solid #c7d3dc;font-weight:800}
+#plazaBreadcrumb{font-size:.88rem;line-height:1.5}.registerMenuHead [data-close-register],.registerMenuHead [data-close-query]{width:auto;padding:8px 12px;font-size:.8rem}
+@media(max-width:520px){#plazaNavigation{gap:8px}#plazaBreadcrumb{font-size:.78rem}}
