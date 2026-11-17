@@ -14,6 +14,7 @@
    const key=row.origen+'|'+(aliases.get(row.partId)||row.partId);
    if(blocked.has(key)||row.syncRejected)continue;
    if(row.kind==='adjustment'&&current.stockAdjustmentLocalV1!==true){blocked.add(key);continue;}
+   if(row.editOpeningDate&&current.openingDateV1!==true){blocked.add(key);continue;}
    selected.push(row);if(selected.length===limit)break;
   }
   return selected;
@@ -43,7 +44,8 @@
    if(!remote||remote.kind!==row.kind||remote.origen!==row.origen)return false;
    const alias=(result.inventoryCriteria||[]).find(item=>item.id===row.partId)?.productionPartId;
    if(remote.partId!==row.partId&&remote.partId!==alias)return false;
-   return superseded(row)||remote.correctionId===row.correctionId&&(row.kind==='adjustment'?remote.target===row.cantidad:remote.cantidad===row.cantidad);
+   const dateMatches=!row.editOpeningDate||(remote.fechaISO===row.fechaISO&&remote.openingFromDate===true);
+   return superseded(row)||dateMatches&&remote.correctionId===row.correctionId&&(row.kind==='adjustment'?remote.target===row.cantidad:remote.cantidad===row.cantidad);
   };
   const accepted=row=>individual?['accepted','already-applied'].includes(receipts.get(row.id)?.status):acknowledged.has(row.id)&&matches(row);
   if(individual)for(const row of sent){
@@ -57,7 +59,12 @@
    if(accepted(original))return [];
    const receipt=receipts.get(row.id);
    return [{...row,syncError:receipt?.error||'La base central no confirmó este registro; se conserva pendiente.',syncRejected:receipt?.status==='rejected'}];
-  }).map(row=>row.kind==='adjustment'&&result.stockAdjustmentLocalV1!==true&&!row.syncRejected?{...row,syncError:adjustmentUpgrade}:row);
+  }).map(row=>{
+   if(row.syncRejected)return row;
+   if(row.editOpeningDate&&result.openingDateV1!==true)return {...row,syncError:'Fecha de apertura guardada en este equipo. Actualiza la implementación de Code.gs para sincronizarla.'};
+   if(row.kind==='adjustment'&&result.stockAdjustmentLocalV1!==true)return {...row,syncError:adjustmentUpgrade};
+   return row;
+  });
   let countQueue=current.countQueue||[],countSyncError=current.countSyncError||'';
   if(inventoryRequest){
    const returned=result.inventoryResult?.count;
@@ -84,7 +91,7 @@
   if(result.incomeChangesV1!==true)incomeChanges=incomeChanges.map(op=>({...op,syncError:'Falta actualizar Code.gs para confirmar la edición, eliminación o reversión del ingreso.'}));
   const {inventoryResult,acknowledgements,ack,superseded:ignored,incomeChangeReceipts,...snapshot}=result;
   const complete=!pending.length&&!countQueue.length&&!incomeChanges.length,time=new Date().toISOString();
-  return {...current,...snapshot,pending,countQueue,incomeChanges,incomeChangesV1:result.incomeChangesV1===true,countSyncError,lastFetchedAt:time,lastSyncAt:complete?time:current.lastSyncAt,stockAdjustmentLocalV1:result.stockAdjustmentLocalV1===true};
+  return {...current,...snapshot,pending,countQueue,incomeChanges,incomeChangesV1:result.incomeChangesV1===true,openingDateV1:result.openingDateV1===true,countSyncError,lastFetchedAt:time,lastSyncAt:complete?time:current.lastSyncAt,stockAdjustmentLocalV1:result.stockAdjustmentLocalV1===true};
  }
  window.SKProductionSync={protocol,samePendingRow,reconcile,selectPending,selectIncomeChanges,pendingSummary,discardRejectedIncomeChanges,adjustmentUpgrade};
 })();

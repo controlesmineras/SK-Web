@@ -87,10 +87,12 @@ test('typing reuses period totals but a new snapshot or day refreshes totals and
 test('the input listener updates only the summary without saving, syncing or rebuilding the stock tables',()=>{
  const c=runtime({incomes:[movement('initial','initial',4)]});
  const handlers={},summary={textContent:''};
- const form={elements:{search:{},partId:{value:part.id},origen:{value:'YT29'},cantidad:{value:'7',addEventListener:(name,handler)=>{handlers[name]=handler}}},querySelector:()=>({}),addEventListener(){}};
+ vm.runInContext(source.slice(source.indexOf('function parseDate('),source.indexOf('function readDate(')),c);
+ const form={dataset:{},elements:{search:{},partId:{value:part.id},origen:{value:'YT29'},fechaISO:{value:'10/11/2026',addEventListener:(name,handler)=>{handlers.date=handler}},cantidad:{value:'7',addEventListener:(name,handler)=>{handlers[name]=handler}}},querySelector:()=>({}),addEventListener(){}};
  const view={kind:'initial',form,panel:{querySelector:()=>summary}};
  Object.assign(c,{stockViews:[view],document:{addEventListener(){}},setupPicker(){},saveStock(){throw Error('unexpected save')},paintStockView(){throw Error('unexpected table redraw')}});
  vm.runInContext(source.slice(source.indexOf('for(const view of stockViews){'),source.indexOf("byId('reviewStockAdjustment').onclick")),c);
  handlers.input();assert.match(summary.textContent,/SALDO ESPERADO CON ESTA APERTURA: 7/);
+ form.elements.fechaISO.value='03/11/2026';handlers.date();assert.equal(form.dataset.openingDirty,'true');
  form.elements.cantidad.value='0';handlers.input();assert.match(summary.textContent,/SALDO ESPERADO CON ESTA APERTURA: 0/);
 });

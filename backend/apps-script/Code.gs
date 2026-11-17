@@ -788,7 +788,8 @@ function productionSync_(q){
    for(const part of productionCatalog_(parts,criteria,origin).values())
     for(const alias of part.aliases)partAliases.set(origin+'|'+alias,part);
   const protocol=q.syncProtocol==='production-receipts-v1';
-  const pending=protocol&&Array.isArray(q.checkedPending)?q.checkedPending:Array.isArray(q.pending)?q.pending:[];
+  const batch=protocol?(q.datedOpeningBatch||q.checkedPending||q.pending):q.pending;
+  const pending=Array.isArray(batch)?batch:[];
   if(pending.length>1000)throw new Error('Envía un máximo de 1000 consumos por sincronización');
   const rejected=new Map(),priorIds=new Set([...known.keys(),...incomes.keys()]);
   if(protocol&&new Set(pending.map(row=>row?.id)).size!==pending.length)throw new Error('El lote contiene identificadores repetidos. Los pendientes se conservan.');
@@ -798,19 +799,23 @@ function productionSync_(q){
    if(!row||!/^[-a-zA-Z0-9]{16,100}$/.test(String(row.id||'')))throw new Error('Identificador de consumo no válido');
    const existingIncome=incomes.get(row.id);
    const samePart=saved=>saved.partId===row.partId||partAliases.get(row.origen+'|'+row.partId)?.aliases.includes(saved.partId);
+   if(row.editOpeningDate&&(row.kind!=='initial'||!productionDate_(row.fechaISO)||row.fechaISO>Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd')))throw new Error('Fecha de apertura no válida.');
    if(known.has(row.id)){
     const saved=known.get(row.id);
     if(row.kind||saved.cantidad!==row.cantidad||saved.origen!==row.origen||!samePart(saved))throw new Error('El identificador ya corresponde a otro consumo confirmado.');
     continue;
    }
    if(existingIncome&&(!row.correctionId||existingIncome.correctionId===row.correctionId||(existingIncome.appliedCorrections||[]).includes(row.correctionId))){
-    const superseded=row.correctionId&&(existingIncome.appliedCorrections||[]).includes(row.correctionId);
+    const superseded=row.correctionId&&existingIncome.correctionId!==row.correctionId&&(existingIncome.appliedCorrections||[]).includes(row.correctionId);
+    if(row.editOpeningDate&&!superseded&&(existingIncome.fechaISO!==row.fechaISO||!existingIncome.openingFromDate))throw new Error('La fecha no coincide con la apertura confirmada.');
     if(existingIncome.kind!==row.kind||existingIncome.origen!==row.origen||!samePart(existingIncome)||!superseded&&(row.kind==='adjustment'?existingIncome.target:existingIncome.cantidad)!==row.cantidad)throw new Error('El identificador ya corresponde a otra cantidad confirmada.');
     continue;
    }
    if(existingIncome){
     if(user.role!=='admin'||existingIncome.kind!=='initial'||row.kind!=='initial'||!/^[-a-zA-Z0-9]{16,100}$/.test(String(row.correctionId))||!Number.isSafeInteger(row.cantidad)||row.cantidad<0)throw new Error('Corrección de saldo inicial no válida.');
-    incomes.set(row.id,Object.assign({},existingIncome,{cantidad:row.cantidad,correctionId:row.correctionId,appliedCorrections:[...(existingIncome.appliedCorrections||[]),existingIncome.correctionId,row.correctionId].filter(Boolean),updatedAt:new Date().toISOString()}));
+    if(existingIncome.origen!==row.origen||!samePart(existingIncome))throw new Error('La apertura corresponde a otro repuesto o inventario.');
+    const dateChange=row.editOpeningDate?{fechaISO:row.fechaISO,openingFromDate:true}:{};
+    incomes.set(row.id,Object.assign({},existingIncome,dateChange,{cantidad:row.cantidad,correctionId:row.correctionId,appliedCorrections:[...(existingIncome.appliedCorrections||[]),existingIncome.correctionId,row.correctionId].filter(Boolean),updatedAt:new Date().toISOString()}));
     changed=true;
     continue;
    }
@@ -827,7 +832,7 @@ function productionSync_(q){
      const opening=latest?.rows.find(x=>(x.aliases||[x.partId]).some(id=>aliases.has(id)));
      const matches=x=>!x.deleted&&x.fechaISO<=date&&x.origen===row.origen&&aliases.has(x.partId);
      const initial=Array.from(incomes.values()).reverse().find(x=>matches(x)&&x.kind==='initial');
-     const includes=x=>matches(x)&&(opening?productionAfterClose_(x,latest.date,latest.closedAt):true);
+     const includes=x=>matches(x)&&(opening?productionAfterClose_(x,latest.date,latest.closedAt):!initial?.openingFromDate||x.fechaISO>=initial.fechaISO);
      let before=opening?.physical??initial?.cantidad??0;
      for(const x of incomes.values())if(includes(x)&&['income','adjustment'].includes(x.kind))before+=x.cantidad;
      for(const x of known.values())if(includes(x))before-=x.cantidad;
@@ -838,7 +843,7 @@ function productionSync_(q){
      continue;
     }
     if(row.kind==='initial'&&Array.from(incomes.values()).some(x=>!x.deleted&&x.kind==='initial'&&part.aliases.includes(x.partId)&&x.origen===row.origen))throw new Error('El repuesto ya tiene un saldo inicial.');
-    incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,recordedAt:productionRecordedAt_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,...(row.kind==='initial'&&row.correctionId?{correctionId:row.correctionId}:{})});
+    incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,recordedAt:productionRecordedAt_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,...(row.editOpeningDate?{openingFromDate:true}:{}),...(row.kind==='initial'&&row.correctionId?{correctionId:row.correctionId}:{})});
     changed=true;
     continue;
    }
@@ -885,7 +890,7 @@ function productionSync_(q){
   // Igual que Plaza: los recibos se emiten solo después de guardar en Drive.
   const acknowledgements=protocol?pending.map(row=>({id:row?.id||'',status:rejected.has(row?.id||'')?'rejected':priorIds.has(row.id)?'already-applied':'accepted',...(rejected.has(row?.id||'')?{error:rejected.get(row?.id||'')}:{})})):undefined;
   return json_({ok:true,incomeChangesV1:true,incomeChangeReceipts,incomeHistory:(data.incomeHistory||[]).filter(row=>Date.now()-Date.parse(row.at)<=30*86400000||incomeChanges.some(op=>op.id===row.id)),...(protocol?{syncProtocol:'production-receipts-v1',acknowledgements}:{}),productionRole:productionRole_(user.role),productionRoles:productionRoles_(user),warehouseV1:true,personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,inventoryResult,stockAdjustment:true,stockAdjustmentLocalV1:true,
-   inventoryCounts:counts.filter(row=>row.status!=='closed'&&(row.owner===user.document||user.role==='admin'&&row.status==='submitted')),
+   openingDateV1:true,inventoryCounts:counts.filter(row=>row.status!=='closed'&&(row.owner===user.document||user.role==='admin'&&row.status==='submitted')),
    inventoryLatest:Array.from(latest.values()),incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.filter(row=>!rejected.has(row?.id||'')).map(row=>row.id),superseded:pending.filter(row=>row.correctionId&&incomes.get(row.id)?.correctionId!==row.correctionId&&(incomes.get(row.id)?.appliedCorrections||[]).includes(row.correctionId)).map(row=>({id:row.id,correctionId:row.correctionId}))});
  }finally{lock.releaseLock()}
 }
@@ -985,9 +990,9 @@ function productionCountRows_(count,counts,parts,criteria,incomes,consumptions){
  const get=row=>row.origen===origin&&!row.deleted&&row.fechaISO<=date&&byAlias.get(row.partId);
  for(const movement of incomes){
   const row=get(movement);
-  if(row&&!row.cutoff&&movement.kind==='initial'){row.opening=movement.cantidad;row.initialDate=movement.fechaISO;}
+  if(row&&!row.cutoff&&movement.kind==='initial'){row.opening=movement.cantidad;row.initialDate=movement.openingFromDate?movement.fechaISO:'';}
  }
- const include=(row,movement)=>row&&(row.cutoff?productionAfterClose_(movement,row.cutoff,row.closedAt):true);
+ const include=(row,movement)=>row&&(row.cutoff?productionAfterClose_(movement,row.cutoff,row.closedAt):!row.initialDate||movement.fechaISO>=row.initialDate);
  for(const movement of incomes){const row=get(movement);if(include(row,movement)){if(['income','warehouse-return'].includes(movement.kind))row.incomes+=movement.cantidad;else if(movement.kind==='warehouse-out')row.outgoings+=movement.cantidad;else if(movement.kind==='adjustment')row.adjustments+=movement.cantidad;}}
  for(const movement of consumptions){const row=get(movement);if(include(row,movement))row.consumptions+=movement.cantidad;}
  return Array.from(catalog.values(),({partId,name,aliases,opening,incomes,consumptions,adjustments,outgoings})=>{
@@ -1109,7 +1114,7 @@ function productionSpareBalance_(data,spare,central){
  const matches=row=>!row.deleted&&row.origen===spare.origen&&ids.has(row.partId)&&row.fechaISO<=today;
  const initial=(data.incomes||[]).filter(row=>matches(row)&&row.kind==='initial').at(-1);
  let total=opening?.physical??initial?.cantidad??0;
- const includes=row=>matches(row)&&(!opening||productionAfterClose_(row,closed.date,closed.closedAt));
+ const includes=row=>matches(row)&&(opening?productionAfterClose_(row,closed.date,closed.closedAt):!initial?.openingFromDate||row.fechaISO>=initial.fechaISO);
  for(const row of data.incomes||[])if(includes(row)){if(['income','warehouse-return'].includes(row.kind))total+=row.cantidad;else if(row.kind==='warehouse-out')total-=row.cantidad;}
  for(const row of data.consumptions||[])if(includes(row))total-=row.cantidad;
  return total;

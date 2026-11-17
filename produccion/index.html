@@ -126,7 +126,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=7-single-picker"><script defer src="warehouse-store.js?v=1"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=3"></script><script defer src="app.js?v=54-count-layout"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><script defer src="app.js?v=55-opening-date"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script><script defer src="../spare-groups.js?v=20261112-spare-wording-3"></script><script defer src="../plaza/spare-picker.js?v=20261115-spare-category-hint-1"></script><script defer src="warehouse.js?v=6-single-picker"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
@@ -192,7 +192,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <h2>EDITAR SALDO DE APERTURA</h2>
 <form id="productionStockEdit">
 <label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
-<label>Fecha<input name="fechaISO" readonly type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
+<label>Fecha del saldo de apertura<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
 <div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem o nombre" autocomplete="off" aria-controls="stockPartOptions"></label>
 <div id="stockPartOptions" class="machineOptions partOptions" hidden></div>
 <input type="hidden" name="partId"></div>
