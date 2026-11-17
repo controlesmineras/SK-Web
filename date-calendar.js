@@ -16,6 +16,7 @@
  function currentYear(){return new Intl.DateTimeFormat('en',{year:'numeric',timeZone:'America/Bogota'}).format(new Date());}
  function parseTypedDate(value,year=currentYear()){
   let text=String(value||'').trim();
+  if(/^\d{2}\/\d{2}\/$/.test(text))text=text.slice(0,-1);
   if(/^\d{4}$/.test(text))text=text.slice(0,2)+'/'+text.slice(2)+'/'+year;
   else if(/^\d{8}$/.test(text))text=text.slice(0,2)+'/'+text.slice(2,4)+'/'+text.slice(4);
   else{
@@ -23,6 +24,29 @@
    if(match)text=match[1].padStart(2,'0')+'/'+match[2].padStart(2,'0')+'/'+(match[3]||year);
   }
   return /^(?:\d{4}-\d{2}-\d{2}|\d{2}\/\d{2}\/\d{4})$/.test(text)?isoDate(text):'';
+ }
+ function guideDateInput(value,caret=String(value).length,inputType='insertText'){
+  const raw=String(value),deleting=inputType.startsWith('delete');let next=raw;
+  if(/^\d{0,8}$/.test(raw)){
+   next=raw.slice(0,2)+(raw.length>2?'/'+raw.slice(2,4):'')+(raw.length>4?'/'+raw.slice(4):'');
+   if(!deleting&&(raw.length===2||raw.length===4))next+='/';
+  }else if(/^\d{2}\/\d{3,6}$/.test(raw))next=raw.slice(0,5)+'/'+raw.slice(5);
+  else if(/^\d{3,4}\/\d{4}$/.test(raw))next=raw.slice(0,2)+'/'+raw.slice(2);
+  else if(/^(?:\d{2}|\d{2}\/\d{2})\/{2,}$/.test(raw))next=raw.replace(/\/+$/,'/');
+  else if(!deleting&&/^\d{2}\/\d{2}$/.test(raw))next+='/';
+  if(next===raw)return {value:next,caret};
+  const digits=raw.slice(0,caret).replace(/\D/g,'').length;let position=0,seen=0;
+  while(position<next.length&&seen<digits){if(/\d/.test(next[position]))seen++;position++;}
+  if(!deleting)while(next[position]==='/')position++;
+  return {value:next,caret:position};
+ }
+ function paintEditor(entry){
+  const {editor,mirror}=entry;mirror.replaceChildren();
+  editor.value.split('/').forEach((part,index)=>{
+   if(index){const separator=document.createElement('span');separator.className='skDateSeparator';separator.textContent='/';mirror.append(separator);}
+   mirror.append(document.createTextNode(part));
+  });
+  mirror.style.transform='translateX('+(-editor.scrollLeft)+'px)';
  }
  const isDate=input=>input instanceof HTMLInputElement&&!input.dataset.skCalendarControl&&(input.type==='date'||input.type==='datetime-local'||/^dd\/mm\/aaaa$/i.test(input.placeholder));
  function clearError(entry){
@@ -43,6 +67,7 @@
    picker.value=input.type==='datetime-local'?input.value:isoDate(input.value);
    if(time)time.value=input.value.split('T')[1]||'';
   }
+  paintEditor(entry);
   wrapper.classList.toggle('isLocked',input.disabled||input.readOnly);
  }
  function writeValue(entry,value){entry.writing=true;try{entry.input.value=value;}finally{entry.writing=false;}}
@@ -81,6 +106,8 @@
   if(entries.has(input)||!isDate(input))return;
   const wrapper=document.createElement('span');wrapper.className='skCalendarField';
   const controls=document.createElement('span');controls.className='skCalendarControls';
+  const text=document.createElement('span');text.className='skCalendarText';
+  const mirror=document.createElement('span');mirror.className='skCalendarMirror';mirror.setAttribute('aria-hidden','true');
   const editor=document.createElement('input');editor.type='text';editor.className='skCalendarEditor';editor.placeholder='DD/MM/AAAA';editor.inputMode='numeric';editor.enterKeyHint='done';editor.autocomplete='off';editor.dataset.skCalendarControl='true';
   const label=input.getAttribute('aria-label')||Array.from(input.labels||[],label=>label.textContent.trim()).join(' ')||'Fecha';
   editor.setAttribute('aria-label',label);editor.title='DDMM (año actual) o DDMM junto con el año';
@@ -91,11 +118,16 @@
   const time=input.type==='datetime-local'?document.createElement('input'):null;
   if(time){time.type='time';time.className='skCalendarTime';time.dataset.skCalendarControl='true';time.setAttribute('aria-label','Hora: '+label);if(input.step)time.step=input.step;}
   input.dataset.skCalendarControl='true';input.classList.add('skCalendarSource');input.tabIndex=-1;input.setAttribute('aria-hidden','true');
-  const entry={input,picker,editor,time,wrapper,error,dirty:false,message:'',writing:false};entries.set(input,entry);
-  input.before(wrapper);wrapper.append(input,controls,error);controls.append(editor);if(time)controls.append(time);controls.append(icon);icon.append(picker);
+  const entry={input,picker,editor,mirror,time,wrapper,error,dirty:false,message:'',writing:false};entries.set(input,entry);
+  input.before(wrapper);wrapper.append(input,controls,error);controls.append(text);text.append(editor,mirror);if(time)controls.append(time);controls.append(icon);icon.append(picker);
   watchValue(input,entry);
   editor.addEventListener('focus',()=>editor.select());
-  editor.addEventListener('input',event=>{event.stopPropagation();entry.dirty=true;setError(entry,'Confirma la fecha con Enter o al salir del campo.',false);});
+  editor.addEventListener('input',event=>{
+   event.stopPropagation();entry.dirty=true;
+   if(!event.isComposing){const guided=guideDateInput(editor.value,editor.selectionStart??editor.value.length,event.inputType||'insertText');if(editor.value!==guided.value){editor.value=guided.value;editor.setSelectionRange(guided.caret,guided.caret);}}
+   paintEditor(entry);setError(entry,'Confirma la fecha con Enter o al salir del campo.',false);
+  });
+  editor.addEventListener('scroll',()=>{mirror.style.transform='translateX('+(-editor.scrollLeft)+'px)';});
   editor.addEventListener('change',event=>event.stopPropagation());
   editor.addEventListener('blur',()=>commit(entry));
   editor.addEventListener('keydown',event=>{if(event.key==='Enter'){event.preventDefault();event.stopPropagation();commit(entry,true);}else if(event.key==='ArrowDown'&&event.altKey){event.preventDefault();commit(entry);open(entry);}});
@@ -122,6 +154,6 @@
   }).observe(document.body,{childList:true,subtree:true,attributes:true,attributeFilter:['type','placeholder','value','min','max','step','required','disabled','readonly']});
   document.addEventListener('reset',event=>setTimeout(()=>{for(const entry of entries.values())if(event.target.contains(entry.input))refresh(entry,true);},0),true);
  }
- window.SKDateCalendar={isoDate,displayDate,parseTypedDate,mount};
+ window.SKDateCalendar={isoDate,displayDate,parseTypedDate,guideDateInput,mount};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',start,{once:true});else start();
 })();
