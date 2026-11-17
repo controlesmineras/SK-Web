@@ -16,12 +16,13 @@ function mount(){
 const apps={
  admin:{name:'SK Web Admin',roles:{assistant:'Auxiliar administrativo',admin:'Administrador'}},
  plaza:{name:'Plaza Blending',roles:{assistant:'Auxiliar',operator:'Bodeguero/a',supervisor:'Supervisor/a'}},
- production:{name:'Producción',roles:{mechanic:'Mecánico',assistant:'Auxiliar',admin:'Administrador'}}
+ production:{name:'Producción',roles:{mechanic:'Mecánico',warehouse:'Bodeguero/a',mechanic_warehouse:'Mecánico y bodeguero/a',assistant:'Auxiliar',admin:'Administrador'}}
 };
 const normalize=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const doc=person=>String(person?.documento??person?.document??'').trim();
 const personName=person=>String(person?.nombre||person?.name||[person?.primerNombre,person?.segundoNombre,person?.primerApellido,person?.segundoApellido].filter(Boolean).join(' ')).trim();
-const labels=(scope,row)=>String(apps[scope].roles[row.role]|| (row.role==='owner'?'Administrador principal':row.role||'Usuario')).trim();
+const productionSelection=row=>row.roles?.includes('mechanic')&&row.roles?.includes('warehouse')?'mechanic_warehouse':row.role;
+const labels=(scope,row)=>scope==='production'&&row.roles?.length?row.roles.map(role=>apps.production.roles[role]||role).join(' + '):String(apps[scope].roles[row.role]|| (row.role==='owner'?'Administrador principal':row.role||'Usuario')).trim();
 const same=(a,b)=>Boolean((a.personId&&a.personId===b.personId)||(doc(a)&&doc(a)===doc(b)));
 function button(label,action){
  const node=document.createElement('button');
@@ -43,7 +44,7 @@ async function open(scope){
  find('h2').textContent='Accesos a '+app.name;
  find('[data-close]').onclick=()=>dialog.close();
  const request=(action,data)=>auth().request(action,data);
- let people=[],selected=null,inviteUrl='',busy=false,adminRoles=['assistant'];
+ let people=[],selected=null,inviteUrl='',busy=false,adminRoles=['assistant'],warehouseV1=false;
  const access={admin:null,plaza:null,production:null};
  function clearInvite(){inviteUrl='';copy.replaceChildren()}
  function identity(p){return [personName(p)||'Sin nombre',doc(p),p.cargo].filter(Boolean).join(' · ')}
@@ -70,7 +71,7 @@ async function open(scope){
    name.textContent=identity(row);roles.textContent=[...new Set(rolesFor(row))].join(' · ');
    card.append(name,roles);
    if(row.role!=='owner'){
-    card.append(button('Restablecer acceso',()=>generate(row,row.role)),button('Gestionar accesos',()=>choose(row,true)));
+    card.append(button('Restablecer acceso',()=>generate(row,scope==='production'?productionSelection(row):row.role)),button('Gestionar accesos',()=>choose(row,true)));
    }
    active.append(card);
   }
@@ -101,7 +102,7 @@ async function open(scope){
   label.textContent='Rol en '+app.name;
   for(const key of scope==='plaza'?['assistant','operator']:Object.keys(app.roles))role.add(new Option(app.roles[key],key));
   if(scope==='plaza'&&row.role==='supervisor')role.add(new Option(app.roles.supervisor,'supervisor'));
-  role.value=row.role||'assistant';label.append(role);manage.append(label);
+  role.value=(scope==='production'?productionSelection(row):row.role)||'assistant';label.append(role);manage.append(label);
   if(scope==='admin'&&!adminRoles.includes('admin')){
    const note=document.createElement('p');note.className='hint';note.textContent='Para habilitar el rol Administrador, actualiza Code.gs y publica una nueva versión del servicio central.';manage.append(note);
   }
@@ -123,11 +124,11 @@ async function open(scope){
    const data={scope,personId:row.personId};
    if(scope==='admin')data.adminRole=role||'assistant';
    if(scope==='plaza')data.plazaRole=role;
-   if(scope==='production')data.productionRole=role;
+   if(scope==='production'){data.productionRoles=role==='mechanic_warehouse'?['mechanic','warehouse']:[role];data.productionRole=role==='mechanic_warehouse'?'mechanic':role;if(!warehouseV1&&data.productionRoles.includes('warehouse'))throw new Error('Actualiza Code.gs para habilitar Bodega y los roles combinados.');}
    const result=await request('accessInvitationCreate',data);
    if(scope==='admin'&&((result.adminRole&&result.adminRole!==data.adminRole)||(data.adminRole==='admin'&&result.adminRole!=='admin')))throw new Error('El servicio no confirmó el rol seleccionado. Actualiza Code.gs y su implementación.');
    if(scope==='plaza'&&result.plazaRole!==role)throw new Error('El servicio devolvió un rol distinto. Revisa la versión de Code.gs.');
-   if(scope==='production'&&result.productionRole!==role)throw new Error('Actualiza y despliega Code.gs para asignar roles de Producción.');
+   if(scope==='production'&&(result.productionRole!==data.productionRole||(data.productionRoles.includes('warehouse')&&JSON.stringify(result.productionRoles)!==JSON.stringify(data.productionRoles))))throw new Error('Actualiza y despliega Code.gs para asignar roles de Producción.');
    if(!result.token)throw new Error('El servicio no devolvió una invitación.');
    const url=new URL(scope==='production'?'produccion/':'crear-acceso.html',location.href);
    if(scope==='production')url.hash=new URLSearchParams({invitation:result.token});
@@ -193,11 +194,24 @@ async function open(scope){
     return {...row,personId:row.personId||person?.id};
    });
   }
+  if(production.status==='fulfilled')warehouseV1=production.value.warehouseV1===true;
   if(production.status==='fulfilled')access.production=(production.value.users||[]).filter(row=>row.enabled!==false).map(row=>{
    const person=people.find(p=>same({personId:p.id,document:doc(p)},row));
    return {...person,...row,nombre:person?.nombre||row.name||row.nombre,role:row.role||'assistant'};
   });
   renderActive();renderSearch();
+  if(scope==='production'){
+   const section=document.createElement('section');section.className='plazaAccessPeople';section.append(Object.assign(document.createElement('h3'),{textContent:'Bodega de Producción'}));
+   const settings=production.status==='fulfilled'?production.value.warehouseSettings||{}:{};
+   const note=document.createElement('p');note.textContent=!warehouseV1?'Actualiza Code.gs y publica su nueva versión para habilitar Bodega.':settings.enabled?'Ingresos automáticos desde '+new Date(settings.transferStartAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+'. Las cantidades pertenecen únicamente a Producción.':'Al activar, solo se incorporarán nuevas salidas de Plaza. Las entregas históricas no se volverán a sumar.';section.append(note);
+   if(warehouseV1&&!settings.enabled)section.append(button('ACTIVAR BODEGA DE PRODUCCIÓN',()=>{
+    if(!confirm('¿Activar Bodega de Producción? Solo se incorporarán salidas de Plaza registradas desde la activación. Los saldos actuales de repuestos se conservan; registra las aperturas de otros elementos en Producción.'))return;
+    run('Activando bodega…',async()=>{const result=await request('productionWarehouseConfigure',{enabled:true});Object.assign(settings,result.warehouseSettings);status.textContent='Bodega activada. Los saldos de Producción no se comparten con Plaza.';dialog.close();open(scope);});
+   }));
+   const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=settings.allowSpareDelivery===true;toggle.disabled=!warehouseV1;label.append(toggle,document.createTextNode('Permitir entregar repuestos YT y Columna desde Bodega de Producción'));section.append(label);
+   toggle.onchange=()=>{const value=toggle.checked;run('Guardando permiso…',async()=>{try{const result=await request('productionWarehouseConfigure',{allowSpareDelivery:value});toggle.checked=result.warehouseSettings.allowSpareDelivery;status.textContent='Permiso actualizado. Producción lo recibirá al sincronizar.';}catch(error){toggle.checked=!value;throw error}})};
+   active.closest('section').after(section);
+  }
   const missing=Object.keys(access).filter(key=>!access[key]).map(key=>apps[key].name);
   status.textContent=missing.length?'Accesos sin verificar: '+missing.join(', ')+'.':'';
  });

@@ -138,9 +138,9 @@ test('report exports omit adjustment column, preserve expected balance and disti
  const c=vm.createContext({displayDate:x=>x});
  vm.runInContext(client.slice(client.indexOf('function countReportRows('),client.indexOf('function paintCount('))+';globalThis.note=countAdjustmentNote;',c);
  const report={date:today,origin:'YT29',rows:[{name:'O-ring',opening:20,incomes:0,consumptions:0,adjustments:-10,expected:10,physical:10,difference:0}]};
- const values=c.countReportRows(report)[0];assert.equal(values.length,10);assert.equal(values[5],0);assert.equal(values[6],10);assert.equal(values[7],10);assert.equal(values[8],0);assert.equal(values[9],10);assert.match(c.note(report),/únicamente movimientos reales/);
+ const values=c.countReportRows(report)[0];assert.equal(values.length,11);assert.equal(values[5],0);assert.equal(values[6],0);assert.equal(values[7],10);assert.equal(values[8],10);assert.equal(values[9],0);assert.equal(values[10],10);assert.match(c.note(report),/únicamente movimientos reales/);
  const old={...report,rows:[{...report.rows[0],adjustments:undefined,consumptions:10}]};const frozen=JSON.stringify(old);
- assert.equal(c.countReportRows(old)[0][5],10);assert.equal(c.countReportRows(old)[0][6],10);assert.match(c.note(old),/CIERRE ANTERIOR/);assert.equal(JSON.stringify(old),frozen);
+ assert.equal(c.countReportRows(old)[0][5],10);assert.equal(c.countReportRows(old)[0][7],10);assert.match(c.note(old),/CIERRE ANTERIOR/);assert.equal(JSON.stringify(old),frozen);
 });
 
 test('opening 4 with no real movements stays 4 despite old negative and positive adjustments, including zero and repeated opening edits',()=>{
@@ -154,4 +154,10 @@ test('opening 4 with no real movements stays 4 despite old negative and positive
   assert.equal(rows[0].expected,quantity);assert.equal(rows[0].difference,0);assert.equal(rows[0].incomes,0);assert.equal(rows[0].consumptions,0);
  }
  assert.equal(JSON.stringify(app.read().incomes.slice(1)),historical);
+});
+test('warehouse loans, returns and deliveries enter both live stock and physical count calculations',()=>{
+ const incomes=[movement('initial-0000000001','initial',20),movement('outgoing-000000001','warehouse-out',6),movement('return-00000000001','warehouse-return',2)];
+ const client=balances({incomes}),total=client.countTotals('YT29','',parts).get('part10');assert.equal(client.stockFor(parts[0],'YT29'),16);assert.equal(total.outgoings,6);assert.equal(total.incomes,2);
+ const app=runtime({incomes},parts,[]),rows=app.context.productionCountRows_({origin:'YT29',date:today,values:[{partId:'part10',physical:16}]},[],parts,[],incomes,[]);
+ assert.equal(rows[0].expected,16);assert.equal(rows[0].outgoings,6);assert.equal(rows[0].difference,0);
 });

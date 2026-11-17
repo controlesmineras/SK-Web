@@ -14,7 +14,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Invitaciones de un solo uso: el enlace contiene un secreto aleatorio, nunca una contraseña.
 function invitationKey_(token){return 'SK_INVITE_'+hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token),Utilities.Charset.UTF_8))}
@@ -25,7 +25,7 @@ function accessInvitationCreate_(q){
  if(!scope)throw new Error('Aplicación no válida');
  const personId=String(q.personId||'').trim(),lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
-  const fileId=findFile_(),cloud=fileId?readFile_(fileId):{},person=(cloud.personal||[]).find(x=>x&&x.id===personId&&!x.deleted);
+  const fileId=findFile_(),cloud=fileId?readFile_(fileId,lock):{},person=(cloud.personal||[]).find(x=>x&&x.id===personId&&!x.deleted);
   if(!person||!String(person.documento||'').trim())throw new Error('Selecciona un colaborador sincronizado con documento');
   if(scope==='admin'){
    const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
@@ -40,7 +40,8 @@ function accessInvitationCreate_(q){
   const expires=Date.now()+24*60*60*1000;
   const plazaRole=q.plazaRole==='supervisor'&&person.plazaEnabled&&person.plazaRole==='supervisor'?'supervisor':q.plazaRole==='assistant'?'assistant':'operator';
   const plazaAccess=scope==='plaza'?{plazaRole}:{};
-  const productionAccess=scope==='production'?{productionRole:productionRole_(q.productionRole||productionAccess_(document)?.role)}:{};
+  const productionRoles=scope==='production'?productionRoles_({roles:q.productionRoles,role:q.productionRole||productionAccess_(document)?.role}):[];
+  const productionAccess=scope==='production'?{productionRole:productionPrimaryRole_(productionRoles),productionRoles}:{};
   props.setProperty(invitationKey_(secret),JSON.stringify({scope:scope,personId:person.id,document:document,expires:expires,...plazaAccess,...productionAccess,...adminAccess}));
   return json_({ok:true,token:secret,document:document,name:person.nombre||'',...plazaAccess,...productionAccess,...adminAccess,expiresAt:new Date(expires).toISOString()});
  }finally{lock.releaseLock()}
@@ -50,10 +51,10 @@ function invitationRecord_(q){const token=String(q.invitation||'');if(!/^[a-f0-9
 function accessInvitationInfo_(q){const invite=invitationRecord_(q),row=invite.row;return json_({ok:true,scope:row.scope,document:row.document,expiresAt:new Date(row.expires).toISOString()})}
 function accessInvitationAccept_(q){const password=String(q.password||'');if(password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{const invite=invitationRecord_(q),row=invite.row,document=String(q.document||'').trim();if(document!==row.document)throw new Error('El documento no corresponde a la invitación');
-  const fileId=findFile_(),cloud=fileId?readFile_(fileId):{},person=(cloud.personal||[]).find(x=>x&&x.id===row.personId&&!x.deleted&&String(x.documento||'').trim()===document);
+  const fileId=findFile_(),cloud=fileId?readFile_(fileId,lock):{},person=(cloud.personal||[]).find(x=>x&&x.id===row.personId&&!x.deleted&&String(x.documento||'').trim()===document);
   if(!person)throw new Error('El colaborador ya no está disponible en Personal');const now=new Date().toISOString();
   if(row.scope==='plaza'){(cloud.personal||[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()===document).forEach(x=>{x.pinHash=hashPin_(document,password);x.plazaEnabled=true;x.plazaRole=['assistant','supervisor'].includes(row.plazaRole)?row.plazaRole:'operator';x.updatedAt=now});cloud.updatedAt=nextRevision_(cloud.updatedAt);writeFile_(fileId,cloud)}
-  else if(row.scope==='production'){saveProductionAccess_(person,hashPin_(document,password),row.productionRole)}
+  else if(row.scope==='production'){saveProductionAccess_(person,hashPin_(document,password),row.productionRoles||row.productionRole)}
   else if(row.scope==='admin'){const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');if(area!=='seguridad fisica')throw new Error('El colaborador ya no pertenece a Seguridad física');const users=adminUsers_();if(users.some(x=>x.role==='owner'&&(x.personId===person.id||x.document===document||x.username===document)))throw new Error('No se puede reemplazar el acceso principal');const adminRole=assignableAdminRole_(row.adminRole??'assistant');let user=users.find(x=>x.role!=='owner'&&(x.personId===person.id||x.document===document));if(!user){if(users.some(x=>x.username===document))throw new Error('El documento ya está registrado como otro usuario');user={id:'ADMIN-'+Utilities.getUuid(),createdAt:now};users.push(user)}user.personId=person.id;user.document=document;user.username=document;user.name=person.nombre||document;user.role=adminRole;user.enabled=true;user.passwordHash=hashPin_(document,password);user.updatedAt=now;saveAdminUsers_(users)}
   else throw new Error('Aplicación no válida');PropertiesService.getScriptProperties().deleteProperty(invite.key);return json_({ok:true,scope:row.scope});
  }finally{lock.releaseLock()}}
@@ -79,7 +80,7 @@ function adminUserSave_(q){
   if(user&&user.role==='owner')throw new Error('No se puede modificar al Desarrollador-administrador desde este formulario');
   const personId=String(q.personId||'').trim();
   if(!personId)throw new Error('Selecciona un colaborador registrado en Personal');
-  const fileId=findFile_(),cloud=fileId?readFile_(fileId):{};
+  const fileId=findFile_(),cloud=fileId?readFile_(fileId,lock):{};
   const person=(cloud.personal||[]).find(x=>String(x.id)===personId&&!x.deleted);
   if(!person)throw new Error('El colaborador no existe en la base central. Sincroniza Personal antes de conceder acceso.');
   const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
@@ -238,7 +239,7 @@ function adminCorrectAssetMark_(q,auth){
  if(!assetId||!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(expectedMark))throw new Error('Selecciona el activo y la marca duplicada que deseas corregir.');
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
-  const fileId=findFile_(),cloud=fileId?readFile_(fileId):{},assets=cloud.assets||[],old=assets.find(row=>row&&row.id===assetId&&!row.deleted);
+  const fileId=findFile_(),cloud=fileId?readFile_(fileId,lock):{},assets=cloud.assets||[],old=assets.find(row=>row&&row.id===assetId&&!row.deleted);
   if(!old)throw new Error('El activo no está disponible en la base central. Sincroniza y vuelve a abrir su ficha.');
   const history=Array.isArray(old.markCorrections)?old.markCorrections:[],previous=history.find(row=>row.from===expectedMark);
   // La marca anterior nunca se recicla: identifica esta corrección también entre dispositivos.
@@ -376,7 +377,7 @@ function adminCargoAdd_(q,auth){
  try{
   const cache=CacheService.getScriptCache(),key='admin-cargo-search-'+token,raw=cache.get(key),search=raw?JSON.parse(raw):null;
   if(!search||search.username!==auth.username)throw new Error('La búsqueda venció. Busca nuevamente el cargo');
-  const id=findFile_(),cloud=id?readFile_(id):{},catalog=cargoCatalog_(cloud),value=search.value;
+  const id=findFile_(),cloud=id?readFile_(id,lock):{},catalog=cargoCatalog_(cloud),value=search.value;
   if(catalog.values.some(item=>cargoNorm_(item).includes(cargoNorm_(value)))){cache.remove(key);throw new Error('Ya hay un cargo que coincide. Revisa la búsqueda')}
   const old=catalog.record||{},now=new Date().toISOString(),record=Object.assign({},old,{id:old.id||'SYSTEM-FORM-OPTIONS-V1',recordType:'formOptions',options:Object.assign({},old.options||{}, {'personal.role':catalog.values.concat([value])}),deleted:true,active:false,createdAt:old.createdAt||now,updatedAt:now,syncState:'synced'});
   const rows=Array.isArray(cloud.inventoryCriteria)?cloud.inventoryCriteria:[],index=rows.indexOf(catalog.record);
@@ -449,7 +450,7 @@ function validateActaStatus_(incoming,cloud,auth){
 function adminSync_(incoming,since,auth){
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
-  const id=findFile_(),cloud=id?readFile_(id):{},baseUpdatedAt=cloud.updatedAt||'',changes={},recovered=completePendingAssetMarks_(cloud);
+  const id=findFile_(),cloud=id?readFile_(id,lock):{},baseUpdatedAt=cloud.updatedAt||'',changes={},recovered=completePendingAssetMarks_(cloud);
   validateLastActaDeletion_(incoming||{},cloud,auth);
   validateActaStatus_(incoming||{},cloud,auth);
   incoming=prepareAdminNovelties_(incoming,cloud,auth);
@@ -486,7 +487,7 @@ function adminSetInventoryQuantity_(q,auth){
   throw new Error('Selecciona un elemento e indica una cantidad válida, cero o mayor.');
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
-  const id=findFile_(),cloud=id?readFile_(id):{};
+  const id=findFile_(),cloud=id?readFile_(id,lock):{};
   const item=(cloud.inventoryCriteria||[]).find(row=>row?.id===itemId);
   if(!item||item.deleted||item.active===false||item.recordType==='formOptions'||
      item.id==='SYSTEM-FORM-OPTIONS-V1'||truthy_(item.isYtSpare)||
@@ -517,7 +518,7 @@ function adminReverseMovement_(q){
  if(!requestedBy||requestedBy.length>200)throw new Error('Indica quién solicitó la reversión (máximo 200 caracteres)');
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
-  const id=findFile_(),cloud=id?readFile_(id):{},rows=Array.isArray(cloud[type])?cloud[type]:[],row=rows.find(x=>x&&x.id===movementId&&!x.deleted);
+  const id=findFile_(),cloud=id?readFile_(id,lock):{},rows=Array.isArray(cloud[type])?cloud[type]:[],row=rows.find(x=>x&&x.id===movementId&&!x.deleted);
   if(!row)throw new Error('El movimiento no existe en la base central');
   if(row.movementType==='REVERSIÓN'||row.reversalOf)throw new Error('No se puede revertir un movimiento de reversión');
   const existing=rows.find(x=>x&&x.movementType==='REVERSIÓN'&&x.reversalOf===movementId);
@@ -525,6 +526,7 @@ function adminReverseMovement_(q){
   if(existing)return json_({ok:true,alreadyApplied:true,data:cloud,movement:existing});
   if(row.reversed===true||row.reversado===true)throw new Error('Este movimiento ya fue reversado');
   if(row.movementType==='DEVOLUCIÓN'||cargoNorm_(row.deliveryType)==='prestamo')throw new Error('Los préstamos se cierran desde Retorno de elementos; no se revierten como entregas.');
+  if(type==='blendingDeliveries'&&productionTransferImported_(row.id))throw new Error('Este traslado ya ingresó a Producción. Registra una devolución desde Bodega de Producción para conservar ambas existencias.');
   if(row.assetId)throw new Error('La reversión de activos fijos requiere restaurar también su ubicación y no está habilitada en esta operación');
   const qty=Number(row.quantity);
   if(!Number.isFinite(qty)||!(qty>0)||!row.itemId)throw new Error('El movimiento no tiene cantidad válida');
@@ -559,6 +561,7 @@ function applyPlazaLoanReturn_(row,asset,movements,cloud,auth){
   const valid=entry=>entry&&!entry.deleted&&!entry.reversed&&!entry.reversado;
   const loan=movements.find(entry=>valid(entry)&&entry.id===row.loanId&&entry.movementType!=='DEVOLUCIÓN');
   if(!loan||cargoNorm_(loan.deliveryType)!=='prestamo')throw new Error('No existe un préstamo válido para esta devolución');
+  if(productionTransferImported_(loan.id))throw new Error('El préstamo está en Producción. Registra allí ENVIAR A PLAZA para cerrar el traslado sin duplicar existencias.');
   if(String(loan.assetId||'')!==String(row.assetId||'')||loan.itemId!==row.itemId||Number(row.quantity)!==Number(loan.quantity)||!Number.isFinite(Number(loan.quantity))||!(Number(loan.quantity)>0))throw new Error('El retorno debe corresponder al elemento y a la cantidad total del préstamo');
   if(movements.some(entry=>valid(entry)&&entry.movementType==='DEVOLUCIÓN'&&entry.loanId===loan.id))throw new Error('Este préstamo ya fue devuelto. Sincroniza para consultar la devolución registrada.');
   if(loan.assetId){
@@ -640,7 +643,7 @@ function applyPlazaChanges_(cloud,incoming,auth){
           if(!asset)throw new Error('El activo seleccionado no existe');
           row.assetLabel=[asset.clase,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.marcaActual||asset.marcaInterna,asset.serial&&'Serial '+asset.serial,asset.minaOrigen&&'Origen: '+asset.minaOrigen].filter(Boolean).join(' · ');
           if(isReturn)asset.ubicacion='Bodega de Superficie';
-          else if(name==='blendingDeliveries'){if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');asset.ubicacion=row.destination||'Operación'}else{asset.ubicacion='Bodega de Superficie';applyPlazaIncomeContext_(row,asset)}asset.updatedAt=new Date().toISOString();
+          else if(name==='blendingDeliveries'){if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');asset.ubicacion=row.destination||'Operación'}else{if(productionWarehouseSettings_().enabled&&/^(?:inventario de |bodega de )?produccion(?:$| ·)/.test(cargoNorm_(asset.ubicacion)))throw new Error('Registra el traslado de este activo desde Bodega de Producción; su ingreso en Plaza será automático.');asset.ubicacion='Bodega de Superficie';applyPlazaIncomeContext_(row,asset)}asset.updatedAt=new Date().toISOString();
         }else{
           const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},balanceBefore=Number(current.quantity)||0,next=balanceBefore+(name==='blendingIncomes'||isReturn?qty:-qty);row.balanceBefore=balanceBefore;row.balanceAfter=next;
           if(next<0)throw new Error('La cantidad ingresada supera la disponibilidad');
@@ -656,7 +659,7 @@ function plazaSync_(q){
   const incoming=q.data||{},lock=LockService.getScriptLock();
   lock.waitLock(30000);
   try{
-    const id=findFile_(),cloud=id?readFile_(id):{},auth=verifyToken_(q.token,cloud),recovered=completePendingAssetMarks_(cloud);
+    const id=findFile_(),cloud=id?readFile_(id,lock):{},auth=verifyToken_(q.token,cloud),recovered=completePendingAssetMarks_(cloud);
     const names=['assets'].concat(PLAZA_WRITE),hasPending=names.some(name=>Array.isArray(incoming[name])&&incoming[name].some(row=>row&&row.syncState==='pending'));
     const protocol=q.syncProtocol==='plaza-receipts-v1',acknowledgements={assets:[],blendingIncomes:[],blendingDeliveries:[]};
     let merged=cloud,changed=recovered;
@@ -710,16 +713,16 @@ function sign_(payload){const secret=PropertiesService.getScriptProperties().get
 function verifyToken_(token,cloud){const bits=String(token||'').split('.');if(bits.length!==2)throw new Error('Sesión no válida');const payload=Utilities.newBlob(Utilities.base64DecodeWebSafe(bits[0])).getDataAsString(),parts=payload.split('|');if(parts.length!==3||!safeEqual_(bits[1],sign_(payload))||Number(parts[2])<Date.now())throw new Error('La sesión venció');if(!['plaza_operator','plaza_supervisor','plaza_assistant'].includes(parts[1]))throw new Error('Permiso no válido');return plazaAccount_(cloud,{document:parts[0],role:parts[1]})}
 function safeEqual_(a,b){a=String(a);b=String(b);if(a.length!==b.length)return false;let n=0;for(let i=0;i<a.length;i++)n|=a.charCodeAt(i)^b.charCodeAt(i);return n===0}
 function hex_(bytes){return bytes.map(x=>(x<0?x+256:x).toString(16).padStart(2,'0')).join('')}
-function enablePlazaUser(document,pin,role){document=String(document||'').trim();pin=String(pin||'');if(!document||!pin)throw new Error('Documento y contraseña son obligatorios');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},matches=(cloud.personal||[]).filter(x=>String(x.documento||'').trim()===document&&!x.deleted),person=matches[0];if(!person)throw new Error('El documento no existe en Personal');const now=nextRevision_(cloud.updatedAt),pinHash=hashPin_(document,pin),plazaRole=role==='supervisor'?'supervisor':'operator';matches.forEach(x=>{x.plazaEnabled=true;x.plazaRole=plazaRole;x.pinHash=pinHash;x.updatedAt=now});cloud.personal=dedupePersonal_(cloud.personal||[]);cloud.updatedAt=now;writeFile_(id,cloud);return 'Usuario de Plaza Blending habilitado: '+document}finally{lock.releaseLock()}}
-function plazaUserAdmin_(q){const document=String(q.document||'').trim(),enabled=q.enabled===true,pin=String(q.pin||''),role=q.role==='supervisor'?'supervisor':'operator';if(!document)throw new Error('Selecciona un colaborador');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},matches=(cloud.personal||[]).filter(x=>String(x.documento||'').trim()===document&&!x.deleted),person=matches[0];if(!person)throw new Error('El colaborador no existe en la base central');const now=nextRevision_(cloud.updatedAt),existingHash=matches.map(x=>x.pinHash).find(Boolean),pinHash=pin?hashPin_(document,pin):existingHash;if(enabled&&!pinHash)throw new Error('Escribe una contraseña para habilitar el acceso');matches.forEach(x=>{if(enabled){x.pinHash=pinHash;x.plazaEnabled=true;x.plazaRole=role}else{x.plazaEnabled=false;delete x.pinHash;delete x.plazaRole}x.updatedAt=now});if(!enabled)revokeInvitations_('plaza',document);cloud.personal=dedupePersonal_(cloud.personal||[]);const saved=(cloud.personal||[]).find(x=>String(x.documento||'').trim()===document&&!x.deleted)||person;cloud.updatedAt=now;writeFile_(id,cloud);return json_({ok:true,user:{id:saved.id,documento:document,nombre:saved.nombre||'',plazaEnabled:saved.plazaEnabled===true,plazaRole:saved.plazaRole||''}})}finally{lock.releaseLock()}}
-function plazaCollaborator_(q){const input=q.collaborator||{},document=String(input.documento||'').trim(),primerNombre=String(input.primerNombre||'').trim(),segundoNombre=String(input.segundoNombre||'').trim(),primerApellido=String(input.primerApellido||'').trim(),segundoApellido=String(input.segundoApellido||'').trim(),nombre=[primerNombre,segundoNombre,primerApellido,segundoApellido].filter(Boolean).join(' '),empresa=String(input.empresa||'').trim(),area=String(input.area||'').trim(),cargo=String(input.cargo||'No informado').trim()||'No informado',telefono=String(input.telefono||'').trim();if(!document||!primerNombre||!primerApellido||!empresa||!area)throw new Error('Documento, primer nombre, primer apellido, empresa y área son obligatorios');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id):{},auth=verifyToken_(q.token,cloud),rows=Array.isArray(cloud.personal)?cloud.personal:(cloud.personal=[]),existing=rows.find(x=>String(x.documento||'').trim()===document&&!x.deleted);if(existing&&!q.update)return json_({ok:true,exists:true,user:publicPerson_(existing)});const now=nextRevision_(cloud.updatedAt),person=existing||{id:'PERSONAL-PLAZA-'+Utilities.getUuid(),createdAt:now};Object.assign(person,{documento:document,primerNombre:primerNombre,segundoNombre:segundoNombre,primerApellido:primerApellido,segundoApellido:segundoApellido,nombre:nombre,empresa:empresa,area:area,cargo:cargo,telefono:telefono,deleted:false,updatedAt:now,syncState:'synced',registeredBy:auth.document});if(!existing)rows.push(person);cloud.personal=dedupePersonal_(rows);cloud.updatedAt=now;writeFile_(id,cloud);return json_({ok:true,exists:false,user:publicPerson_(person)})}finally{lock.releaseLock()}}
+function enablePlazaUser(document,pin,role){document=String(document||'').trim();pin=String(pin||'');if(!document||!pin)throw new Error('Documento y contraseña son obligatorios');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id,lock):{},matches=(cloud.personal||[]).filter(x=>String(x.documento||'').trim()===document&&!x.deleted),person=matches[0];if(!person)throw new Error('El documento no existe en Personal');const now=nextRevision_(cloud.updatedAt),pinHash=hashPin_(document,pin),plazaRole=role==='supervisor'?'supervisor':'operator';matches.forEach(x=>{x.plazaEnabled=true;x.plazaRole=plazaRole;x.pinHash=pinHash;x.updatedAt=now});cloud.personal=dedupePersonal_(cloud.personal||[]);cloud.updatedAt=now;writeFile_(id,cloud);return 'Usuario de Plaza Blending habilitado: '+document}finally{lock.releaseLock()}}
+function plazaUserAdmin_(q){const document=String(q.document||'').trim(),enabled=q.enabled===true,pin=String(q.pin||''),role=q.role==='supervisor'?'supervisor':'operator';if(!document)throw new Error('Selecciona un colaborador');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id,lock):{},matches=(cloud.personal||[]).filter(x=>String(x.documento||'').trim()===document&&!x.deleted),person=matches[0];if(!person)throw new Error('El colaborador no existe en la base central');const now=nextRevision_(cloud.updatedAt),existingHash=matches.map(x=>x.pinHash).find(Boolean),pinHash=pin?hashPin_(document,pin):existingHash;if(enabled&&!pinHash)throw new Error('Escribe una contraseña para habilitar el acceso');matches.forEach(x=>{if(enabled){x.pinHash=pinHash;x.plazaEnabled=true;x.plazaRole=role}else{x.plazaEnabled=false;delete x.pinHash;delete x.plazaRole}x.updatedAt=now});if(!enabled)revokeInvitations_('plaza',document);cloud.personal=dedupePersonal_(cloud.personal||[]);const saved=(cloud.personal||[]).find(x=>String(x.documento||'').trim()===document&&!x.deleted)||person;cloud.updatedAt=now;writeFile_(id,cloud);return json_({ok:true,user:{id:saved.id,documento:document,nombre:saved.nombre||'',plazaEnabled:saved.plazaEnabled===true,plazaRole:saved.plazaRole||''}})}finally{lock.releaseLock()}}
+function plazaCollaborator_(q){const input=q.collaborator||{},document=String(input.documento||'').trim(),primerNombre=String(input.primerNombre||'').trim(),segundoNombre=String(input.segundoNombre||'').trim(),primerApellido=String(input.primerApellido||'').trim(),segundoApellido=String(input.segundoApellido||'').trim(),nombre=[primerNombre,segundoNombre,primerApellido,segundoApellido].filter(Boolean).join(' '),empresa=String(input.empresa||'').trim(),area=String(input.area||'').trim(),cargo=String(input.cargo||'No informado').trim()||'No informado',telefono=String(input.telefono||'').trim();if(!document||!primerNombre||!primerApellido||!empresa||!area)throw new Error('Documento, primer nombre, primer apellido, empresa y área son obligatorios');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id,lock):{},auth=verifyToken_(q.token,cloud),rows=Array.isArray(cloud.personal)?cloud.personal:(cloud.personal=[]),existing=rows.find(x=>String(x.documento||'').trim()===document&&!x.deleted);if(existing&&!q.update)return json_({ok:true,exists:true,user:publicPerson_(existing)});const now=nextRevision_(cloud.updatedAt),person=existing||{id:'PERSONAL-PLAZA-'+Utilities.getUuid(),createdAt:now};Object.assign(person,{documento:document,primerNombre:primerNombre,segundoNombre:segundoNombre,primerApellido:primerApellido,segundoApellido:segundoApellido,nombre:nombre,empresa:empresa,area:area,cargo:cargo,telefono:telefono,deleted:false,updatedAt:now,syncState:'synced',registeredBy:auth.document});if(!existing)rows.push(person);cloud.personal=dedupePersonal_(rows);cloud.updatedAt=now;writeFile_(id,cloud);return json_({ok:true,exists:false,user:publicPerson_(person)})}finally{lock.releaseLock()}}
 function publicPerson_(x){return{id:x.id,createdAt:x.createdAt||'',updatedAt:x.updatedAt||'',documento:x.documento||'',primerNombre:x.primerNombre||'',segundoNombre:x.segundoNombre||'',primerApellido:x.primerApellido||'',segundoApellido:x.segundoApellido||'',nombre:x.nombre||'',empresa:x.empresa||'',area:x.area||'',cargo:x.cargo||'No informado',telefono:x.telefono||'',deleted:!!x.deleted}}
 function merge_(cloud,local){const out={schema:6,updatedAt:nextRevision_(cloud.updatedAt)},names=new Set(Object.keys(cloud||{}).concat(Object.keys(local||{})));names.delete('schema');names.delete('updatedAt');names.forEach(name=>{const map=new Map(),remote=Array.isArray(cloud[name])?cloud[name]:[],device=Array.isArray(local[name])?local[name]:[];remote.forEach(x=>{if(x&&x.id)map.set(x.id,x)});device.forEach(x=>{if(!x||!x.id)return;const central=map.get(x.id),chosen=(name==='assets'&&central?.deleted||['blendingIncomes','blendingDeliveries'].includes(name)&&central&&(central.reversed===true||central.reversado===true||central.movementType==='REVERSIÓN'))?central:choose_(x,central);if(name==='personal'&&central){const merged=Object.assign({},central,chosen);for(const field of ['pinHash','plazaEnabled','plazaRole']){if(Object.prototype.hasOwnProperty.call(central,field))merged[field]=central[field];else delete merged[field]}map.set(x.id,merged)}else map.set(x.id,chosen)});out[name]=Array.from(map.values())});if(Array.isArray(out.personal)){out.personal=dedupePersonal_(out.personal);const centralByDocument=new Map();(Array.isArray(cloud.personal)?cloud.personal:[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()).forEach(x=>{const key=String(x.documento).trim(),old=centralByDocument.get(key);centralByDocument.set(key,choose_(x,old))});out.personal.forEach(x=>{const central=centralByDocument.get(String(x.documento||'').trim());if(central&&central.plazaEnabled===true&&central.pinHash){x.plazaEnabled=true;x.pinHash=central.pinHash;x.plazaRole=central.plazaRole||'operator'}else{delete x.pinHash;delete x.plazaEnabled;delete x.plazaRole}})}return out}
 function dedupePersonal_(rows){const map=new Map();rows.forEach(x=>{if(!x||!x.id)return;const document=String(x.documento||'').trim(),key=document?'doc:'+document:'id:'+x.id,old=map.get(key);if(!old){map.set(key,x);return}const chosen=choose_(x,old);map.set(key,Object.assign({},old,chosen,{id:old.id||chosen.id}))});return Array.from(map.values())}
 function choose_(local,remote){if(!remote)return local;if(!local)return remote;const ls=local.syncState==='seed',rs=remote.syncState==='seed';if(ls!==rs)return ls?remote:local;return stamp_(local)>=stamp_(remote)?local:remote}
 function stamp_(x){const n=Date.parse(x.updatedAt||x.createdAt||'');return isNaN(n)?0:n}
 function findFile_(){const cache=CacheService.getScriptCache(),cached=cache.get('sk-web-central-file-id');if(cached){try{DriveApp.getFileById(cached).getName();return cached}catch(_){cache.remove('sk-web-central-file-id')}}const files=DriveApp.getFilesByName(CLOUD_FILE),candidates=[];while(files.hasNext())candidates.push(files.next());candidates.sort((a,b)=>b.getLastUpdated().getTime()-a.getLastUpdated().getTime());for(const file of candidates){try{const data=JSON.parse(file.getBlob().getDataAsString('UTF-8'));if(data&&typeof data==='object'&&!Array.isArray(data)){cache.put('sk-web-central-file-id',file.getId(),60);return file.getId()}}catch(error){console.error('Base central descartada por contenido inválido',file.getId(),String(error&&error.message||error))}}if(candidates.length)throw new Error('La base central está dañada. Se bloqueó la operación para proteger los datos.');return''}
-function readFile_(id){return JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8'))}
+function readFile_(id,heldLock){const data=JSON.parse(DriveApp.getFileById(id).getBlob().getDataAsString('UTF-8'));return productionRecoverBridge_(id,data,heldLock)}
 function writeFile_(id,data){const body=JSON.stringify(data);if(id){DriveApp.getFileById(id).setContent(body);return id}return DriveApp.createFile(CLOUD_FILE,body,MimeType.PLAIN_TEXT).getId()}
 function json_(x){return ContentService.createTextOutput(JSON.stringify(x)).setMimeType(ContentService.MimeType.JSON)}
 
@@ -727,10 +730,10 @@ function json_(x){return ContentService.createTextOutput(JSON.stringify(x)).setM
 const PRODUCTION_FILE='sk-web-production.json';
 function productionAccessKey_(document){return 'SK_PROD_USER_'+invitationKey_(document).slice('SK_INVITE_'.length)}
 function productionAccess_(document){const raw=PropertiesService.getScriptProperties().getProperty(productionAccessKey_(document));return raw?JSON.parse(raw):null}
-function productionRole_(role){return ['admin','mechanic','assistant'].includes(role)?role:'assistant'}
+function productionRole_(role){return ['admin','mechanic','assistant','warehouse'].includes(role)?role:'assistant'}
 function saveProductionAccess_(person,passwordHash,role){
  const document=String(person.documento).trim();
- PropertiesService.getScriptProperties().setProperty(productionAccessKey_(document),JSON.stringify({document:document,personId:person.id,role:productionRole_(role),passwordHash:passwordHash,revision:Utilities.getUuid()}));
+ PropertiesService.getScriptProperties().setProperty(productionAccessKey_(document),JSON.stringify({document:document,personId:person.id,role:productionPrimaryRole_(productionRoles_({roles:Array.isArray(role)?role:undefined,role})),roles:productionRoles_({roles:Array.isArray(role)?role:undefined,role}),passwordHash:passwordHash,revision:Utilities.getUuid()}));
 }
 function productionAccessAdmin_(q){
  const props=PropertiesService.getScriptProperties();
@@ -740,7 +743,7 @@ function productionAccessAdmin_(q){
   finally{lock.releaseLock()}
  }
  const values=props.getProperties();
- return json_({ok:true,users:Object.keys(values).filter(key=>key.startsWith('SK_PROD_USER_')).map(key=>{const row=JSON.parse(values[key]);return {document:row.document,personId:row.personId,role:productionRole_(row.role)}})});
+ return json_({ok:true,warehouseV1:true,warehouseSettings:productionWarehouseSettings_(),users:Object.keys(values).filter(key=>key.startsWith('SK_PROD_USER_')).map(key=>{const row=JSON.parse(values[key]);return {document:row.document,personId:row.personId,role:productionRole_(row.role),roles:productionRoles_(row)}})});
 }
 function productionLogin_(q){
  const document=String(q.document||'').trim(),user=productionAccess_(document);
@@ -748,7 +751,7 @@ function productionLogin_(q){
  const id=findFile_(),cloud=id?readFile_(id):{},person=(cloud.personal||[]).find(row=>row.id===user.personId&&!row.deleted&&String(row.documento).trim()===document);
  if(!person)throw new Error('Colaborador no disponible');
  const expires=Date.now()+12*60*60*1000,payload=JSON.stringify(['production',document,user.revision,expires]);
- return json_({ok:true,token:Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload),expiresAt:expires,user:{document:document,name:person.nombre||document,personId:person.id,role:productionRole_(user.role)}});
+ return json_({ok:true,token:Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload),expiresAt:expires,user:{document:document,name:person.nombre||document,personId:person.id,role:productionRole_(user.role),roles:productionRoles_(user)},warehouseV1:true});
 }
 function verifyProductionToken_(token){
  const bits=String(token||'').split('.');
@@ -763,14 +766,19 @@ function verifyProductionToken_(token){
 function productionSync_(q){
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
-  const user=verifyProductionToken_(q.token),id=findFile_(),central=id?readFile_(id):{};
+  const user=verifyProductionToken_(q.token);
+  if(!productionCan_(user,'mechanic'))throw new Error('Tu acceso permite Bodega de Producción.');
+  const id=findFile_(),central=id?readFile_(id,lock):{};
   const personal=(central.personal||[]).filter(row=>!row.deleted);
   const recorder=personal.find(row=>row.id===user.personId&&String(row.documento).trim()===user.document);
   if(!recorder)throw new Error('Colaborador no disponible');
-  const files=DriveApp.getFilesByName(PRODUCTION_FILE),file=files.hasNext()?files.next():null;
+  const files=DriveApp.getFilesByName(PRODUCTION_FILE);let file=files.hasNext()?files.next():null;
   if(files.hasNext())throw new Error('Hay más de una base de Producción. Revisa los archivos de Drive.');
   const data=file?JSON.parse(file.getBlob().getDataAsString('UTF-8')):{consumptions:[]};
   if(!Array.isArray(data.consumptions))throw new Error('La base de Producción no es válida');
+  const imported=productionImportPlaza_(data,central);
+  if(imported)file=productionSaveData_(file,data);
+  if(productionWarehouseSettings_().allowSpareDelivery&&q.warehouseV1!==true)throw new Error('Actualiza la app de Producción para consultar las salidas de Bodega.');
   const known=new Map(data.consumptions.map(row=>[row.id,row]));
   const incomes=new Map((data.incomes||[]).map(row=>[row.id,row]));
   const assets=(central.assets||[]).filter(row=>!row.deleted&&/^(yt|columna)/i.test(String(row.clase||'')));
@@ -837,9 +845,10 @@ function productionSync_(q){
    if(row.kind||!Number.isSafeInteger(row.cantidad)||row.cantidad<1||!productionDate_(row.fechaISO))throw new Error('Cantidad o fecha no válida');
    if(!/^(?:YT|Columna)(?:28|29)$/.test(row.origen)||!['YT','Columna'].includes(row.tipoEquipo)||!row.origen.startsWith(row.tipoEquipo))throw new Error('Inventario de origen no válido');
    if(!assets.some(x=>x.id===row.assetId)||!personal.some(x=>x.id===row.responsableId)||!partAliases.has(row.origen+'|'+row.partId))throw new Error('Máquina, responsable o repuesto no disponible. Revisa los consumos pendientes.');
-   if(productionRole_(user.role)==='mechanic'&&row.responsableId!==user.personId)throw new Error('El mecánico solo puede registrar consumos a su nombre.');
+   if(productionRoles_(user).includes('mechanic')&&!productionRoles_(user).some(role=>['admin','assistant'].includes(role))&&row.responsableId!==user.personId)throw new Error('El mecánico solo puede registrar consumos a su nombre.');
    if(row.turno!=null&&!/^[DTS]$/.test(row.turno))throw new Error('Turno no válido');
    const responsible=personal.find(person=>person.id===row.responsableId);
+   if(productionWarehouseSettings_().enabled&&row.cantidad>productionSpareBalance_({...data,incomes:Array.from(incomes.values()),consumptions:Array.from(known.values())},{partId:row.partId,origen:row.origen},central))throw new Error('La cantidad supera las existencias actuales de Producción. Revisa los pendientes.');
    const saved={id:row.id,assetId:row.assetId,responsableId:row.responsableId,responsableNombre:responsible.nombre||responsible.documento,partId:row.partId,itemId:String(row.itemId||''),noItem:String(row.noItem||''),nombreRepuesto:String(row.nombreRepuesto||'').slice(0,200),tipoEquipo:row.tipoEquipo,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,recordedAt:productionRecordedAt_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,registradoPorId:recorder.id};
    if(row.turno)saved.turno=row.turno;
    known.set(saved.id,saved);changed=true;
@@ -875,7 +884,7 @@ function productionSync_(q){
   const deliveries=(central.blendingDeliveries||[]).filter(row=>!row.deleted&&cargoNorm_(row.destination)==='produccion'&&spareIds.has(row.itemId)).map(row=>({id:row.id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,createdAt:row.createdAt,reversed:row.reversed===true||row.reversado===true}));
   // Igual que Plaza: los recibos se emiten solo después de guardar en Drive.
   const acknowledgements=protocol?pending.map(row=>({id:row?.id||'',status:rejected.has(row?.id||'')?'rejected':priorIds.has(row.id)?'already-applied':'accepted',...(rejected.has(row?.id||'')?{error:rejected.get(row?.id||'')}:{})})):undefined;
-  return json_({ok:true,incomeChangesV1:true,incomeChangeReceipts,incomeHistory:(data.incomeHistory||[]).filter(row=>Date.now()-Date.parse(row.at)<=30*86400000||incomeChanges.some(op=>op.id===row.id)),...(protocol?{syncProtocol:'production-receipts-v1',acknowledgements}:{}),productionRole:productionRole_(user.role),personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,inventoryResult,stockAdjustment:true,stockAdjustmentLocalV1:true,
+  return json_({ok:true,incomeChangesV1:true,incomeChangeReceipts,incomeHistory:(data.incomeHistory||[]).filter(row=>Date.now()-Date.parse(row.at)<=30*86400000||incomeChanges.some(op=>op.id===row.id)),...(protocol?{syncProtocol:'production-receipts-v1',acknowledgements}:{}),productionRole:productionRole_(user.role),productionRoles:productionRoles_(user),warehouseV1:true,personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,inventoryResult,stockAdjustment:true,stockAdjustmentLocalV1:true,
    inventoryCounts:counts.filter(row=>row.status!=='closed'&&(row.owner===user.document||user.role==='admin'&&row.status==='submitted')),
    inventoryLatest:Array.from(latest.values()),incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.filter(row=>!rejected.has(row?.id||'')).map(row=>row.id),superseded:pending.filter(row=>row.correctionId&&incomes.get(row.id)?.correctionId!==row.correctionId&&(incomes.get(row.id)?.appliedCorrections||[]).includes(row.correctionId)).map(row=>({id:row.id,correctionId:row.correctionId}))});
  }finally{lock.releaseLock()}
@@ -892,6 +901,7 @@ function productionIncomeChange_(op,incomes,data,user,recorder){
   return {changed:false};
  }
  const before=incomes.get(op.incomeId);
+ if(before?.sourceDeliveryId||before?.sourceWarehouseMovementId)throw new Error('El ingreso está vinculado a un traslado. Registra su devolución desde Bodega.');
  if(!before||before.kind!=='income')throw new Error('Selecciona un ingreso registrado; los saldos de apertura se corrigen en Existencias.');
  if(op.baseRevision!==(before.revision||'original'))throw new Error('Este ingreso cambió en otro dispositivo. Sincroniza y revisa el registro.');
  const latest=(data.inventoryCounts||[]).filter(row=>row.origin===before.origen&&row.status==='closed').sort((a,b)=>b.date.localeCompare(a.date))[0];
@@ -969,7 +979,7 @@ function productionCountRows_(count,counts,parts,criteria,incomes,consumptions){
  for(const row of previous?.rows||[])for(const id of row.aliases||[row.partId])lastRows.set(id,row);
  for(const row of catalog.values()){
   const last=row.aliases.map(id=>lastRows.get(id)).find(Boolean);
-  row.opening=last?.physical||0;row.incomes=0;row.consumptions=0;row.adjustments=0;row.cutoff=last?previous.date:'';row.closedAt=last?previous.closedAt:'';
+  row.opening=last?.physical||0;row.incomes=0;row.consumptions=0;row.adjustments=0;row.outgoings=0;row.cutoff=last?previous.date:'';row.closedAt=last?previous.closedAt:'';
   for(const id of row.aliases)byAlias.set(id,row);
  }
  const get=row=>row.origen===origin&&!row.deleted&&row.fechaISO<=date&&byAlias.get(row.partId);
@@ -978,11 +988,11 @@ function productionCountRows_(count,counts,parts,criteria,incomes,consumptions){
   if(row&&!row.cutoff&&movement.kind==='initial'){row.opening=movement.cantidad;row.initialDate=movement.fechaISO;}
  }
  const include=(row,movement)=>row&&(row.cutoff?productionAfterClose_(movement,row.cutoff,row.closedAt):true);
- for(const movement of incomes){const row=get(movement);if(include(row,movement)){if(movement.kind==='income')row.incomes+=movement.cantidad;else if(movement.kind==='adjustment')row.adjustments+=movement.cantidad;}}
+ for(const movement of incomes){const row=get(movement);if(include(row,movement)){if(['income','warehouse-return'].includes(movement.kind))row.incomes+=movement.cantidad;else if(movement.kind==='warehouse-out')row.outgoings+=movement.cantidad;else if(movement.kind==='adjustment')row.adjustments+=movement.cantidad;}}
  for(const movement of consumptions){const row=get(movement);if(include(row,movement))row.consumptions+=movement.cantidad;}
- return Array.from(catalog.values(),({partId,name,aliases,opening,incomes,consumptions,adjustments})=>{
-  const expected=opening+incomes-consumptions,physical=counted.get(partId);
-  return {partId,name,aliases,opening,incomes,consumptions,adjustments,expected,physical,difference:physical-expected};
+ return Array.from(catalog.values(),({partId,name,aliases,opening,incomes,consumptions,adjustments,outgoings})=>{
+  const expected=opening+incomes-consumptions-outgoings,physical=counted.get(partId);
+  return {partId,name,aliases,opening,incomes,consumptions,adjustments,outgoings,expected,physical,difference:physical-expected};
  });
 }
 
@@ -1013,4 +1023,255 @@ function productionCatalog_(parts,criteria,origin){
   if(source&&normalize(item.spareEquipment)===key&&!source.aliases.includes(item.id))source.aliases.push(item.id);
  }
  return catalog;
+}
+
+// Bodega de Producción: su libro y cantidades viven exclusivamente en PRODUCTION_FILE.
+function productionRoles_(user){
+ const valid=['admin','assistant','mechanic','warehouse'];
+ const roles=Array.isArray(user?.roles)?user.roles:[user?.role||'assistant'];
+ if(!roles.length||roles.some(role=>!valid.includes(role)))throw new Error('Selecciona un rol válido de Producción.');
+ return [...new Set(roles)];
+}
+function productionPrimaryRole_(roles){return ['admin','assistant','mechanic','warehouse'].find(role=>roles.includes(role))}
+function productionCan_(user,module){const roles=productionRoles_(user);return roles.includes('admin')||(module==='mechanic'?roles.some(role=>['mechanic','assistant'].includes(role)):roles.includes('warehouse'))}
+function productionWarehouseSettings_(){
+ const raw=typeof PropertiesService!=='undefined'?PropertiesService.getScriptProperties().getProperty('SK_PRODUCTION_WAREHOUSE'):null;
+ return raw?JSON.parse(raw):{enabled:false,allowSpareDelivery:false,transferStartAt:''};
+}
+function productionWarehouseConfigure_(q){
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const settings=productionWarehouseSettings_();
+  if(typeof q.enabled==='boolean'){
+   if(settings.enabled&&!q.enabled)throw new Error('La bodega ya está activa. Su historial debe conservarse.');
+   if(q.enabled&&!settings.enabled){settings.enabled=true;settings.transferStartAt=new Date().toISOString();}
+  }
+  if(typeof q.allowSpareDelivery==='boolean')settings.allowSpareDelivery=q.allowSpareDelivery;
+  PropertiesService.getScriptProperties().setProperty('SK_PRODUCTION_WAREHOUSE',JSON.stringify(settings));
+  return json_({ok:true,warehouseV1:true,warehouseSettings:settings});
+ }finally{lock.releaseLock()}
+}
+function productionDataFile_(){
+ const files=DriveApp.getFilesByName(PRODUCTION_FILE),file=files.hasNext()?files.next():null;
+ if(files.hasNext())throw new Error('Hay más de una base de Producción. Revisa Drive.');
+ return file;
+}
+function productionReadData_(file){
+ const data=file?JSON.parse(file.getBlob().getDataAsString('UTF-8')):{consumptions:[],incomes:[]};
+ if(!Array.isArray(data.consumptions)||data.incomes&&!Array.isArray(data.incomes))throw new Error('La base de Producción no es válida.');
+ return data;
+}
+function productionSaveData_(file,data){
+ const body=JSON.stringify(data);
+ return file?(file.setContent(body),file):DriveApp.createFile(PRODUCTION_FILE,body,MimeType.PLAIN_TEXT);
+}
+function productionWarehouseAppend_(data,row){
+ data.warehouseRevision=(Number(data.warehouseRevision)||0)+1;
+ const saved={...row,revision:data.warehouseRevision};
+ (data.warehouseMovements||(data.warehouseMovements=[])).push(saved);return saved;
+}
+function productionWarehouseDestination_(row){return row.destinationWarehouseId==='production'||['produccion','inventario de produccion','bodega de produccion'].includes(cargoNorm_(row.destination))}
+function productionSpare_(item,central){
+ if(!item?.isYtSpare)return null;
+ for(const origin of ['YT28','YT29','Columna28','Columna29']){
+  for(const part of productionCatalog_(central.parts||[],central.inventoryCriteria||[],origin).values())
+   if(part.aliases.includes(item.id)||part.aliases.includes(item.productionPartId))return {partId:part.partId,origen:origin};
+ }
+ throw new Error('El repuesto no tiene inventario de origen configurado.');
+}
+function productionImportPlaza_(data,central){
+ const settings=productionWarehouseSettings_();if(!settings.enabled)return false;
+ const existing=new Set((data.warehouseMovements||[]).map(row=>row.id));
+ const criteria=new Map((central.inventoryCriteria||[]).map(row=>[row.id,row]));let changed=false;
+ for(const source of central.blendingDeliveries||[]){
+  // La activación no vuelve a ingresar entregas históricas incluidas en aperturas.
+  if(source.deleted||source.reversed||source.reversado||source.reversalOf||source.movementType==='DEVOLUCIÓN'||source.movementType==='REVERSIÓN'||!productionWarehouseDestination_(source)||String(source.createdAt||'')<settings.transferStartAt)continue;
+  const id='plaza-'+source.id;if(existing.has(id))continue;
+  const item=criteria.get(source.itemId);if(!item||!Number.isFinite(Number(source.quantity))||Number(source.quantity)<=0)continue;
+  const spare=productionSpare_(item,central),now=new Date().toISOString();
+  const event=productionWarehouseAppend_(data,{id,kind:'transfer_in',itemId:item.id,itemName:item.name,quantity:Number(source.quantity),delta:Number(source.quantity),assetId:source.assetId||'',sourceDeliveryId:source.id,sourceLoan:cargoNorm_(source.deliveryType)==='prestamo',source:'plaza',target:spare?'mechanics':'warehouse',createdAt:now,fechaISO:Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'),sourceCreatedAt:source.createdAt,personName:source.recipientName||'',status:'synced'});
+  if(spare)(data.incomes||(data.incomes=[])).push({id,kind:'income',...spare,cantidad:event.quantity,fechaISO:Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'),createdAt:now,recordedAt:now,sourceDeliveryId:source.id,registradoPorNombre:'Traslado desde Plaza Blending'});
+  existing.add(id);changed=true;
+ }
+ return changed;
+}
+function productionTransferImported_(sourceId){
+ if(!productionWarehouseSettings_().enabled)return false;
+ const file=productionDataFile_();if(!file)return false;
+ return (productionReadData_(file).warehouseMovements||[]).some(row=>row.sourceDeliveryId===sourceId&&row.status!=='rejected');
+}
+function productionSpareBalance_(data,spare,central){
+ const today=Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'),catalog=productionCatalog_(central.parts||[],central.inventoryCriteria||[],spare.origen);
+ const part=[...catalog.values()].find(row=>row.aliases.includes(spare.partId));if(!part)return 0;
+ const ids=new Set(part.aliases),closed=(data.inventoryCounts||[]).filter(row=>row.status==='closed'&&row.origin===spare.origen&&row.date<=today).sort((a,b)=>b.date.localeCompare(a.date)||String(b.closedAt||'').localeCompare(String(a.closedAt||'')))[0];
+ const opening=closed?.rows.find(row=>(row.aliases||[row.partId]).some(id=>ids.has(id)));
+ const matches=row=>!row.deleted&&row.origen===spare.origen&&ids.has(row.partId)&&row.fechaISO<=today;
+ const initial=(data.incomes||[]).filter(row=>matches(row)&&row.kind==='initial').at(-1);
+ let total=opening?.physical??initial?.cantidad??0;
+ const includes=row=>matches(row)&&(!opening||productionAfterClose_(row,closed.date,closed.closedAt));
+ for(const row of data.incomes||[])if(includes(row)){if(['income','warehouse-return'].includes(row.kind))total+=row.cantidad;else if(row.kind==='warehouse-out')total-=row.cantidad;}
+ for(const row of data.consumptions||[])if(includes(row))total-=row.cantidad;
+ return total;
+}
+function productionWarehouseBalance_(data,item,central){
+ const spare=productionSpare_(item,central);if(spare)return productionSpareBalance_(data,spare,central);
+ return (data.warehouseMovements||[]).filter(row=>row.itemId===item.id&&row.status!=='rejected').reduce((n,row)=>n+Number(row.delta||0),0);
+}
+function productionWarehouseAssetAvailable_(data,asset,central){
+ if(!asset||asset.deleted||/dado.*baja/i.test(asset.estado||''))return false;
+ const last=(data.warehouseMovements||[]).filter(row=>row.assetId===asset.id&&row.status!=='rejected').at(-1);
+ if(last)return last.delta>0&&(last.bridgePending||/^(?:inventario de |bodega de )?produccion(?:$| ·)/.test(cargoNorm_(asset.ubicacion)));
+ return ['produccion','inventario de produccion','bodega de produccion'].includes(cargoNorm_(asset.ubicacion));
+}
+function productionWarehouseApply_(data,central,request,user){
+ if(!/^[-a-zA-Z0-9]{16,100}$/.test(String(request.id||'')))throw new Error('Identificador no válido.');
+ const original=(data.warehouseMovements||[]).find(row=>row.id===request.id);
+ if(original){
+  if(original.requestSignature!==JSON.stringify(request))throw new Error('El identificador ya corresponde a otro movimiento.');
+  return {row:original,duplicate:true};
+ }
+ const settings=productionWarehouseSettings_();if(!settings.enabled)throw new Error('La bodega aún no está activada desde SK Web Admin.');
+ const allowed=['income','opening','delivery','loan','return','transfer_out'];if(!allowed.includes(request.kind))throw new Error('Movimiento no válido.');
+ if(request.kind==='opening'&&!productionRoles_(user).includes('admin'))throw new Error('Solo el administrador registra saldos de apertura.');
+ const item=(central.inventoryCriteria||[]).find(row=>row.id===request.itemId&&!row.deleted&&row.active!==false);
+ if(!item)throw new Error('Elemento no disponible en Criterios de inventario.');
+ const spare=productionSpare_(item,central),fixed=item.isFixedAsset===true,quantity=Number(request.quantity),outgoing=['delivery','loan','transfer_out'].includes(request.kind);
+ if(!Number.isFinite(quantity)||(!item.fractionable&&!fixed&&!spare&&!Number.isInteger(quantity))||quantity<(request.kind==='opening'?0:0.000001)||quantity>1000000000||fixed&&quantity!==1||spare&&!Number.isSafeInteger(quantity))throw new Error('Cantidad no válida.');
+ if(spare&&request.kind==='opening')throw new Error('La apertura de repuestos se administra en Mecánica.');
+ if(spare&&outgoing&&!settings.allowSpareDelivery)throw new Error('El administrador no ha habilitado la entrega de repuestos desde Bodega.');
+ if(request.kind==='loan'&&!item.allowLoan)throw new Error('El criterio no permite préstamos.');
+ const person=(central.personal||[]).find(row=>row.id===request.personId&&!row.deleted&&row.active!==false);
+ if(request.kind!=='opening'&&!person)throw new Error('Selecciona el funcionario que entrega o recibe.');
+ const date=String(request.fechaISO||'');
+ if(!productionDate_(date)||date>Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'))throw new Error('Fecha no válida.');
+ if(spare){const closed=(data.inventoryCounts||[]).filter(row=>row.status==='closed'&&row.origin===spare.origen).sort((a,b)=>b.date.localeCompare(a.date))[0];if(closed&&date<closed.date)throw new Error('La fecha corresponde a un inventario de repuestos cerrado.');}
+ let newAsset=null;
+ if(request.newAsset){
+  if(!fixed||request.kind!=='income')throw new Error('Solo se registran activos nuevos desde Ingresos.');
+  const input=request.newAsset;
+  if(!/^[-a-zA-Z0-9]{16,100}$/.test(String(input.id||'')))throw new Error('Identificador del activo no válido.');
+  if((central.assets||[]).some(row=>row.id===input.id))throw new Error('El activo ya existe. Selecciónalo como registrado.');
+  newAsset={id:input.id,clase:item.name,serial:String(input.serial||'').trim().slice(0,160),modelo:String(input.modelo||'').trim().slice(0,100),marcaComercial:String(input.marcaComercial||'').trim().slice(0,100),marcaAnterior:String(input.marcaAnterior||'').trim().slice(0,100),numeroClase:String(input.numeroClase||'').trim().slice(0,30),minaOrigen:String(input.minaOrigen||'Sandra K').trim().slice(0,100),longitud:String(input.longitud||'').trim().slice(0,40),estado:request.incomeType==='REPARACIÓN'?'En reparación':'Operativo/a',ubicacion:'Producción',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),syncState:'synced'};
+  newAsset.mina=newAsset.minaOrigen;newAsset.criteriaId=item.id;newAsset.largo=newAsset.longitud;newAsset.fabricante=newAsset.marcaComercial;
+  for(const [flag,field,label] of [['usesLength','largo','largo'],['usesModel','modelo','modelo'],['usesManufacturer','fabricante','fabricante']])if(truthy_(item[flag])&&!newAsset[field])throw new Error('Falta '+label+' del activo.');
+  if(repairIncomeClass_(newAsset.clase)){newAsset.tipoIngresoInicial=request.incomeType==='REPARACIÓN'?'REPARACIÓN':'TRASLADO';newAsset.incomeMarking=true;preparePlazaIncomeAsset_(newAsset);}
+  if(usesAutomaticAssetMark_(newAsset)){newAsset.markingPolicy='letters-v1';newAsset.markStatus='pending';}
+  const peers=[...(central.assets||[]),...(data.warehouseMovements||[]).filter(row=>row.newAsset).map(row=>row.newAsset)];
+  if(automaticClassNumberEligible_(newAsset.clase)){newAsset.classNumberPolicy='auto-v1';newAsset.numeroClase=automaticClassNumber_(peers,newAsset);}
+  if(!newAsset.numeroClase)throw new Error('Falta el número de clase del activo.');
+  if(peers.some(row=>!row.deleted&&cargoNorm_(row.clase)===cargoNorm_(newAsset.clase)&&cargoNorm_(row.minaOrigen||row.mina||'Sandra K')===cargoNorm_(newAsset.minaOrigen)&&String(row.numeroClase||row.numeroYT||'')===newAsset.numeroClase))throw new Error('El número de clase ya pertenece a otro activo.');
+  newAsset.numeroYT=newAsset.numeroClase;validateAssetSerials_(peers,[newAsset],central.inventoryCriteria||[]);
+ }
+ const asset=fixed?(newAsset||(central.assets||[]).find(row=>row.id===request.assetId&&!row.deleted)):null;
+ if(fixed&&(!asset||cargoNorm_(asset.clase)!==cargoNorm_(item.name)))throw new Error('Selecciona un activo registrado de esta clase.');
+ if(asset&&/dado.*baja/i.test(asset.estado||''))throw new Error('El activo está dado de baja.');
+ const available=asset&&productionWarehouseAssetAvailable_(data,asset,central);
+ if(outgoing&&fixed&&!available)throw new Error('El activo no está disponible en Bodega de Producción.');
+ if(['income','opening'].includes(request.kind)&&asset&&cargoNorm_(asset.ubicacion)==='bodega de superficie')throw new Error('El activo está en Plaza Blending. Registra allí su salida hacia Producción.');
+ if(['income','opening'].includes(request.kind)&&asset&&available&&(data.warehouseMovements||[]).some(row=>row.assetId===asset.id))throw new Error('El activo ya se encuentra en Producción.');
+ if(request.kind==='opening'&&(data.warehouseMovements||[]).some(row=>row.itemId===item.id&&row.kind==='opening'&&(!fixed||row.assetId===asset.id)))throw new Error('El elemento ya tiene saldo de apertura.');
+ if(['income','opening'].includes(request.kind)&&asset&&(data.warehouseMovements||[]).some(row=>row.kind==='loan'&&row.assetId===asset.id&&!((data.warehouseMovements||[]).some(back=>back.kind==='return'&&back.loanId===row.id))))throw new Error('El activo tiene un préstamo pendiente. Registra su reintegro.');
+ let loan=null;
+ if(request.kind==='return'){
+  loan=(data.warehouseMovements||[]).find(row=>row.id===request.loanId&&row.kind==='loan'&&row.status!=='rejected');
+  if(!loan||loan.itemId!==item.id||fixed&&loan.assetId!==asset.id)throw new Error('Préstamo no válido.');
+  const returned=(data.warehouseMovements||[]).filter(row=>row.loanId===loan.id&&row.kind==='return'&&row.status!=='rejected').reduce((n,row)=>n+row.quantity,0);
+  if(quantity>loan.quantity-returned)throw new Error('La cantidad supera lo pendiente de devolver.');
+ }
+ if(outgoing&&!fixed&&quantity>productionWarehouseBalance_(data,item,central))throw new Error('La cantidad supera las existencias confirmadas de Producción.');
+ let sourceLoan=null;
+ if(request.kind==='transfer_out'){
+  const imports=(data.warehouseMovements||[]).filter(row=>row.kind==='transfer_in'&&row.sourceLoan&&row.itemId===item.id&&(!fixed||row.assetId===asset.id));
+  sourceLoan=imports.find(row=>row.sourceDeliveryId===request.sourceLoanId)||(!request.sourceLoanId&&fixed?imports.filter(row=>!(data.warehouseMovements||[]).some(out=>out.sourceLoanId===row.sourceDeliveryId)).at(-1):null);
+  if(request.sourceLoanId&&!sourceLoan)throw new Error('No existe ese préstamo de Plaza para este elemento.');
+  if(sourceLoan){
+   if(quantity!==sourceLoan.quantity)throw new Error('El préstamo de Plaza debe devolverse completo.');
+   if((data.warehouseMovements||[]).some(row=>row.sourceLoanId===sourceLoan.sourceDeliveryId)||(central.blendingDeliveries||[]).some(row=>!row.deleted&&row.movementType==='DEVOLUCIÓN'&&row.loanId===sourceLoan.sourceDeliveryId))throw new Error('El préstamo de Plaza ya fue devuelto.');
+  }
+ }
+ const destination=String(request.destination||'').trim().slice(0,160);
+ if(['delivery','loan'].includes(request.kind)&&!destination)throw new Error('Indica dónde estará el elemento.');
+ const now=new Date().toISOString(),row=productionWarehouseAppend_(data,{id:request.id,kind:request.kind,itemId:item.id,itemName:item.name,unit:item.unit||'Unidad',quantity,delta:outgoing?-quantity:quantity,assetId:asset?.id||'',assetLabel:asset?[asset.marcaActual||asset.marcaInterna||asset.marcaAnterior,asset.serial].filter(Boolean).join(' · '):'',personId:person?.id||'',personName:person?.nombre||'',destination:request.kind==='transfer_out'?'Plaza Blending':destination,loanId:loan?.id||'',sourceLoanId:sourceLoan?.sourceDeliveryId||'',notes:String(request.notes||'').slice(0,1000),fechaISO:date,createdAt:now,recordedBy:user.document,target:spare?'mechanics':'warehouse',status:'synced',requestSignature:JSON.stringify(request)});
+ if(spare){
+  const kind=outgoing?'warehouse-out':request.kind==='return'?'warehouse-return':'income';
+  (data.incomes||(data.incomes=[])).push({id:'warehouse-'+row.id,kind,...spare,cantidad:quantity,fechaISO:date,createdAt:now,recordedAt:now,sourceWarehouseMovementId:row.id,registradoPor:user.document,registradoPorNombre:person?.nombre||'Bodega de Producción'});
+ }
+ if(asset||request.kind==='transfer_out'){
+  row.bridgePending=true;
+  if(newAsset)row.newAsset=newAsset;
+  row.assetLocation=request.kind==='transfer_out'?'Bodega de Superficie':outgoing?'Producción · '+destination:'Producción';
+  row.assetBaseVersion=asset?.updatedAt||'';
+  if(asset)row.assetStatus=request.kind==='income'&&request.incomeType==='REPARACIÓN'?'En reparación':asset.estado;
+ }
+ return {row,duplicate:false};
+}
+// Diario durable: se guarda en Producción antes de proyectar cambios compartidos.
+// Una respuesta perdida o una escritura fallida se recupera por ID sin repetir cantidades.
+function productionRecoverBridge_(centralId,central,heldLock){
+ if(typeof PropertiesService==='undefined'||PropertiesService.getScriptProperties().getProperty('SK_PRODUCTION_BRIDGE')!=='pending')return central;
+ const owned=Boolean(heldLock),lock=heldLock||LockService.getScriptLock();
+ if(!owned)lock.waitLock(30000);
+ try{
+  if(!owned)central=JSON.parse(DriveApp.getFileById(centralId).getBlob().getDataAsString('UTF-8'));
+  const file=productionDataFile_();if(!file){PropertiesService.getScriptProperties().deleteProperty('SK_PRODUCTION_BRIDGE');return central;}
+  const data=productionReadData_(file),pending=(data.warehouseMovements||[]).filter(row=>row.bridgePending);
+  if(!pending.length){PropertiesService.getScriptProperties().deleteProperty('SK_PRODUCTION_BRIDGE');return central;}
+  let changed=false;
+  for(const row of pending){
+   if(row.assetId){
+    let asset=(central.assets||[]).find(asset=>asset.id===row.assetId);
+    if(!asset&&row.newAsset){
+     const marking=assignAssetMarks_(central,[row.newAsset],{document:row.recordedBy,role:'production_warehouse'});asset=marking.assets[0];
+     (central.assets||(central.assets=[])).push(asset);if(marking.registry.length)central.assetMarkRegistry=marking.registry;changed=true;
+     row.assetLabel=[asset.marcaActual||asset.marcaInterna||asset.marcaAnterior,asset.serial].filter(Boolean).join(' · ');
+    }
+    if(!asset)throw new Error('No se encontró el activo para completar el traslado.');
+    if(Number(asset.productionMovementRevision||0)<row.revision){
+     asset.ubicacion=row.assetLocation;asset.estado=row.assetStatus||asset.estado;
+     asset.productionMovementRevision=row.revision;asset.updatedAt=row.createdAt;changed=true;
+    }
+   }
+   if(row.kind==='transfer_out'){
+    const id='production-'+row.id,incomes=row.sourceLoanId?(central.blendingDeliveries||(central.blendingDeliveries=[])):(central.blendingIncomes||(central.blendingIncomes=[]));
+    if(!incomes.some(income=>income.id===id)){
+     incomes.push({id,syncEventId:id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,assetId:row.assetId,assetLabel:row.assetLabel,broughtById:row.personId,broughtByName:row.personName,sourceWarehouseId:'production',sourceMovementId:row.id,...(row.sourceLoanId?{movementType:'DEVOLUCIÓN',loanId:row.sourceLoanId,returnedAt:row.createdAt,returnedById:row.personId,returnedByName:row.personName,destination:'Bodega de Superficie'}:{}),notes:row.notes,createdAt:row.createdAt,updatedAt:row.createdAt,syncState:'synced'});
+     if(!row.assetId){const stocks=central.inventoryStock||(central.inventoryStock=[]);let stock=stocks.find(x=>x.itemId===row.itemId);if(!stock){stock={id:'stock-'+row.itemId,itemId:row.itemId,quantity:0};stocks.push(stock)}stock.quantity=Number(stock.quantity||0)+row.quantity;stock.updatedAt=row.createdAt;}
+     changed=true;
+    }
+   }
+   row.bridgePending=false;
+  }
+  if(changed){central.updatedAt=nextRevision_(central.updatedAt);writeFile_(centralId,central);}
+  productionSaveData_(file,data);
+  PropertiesService.getScriptProperties().deleteProperty('SK_PRODUCTION_BRIDGE');
+  return central;
+ }finally{if(!owned)lock.releaseLock()}
+}
+function productionWarehouseSync_(q){
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const user=verifyProductionToken_(q.token);if(!productionCan_(user,'warehouse'))throw new Error('No tienes acceso a Bodega de Producción.');
+  const id=findFile_(),central=id?readFile_(id,lock):{},person=(central.personal||[]).find(row=>row.id===user.personId&&!row.deleted);
+  if(!person)throw new Error('Colaborador no disponible.');
+  let file=productionDataFile_(),data=productionReadData_(file),changed=productionImportPlaza_(data,central);
+  const pending=Array.isArray(q.pending)?q.pending:[];
+  if(pending.length>1000||new Set(pending.map(row=>row.id)).size!==pending.length)throw new Error('Envía un máximo de 1000 movimientos con identificadores únicos.');
+  const receipts=[];
+  for(const request of pending){
+   try{const applied=productionWarehouseApply_(data,central,request,user);changed=changed||!applied.duplicate;receipts.push({id:request.id,status:applied.duplicate?'already-applied':'accepted'});}
+   catch(error){receipts.push({id:request.id,status:'rejected',error:String(error.message||error)});}
+  }
+  if(changed){
+   if((data.warehouseMovements||[]).some(row=>row.bridgePending))PropertiesService.getScriptProperties().setProperty('SK_PRODUCTION_BRIDGE','pending');
+   file=productionSaveData_(file,data);
+  }
+  productionRecoverBridge_(id,central,lock);
+  if(file)data=productionReadData_(file);
+  const revision=Number(data.warehouseRevision)||0,cursor=Number(q.cursor)||0,reset=cursor>revision;
+  const rows=(data.warehouseMovements||[]).filter(row=>reset||row.revision>cursor);
+  const criteria=(central.inventoryCriteria||[]).filter(row=>!row.deleted&&row.active!==false);
+  const balances=criteria.map(item=>({itemId:item.id,quantity:productionWarehouseBalance_(data,item,central)}));
+  const catalogChanged=q.catalogRevision!==central.updatedAt;
+  return json_({ok:true,protocol:'production-warehouse-v1',reset,cursor:revision,rows,receipts,balances,settings:productionWarehouseSettings_(),roles:productionRoles_(user),catalogRevision:central.updatedAt||'',...(catalogChanged?{catalog:{criteria,personal:(central.personal||[]).filter(row=>!row.deleted).map(row=>({id:row.id,nombre:row.nombre,documento:row.documento,empresa:row.empresa})),assets:(central.assets||[]).filter(row=>!row.deleted).map(row=>({id:row.id,clase:row.clase,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,marcaAnterior:row.marcaAnterior,numeroClase:row.numeroClase,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion,updatedAt:row.updatedAt}))}}:{}),syncedAt:new Date().toISOString()});
+ }finally{lock.releaseLock()}
 }

@@ -8,7 +8,7 @@ function formClient(){
     dispatchEvent(event){this.events.push(event.type)},querySelectorAll:()=>[],add(option){this.options.push(option)},
     replaceChildren(...options){this.options=options}});
   const query=selector=>{if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)};
-  const fields=Object.fromEntries(['itemId','quantity','destination','destinationLevel','notes'].map(name=>[name,node()]));
+  const fields=Object.fromEntries(['itemId','quantity','destination','destinationLevel','destinationWarehouseId','notes'].map(name=>[name,node()]));
   fields.quantity.min='0.01';fields.quantity.step='any';fields.quantity.required=true;fields.quantity.value='1';
   fields.assetId=query('#deliveryAssetId');
   fields.itemId.closest=()=>({_clearItemSearch:()=>{fields.itemId.value=''}});
@@ -143,4 +143,10 @@ test('a grouped spare capture keeps the criterion ID and explicit name for stock
   assert.equal(row.itemId,'criterion-resorte');assert.equal(row.itemName,'Repuesto de YT29 · Ítem 1 · Resorte del pin del cabezal');
   assert.equal(row.destination,'Producción');assert.equal(row.assetId,'');assert.equal(row.quantity,2);
   c.api.add();assert.equal(c.api.draft()[0].itemId,'criterion-resorte');assert.equal(c.fields.itemId.value,'');
+});
+
+test('ordinary delivery goes to Production only when its destination is explicitly selected',()=>{
+ const c=formClient();c.api.mode('assignment');c.select('pliers');c.fields.quantity.value='2';
+ assert.equal(c.api.capture().destination,'');c.fields.destinationWarehouseId.value='production';assert.equal(c.api.capture().destination,'Producción');
+ c.select('cable');assert.equal(c.fields.destinationWarehouseId.value,'');
 });

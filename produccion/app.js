@@ -71,7 +71,7 @@ function refreshShift(){
  if(!manualShift)fields.turno.value=currentShift();
 }
 const norm=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
-const roleLabels={admin:'Administrador',assistant:'Auxiliar',mechanic:'Mecánico'};
+const roleLabels={admin:'Administrador',assistant:'Auxiliar',mechanic:'Mecánico',warehouse:'Bodeguero/a'};
 const ownPerson=()=>session.user.personId||(state.personal||[]).find(row=>String(row.documento).trim()===session.user.document)?.id;
 const canSync=()=>session?.token&&Number(session.expiresAt)>Date.now();
 const database=new Promise((resolve,reject)=>{
@@ -210,7 +210,7 @@ function countTotals(origin,date,parts){
  for(const row of closed?.rows||[])for(const id of row.aliases||[row.partId])prior.set(id,row);
  for(const part of parts){
   const ids=[part.id,part.criterionId,...(criterionAliases.get(part.id)||[])].filter(Boolean),previous=ids.map(id=>prior.get(id)).find(Boolean);
-  const total={opening:previous?.physical??0,incomes:0,consumptions:0,adjustments:0,cutoff:previous?closed.date:'',closedAt:previous?closed.closedAt:'',initialDate:''};
+  const total={opening:previous?.physical??0,incomes:0,consumptions:0,adjustments:0,outgoings:0,cutoff:previous?closed.date:'',closedAt:previous?closed.closedAt:'',initialDate:''};
   totals.set(part.id,total);
   for(const id of ids)aliases.set(id,total);
  }
@@ -221,7 +221,7 @@ function countTotals(origin,date,parts){
   if(total&&!total.cutoff&&row.kind==='initial'){total.opening=row.cantidad;total.initialDate=row.fechaISO;}
  }
  const include=(row,total)=>total&&(total.cutoff?(row.fechaISO>total.cutoff||row.fechaISO===total.cutoff&&(row.recordedAt||row.createdAt)>total.closedAt):true);
- for(const row of incomes){const total=get(row);if(include(row,total)){if(row.kind==='income')total.incomes+=row.cantidad;else if(row.kind==='adjustment'&&row.target!=null)total.adjustments+=row.cantidad;}}
+ for(const row of incomes){const total=get(row);if(include(row,total)){if(['income','warehouse-return'].includes(row.kind))total.incomes+=row.cantidad;else if(row.kind==='warehouse-out')total.outgoings+=row.cantidad;else if(row.kind==='adjustment'&&row.target!=null)total.adjustments+=row.cantidad;}}
  const movements=new Map((state.consumptions||[]).map(row=>[row.id,row]));
  for(const row of movements.values()){const total=get(row);if(include(row,total))total.consumptions+=row.cantidad;}
  const confirmedIds=new Set([...incomes,...movements.values()].map(row=>row.id));
@@ -232,7 +232,7 @@ function countTotals(origin,date,parts){
   if(row.kind==='initial'||confirmedIds.has(row.id)||row.syncRejected)continue;
   if(row.kind==='income')total.incomes+=row.cantidad;
   else if(row.kind==='adjustment'){
-   const delta=row.cantidad-(total.opening+total.incomes-total.consumptions);
+   const delta=row.cantidad-(total.opening+total.incomes-total.consumptions-(total.outgoings||0));
    total.adjustments+=delta;
   }else if(!row.kind)total.consumptions+=row.cantidad;
  }
@@ -248,7 +248,7 @@ function stockBreakdown(part,origin){
 }
 function stockFor(part,origin){
  const total=stockBreakdown(part,origin);
- return total?total.opening+total.incomes-total.consumptions:0;
+ return total?total.opening+total.incomes-total.consumptions-(total.outgoings||0):0;
 }
 let stockSummaryState,stockSummaryDay,stockSummaryCache=new Map();
 function stockPeriodSummary(part,origin){
@@ -265,12 +265,13 @@ function stockPeriodSummary(part,origin){
  const rows=new Map([...incomeMovements({...state,pending:[]}),...(state.consumptions||[])].map(row=>[row.id,row]));
  const pendingIds=new Set();
  for(const row of state.pending||[])if(!row.syncRejected&&!rows.has(row.id)){rows.set(row.id,row);pendingIds.add(row.id);}
- const result={closed,opening:opening?.physical,incomes:0,consumptions:0,adjustments:0,pending:0};
+ const result={closed,opening:opening?.physical,incomes:0,consumptions:0,adjustments:0,outgoings:0,pending:0};
  for(const row of rows.values()){
   if(row.deleted||row.origen!==origin||!aliases.has(row.partId)||!row.fechaISO||row.fechaISO>day)continue;
   if(closed&&(row.fechaISO<closed.date||row.fechaISO===closed.date&&!(Date.parse(row.recordedAt||row.createdAt)>Date.parse(closed.closedAt))))continue;
   if(row.kind==='initial')continue;
-  if(row.kind==='income')result.incomes+=row.cantidad;
+  if(['income','warehouse-return'].includes(row.kind))result.incomes+=row.cantidad;
+  else if(row.kind==='warehouse-out')result.outgoings+=row.cantidad;
   else if(!row.kind)result.consumptions+=row.cantidad;
   else if(row.kind==='adjustment'&&row.target!=null&&!pendingIds.has(row.id))result.adjustments+=row.cantidad;
   if(pendingIds.has(row.id))result.pending++;
@@ -280,7 +281,7 @@ function stockPeriodSummary(part,origin){
 function stockSummaryText(part,origin,value){
  const totals=stockPeriodSummary(part,origin),current=stockFor(part,origin),initial=initialFor(part,origin);
  const lines=[totals.closed?'PERÍODO: DESDE EL INVENTARIO DEL '+displayDate(totals.closed.date)+'.':'PERÍODO: TODOS LOS MOVIMIENTOS · SIN INVENTARIO CERRADO.',
-  'INGRESOS: '+totals.incomes+' · CONSUMOS: '+totals.consumptions+'.',
+  'INGRESOS: '+totals.incomes+' · CONSUMOS: '+totals.consumptions+'.'+(totals.outgoings?' · SALIDAS DE BODEGA: '+totals.outgoings+'.':''),
   'SALDO DE APERTURA REGISTRADO: '+(initial?.cantidad??0)+'.',
   'SALDO ESPERADO ACTUAL: '+current+'.'];
  const pending=(state.pending||[]).find(row=>['initial','adjustment'].includes(row.kind)&&partMatches(row,part,origin));
@@ -619,7 +620,7 @@ function paintSync(){
  byId('headerLastSync').textContent=Number.isNaN(date.getTime())?'SIN SINCRONIZAR':
   (count?'Datos: ':'Sinc. ')+date.toLocaleDateString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'})+' '+date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota',hour:'numeric',minute:'2-digit'});
  byId('refreshOfflineData').disabled=syncing;
- paintOfflineEntry();
+ paintOfflineEntry();window.SKProductionWarehouse?.paintHeader?.();
 }
 let syncRequested=false,syncTimer=0,retryAfter=0,lastSyncAttempt=0;
 function scheduleSync(delay=1500){
@@ -648,6 +649,7 @@ async function performSync(){
  if(!session)return {ok:false,error:'Inicia sesión para sincronizar.'};
  if(!navigator.onLine){syncFailed=true;syncConnectionFailed=true;paintSync();return {ok:false,error:'Sin conexión. Los registros siguen guardados.'};}
  if(!canSync()){syncFailed=true;paintSync();const error='Inicia sesión con internet para renovar la sincronización. Tus registros siguen guardados.';status(error);return {ok:false,error};}
+ if(window.SKProductionWarehouse&&(window.SKProductionWarehouse.module==='warehouse'||!window.SKProductionWarehouse.permits(session.user,'mechanic')))return window.SKProductionWarehouse.sync();
  const active=session,document=active.user.document;let syncError='',countAttempted=false,again;
  syncing=true;syncFailed=false;syncConnectionFailed=false;lastSyncAttempt=Date.now();paintSync();
  try{
@@ -657,10 +659,11 @@ async function performSync(){
    const inventoryRequest=countAttempted?undefined:(local.countQueue||[])[0];countAttempted=Boolean(inventoryRequest)||countAttempted;
    // Un servidor antiguo ignora checkedPending: nunca aplica un ajuste sin validar el saldo.
    const movements=pending.some(row=>row.kind==='adjustment')?{pending:[],checkedPending:pending}:{pending};
-   const result=await api('productionSync',{token:active.token,syncProtocol:window.SKProductionSync.protocol,...movements,inventoryRequest,incomeChanges});
+   const result=await api('productionSync',{token:active.token,syncProtocol:window.SKProductionSync.protocol,...movements,inventoryRequest,incomeChanges,warehouseV1:true});
    const fresh=await changeState(document,current=>window.SKProductionSync.reconcile(result,pending,current,inventoryRequest,incomeChanges));
    if(session===active){
     state=fresh;
+    if(Array.isArray(result.productionRoles)){session.user.roles=result.productionRoles;try{localStorage.setItem(sessionKey,JSON.stringify(session));}catch(_){}}
     if(result.inventoryResult?.count?.status==='closed'&&countSelection===result.inventoryResult.count.id){countReport=result.inventoryResult.count;countSelection='';countValues=new Map();}
     if(!countDirty&&!countSaving&&countSelection){const selected=selectedCount();countValues=new Map((selected?.values||[]).map(row=>[row.partId,row.physical]));countEditRevision=selected?.revision||'';if(!selected)countSelection='';}
     syncFailed=Boolean(fresh.pending.length||fresh.countQueue.length||fresh.incomeChanges.length);
@@ -712,7 +715,7 @@ function showConsumptionView(showQueries,stockView,physical=false){
  if(showQueries)showQueryType(byId('queryIncome').getAttribute('aria-pressed')==='true');
 }
 function incomeEditable(row){
- if(!row||row.kind!=='income'||session?.user.role!=='admin')return false;
+ if(!row||row.kind!=='income'||row.sourceDeliveryId||row.sourceWarehouseMovementId||session?.user.role!=='admin')return false;
  const latest=(state.inventoryLatest||[]).filter(x=>x.origin===row.origen&&x.status==='closed').sort((a,b)=>b.date.localeCompare(a.date))[0];
  return !latest||row.fechaISO>latest.date||row.fechaISO===latest.date&&(row.recordedAt||row.createdAt)>latest.closedAt;
 }
@@ -839,7 +842,7 @@ function showQueryType(incomes){
  else window.dispatchEvent(new Event('skweb-open-queries'));
 }
 const countForm=byId('countForm'),countFields=countForm.elements;
-const countHeaders=['FECHA DE INVENTARIO','INVENTARIO','REPUESTO','SALDO DE APERTURA','INGRESOS','CONSUMOS','SALDO ESPERADO','EXISTENCIA FÍSICA','DIFERENCIA','SALDO DE CIERRE'];
+const countHeaders=['FECHA DE INVENTARIO','INVENTARIO','REPUESTO','SALDO DE APERTURA','INGRESOS','CONSUMOS','SALIDAS BODEGA','SALDO ESPERADO','EXISTENCIA FÍSICA','DIFERENCIA','SALDO DE CIERRE'];
 const countStatus=message=>{byId('countStatus').textContent=message};
 let countSelection='',countValues=new Map(),countReport=null,countDirty=false,countAccount='',countSaving=false,countEditRevision='';
 const canCount=()=>['admin','assistant'].includes(session?.user.role);
@@ -859,7 +862,7 @@ function selectCount(id){
  paintCount();
 }
 function countReportRows(report){
- return report.rows.map(row=>[displayDate(report.date),report.origin,row.name,row.opening,row.incomes,row.consumptions,row.expected,row.physical,row.difference,row.physical]);
+ return report.rows.map(row=>[displayDate(report.date),report.origin,row.name,row.opening,row.incomes,row.consumptions,row.outgoings||0,row.expected,row.physical,row.difference,row.physical]);
 }
 const countAdjustmentNote=report=>report?.rows.some(row=>row.adjustments==null)?'CIERRE ANTERIOR: sus ingresos y consumos pueden incluir ajustes. Se conservan las cifras aprobadas.':'INGRESOS y CONSUMOS muestran únicamente movimientos reales.';
 function paintCount(){
@@ -895,14 +898,14 @@ function paintCount(){
  const table=byId('countTable'),origin=countFields.origin.value,date=readDate(countFields.date);
  const reportRows=countReport?countReportRows(countReport):null;
  byId('countAdjustmentNote').textContent=countAdjustmentNote(countReport);
- const headers=reportRows?countHeaders:countHeaders.slice(2,9);
+ const headers=reportRows?countHeaders:countHeaders.slice(2,10);
  const header=document.createElement('tr');
  for(const title of headers){const th=document.createElement('th');th.scope='col';th.textContent=title;header.append(th)}
  table.tHead.replaceChildren(header);
  const parts=window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin);
  const totals=reportRows?null:countTotals(origin,date,parts);
  const rows=reportRows||filterParts(parts,countFields.search.value).map(part=>{
-  const total=totals.get(part.id),expected=total.opening+total.incomes-total.consumptions;
+  const total=totals.get(part.id),expected=total.opening+total.incomes-total.consumptions-(total.outgoings||0);
   const amount=countValues.get(part.id),input=document.createElement('input');
   input.type='number';input.min='0';input.step='1';input.inputMode='numeric';input.disabled=!editable;
   input.value=amount??'';input.setAttribute('aria-label','Existencia física de '+partLabel(part));
@@ -915,7 +918,7 @@ function paintCount(){
    countStatus('CAMBIOS SIN GUARDAR · Pulsa GUARDAR BORRADOR.');
    difference.textContent=input.value===''||!input.validity.valid?'—':input.valueAsNumber-expected;
   };
-  return [partLabel(part),total.opening,total.incomes,total.consumptions,expected,input,difference];
+  return [partLabel(part),total.opening,total.incomes,total.consumptions,total.outgoings||0,expected,input,difference];
  });
  table.tBodies[0].replaceChildren(...rows.map(values=>{
   const tr=document.createElement('tr');
@@ -1033,10 +1036,11 @@ async function openWorkspace({offlineAccess=!navigator.onLine}={}){
  placeInstallControls(document.querySelector('.productionToolbar'));
  byId('access').hidden=true;byId('productionHeader').hidden=false;byId('workspace').hidden=offlineAccess;byId('productionSync').hidden=offlineAccess;byId('offlineEntry').hidden=true;syncFailed=false;
  byId('operatorName').textContent=session.user.name;
- byId('operatorRole').textContent=roleLabels[session.user.role]||'Auxiliar';
+ byId('operatorRole').textContent=(session.user.roles||[session.user.role]).map(role=>roleLabels[role]||role).join(' · ');
  byId('showStockEdit').hidden=session.user.role!=='admin';
  for(const view of stockViews)view.form.elements.fechaISO.value=displayDate(today());
  fields.fechaISO.value=displayDate(today());manualShift=false;refreshShift();showConsumptionView(false);paint();
+ await window.SKProductionWarehouse?.open?.();
  if(offlineAccess)showOfflineEntry();
  else if(navigator.onLine){
   await sync();
@@ -1105,6 +1109,7 @@ submitAccess('activate',async values=>{
 byId('logout').onclick=()=>{
  if(countSaving)return;
  if(countDirty&&!confirm('El conteo tiene cambios sin guardar. ¿Cerrar la sesión?'))return;
+ window.SKProductionWarehouse?.close?.();
  countAccount='';countSelection='';countValues=new Map();countReport=null;countDirty=false;countEditRevision='';
  fields.responsableId.value='';personSearch.value='';responsibleOptions.hidden=true;
  placeInstallControls(byId('installBeforeLogin'));
@@ -1133,9 +1138,10 @@ function syncAge(lastSyncAt,now=Date.now()){
 }
 function paintOfflineEntry(){
  if(byId('offlineEntry').hidden)return;
- const stamp=Date.parse(state.lastSyncAt),date=new Date(stamp),valid=Number.isFinite(stamp);
+ const lastSyncAt=window.SKProductionWarehouse?.module==='warehouse'?window.SKProductionWarehouse.snapshot.syncedAt:state.lastSyncAt;
+ const stamp=Date.parse(lastSyncAt),date=new Date(stamp),valid=Number.isFinite(stamp);
  byId('offlineLastSync').textContent=valid?date.toLocaleString('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'}):'AÚN NO SE HA SINCRONIZADO';
- byId('offlineDataAge').textContent=syncAge(state.lastSyncAt);
+ byId('offlineDataAge').textContent=syncAge(lastSyncAt);
  byId('offlineSyncAdvice').textContent=valid?
   'Cuando tengas internet, inicia sesión con conexión y sincroniza para obtener datos recientes y enviar tus registros pendientes.':
   'La cuenta tiene acceso local, pero aún falta descargar los datos. Conéctate e inicia sesión para completar la primera sincronización.';
