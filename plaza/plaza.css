@@ -2,6 +2,8 @@
 
 /* La tarjeta de turno usa solo el espacio superior del contenedor. */
 #plazaShift{margin-top:0}
+/* En Inicio, el responsable del turno queda justo debajo del título. */
+#home>#plazaShift{width:100%;max-width:none;margin:20px 0 24px}
 
 .itemSearchMenu button.spareGroupOption{grid-template-columns:auto minmax(0,1fr);align-items:start;column-gap:10px}
 .spareGroupOption .spareGroupIcon{font-size:1.15rem;line-height:1.2}
