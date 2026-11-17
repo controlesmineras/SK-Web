@@ -12,7 +12,7 @@
  const home=el('section');home.id='productionModuleHome';home.hidden=true;
  const title=el('h2','PRODUCCIÓN'),intro=el('p','Selecciona el módulo que vas a utilizar.'),modules=el('div');modules.className='productionModules';
  modules.append(button('MECÁNICA',()=>choose('mechanic')),button('BODEGA',()=>choose('warehouse')));home.append(title,intro,modules);
- const change=button('← VOLVER',goBack);change.id='changeProductionModule';change.hidden=true;
+ const change=button('',goBack);change.id='changeProductionModule';change.hidden=true;change.setAttribute('aria-label','Volver a la pantalla anterior');change.title='Volver';change.innerHTML='<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 5 2 12l8 7v-5h3c4.2 0 7 1.8 9 5-.8-6.5-4-10-9-10h-3V5Z"/></svg>';
  const navigation=el('nav');navigation.id='productionNavigation';navigation.setAttribute('aria-label','Ubicación en Producción');const breadcrumb=el('span');breadcrumb.id='productionBreadcrumb';navigation.append(change,breadcrumb);
  byId('productionHome').onclick=()=>choose('');
  const panel=el('section');panel.id='warehousePanel';panel.hidden=true;
