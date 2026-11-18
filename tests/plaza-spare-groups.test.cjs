@@ -56,13 +56,13 @@ class Node {
  add(node){this.append(node)}
  get options(){return this.children}
 }
-function picker(delivery=true){
+function picker(delivery=true,config={}){
  const form=new Node('form');form.id=delivery?'deliveryForm':'incomeForm';const label=new Node('label'),select=new Node('select');label.append(select);form.append(label);form.elements={itemId:select};
  const document={createElement:tag=>new Node(tag),addEventListener(){}};
  const window={},ctx={window,document,Event:class{constructor(type){this.type=type}},Option:class extends Node{constructor(text,value){super('option');this.textContent=text;this.value=value}}};
  vm.runInNewContext(read('spare-groups.js'),ctx);vm.runInNewContext(read('plaza/spare-picker.js'),ctx);
  let items=fixtures(),changes=0,quantity=5,loan=false;select.addEventListener('change',()=>changes++);
- const api=window.SKSparePicker.mount(form,{title:'ELEMENTO',isDelivery:delivery,items:()=>items,fixed:()=>false,availability:()=>quantity,aliases:()=>[],loan:()=>loan,badge:n=>({className:'available',text:String(n)})});
+ const api=window.SKSparePicker.mount(form,{title:'ELEMENTO',isDelivery:delivery,items:()=>items,fixed:()=>false,availability:()=>quantity,aliases:()=>[],loan:()=>loan,badge:n=>({className:'available',text:String(n)}),...config});
  const click=(menu,key,value)=>{const button=menu.children.find(x=>x.dataset[key]===value);assert.ok(button,`${key}: ${value}`);menu.dispatchEvent({type:'click',target:button})};
  const group=type=>{api.main.open();click(api.main.menu,'spareGroup',type)};
  return{...api,select,label,group,window,items,changes:()=>changes,setItems:value=>{items=value},setQuantity:value=>{quantity=value},setLoan:value=>{loan=value},choose:id=>click(api.detail.menu,'itemId',id),type(value,target=api.detail){target.input.value=value;target.input.dispatchEvent({type:'input'})}};
@@ -114,4 +114,18 @@ test('the unchanged backend confirms each named spare once and Production receiv
  const production=ctx.productionSync_({token:'test',pending:[]});
  assert.deepEqual(production.deliveries.map(row=>row.itemId),['yt1','yt28']);
  assert.ok(ctx.productionCatalog_(cloud.parts,cloud.inventoryCriteria,'YT29').get('legacy-yt1').aliases.includes('yt1'));
+});
+
+test('Production lists every eligible item, including later search matches and zero-stock rows',()=>{
+ const items=Array.from({length:120},(_,i)=>({id:'tool-'+i,name:'Herramienta '+i}));
+ const last=items.at(-1),ui=picker(true,{showAllItems:true});
+ ui.setItems(items);ui.main.open();
+ assert.equal(ui.main.menu.children.length,120);
+ ui.type('Herramienta',ui.main);assert.equal(ui.main.menu.children.length,120);
+ ui.main.menu.dispatchEvent({type:'click',target:ui.main.menu.children.at(-1)});
+ assert.equal(ui.select.value,last.id);
+ ui.clear();ui.setQuantity(0);ui.main.open();assert.equal(ui.main.menu.children.length,120);
+ assert.equal(ui.main.menu.children.at(-1).disabled,true);
+ const plaza=picker();plaza.setItems(items);plaza.main.open();assert.equal(plaza.main.menu.children.length,80);
+ assert.match(read('produccion/warehouse.js'),/SKSparePicker\.mount\(form,\{[^}]*showAllItems:true/);
 });

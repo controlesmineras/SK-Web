@@ -106,7 +106,7 @@
   f.loanId.required=loanMode;
  }
  const itemPicker=window.SKSparePicker.mount(form,{
-  title:'SELECCIONE ELEMENTO A ENTREGAR',
+  title:'SELECCIONE ELEMENTO A ENTREGAR',showAllItems:true,
   get isDelivery(){return ['delivery','loan','transfer_out'].includes(view)},loan:()=>view==='loan',
   items:()=>selectableCriteria().map(row=>({...row,CI_ALIAS_SECUNDARIO:[row.CI_ALIAS_SECUNDARIO,row.spareApplication,row.application,row.ubicacionAplicacion].filter(Boolean).join(' ')})),
   fixed:row=>row.isFixedAsset===true,availability:balance,
