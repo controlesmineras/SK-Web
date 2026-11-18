@@ -206,3 +206,22 @@ test('the Production picker and stock use the same asset identities offline acro
  const back=moveHammer('return',{loanId:loan.id});check({...lent,pending:[back]},['hammer']);
  check(r.sync([back]),['hammer']);
 });
+
+test('Reintegros lists open internal loans by original borrower, including offline and partial returns',()=>{
+ const c=vm.createContext({assetLabel:row=>row.serial});
+ const client=fs.readFileSync('produccion/warehouse.js','utf8');
+ vm.runInContext(client.slice(client.indexOf(' function warehouseLoans('),client.indexOf(' let loanSnapshot')),c);
+ const loan=(id,quantity,extra={})=>({id,kind:'loan',itemId:'tool',personId:'a',quantity,...extra});
+ const back=(id,loanId,quantity)=>({id,kind:'return',loanId,quantity,personId:'b'});
+ const closed=loan('closed',0.8),partial=loan('partial',3,{personName:'Nombre del préstamo'});
+ const savedReturn=back('r1','partial',1);
+ const catalog={criteria:[item],personal:[{id:'a',nombre:'Quien retiró',documento:'123'}],assets:[{id:'fixed',serial:'S-42'}]};
+ const records=[closed,partial,savedReturn,back('r2','closed',0.1),{id:'plaza',kind:'transfer_in',sourceLoan:true}];
+ const pending=[back('r3','closed',0.7),savedReturn,partial,loan('local',1,{assetId:'fixed'}),
+  {...back('r4','partial',2),syncRejected:true},loan('invalid',1,{syncRejected:true})];
+ const open=()=>Array.from(c.warehouseLoans({catalog,records,pending})).filter(row=>row.left>0);
+ assert.deepEqual(open().map(row=>[row.id,row.left,row.borrower,row.document,row.label]),[
+  ['local',1,'Quien retiró','123','Llave · S-42'],['partial',2,'Nombre del préstamo','123','Llave']]);
+ pending.push(back('r5','local',1),back('r6','partial',2));
+ assert.deepEqual(open(),[]);
+});
