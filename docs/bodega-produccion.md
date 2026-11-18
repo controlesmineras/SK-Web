@@ -8,7 +8,7 @@ Producción conserva sus propias cantidades y movimientos en `sk-web-production.
 2. En **Implementar → Administrar implementaciones → Editar**, elegir **Nueva versión** y actualizar la implementación existente. Conservar la URL y sus propiedades actuales.
 3. Actualizar SK Web Admin, Plaza Blending y Producción con el engranaje de cada app. No borrar sus datos ni descartar pendientes.
 4. En SK Web Admin, abrir **USUARIOS DE PRODUCCIÓN → Bodega de Producción → ACTIVAR BODEGA DE PRODUCCIÓN**.
-5. Registrar en Producción los saldos de apertura de los otros elementos presentes al momento de activar. Los repuestos mantienen sus aperturas e inventarios anteriores en Mecánica; no se vuelven a cargar.
+5. Registrar en Producción los saldos de apertura de los elementos por cantidad presentes al momento de activar. Los activos fijos ya ubicados en Bodega de Producción-N. 4 aparecen por su ficha, sin otra apertura ni ingreso. Los repuestos mantienen sus aperturas e inventarios anteriores en Mecánica; no se vuelven a cargar.
 6. Asignar **Bodeguero/a**, **Mecánico** o **Mecánico y bodeguero/a** mediante el enlace de acceso del funcionario. La activación del enlace aplica sus roles. Una cuenta de Administrador puede entrar a ambos módulos.
 
 La actualización del repositorio no actualiza automáticamente la implementación de Apps Script. La bodega permanece desactivada hasta el paso 4. La fecha de activación queda registrada: solo se incorporan salidas de Plaza creadas desde ese momento, para no duplicar lo ya incluido en las aperturas. Sincronizar los pendientes de Plaza antes de establecer esa apertura.

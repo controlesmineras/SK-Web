@@ -152,3 +152,57 @@ test('roles persist together and legacy single-role accounts keep their permissi
  assert.equal(r.c.productionCan_({role:'mechanic'},'warehouse'),false);assert.equal(r.c.productionCan_({role:'assistant'},'mechanic'),true);
  assert.throws(()=>r.c.productionRoles_({roles:['unknown']}),/válido/);
 });
+
+const hammer={id:'rotomartillo',name:'Rotomartillo',isFixedAsset:true,allowLoan:true};
+const level4={id:'hammer',clase:hammer.name,estado:'Operativo/a',disponibleEntrega:'Sí',ubicacion:'Bodega de Producción-N. 4'};
+const moveHammer=(kind,extra={})=>op(kind,1,{itemId:hammer.id,assetId:level4.id,...extra});
+
+test('a level 4 asset is counted and can leave without an opening, exactly once until returned',()=>{
+ const assets=[level4,...[
+  {id:'surface',ubicacion:'Bodega de Superficie'},{id:'assigned',ubicacion:'Producción · Nivel 4'},
+  {id:'other-level',ubicacion:'Bodega de Producción-N. 14'},{id:'blocked',disponibleEntrega:'No'},
+  {id:'repair',estado:'En reparación'},{id:'retired',estado:'Dada de baja'},{id:'deleted',deleted:true}
+ ].map(change=>({...level4,...change}))];
+ const r=runtime({central:{inventoryCriteria:[hammer],assets}});
+ const first=r.sync([],{catalogRevision:'production-no-epp-v1|'+cutoff});
+ assert.deepEqual(Array.from(first.catalog.assets.filter(a=>a.inWarehouse&&a.canIssue),a=>a.id),['hammer']);
+ assert.equal(first.balances[0].quantity,1);assert.equal(first.rows.length,0);
+ const loan=moveHammer('loan');
+ const lent=r.sync([loan,moveHammer('delivery')]);
+ assert.deepEqual(Array.from(lent.receipts,row=>row.status),['accepted','rejected']);assert.equal(lent.balances[0].quantity,0);
+ assert.equal(r.sync([loan]).receipts[0].status,'already-applied');
+ const back=r.sync([moveHammer('return',{loanId:loan.id})]);assert.equal(back.balances[0].quantity,1);
+ assert.equal(r.sync([moveHammer('delivery')]).balances[0].quantity,0);
+ for(const assetId of ['surface','assigned','other-level','blocked','repair','retired','deleted']){
+  assert.equal(r.sync([moveHammer('loan',{assetId})]).receipts[0].status,'rejected',assetId);
+ }
+ assert.equal(r.sync([moveHammer('transfer_out',{assetId:'repair'})]).receipts[0].status,'accepted');
+});
+
+test('an existing level 4 transfer and its asset are counted once, with the Plaza loan still linked',()=>{
+ const source=transfer('plaza-loan',{quantity:1,itemId:hammer.id,assetId:level4.id,destination:'Bodega de Producción - N. 4',deliveryType:'PRÉSTAMO'});
+ const r=runtime({central:{inventoryCriteria:[hammer],assets:[level4],blendingDeliveries:[source]}});
+ const first=r.sync();assert.equal(first.rows.length,1);assert.equal(first.balances[0].quantity,1);
+ assert.equal(r.sync().balances[0].quantity,1);
+ const out=r.sync([moveHammer('transfer_out')]);assert.equal(out.receipts[0].status,'accepted');assert.equal(out.balances[0].quantity,0);
+ assert.equal(r.central.blendingDeliveries.at(-1).loanId,source.id);
+});
+
+test('the Production picker and stock use the same asset identities offline across a loan, rejection and return',()=>{
+ const r=runtime({central:{inventoryCriteria:[hammer],assets:[level4,{...level4,id:'other',ubicacion:'Socavón'}]}});
+ const initial=r.sync(),loan=moveHammer('loan');
+ const ui=vm.createContext({snapshot:initial,view:'delivery',criterion:hammer,norm:value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()});
+ const client=fs.readFileSync('produccion/warehouse.js','utf8');
+ vm.runInContext(client.slice(client.indexOf(' const assetClass='),client.indexOf(' function selectOptions')),ui);
+ function check(snapshot,expected){
+  ui.snapshot=snapshot;
+  for(const kind of ['delivery','loan','stock']){
+   ui.view=kind;assert.deepEqual(Array.from(ui.fixedAssets(hammer,kind),row=>row.id),expected);assert.equal(ui.balance(hammer),expected.length);
+  }
+ }
+ check(initial,['hammer']);check({...initial,pending:[loan]},[]);
+ check({...initial,pending:[{...loan,syncRejected:true}]},['hammer']);
+ const lent=r.sync([loan]);check(lent,[]);
+ const back=moveHammer('return',{loanId:loan.id});check({...lent,pending:[back]},['hammer']);
+ check(r.sync([back]),['hammer']);
+});

@@ -23,12 +23,62 @@
  const tell=message=>{feedback.textContent=message};
  form.addEventListener('input',()=>{warehouseDirty=true});form.addEventListener('change',()=>{warehouseDirty=true});
  const isEpp=row=>row.isEpp===true||['true','si','sí','1','yes'].includes(String(row.isEpp||'').trim().toLowerCase());
- const criteria=()=>(snapshot.catalog?.criteria||[]).filter(row=>!row.deleted&&row.active!==false&&!isEpp(row)),people=()=>snapshot.catalog?.personal||[],assets=()=>snapshot.catalog?.assets||[];
+ const criteria=()=>(snapshot.catalog?.criteria||[]).filter(row=>!row.deleted&&row.active!==false&&!isEpp(row)),people=()=>snapshot.catalog?.personal||[];
  const pending=()=>snapshot.pending||[],records=()=>[...(snapshot.records||[])].sort((a,b)=>a.revision-b.revision);
  const item=id=>criteria().find(row=>row.id===id),assetLabel=row=>[row.clase,row.marcaActual||row.marcaInterna||row.marcaAnterior,row.numeroClase&&'N.º '+row.numeroClase,row.serial].filter(Boolean).join(' · ');
  const itemLabel=row=>row.isYtSpare?[row.spareEquipment,'Ítem '+row.spareItemNumber,row.spareItemName||row.name,row.spareApplication||row.application].filter(Boolean).join(' · '):[row.name,row.application||row.ubicacionAplicacion].filter(Boolean).join(' · ');
  const outstanding=loan=>loan.quantity-records().filter(row=>row.kind==='return'&&row.loanId===loan.id).reduce((n,row)=>n+row.quantity,0)-pending().filter(row=>!row.syncRejected&&row.kind==='return'&&row.loanId===loan.id).reduce((n,row)=>n+row.quantity,0);
- function balance(id){let value=Number((snapshot.balances||[]).find(row=>row.itemId===id)?.quantity)||0;for(const row of pending())if(row.itemId===id&&!row.syncRejected)value+=Number(row.quantity)*(['delivery','loan','transfer_out'].includes(row.kind)?-1:1);return value;}
+ const assetClass=value=>norm(value).trim().replace(/\s+/g,' ');
+ const outgoing=kind=>['delivery','loan','transfer_out'].includes(kind);
+ function groupWarehouseAssets(snapshot){
+  const catalog=snapshot.catalog||{},latest=new Map(),states=new Map(),groups=new Map();
+  const legacy=catalog.assets?.some(asset=>asset.inWarehouse===undefined);
+  if(legacy)for(const row of snapshot.records||[]){
+   if(row.assetId&&row.status!=='rejected'&&row.revision>(latest.get(row.assetId)?.revision||0))latest.set(row.assetId,row);
+  }
+  for(const asset of catalog.assets||[]){
+   if(asset.deleted||/^dad[oa](?:\/[oa])? de baja$/.test(assetClass(asset.estado)))continue;
+   const last=latest.get(asset.id),location=assetClass(asset.ubicacion);
+   // Un catálogo anterior solo permite las ubicaciones que su servidor puede confirmar.
+   const stored=asset.inWarehouse??((!last||last.delta>0)&&['produccion','inventario de produccion','bodega de produccion'].includes(location));
+   states.set(asset.id,{asset,stored,canIssue:asset.canIssue??true});
+  }
+  for(const row of snapshot.pending||[]){
+   if(row.syncRejected)continue;
+   if(row.newAsset&&row.kind==='income'){
+    const criterion=catalog.criteria?.find(item=>item.id===row.itemId);
+    if(criterion)states.set(row.newAsset.id,{asset:{...row.newAsset,clase:criterion.name},stored:true,canIssue:row.incomeType!=='REPARACIÓN'});
+    continue;
+   }
+   const state=states.get(row.assetId);
+   if(!state)continue;
+   state.stored=!outgoing(row.kind);
+   if(row.kind==='income'&&row.incomeType==='REPARACIÓN')state.canIssue=false;
+  }
+  for(const state of states.values()){
+   const key=assetClass(state.asset.clase);
+   if(!groups.has(key))groups.set(key,{registered:[],stored:[],available:[]});
+   const group=groups.get(key);group.registered.push(state.asset);
+   if(state.stored){group.stored.push(state.asset);if(state.canIssue)group.available.push(state.asset);}
+  }
+  return groups;
+ }
+ let indexedSnapshot,assetGroups;
+ function fixedAssets(criterion,kind){
+  if(!criterion?.isFixedAsset)return [];
+  if(indexedSnapshot!==snapshot){assetGroups=groupWarehouseAssets(snapshot);indexedSnapshot=snapshot;}
+  const group=assetGroups.get(assetClass(criterion.name));
+  if(kind==='transfer_out')return group?.stored||[];
+  if(['stock','delivery','loan'].includes(kind))return group?.available||[];
+  return group?.registered||[];
+ }
+ function balance(criterion){
+  if(criterion.isFixedAsset)return fixedAssets(criterion,view==='transfer_out'?view:'stock').length;
+  const id=criterion.id;
+  let value=Number((snapshot.balances||[]).find(row=>row.itemId===id)?.quantity)||0;
+  for(const row of pending())if(row.itemId===id&&!row.syncRejected)value+=Number(row.quantity)*(outgoing(row.kind)?-1:1);
+  return value;
+ }
  function selectOptions(select,options,placeholder){const before=select.value;select.replaceChildren(new Option(placeholder,''),...options.map(([value,label])=>new Option(label,value)));if(options.some(([value])=>String(value)===before))select.value=before;}
  function selectableCriteria(){
   const sparesBlocked=['delivery','loan','transfer_out'].includes(view)&&!snapshot.settings?.allowSpareDelivery;
@@ -46,8 +96,8 @@
   find('[data-asset-mode]').hidden=!fixed||view!=='income';find('[data-new-asset]').hidden=!creating;
   find('[data-asset]').hidden=!fixed||loanMode||creating;find('[data-loan]').hidden=!loanMode;
   f.assetId.required=Boolean(fixed&&!loanMode&&!creating);f.quantity.min=view==='opening'?'0':selected?.isYtSpare||fixed?'1':'0.001';f.quantity.step=selected?.isYtSpare||fixed?'1':'any';f.quantity.readOnly=Boolean(fixed);if(fixed)f.quantity.value='1';
-  const selectedAssets=assets().filter(row=>norm(row.clase)===norm(selected?.name)&&!/dado.*baja/i.test(row.estado||''));
-  selectOptions(f.assetId,selectedAssets.map(row=>[row.id,assetLabel(row)]),'Seleccionar activo');
+  const selectedAssets=fixedAssets(selected,view);
+  selectOptions(f.assetId,selectedAssets.map(row=>[row.id,assetLabel(row)]),fixed&&outgoing(view)&&!selectedAssets.length?'Sin activos disponibles en Producción':'Seleccionar activo');
   const loans=records().filter(row=>row.kind==='loan'&&row.itemId===selected?.id&&outstanding(row)>0);
   selectOptions(f.loanId,loans.map(row=>[row.id,`${row.personName} · ${row.assetLabel||row.itemName} · pendiente ${outstanding(row)}`]),'Seleccionar préstamo');
   find('[data-source-loan]').hidden=view!=='transfer_out';
@@ -56,10 +106,10 @@
   f.loanId.required=loanMode;
  }
  const itemPicker=window.SKSparePicker.mount(form,{
-  title:'SELECCIONE ELEMENTO A ENTREGAR',
+  title:'SELECCIONE ELEMENTO A ENTREGAR',showAllItems:true,
   get isDelivery(){return ['delivery','loan','transfer_out'].includes(view)},loan:()=>view==='loan',
   items:()=>selectableCriteria().map(row=>({...row,CI_ALIAS_SECUNDARIO:[row.CI_ALIAS_SECUNDARIO,row.spareApplication,row.application,row.ubicacionAplicacion].filter(Boolean).join(' ')})),
-  fixed:row=>row.isFixedAsset===true,availability:row=>balance(row.id),
+  fixed:row=>row.isFixedAsset===true,availability:balance,
   aliases:row=>[row.secondaryName,row.tertiaryName,row.spareApplication||row.application||row.ubicacionAplicacion].filter(Boolean),
   badge:quantity=>quantity<=0?{className:'empty',text:'SIN EXISTENCIAS'}:quantity<=3?{className:'low',text:'QUEDAN: '+quantity}:{className:'available',text:'HAY: '+quantity}
  });
@@ -94,7 +144,7 @@
  function renderTable(){
   const query=norm(find('#warehouseSearch').value);let headers,rows;
   if(view==='stock'){
-   headers=['ELEMENTO','UNIDAD','DISPONIBLE EN PRODUCCIÓN'];rows=criteria().map(row=>[itemLabel(row),row.unit||'Unidad',balance(row.id)]);
+   headers=['ELEMENTO','UNIDAD','DISPONIBLE EN PRODUCCIÓN'];rows=criteria().map(row=>[itemLabel(row),row.unit||'Unidad',balance(row)]);
   }else if(view==='loans'){
    headers=['FECHA','ELEMENTO / ACTIVO','QUIÉN RECIBIÓ','PRESTADO','PENDIENTE','ESTADO'];
    const filter=find('#warehouseLoanFilter').value;
@@ -112,6 +162,7 @@
   const ready=snapshot.settings?.enabled;
   find('#warehouseNote').textContent=!snapshot.catalog?'Puedes abrir las pantallas. Para registrar movimientos, sincroniza una vez y descarga los criterios de la bodega.':!ready?'BODEGA PENDIENTE DE ACTIVACIÓN. Puedes abrir las pantallas y consultar los datos descargados. Para registrar movimientos: SK Web Admin → USUARIOS DE PRODUCCIÓN → Bodega de Producción → ACTIVAR BODEGA DE PRODUCCIÓN. Después sincroniza aquí.':
    'Cantidades propias de Producción. Ingresos automáticos desde '+new Date(snapshot.settings.transferStartAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+'.'+(!snapshot.settings.allowSpareDelivery?' La entrega de repuestos YT y Columna está bloqueada.':'');
+  if(ready&&snapshot.catalog&&!String(snapshot.catalogRevision||'').startsWith('warehouse-assets-v2|'))find('#warehouseNote').textContent+=' Para incluir los activos de la bodega del nivel 4, actualiza Code.gs y sincroniza.';
   for(const node of panel.querySelectorAll('[data-view]')){node.hidden=node.dataset.view==='opening'&&!roles(session?.user).includes('admin');node.disabled=false;}
   find('[type=submit]').disabled=savingMovement||!ready||!snapshot.catalog;
   if(!form.hidden){choices();personChoices();}
@@ -211,11 +262,12 @@
    if(!find('#warehouseItemField')._validateItemSearch()||!selected||!date)throw new Error('Selecciona el elemento de la lista y una fecha válida.');
    if(selected.isYtSpare&&['delivery','loan','transfer_out'].includes(view)&&(state.pending||[]).some(row=>!row.kind&&!row.syncRejected))throw new Error('Hay consumos de Mecánica pendientes en este equipo. Sincronízalos antes de entregar repuestos desde Bodega.');
    const quantity=Number(f.quantity.value);if(f.quantity.value===''||!Number.isFinite(quantity)||quantity<(view==='opening'?0:0.000001))throw new Error('Escribe una cantidad válida.');
-   if(['delivery','loan','transfer_out'].includes(view)&&!selected.isFixedAsset&&quantity>balance(selected.id))throw new Error('La cantidad supera lo disponible en este equipo.');
+   if(['delivery','loan','transfer_out'].includes(view)&&!selected.isFixedAsset&&quantity>balance(selected))throw new Error('La cantidad supera lo disponible en este equipo.');
    const loan=records().find(row=>row.id===f.loanId.value),assetId=view==='return'?loan?.assetId||'':f.assetId.value;
    if(view==='return'&&(!loan||quantity>outstanding(loan)))throw new Error('Revisa el préstamo y la cantidad pendiente.');
    const creating=selected.isFixedAsset&&view==='income'&&f.assetMode.value==='new';
    if(selected.isFixedAsset&&!assetId&&!creating)throw new Error('Selecciona el activo registrado.');
+   if(selected.isFixedAsset&&outgoing(view)&&!fixedAssets(selected,view).some(asset=>asset.id===assetId))throw new Error('El activo no está disponible en Bodega de Producción.');
    if(view==='transfer_out'&&!confirm('¿Enviar '+quantity+' '+selected.name+' a Plaza Blending? Al sincronizar se descontará en Producción y se registrará el ingreso en Plaza.'))return;
    const row={id:crypto.randomUUID(),kind:view,itemId:selected.id,quantity,fechaISO:date,assetId,personId:f.personId.value,destination:f.destination.value.trim(),loanId:view==='return'?f.loanId.value:'',sourceLoanId:view==='transfer_out'?f.sourceLoanId.value:'',incomeType:view==='income'?f.incomeType.value:'',notes:f.notes.value.trim(),createdAt:new Date().toISOString(),...(creating?{newAsset:{id:crypto.randomUUID(),serial:f.newSerial.value,modelo:f.newModel.value,marcaComercial:f.newBrand.value,marcaAnterior:f.newMark.value,numeroClase:f.newNumber.value,minaOrigen:f.newMine.value,longitud:f.newLength.value}}:{})};
    savingMovement=true;find('[type=submit]').disabled=true;

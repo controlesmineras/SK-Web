@@ -643,7 +643,7 @@ function applyPlazaChanges_(cloud,incoming,auth){
           if(!asset)throw new Error('El activo seleccionado no existe');
           row.assetLabel=[asset.clase,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.marcaActual||asset.marcaInterna,asset.serial&&'Serial '+asset.serial,asset.minaOrigen&&'Origen: '+asset.minaOrigen].filter(Boolean).join(' · ');
           if(isReturn)asset.ubicacion='Bodega de Superficie';
-          else if(name==='blendingDeliveries'){if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');asset.ubicacion=row.destination||'Operación'}else{if(productionWarehouseSettings_().enabled&&/^(?:inventario de |bodega de )?produccion(?:$| ·)/.test(cargoNorm_(asset.ubicacion)))throw new Error('Registra el traslado de este activo desde Bodega de Producción; su ingreso en Plaza será automático.');asset.ubicacion='Bodega de Superficie';applyPlazaIncomeContext_(row,asset)}asset.updatedAt=new Date().toISOString();
+          else if(name==='blendingDeliveries'){if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');asset.ubicacion=row.destination||'Operación'}else{if(productionWarehouseSettings_().enabled&&(productionWarehouseLocation_(asset.ubicacion)||/^(?:inventario de |bodega de )?produccion ·/.test(cargoNorm_(asset.ubicacion))))throw new Error('Registra el traslado de este activo desde Bodega de Producción; su ingreso en Plaza será automático.');asset.ubicacion='Bodega de Superficie';applyPlazaIncomeContext_(row,asset)}asset.updatedAt=new Date().toISOString();
         }else{
           const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},balanceBefore=Number(current.quantity)||0,next=balanceBefore+(name==='blendingIncomes'||isReturn?qty:-qty);row.balanceBefore=balanceBefore;row.balanceAfter=next;
           if(next<0)throw new Error('La cantidad ingresada supera la disponibilidad');
@@ -1077,7 +1077,11 @@ function productionWarehouseAppend_(data,row){
  (data.warehouseMovements||(data.warehouseMovements=[])).push(saved);return saved;
 }
 function productionWarehouseEpp_(item){return truthy_(item?.isEpp)}
-function productionWarehouseDestination_(row){return row.destinationWarehouseId==='production'||['produccion','inventario de produccion','bodega de produccion'].includes(cargoNorm_(row.destination))}
+function productionWarehouseLocation_(location){
+ const value=cargoNorm_(location);
+ return ['produccion','inventario de produccion','bodega de produccion'].includes(value)||/^bodega de produccion\s*[-–—]?\s*(?:n\.?|nivel)\s*4$/.test(value);
+}
+function productionWarehouseDestination_(row){return row.destinationWarehouseId==='production'||productionWarehouseLocation_(row.destination)}
 function productionSpare_(item,central){
  if(!item?.isYtSpare)return null;
  for(const origin of ['YT28','YT29','Columna28','Columna29']){
@@ -1124,11 +1128,17 @@ function productionWarehouseBalance_(data,item,central){
  const spare=productionSpare_(item,central);if(spare)return productionSpareBalance_(data,spare,central);
  return (data.warehouseMovements||[]).filter(row=>row.itemId===item.id&&row.status!=='rejected').reduce((n,row)=>n+Number(row.delta||0),0);
 }
-function productionWarehouseAssetAvailable_(data,asset,central){
- if(!asset||asset.deleted||/dado.*baja/i.test(asset.estado||''))return false;
- const last=(data.warehouseMovements||[]).filter(row=>row.assetId===asset.id&&row.status!=='rejected').at(-1);
- if(last)return last.delta>0&&(last.bridgePending||/^(?:inventario de |bodega de )?produccion(?:$| ·)/.test(cargoNorm_(asset.ubicacion)));
- return ['produccion','inventario de produccion','bodega de produccion'].includes(cargoNorm_(asset.ubicacion));
+function productionWarehouseRetired_(asset){return /^dad[oa](?:\/[oa])? de baja$/.test(cargoNorm_(asset.estado))}
+function productionWarehouseHoldsAsset_(asset,last){
+ if(asset.deleted||productionWarehouseRetired_(asset))return false;
+ if(last?.bridgePending)return last.delta>0;
+ if(last?.kind==='loan')return false;
+ return productionWarehouseLocation_(asset.ubicacion);
+}
+function productionWarehouseCanIssue_(asset,state){
+ const status=cargoNorm_(state);
+ return !['no','false','0'].includes(cargoNorm_(String(asset.disponibleEntrega??'')))&&
+  (!status||/^operativ[oa](?:\/[oa])?$/.test(status)||status==='apto segun inspeccion');
 }
 function productionWarehouseApply_(data,central,request,user){
  if(!/^[-a-zA-Z0-9]{16,100}$/.test(String(request.id||'')))throw new Error('Identificador no válido.');
@@ -1170,11 +1180,14 @@ function productionWarehouseApply_(data,central,request,user){
   if(peers.some(row=>!row.deleted&&cargoNorm_(row.clase)===cargoNorm_(newAsset.clase)&&cargoNorm_(row.minaOrigen||row.mina||'Sandra K')===cargoNorm_(newAsset.minaOrigen)&&String(row.numeroClase||row.numeroYT||'')===newAsset.numeroClase))throw new Error('El número de clase ya pertenece a otro activo.');
   newAsset.numeroYT=newAsset.numeroClase;validateAssetSerials_(peers,[newAsset],central.inventoryCriteria||[]);
  }
- const asset=fixed?(newAsset||(central.assets||[]).find(row=>row.id===request.assetId&&!row.deleted)):null;
+ const asset=fixed?(newAsset||(central.assets||[]).find(row=>row.id===request.assetId&&!row.deleted)||(data.warehouseMovements||[]).find(row=>row.bridgePending&&row.newAsset&&row.assetId===request.assetId)?.newAsset):null;
  if(fixed&&(!asset||cargoNorm_(asset.clase)!==cargoNorm_(item.name)))throw new Error('Selecciona un activo registrado de esta clase.');
- if(asset&&/dado.*baja/i.test(asset.estado||''))throw new Error('El activo está dado de baja.');
- const available=asset&&productionWarehouseAssetAvailable_(data,asset,central);
+ if(asset&&productionWarehouseRetired_(asset))throw new Error('El activo está dado de baja.');
+ const last=asset&&(data.warehouseMovements||[]).filter(row=>row.assetId===asset.id&&row.status!=='rejected').at(-1);
+ const available=asset&&productionWarehouseHoldsAsset_(asset,last);
+ const assetState=last?.bridgePending?last.assetStatus:asset?.estado;
  if(outgoing&&fixed&&!available)throw new Error('El activo no está disponible en Bodega de Producción.');
+ if(asset&&['delivery','loan'].includes(request.kind)&&!productionWarehouseCanIssue_(asset,assetState))throw new Error('El activo no está habilitado para entrega o préstamo.');
  if(['income','opening'].includes(request.kind)&&asset&&cargoNorm_(asset.ubicacion)==='bodega de superficie')throw new Error('El activo está en Plaza Blending. Registra allí su salida hacia Producción.');
  if(['income','opening'].includes(request.kind)&&asset&&available&&(data.warehouseMovements||[]).some(row=>row.assetId===asset.id))throw new Error('El activo ya se encuentra en Producción.');
  if(request.kind==='opening'&&(data.warehouseMovements||[]).some(row=>row.itemId===item.id&&row.kind==='opening'&&(!fixed||row.assetId===asset.id)))throw new Error('El elemento ya tiene saldo de apertura.');
@@ -1209,7 +1222,7 @@ function productionWarehouseApply_(data,central,request,user){
   if(newAsset)row.newAsset=newAsset;
   row.assetLocation=request.kind==='transfer_out'?'Bodega de Superficie':outgoing?'Producción · '+destination:'Producción';
   row.assetBaseVersion=asset?.updatedAt||'';
-  if(asset)row.assetStatus=request.kind==='income'&&request.incomeType==='REPARACIÓN'?'En reparación':asset.estado;
+  if(asset)row.assetStatus=request.kind==='income'&&request.incomeType==='REPARACIÓN'?'En reparación':assetState;
  }
  return {row,duplicate:false};
 }
@@ -1278,9 +1291,20 @@ function productionWarehouseSync_(q){
   const revision=Number(data.warehouseRevision)||0,cursor=Number(q.cursor)||0,reset=cursor>revision;
   const rows=(data.warehouseMovements||[]).filter(row=>reset||row.revision>cursor);
   const criteria=(central.inventoryCriteria||[]).filter(row=>!row.deleted&&row.active!==false&&!productionWarehouseEpp_(row));
-  const balances=criteria.map(item=>({itemId:item.id,quantity:productionWarehouseBalance_(data,item,central)}));
-  const catalogRevision='production-no-epp-v1|'+(central.updatedAt||'');
+  const lastByAsset=new Map();
+  for(const row of data.warehouseMovements||[])if(row.assetId&&row.status!=='rejected')lastByAsset.set(row.assetId,row);
+  const fixedCounts=new Map(),assets=[];
+  for(const row of central.assets||[]){
+   if(row.deleted)continue;
+   const inWarehouse=productionWarehouseHoldsAsset_(row,lastByAsset.get(row.id)),canIssue=productionWarehouseCanIssue_(row,row.estado);
+   const key=cargoNorm_(row.clase);
+   if(inWarehouse&&canIssue)fixedCounts.set(key,(fixedCounts.get(key)||0)+1);
+   assets.push({id:row.id,clase:row.clase,marcaActual:row.marcaActual||row.nuevaMarca,marcaInterna:row.marcaInterna,marcaAnterior:row.marcaAnterior,numeroClase:row.numeroClase||row.numeroYT,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion,updatedAt:row.updatedAt,inWarehouse,canIssue});
+  }
+  const balances=criteria.map(item=>({itemId:item.id,quantity:item.isFixedAsset===true?(fixedCounts.get(cargoNorm_(item.name))||0):productionWarehouseBalance_(data,item,central)}));
+  const assetRevision=(data.warehouseMovements||[]).filter(row=>row.assetId).at(-1)?.revision||0;
+  const catalogRevision='warehouse-assets-v2|'+(central.updatedAt||'')+'|'+assetRevision;
   const catalogChanged=q.catalogRevision!==catalogRevision;
-  return json_({ok:true,protocol:'production-warehouse-v1',reset,cursor:revision,rows,receipts,balances,settings:productionWarehouseSettings_(),roles:productionRoles_(user),catalogRevision,...(catalogChanged?{catalog:{criteria,personal:(central.personal||[]).filter(row=>!row.deleted).map(row=>({id:row.id,nombre:row.nombre,documento:row.documento,empresa:row.empresa})),assets:(central.assets||[]).filter(row=>!row.deleted).map(row=>({id:row.id,clase:row.clase,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,marcaAnterior:row.marcaAnterior,numeroClase:row.numeroClase,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion,updatedAt:row.updatedAt}))}}:{}),syncedAt:new Date().toISOString()});
+  return json_({ok:true,protocol:'production-warehouse-v1',reset,cursor:revision,rows,receipts,balances,settings:productionWarehouseSettings_(),roles:productionRoles_(user),catalogRevision,...(catalogChanged?{catalog:{criteria,personal:(central.personal||[]).filter(row=>!row.deleted).map(row=>({id:row.id,nombre:row.nombre,documento:row.documento,empresa:row.empresa})),assets}}:{}),syncedAt:new Date().toISOString()});
  }finally{lock.releaseLock()}
 }

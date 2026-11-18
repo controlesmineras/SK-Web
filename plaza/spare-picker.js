@@ -46,7 +46,8 @@
     function empty(menu){if(!menu.children.length){const message=document.createElement('p');message.textContent='No hay elementos que coincidan.';menu.append(message)}}
     const main=picker(label,'ItemSearch','Ej.: Repuestos de YT29, guantes…',(menu,input)=>{
       const query=selectedGroup||select.value?'':input.value;
-      const entries=groups.entries(available(),query).slice(0,80);
+      const matches=groups.entries(available(),query);
+      const entries=api.showAllItems?matches:matches.slice(0,80);
       menu.replaceChildren(...entries.map((entry,index)=>{
         if(entry.item)return itemButton(entry.item,index,'ItemOption');
         const button=document.createElement('button'),names=document.createElement('span'),strong=document.createElement('strong'),detail=document.createElement('span');
