@@ -161,3 +161,13 @@ test('warehouse loans, returns and deliveries enter both live stock and physical
  const app=runtime({incomes},parts,[]),rows=app.context.productionCountRows_({origin:'YT29',date:today,values:[{partId:'part10',physical:16}]},[],parts,[],incomes,[]);
  assert.equal(rows[0].expected,16);assert.equal(rows[0].outgoings,6);assert.equal(rows[0].difference,0);
 });
+
+test('mechanic sync exposes lightweight cut dates for every closed period, including prior inventories',()=>{
+ const first={id:'first',origin:'YT29',date:'2026-09-03',closedAt:'2026-09-03T17:00:00Z'};
+ const second={id:'second',origin:'YT29',date:'2026-10-03',closedAt:'2026-10-03T18:00:00Z'};
+ const app=runtime({inventoryCounts:[{...first,status:'closed',rows:[],approvedBy:'admin'},{...second,status:'closed',rows:[]},{id:'draft',status:'draft'}]});
+ app.role('mechanic');
+ const snapshot=app.sync([]);
+ assert.deepEqual(JSON.parse(JSON.stringify(snapshot.inventoryClosures)),[first,second]);
+ assert.equal(snapshot.inventoryLatest[0].id,second.id);
+});

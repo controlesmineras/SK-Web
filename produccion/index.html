@@ -129,7 +129,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=7-single-picker"><script defer src="warehouse-store.js?v=1"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><script defer src="app.js?v=56-mechanics-menu"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=1"><script defer src="consumption-reports.js?v=1"></script><script defer src="app.js?v=57-consumption-reports"></script><script defer src="../consumption-query-v2.js?v=exportar-inventario-1"></script>
 <script defer src="install-ui.js?v=1"></script><script defer src="../spare-groups.js?v=20261112-spare-wording-3"></script><script defer src="../plaza/spare-picker.js?v=20261115-spare-category-hint-1"></script><script defer src="warehouse.js?v=7-mechanics-menu"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
@@ -275,7 +275,36 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <div class="productionViews" role="group" aria-label="Tipo de consulta">
 <button type="button" id="queryIncome" aria-controls="incomeQueries" aria-pressed="false">INGRESOS</button>
 <button type="button" id="queryConsumption" aria-controls="queries" aria-pressed="true">CONSUMOS</button>
+<button type="button" id="querySheet" aria-controls="consumptionSheet" aria-pressed="false">HOJA DE CONSUMO</button>
+<button type="button" id="queryDashboard" aria-controls="consumptionDashboard" aria-pressed="false">DASHBOARD</button>
 </div>
+<section id="consumptionSheet" class="partsReport" aria-labelledby="sheetTitle" hidden>
+<h2 id="sheetTitle">Hoja de consumo</h2>
+<div class="reportFilters">
+<label>Inventario<select id="sheetOrigin"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
+<label>Ver por<select id="sheetMode"><option value="month">Mes</option><option value="period">Entre inventarios</option></select></label>
+<label id="sheetMonthField">Mes<select id="sheetMonth"></select></label>
+<label id="sheetYearField">Año<input id="sheetYear" type="number" min="1900" max="9999" step="1" inputmode="numeric"></label>
+<label id="sheetPeriodField" class="reportWide" hidden>Período de inventario<select id="sheetPeriod"></select></label>
+<label id="sheetPageField" hidden>Días visibles<select id="sheetPage"></select></label>
+</div>
+<p id="sheetDates" class="reportNote" role="status"></p>
+<p id="sheetHistoryNote" class="reportNote" hidden></p>
+<div id="sheetScroll" class="reportScroll" role="region" aria-label="Consumo diario por repuesto" tabindex="0" hidden><table id="sheetTable"><thead></thead><tbody></tbody></table></div>
+</section>
+<section id="consumptionDashboard" class="partsReport" aria-labelledby="dashboardTitle" hidden>
+<h2 id="dashboardTitle">Dashboard de repuestos</h2>
+<div class="reportFilters"><label>Inventario<select id="dashboardOrigin"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label></div>
+<p id="dashboardDates" class="reportNote" role="status"></p>
+<div id="dashboardResults" hidden>
+<h3>Repuestos más consumidos</h3>
+<ol id="consumptionRanking"></ol>
+<h3>Consumo frente a existencias</h3>
+<p class="reportNote">La cobertura estima cuántos meses duraría la existencia actual al ritmo de los últimos tres meses.</p>
+<div class="reportScroll" role="region" aria-label="Comparativa de consumos y existencias por repuesto" tabindex="0">
+<table id="dashboardTable"><thead><tr><th scope="col">Ítem</th><th scope="col">Repuesto</th><th scope="col">Consumo · 3 meses</th><th scope="col">Promedio mensual</th><th scope="col">Existencia actual</th><th scope="col">Cobertura en meses</th></tr></thead><tbody></tbody></table>
+</div></div>
+</section>
 <section id="incomeQueries" hidden>
 <h2>CONSULTAR INGRESOS</h2>
 <p id="incomeQueryStatus" class="hint" hidden></p>

@@ -1,0 +1,41 @@
+body>main:has(.partsReport:not([hidden])){max-width:1440px}
+.partsReport{min-width:0;background:#f7fafb;color:#172e40;border-radius:12px;padding:clamp(12px,2vw,24px)}
+.partsReport h2{margin:0 0 16px;font-size:1.35rem}
+.partsReport h3{margin:22px 0 10px;font-size:1.05rem}
+.reportFilters{display:flex;align-items:end;gap:10px 14px;flex-wrap:wrap}
+.reportFilters label{min-width:7rem;max-width:100%;font-size:.82rem}
+.reportFilters select,.reportFilters input{width:100%;min-height:42px}
+#sheetYear{max-width:8rem}
+.reportNote{font-size:.92rem;line-height:1.45;margin:12px 0;color:#354d60}
+.reportScroll{overflow:auto;max-width:100%;border:1px solid #c5d2da;border-radius:8px;background:white;isolation:isolate}
+.reportScroll:focus-visible{outline:2px solid #29698e;outline-offset:2px}
+.reportScroll table{border-spacing:0;border-collapse:separate;width:max-content;min-width:100%;font-variant-numeric:tabular-nums}
+.reportScroll th,.reportScroll td{position:static;padding:8px 10px;vertical-align:middle;font-size:.85rem;line-height:1.3;background:#fff;border:0;border-bottom:1px solid #dae2e7;text-align:right}
+.reportScroll thead th{background:#e3ecf1;color:#213f51;text-transform:none}
+.reportScroll tbody th{text-transform:none;letter-spacing:normal}
+.reportScroll tr:nth-child(even)>*{background:#f4f7f9}
+.reportScroll table tr>*:nth-child(2){text-align:left}
+#sheetScroll{--number-width:3.2rem;--name-width:clamp(7.5rem,20vw,16rem);max-height:68vh}
+#sheetTable{--group-height:2.4rem}
+#sheetTable thead th{position:sticky;top:0;z-index:2;text-align:center}
+#sheetTable thead tr:first-child th{height:var(--group-height);background:#dbe7ed}
+#sheetTable thead tr:nth-child(2) th{top:var(--group-height);min-width:2.45rem}
+#sheetTable thead tr:first-child th[rowspan],#sheetTable tbody tr>:nth-child(-n+2){text-align:left}
+#sheetTable thead tr:first-child th:first-child,#sheetTable tbody tr>:first-child{position:sticky;left:0;width:var(--number-width);min-width:var(--number-width);max-width:var(--number-width);z-index:1}
+#sheetTable thead tr:first-child th:nth-child(2),#sheetTable tbody tr>:nth-child(2){position:sticky;left:var(--number-width);width:var(--name-width);min-width:var(--name-width);max-width:var(--name-width);overflow-wrap:anywhere;border-right:1px solid #b8c9d2;z-index:1}
+#sheetTable thead tr:first-child th:nth-child(-n+2){z-index:3}
+#sheetTable thead th:nth-child(4){max-width:6.2rem}
+#sheetTable td.hasConsumption{color:#754713;background:#fbefd9;font-weight:700}
+#dashboardTable th,#dashboardTable td{max-width:17rem}
+#consumptionRanking{list-style:none;display:grid;gap:12px;max-height:28rem;overflow:auto;padding:12px 16px;margin:0;background:#fff;border:1px solid #c5d2da;border-radius:8px}
+#consumptionRanking li{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:3px 12px;font-size:.9rem;margin:0}
+#consumptionRanking .rankTrack{grid-column:1/-1;height:7px;border-radius:4px;background:#e9eff2;overflow:hidden}
+.rankTrack>div{height:100%;min-width:2px;border-radius:4px;background:#aa7130}
+@media(max-width:520px){
+ .partsReport{padding:12px 8px}
+ .reportFilters{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+ .reportFilters label{min-width:0}
+ .reportFilters .reportWide{grid-column:1/-1}
+ .reportScroll th,.reportScroll td{padding:7px 6px}
+ #sheetScroll{--number-width:2.8rem}
+}

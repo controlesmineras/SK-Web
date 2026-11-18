@@ -623,7 +623,8 @@ function paint(){
  paintCount();paintSync();
  if(!byId('productionQueries').hidden){
   if(!byId('incomeQueries').hidden)paintIncomeQueries();
-  else window.dispatchEvent(new Event('skweb-consumption-changed'));
+  else if(!byId('queries').hidden)window.dispatchEvent(new Event('skweb-consumption-changed'));
+  else paintConsumptionReport();
  }
 }
 function paintSync(){
@@ -738,11 +739,11 @@ function showConsumptionView(button){
   option.setAttribute('aria-pressed',String(selected));
  }
  const title=byId('mechanicTitle');
- title.textContent=button?button.textContent.replace(/^\s*\+\s*/,'').trim():'MECÁNICA';
+ title.textContent=button?button.textContent.replace(/^\s*[+−]\s*/,'').trim():'MECÁNICA';
  const stockView=stockViews.find(view=>view.button===button);
  if(stockView)paintStockView(stockView);
  if(button===byId('showPhysicalCount'))paintCount();
- if(button===byId('showConsumptionQueries'))showQueryType(byId('queryIncome').getAttribute('aria-pressed')==='true');
+ if(button===byId('showConsumptionQueries'))showQueryType();
  window.SKProductionWarehouse?.paintNavigation?.();
  if(button)title.focus();
 }
@@ -853,7 +854,7 @@ byId('discardRejectedIncomeChanges').onclick=()=>discardRejectedIncomeChanges();
 byId('reviewIncomeConflicts').onclick=()=>{
  showConsumptionView(byId('showConsumptionQueries'));
  if(byId('productionQueries').hidden)return;
- showQueryType(true);
+ showQueryType('incomeQueries');
  byId('incomeChangeLog').scrollIntoView({block:'start'});
  byId('incomeChangeLog').focus({preventScroll:true});
 };
@@ -865,13 +866,20 @@ byId('incomeEditForm').onsubmit=async event=>{
  if(!confirm('Editar este registro afectará la cantidad en el módulo Inventario, en la columna Saldo esperado.\n\nCantidad: '+row.cantidad+' → '+cantidad+'\nFecha: '+displayDate(row.fechaISO)+' → '+displayDate(fechaISO)+'\n\n¿Confirmas la edición?'))return;
  if(await queueIncomeChange(row,'edit',{cantidad,fechaISO,deleted:false}))byId('incomeEditDialog').close();
 };
-function showQueryType(incomes){
- byId('queryIncome').setAttribute('aria-pressed',String(incomes));
- byId('queryConsumption').setAttribute('aria-pressed',String(!incomes));
- byId('incomeQueries').hidden=!incomes;
- byId('queries').hidden=incomes;
- if(incomes)paintIncomeQueries();
- else window.dispatchEvent(new Event('skweb-open-queries'));
+function showQueryType(panel){
+ const buttons=byId('productionQueries').querySelectorAll('.productionViews button');
+ if(!panel)panel=Array.from(buttons).find(button=>button.getAttribute('aria-pressed')==='true')?.getAttribute('aria-controls')||'queries';
+ for(const button of buttons){
+  const target=button.getAttribute('aria-controls');
+  button.setAttribute('aria-pressed',String(target===panel));
+  byId(target).hidden=target!==panel;
+ }
+ if(panel==='incomeQueries')paintIncomeQueries();
+ else if(panel==='queries')window.dispatchEvent(new Event('skweb-open-queries'));
+ else paintConsumptionReport();
+}
+function paintConsumptionReport(){
+ window.SKConsumptionReports.render({state,today:today(),catalog,incomeMovements,stockFor,compareParts});
 }
 const countForm=byId('countForm'),countFields=countForm.elements;
 const countHeaders=['FECHA DE INVENTARIO','INVENTARIO','REPUESTO','SALDO DE APERTURA','INGRESOS','CONSUMOS','SALIDAS BODEGA','SALDO ESPERADO','EXISTENCIA FÍSICA','DIFERENCIA','SALDO DE CIERRE'];
@@ -1046,8 +1054,11 @@ byId('countPdf').onclick=()=>{
 };
 
 for(const button of mechanicButtons)button.onclick=()=>showConsumptionView(button);
-byId('queryIncome').onclick=()=>showQueryType(true);
-byId('queryConsumption').onclick=()=>showQueryType(false);
+byId('queryIncome').onclick=()=>showQueryType('incomeQueries');
+byId('queryConsumption').onclick=()=>showQueryType('queries');
+byId('querySheet').onclick=()=>showQueryType('consumptionSheet');
+byId('queryDashboard').onclick=()=>showQueryType('consumptionDashboard');
+for(const field of document.querySelectorAll('.partsReport select,.partsReport input'))field.onchange=paintConsumptionReport;
 function placeInstallControls(container){
  container.append(byId('installProduction'),byId('installProductionHelp'));
 }
