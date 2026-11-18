@@ -17,7 +17,15 @@
   return new Promise((resolve,reject)=>{
    const tx=db.transaction(['meta','records','pending']),result={};
    const meta=tx.objectStore('meta').get(account);meta.onsuccess=()=>Object.assign(result,meta.result||{});
-   for(const name of ['records','pending']){const request=tx.objectStore(name).index('account').getAll(account);request.onsuccess=()=>result[name]=request.result.map(({account,...row})=>row)}
+   for(const name of ['records','pending']){
+    const request=tx.objectStore(name).index('account').getAll(account);
+    request.onsuccess=()=>{
+     const rows=request.result;
+     // El índice de cuenta devuelve UUID en orden alfabético. La apertura debe viajar antes de las salidas posteriores.
+     if(name==='pending')rows.sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''))||Number(b.kind==='opening')-Number(a.kind==='opening'));
+     result[name]=rows.map(({account,...row})=>row);
+    };
+   }
    tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(tx.error);tx.onerror=()=>{};
   });
  }

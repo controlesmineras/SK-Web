@@ -7,6 +7,16 @@ test('offline queue survives reopen and never crosses accounts',async()=>{
  const {store,factory}=runtime();await store.queue('a',op('one'));await store.queue('b',op('two'));
  const reopened=runtime(factory).store;assert.equal((await reopened.read('a')).pending[0].id,'one');assert.equal((await reopened.read('b')).pending[0].id,'two');
 });
+test('offline openings precede subsequent deliveries on retry regardless of UUID or inventory date',async()=>{
+ const {store,factory}=runtime();
+ const opening={...op('z-opening'),kind:'opening',createdAt:'2026-11-17T18:00:00Z'};
+ const delivery={...op('a-delivery'),kind:'delivery',fechaISO:'2026-11-16',createdAt:'2026-11-17T18:01:00Z'};
+ await store.queue('a',opening);await store.queue('a',delivery);
+ const reopened=runtime(factory).store,{pending}=await reopened.read('a');
+ assert.deepEqual(JSON.parse(JSON.stringify(pending)),[opening,delivery]);
+ await reopened.reconcile('a',response(pending),pending);
+ assert.equal((await reopened.read('a')).pending.length,0);
+});
 test('a response cannot delete work added while its request was running',async()=>{
  const {store}=runtime(),one=op('one'),two=op('two');await store.queue('a',one);await store.queue('a',two);
  await store.reconcile('a',response([one]),[one]);const state=await store.read('a');assert.equal(state.pending.length,1);assert.equal(state.pending[0].id,'two');assert.equal(state.records.length,1);

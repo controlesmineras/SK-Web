@@ -29,7 +29,8 @@ function runtime(){
  vm.runInContext(source.slice(source.indexOf('const incomeMovements='),source.indexOf('function filterParts(')),c);
  vm.runInContext(source.slice(source.indexOf('async function saveStock('),source.indexOf('for(const view of stockViews){')),c);
  vm.runInContext(source.slice(source.indexOf('let syncRequested=false'),source.indexOf('function showConsumptionView(')),c);
- const form={elements:{origen:{value:'YT29'},partId:{value:part.id},fechaISO:{value:'10/11/2026'},cantidad:{value:'4'}}};
+ const picker={hidden:true};
+ const form={dataset:{},querySelector:()=>picker,elements:{origen:{value:'YT29'},search:{value:part.nombre},partId:{value:part.id},fechaISO:{value:'10/11/2026'},cantidad:{value:'4'}}};
  return {c,form,save:()=>c.saveStock({preventDefault(){}},{form,kind:'initial'}),read:()=>local,central:()=>central,backend};
 }
 test('opening correction keeps incomes, updates physical expected balance, syncs and accepts zero',async()=>{
@@ -41,12 +42,32 @@ test('opening correction keeps incomes, updates physical expected balance, syncs
  r.c.navigator.onLine=true;await r.c.sync();assert.equal(r.read().pending.length,0);
  assert.equal(r.central().incomes.filter(x=>x.kind==='initial').length,1);
  assert.equal(r.c.stockFor(part,'YT29'),27);
- r.form.elements.cantidad.value='0';await r.save();await r.c.sync();assert.equal(r.c.stockFor(part,'YT29'),20);
+ r.form.elements.partId.value=part.id;r.form.elements.cantidad.value='0';await r.save();await r.c.sync();assert.equal(r.c.stockFor(part,'YT29'),20);
  r.backend.productionSync_({pending:[movement('new-income-000001','income',3)]});await r.c.sync();assert.equal(r.c.stockFor(part,'YT29'),23);
 });
 test('opening preview includes all income and retains historical stock adjustments',()=>{
  const r=runtime();assert.match(r.c.stockSummaryText(part,'YT29','7'),/SALDO ESPERADO CON ESTA APERTURA: 27/);
  assert.equal(r.central().incomes[1].cantidad,20);
+});
+
+test('an offline opening clears only after commit and a failed save keeps the form ready to retry',async()=>{
+ const r=runtime(),fields=r.form.elements;
+ r.c.navigator.onLine=false;
+ const persist=r.c.changeState;
+ let finish;
+ r.c.changeState=(...args)=>new Promise((resolve,reject)=>{finish=()=>persist(...args).then(resolve,reject)});
+ const write=r.save();
+ assert.equal(fields.partId.value,part.id);assert.equal(fields.cantidad.value,'4');
+ await r.save();assert.equal(r.read().pending.length,0);
+ await finish();await write;
+ assert.equal(r.read().pending.length,1);assert.match(r.c.formMessage,/GUARDADO EN ESTE EQUIPO/);
+ assert.equal(fields.search.value,'');assert.equal(fields.partId.value,'');assert.equal(fields.cantidad.value,'');
+ assert.equal(fields.fechaISO.value,'10/11/2026');assert.equal(fields.origen.value,'YT29');
+ fields.search.value=part.nombre;fields.partId.value=part.id;fields.cantidad.value='0';
+ r.c.changeState=async()=>{throw Error('Falló el almacenamiento local')};
+ await r.save();assert.match(r.c.formMessage,/Falló el almacenamiento/);
+ assert.equal(fields.partId.value,part.id);assert.equal(fields.search.value,part.nombre);assert.equal(fields.cantidad.value,'0');
+ assert.equal(r.read().pending[0].cantidad,4);
 });
 
 test('repeated offline edits replace one opening, synchronize once and never create income or adjustments',async()=>{
@@ -56,7 +77,7 @@ test('repeated offline edits replace one opening, synchronize once and never cre
  await r.c.changeState('doc',x=>({...x,incomes:[]}));r.c.state=await r.c.changeState('doc');
  let id;
  for(const quantity of [4,9,0,7]){
-  r.form.elements.cantidad.value=String(quantity);await r.save();
+  r.form.elements.partId.value=part.id;r.form.elements.cantidad.value=String(quantity);await r.save();
   assert.equal(r.read().pending.length,1);id??=r.read().pending[0].id;assert.equal(r.read().pending[0].id,id);
   const totals=r.c.countTotals('YT29','',[part]).get(part.id);
   assert.equal(totals.opening,quantity);assert.equal(totals.incomes,0);assert.equal(totals.consumptions,0);
@@ -73,7 +94,7 @@ test('editing an opening while its previous value is in flight preserves the new
  const api=r.c.api;let release,started;const began=new Promise(resolve=>started=resolve);
  r.c.api=async(...args)=>{const response=await api(...args);started();await new Promise(resolve=>release=resolve);return response};
  const sync=r.c.sync();await began;
- r.form.elements.cantidad.value='9';await r.save();release();
+ r.form.elements.partId.value=part.id;r.form.elements.cantidad.value='9';await r.save();release();
  r.c.api=api;await sync;await r.c.sync();
  assert.equal(r.read().pending.length,0);assert.equal(r.central().incomes.find(x=>x.kind==='initial').cantidad,9);
  assert.equal(r.c.stockFor(part,'YT29'),29);
@@ -109,7 +130,7 @@ test('a backdated opening syncs once, counts movements from its day, and leaves 
  const closed=inventoryRequest({...count,action:'approve'}).count;
  assert.equal(closed.rows[0].expected,7);assert.equal(closed.rows[0].physical,6);
  await r.c.sync();
- r.form.elements.fechaISO.value='01/11/2025';await r.save();await r.c.sync();
+ r.form.elements.partId.value=part.id;r.form.elements.cantidad.value='10';r.form.elements.fechaISO.value='01/11/2025';await r.save();await r.c.sync();
  assert.equal(r.central().incomes[0].fechaISO,'2025-11-01');assert.equal(r.read().pending.length,0);
  assert.deepEqual(r.central().inventoryCounts.find(row=>row.id===closed.id).rows,JSON.parse(JSON.stringify(closed.rows)));
  assert.equal(totals('2025-11-05').opening,6);assert.equal(totals('2025-11-05').consumptions,0);

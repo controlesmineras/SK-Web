@@ -339,8 +339,8 @@ function paintStockView({form:stockForm,panel,kind}){
  panel.querySelector('[data-stock-balance]').textContent=!enabled?'El servidor debe actualizarse y sincronizarse antes de registrar movimientos.':part?'Existencia registrada: '+stockFor(part,origin):options.length?'Selecciona un repuesto para ver su existencia.':'Sin repuestos que coincidan.';
  stockForm.querySelector('button[type=submit]').disabled=saving||!enabled||!allowed||!part;
  if(kind==='initial'||kind==='adjustment'){
-  const pending=(state.pending||[]).find(row=>part&&['initial','adjustment'].includes(row.kind)&&partMatches(row,part,origin));
-  const blocked=Boolean(pending&&(pending.kind==='adjustment'||pending.syncRejected));
+  const pending=(state.pending||[]).find(row=>['initial','adjustment'].includes(row.kind)&&(part?partMatches(row,part,origin):row.id===stockForm.dataset.pendingStockId));
+  const blocked=Boolean(part&&pending&&(pending.kind==='adjustment'||pending.syncRejected));
   incomeFields.cantidad.disabled=blocked;
   if(kind==='initial')incomeFields.fechaISO.disabled=blocked;
   const opening=pending||(part&&initialFor(part,origin));
@@ -350,10 +350,10 @@ function paintStockView({form:stockForm,panel,kind}){
    if(kind==='initial'&&opening)incomeFields.fechaISO.value=displayDate(opening.fechaISO);
    stockForm.dataset.openingPart=openingKey;
   }
-  byId('reviewStockAdjustment').hidden=!pending?.syncRejected;
+  byId('reviewStockAdjustment').hidden=!part||!pending?.syncRejected;
   if(pending){
    stockForm.dataset.pendingStockId=pending.id;
-   stockForm.querySelector('button[type=submit]').disabled=saving||!allowed||blocked;
+   stockForm.querySelector('button[type=submit]').disabled=saving||!enabled||!allowed||!part||blocked;
    stockStatus(stockForm,pending.syncError||'GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.',Boolean(pending.syncError),false);
   }else if(stockForm.dataset.pendingStockId){
    const saved=(state.incomes||[]).find(row=>row.id===stockForm.dataset.pendingStockId);
@@ -431,7 +431,16 @@ async function saveStock(event,{form:stockForm,kind}){
    return {...current,pending:[...pending,record]};
   });
   if(session!==active)return;
-  state=fresh;if(kind==='income')cantidad.value='';
+  state=fresh;
+  if(kind==='income'||kind==='initial')cantidad.value='';
+  if(kind==='initial'){
+   partId.value='';
+   stockForm.elements.search.value='';
+   stockForm.querySelector('.partOptions').hidden=true;
+   stockForm.dataset.stockPartKey=record.origen+'|';
+   stockForm.dataset.pendingStockId=record.id;
+   delete stockForm.dataset.openingPart;
+  }
   if(stockForm.dataset){delete stockForm.dataset.openingDirty;delete stockForm.dataset.openingDateEdited;}
   tell('GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.');
   scheduleSync(300);

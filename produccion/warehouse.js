@@ -70,12 +70,19 @@
   const caption='SELECCIONE ELEMENTO '+action;find('[data-item-caption]').textContent=caption;itemPicker.main.input.setAttribute('aria-label',caption);
  }
  function personChoices(){const query=norm(f.personSearch.value);selectOptions(f.personId,people().filter(row=>norm(row.nombre+' '+row.documento).includes(query)).slice(0,100).map(row=>[row.id,row.nombre+' · '+row.documento]),'Seleccionar funcionario');}
+ function resetMovementForm(date){
+  form.reset();
+  itemPicker.clear();
+  f.fechaISO.value=displayDate(date);
+  f.quantity.value='';
+  warehouseDirty=false;
+ }
  function setView(next){
   if(savingMovement||next!==view&&!leaveCurrent())return;view=next;warehouseDirty=false;form.hidden=['home','stock','history','loans'].includes(view);
   find('.warehouseActions').hidden=view!=='home';find('.tableWrap').hidden=view==='home';
   find('#warehouseLoanFilter').hidden=view!=='loans';find('#warehouseFilters').hidden=!form.hidden||view==='home';find('#warehouseExports').hidden=!form.hidden||view==='home';
   for(const node of panel.querySelectorAll('[data-view]'))node.setAttribute('aria-pressed',String(node.dataset.view===view));
-  if(!form.hidden){form.reset();itemPicker.clear();itemCaption();f.fechaISO.value=displayDate(today());f.quantity.value='';choices();personChoices();f.personId.required=view!=='opening';for(const node of panel.querySelectorAll('[data-person]'))node.hidden=view==='opening';find('[data-person-label]').textContent=['income','return'].includes(view)?'QUIÉN TRAE':'QUIÉN RECIBE';find('[data-destination]').hidden=!['delivery','loan'].includes(view);f.destination.required=['delivery','loan'].includes(view);find('[data-income]').hidden=view!=='income';find('[type=submit]').textContent='GUARDAR '+(kinds[view]||'MOVIMIENTO').toUpperCase();}
+  if(!form.hidden){resetMovementForm(today());itemCaption();choices();personChoices();f.personId.required=view!=='opening';for(const node of panel.querySelectorAll('[data-person]'))node.hidden=view==='opening';find('[data-person-label]').textContent=['income','return'].includes(view)?'QUIÉN TRAE':'QUIÉN RECIBE';find('[data-destination]').hidden=!['delivery','loan'].includes(view);f.destination.required=['delivery','loan'].includes(view);find('[data-income]').hidden=view!=='income';find('[type=submit]').textContent='GUARDAR '+(kinds[view]||'MOVIMIENTO').toUpperCase();}
   renderTable();paintNavigation();
  }
  const actions=[['ENTREGAS','delivery'],['INGRESOS','income'],['PRÉSTAMOS','loan'],['REINTEGROS','return'],['EXISTENCIAS','stock'],['CONSULTAR MOVIMIENTOS','history'],['PRÉSTAMOS PENDIENTES','loans'],['ENVIAR A PLAZA','transfer_out'],['SALDO DE APERTURA','opening']];
@@ -106,7 +113,7 @@
   find('#warehouseNote').textContent=!snapshot.catalog?'Puedes abrir las pantallas. Para registrar movimientos, sincroniza una vez y descarga los criterios de la bodega.':!ready?'BODEGA PENDIENTE DE ACTIVACIÓN. Puedes abrir las pantallas y consultar los datos descargados. Para registrar movimientos: SK Web Admin → USUARIOS DE PRODUCCIÓN → Bodega de Producción → ACTIVAR BODEGA DE PRODUCCIÓN. Después sincroniza aquí.':
    'Cantidades propias de Producción. Ingresos automáticos desde '+new Date(snapshot.settings.transferStartAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+'.'+(!snapshot.settings.allowSpareDelivery?' La entrega de repuestos YT y Columna está bloqueada.':'');
   for(const node of panel.querySelectorAll('[data-view]')){node.hidden=node.dataset.view==='opening'&&!roles(session?.user).includes('admin');node.disabled=false;}
-  find('[type=submit]').disabled=busy||savingMovement||!ready||!snapshot.catalog;
+  find('[type=submit]').disabled=savingMovement||!ready||!snapshot.catalog;
   if(!form.hidden){choices();personChoices();}
   const box=find('#warehousePending');box.replaceChildren();
   for(const row of pending().filter(row=>row.syncRejected)){
@@ -177,7 +184,7 @@
   const active=session;if(!active||!permits(active.user,'warehouse'))return {ok:true};
   if(!navigator.onLine||!canSync()){tell(!navigator.onLine?'Sin conexión. Los movimientos siguen guardados en este equipo.':'Inicia sesión con conexión para sincronizar la bodega.');return {ok:false};}
   activeSync=(async()=>{
-   busy=true;find('[type=submit]').disabled=true;paintHeader();
+   busy=true;paintHeader();
    try{
     let again;
     do{
@@ -198,7 +205,6 @@
  }
  form.onsubmit=async event=>{
   event.preventDefault();if(savingMovement||!session)return;
-  if(busy){tell('Sincronizando. Puedes completar el formulario; espera a que termine para guardar.');return;}
   const active=session,selected=item(f.itemId.value),date=readDate(f.fechaISO);
   try{
    if(!snapshot.settings?.enabled)throw new Error('La bodega aún no está activa.');
@@ -212,10 +218,15 @@
    if(selected.isFixedAsset&&!assetId&&!creating)throw new Error('Selecciona el activo registrado.');
    if(view==='transfer_out'&&!confirm('¿Enviar '+quantity+' '+selected.name+' a Plaza Blending? Al sincronizar se descontará en Producción y se registrará el ingreso en Plaza.'))return;
    const row={id:crypto.randomUUID(),kind:view,itemId:selected.id,quantity,fechaISO:date,assetId,personId:f.personId.value,destination:f.destination.value.trim(),loanId:view==='return'?f.loanId.value:'',sourceLoanId:view==='transfer_out'?f.sourceLoanId.value:'',incomeType:view==='income'?f.incomeType.value:'',notes:f.notes.value.trim(),createdAt:new Date().toISOString(),...(creating?{newAsset:{id:crypto.randomUUID(),serial:f.newSerial.value,modelo:f.newModel.value,marcaComercial:f.newBrand.value,marcaAnterior:f.newMark.value,numeroClase:f.newNumber.value,minaOrigen:f.newMine.value,longitud:f.newLength.value}}:{})};
-   savingMovement=true;find('[type=submit]').disabled=true;await store.queue(active.user.document,row);snapshot=await store.read(active.user.document);
-   if(session!==active){savingMovement=false;return;}
-   if(session===active){setTimeout(()=>{savingMovement=false;warehouseDirty=false;setView(view);tell('GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.');paintWarehouse();if(navigator.onLine)void synchronize();},0);}
-  }catch(error){savingMovement=false;tell(error.message);paintWarehouse();}
+   savingMovement=true;find('[type=submit]').disabled=true;
+   await store.queue(active.user.document,row);
+   if(session!==active)return;
+   snapshot={...snapshot,pending:[...pending(),row]};
+   resetMovementForm(row.kind==='opening'?row.fechaISO:today());
+   tell('GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.');
+   if(navigator.onLine)void synchronize();
+  }catch(error){if(session===active)tell(error.message);}
+  finally{savingMovement=false;if(session===active)paintWarehouse();}
  };
  find('[data-excel]').onclick=()=>window.SKDownloadTableExcel?.(exportRows,'Bodega_Produccion_'+today()+'.xlsx');
  find('[data-pdf]').onclick=()=>{
