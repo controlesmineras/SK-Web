@@ -11,10 +11,10 @@ const seed=[
  {id:'deleted',nombre:'Borrado',documento:'222',deleted:true},
  {id:'inactive',nombre:'Inactivo',documento:'333',active:false}
 ];
-function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant','admin']}={}){
+function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant','admin'],productionUsers=()=>({users:[]}),renewForSync,waitForLoginRenewal}={}){
  let click,dialog;const nodes={},requests=[];
  const document={readyState:'loading',activeElement:null,querySelector:()=>null,getElementById:()=>null,
-  addEventListener(type,handler){if(type==='click')click=handler},createElement:make,body:{append(node){dialog=node}}};
+  addEventListener(type,handler){if(type==='click')click=handler},createElement:make,createTextNode:textContent=>({textContent}),body:{append(node){dialog=node}}};
  function make(tag){
   const node={tag,children:[],value:'',hidden:false,disabled:false,attrs:{},style:{},
    append(...children){this.children.push(...children);for(const child of children)child.parent=this},
@@ -27,14 +27,15 @@ function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant',
   if(tag==='dialog')Object.defineProperty(node,'innerHTML',{set(){
    for(const selector of ['[data-active]','[data-results]','[data-manage]','#accessPersonSearch','[role=status]','[data-copy]','[data-person-info]','[data-document]','[data-company]','h2','[data-close]','.accessPersonField'])nodes[selector]=make('div');
    nodes['.accessPersonField'].append(nodes['#accessPersonSearch'],nodes['[data-results]']);
+   nodes['[data-active]'].closest=()=>({after:section=>{nodes.warehouse=section}});
    for(const key of ['[data-results]','[data-manage]','[data-person-info]'])nodes[key].hidden=true;
   }});
   return node;
  }
- const window={addEventListener(){},SKAdminAuth:{isAdmin:()=>owner,async request(action,data){
+ const window={addEventListener(){},SKAdminAuth:{isAdmin:()=>owner,renewForSync,waitForLoginRenewal,async request(action,data){
   requests.push({action,data});
   if(action==='adminUsersList'){if(failAccess)throw Error('Offline');return {users:[],adminRoles}}
-  if(action==='productionUsers')return {users:[]};
+  if(action==='productionUsers')return productionUsers();
   if(action==='accessInvitationCreate')return {token:'test-token',plazaRole:data.plazaRole,productionRole:data.productionRole,adminRole:data.adminRole};
   throw Error('Unexpected request: '+action);
  }}};
@@ -94,4 +95,39 @@ test('mantiene restricciones de Admin y roles de Producción',async()=>{
  await production.generate();assert.equal(production.requests.at(-1).data.productionRole,'assistant');
  const blocked=app('admin',{owner:false});await blocked.open();assert.equal(blocked.dialog(),undefined);
  const failed=app('admin',{failAccess:true});await failed.open();await failed.search('ana');assert.equal(failed.results().length,0);
+});
+
+test('un fallo de red permite reintentar y solo ofrece activar después de leer el estado',async()=>{
+ let online=false;
+ const s=app('production',{productionUsers:()=>{
+  if(!online)throw Error('Failed to fetch');
+  return {users:[],warehouseV1:true,warehouseSettings:{enabled:false}};
+ }});
+ await s.open();
+ const labels=()=>s.nodes.warehouse.children.map(node=>node.textContent||'').join(' ');
+ assert.doesNotMatch(labels(),/Code\.gs|ACTIVAR BODEGA/);
+ assert.match(s.nodes['[role=status]'].textContent,/Producción.*conectar/);
+ online=true;await s.nodes['[data-copy]'].children.find(node=>node.textContent==='Reintentar consulta').onclick();
+ assert.match(labels(),/ACTIVAR BODEGA DE PRODUCCIÓN/);
+ assert.equal(s.requests.some(row=>row.action==='productionWarehouseConfigure'),false);
+});
+test('espera la renovación en curso y permite renovar una sesión vencida antes de consultar otra vez',async()=>{
+ let fresh=false,resume;
+ const delay=new Promise(resolve=>{resume=resolve});
+ const s=app('production',{waitForLoginRenewal:()=>delay,renewForSync:async()=>{fresh=true},
+  productionUsers:()=>{if(!fresh)throw Error('La sesión de Web Admin venció');return {users:[],warehouseV1:true,warehouseSettings:{enabled:true,transferStartAt:'2026-11-18T00:00:00Z'}}}});
+ await s.open();assert.equal(s.requests.length,0);resume();await tick();
+ assert.match(s.nodes['[role=status]'].textContent,/sesión de Web Admin venció/);
+ await s.nodes['[data-copy]'].children.find(node=>node.textContent==='Renovar sesión de Admin').onclick();await tick();
+ assert.ok(s.nodes.warehouse.children.some(node=>/Ingresos automáticos desde/.test(node.textContent)));
+ assert.equal(s.requests.some(row=>row.action==='productionWarehouseConfigure'),false);
+});
+test('distingue una versión sin Bodega de una respuesta incompleta',async()=>{
+ const legacy=app('production');await legacy.open();
+ assert.ok(legacy.nodes.warehouse.children.some(node=>/Actualiza Code\.gs/.test(node.textContent)));
+ for(const result of [{},{users:[],warehouseV1:true}]){
+  const incomplete=app('production',{productionUsers:()=>result});await incomplete.open();
+  assert.ok(incomplete.nodes.warehouse);
+  assert.equal(incomplete.nodes.warehouse.children.some(node=>/Actualiza Code\.gs|ACTIVAR BODEGA/.test(node.textContent)),false);
+ }
 });

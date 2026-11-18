@@ -182,7 +182,17 @@ async function open(scope){
  find('.accessPersonField').onfocusout=()=>queueMicrotask(()=>{if(!find('.accessPersonField').contains(document.activeElement))showResults(false)});
  dialog.showModal();
  await run('Cargando Personal y accesos…',async()=>{
-  const [local,admin,production]=await Promise.allSettled([all('personal'),request('adminUsersList'),request('productionUsers')]);
+  await auth().waitForLoginRenewal?.();
+  const current=()=>dialog.open&&dialog.querySelector('[data-active]')===active&&auth()?.isAdmin();
+  if(!current())return;
+  async function readUsers(action){
+   const result=await request(action);
+   if(!Array.isArray(result?.users))throw new Error('El servicio devolvió una lista de accesos incompleta.');
+   return result;
+  }
+  const [local,admin,production]=await Promise.allSettled([all('personal'),readUsers('adminUsersList'),readUsers('productionUsers')]);
+  if(!current())return;
+  const reload=()=>{dialog.close();return open(scope)};
   if(local.status==='fulfilled'){
    people=local.value.filter(person=>!person.deleted).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
    access.plaza=people.filter(person=>person.plazaEnabled).map(person=>({...person,personId:person.id,role:person.plazaRole||'operator'}));
@@ -202,18 +212,39 @@ async function open(scope){
   renderActive();renderSearch();
   if(scope==='production'){
    const section=document.createElement('section');section.className='plazaAccessPeople';section.append(Object.assign(document.createElement('h3'),{textContent:'Bodega de Producción'}));
-   const settings=production.status==='fulfilled'?production.value.warehouseSettings||{}:{};
-   const note=document.createElement('p');note.textContent=!warehouseV1?'Actualiza Code.gs y publica su nueva versión para habilitar Bodega.':settings.enabled?'Ingresos automáticos desde '+new Date(settings.transferStartAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+'. Las cantidades pertenecen únicamente a Producción.':'Al activar, solo se incorporarán nuevas salidas de Plaza. Las entregas históricas no se volverán a sumar.';section.append(note);
-   if(warehouseV1&&!settings.enabled)section.append(button('ACTIVAR BODEGA DE PRODUCCIÓN',()=>{
+   const settings=production.status==='fulfilled'?production.value.warehouseSettings:null;
+   const settingsReady=warehouseV1&&typeof settings?.enabled==='boolean';
+   const note=document.createElement('p');section.append(note);
+   if(production.status==='rejected')note.textContent='No se pudo consultar la activación de la bodega. Revisa el detalle de la consulta.';
+   else if(!warehouseV1)note.textContent='Actualiza Code.gs y publica su nueva versión para habilitar Bodega.';
+   else if(!settingsReady){note.textContent='El servicio respondió sin el estado de activación de la bodega.';section.append(button('Reintentar consulta',reload));}
+   else note.textContent=settings.enabled?'Ingresos automáticos desde '+new Date(settings.transferStartAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+'. Las cantidades pertenecen únicamente a Producción.':'Al activar, solo se incorporarán nuevas salidas de Plaza. Las entregas históricas no se volverán a sumar.';
+   if(settingsReady&&!settings.enabled)section.append(button('ACTIVAR BODEGA DE PRODUCCIÓN',()=>{
     if(!confirm('¿Activar Bodega de Producción? Solo se incorporarán salidas de Plaza registradas desde la activación. Los saldos actuales de repuestos se conservan; registra las aperturas de otros elementos en Producción.'))return;
     run('Activando bodega…',async()=>{const result=await request('productionWarehouseConfigure',{enabled:true});Object.assign(settings,result.warehouseSettings);status.textContent='Bodega activada. Los saldos de Producción no se comparten con Plaza.';dialog.close();open(scope);});
    }));
-   const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=settings.allowSpareDelivery===true;toggle.disabled=!warehouseV1;label.append(toggle,document.createTextNode('Permitir entregar repuestos YT y Columna desde Bodega de Producción'));section.append(label);
+   const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=settings?.allowSpareDelivery===true;toggle.disabled=!settingsReady;label.append(toggle,document.createTextNode('Permitir entregar repuestos YT y Columna desde Bodega de Producción'));section.append(label);
    toggle.onchange=()=>{const value=toggle.checked;run('Guardando permiso…',async()=>{try{const result=await request('productionWarehouseConfigure',{allowSpareDelivery:value});toggle.checked=result.warehouseSettings.allowSpareDelivery;status.textContent='Permiso actualizado. Producción lo recibirá al sincronizar.';}catch(error){toggle.checked=!value;throw error}})};
    active.closest('section').after(section);
   }
-  const missing=Object.keys(access).filter(key=>!access[key]).map(key=>apps[key].name);
-  status.textContent=missing.length?'Accesos sin verificar: '+missing.join(', ')+'.':'';
+  const failures=new Map();
+  for(const [name,result] of [['Personal local',local],[apps.admin.name,admin],[apps.production.name,production]]){
+   if(result.status!=='rejected')continue;
+   const reason=String(result.reason?.message||result.reason||'No se pudo completar la consulta.');
+   const message=/failed to fetch|load failed|networkerror|network request failed|fetch failed/i.test(reason)?'No se pudo conectar con el servicio. Comprueba la conexión a internet.':reason;
+   failures.set(message,[...(failures.get(message)||[]),name]);
+  }
+  status.textContent=Array.from(failures,([message,names])=>names.join(' y ')+' · '+message).join(' ');
+  if(failures.size){
+   copy.append(button('Reintentar consulta',reload));
+   if([admin,production].some(result=>result.status==='rejected'&&/sesi[oó]n.*(?:venci|caduc|expir)|inicia sesi[oó]n/i.test(result.reason?.message||''))){
+    copy.append(button('Renovar sesión de Admin',async()=>{
+     dialog.close();
+     await auth().renewForSync();
+     if(auth()?.isAdmin()&&!dialog.open)open(scope);
+    }));
+   }
+  }
  });
 }
 document.addEventListener('click',event=>{
