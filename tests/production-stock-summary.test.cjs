@@ -112,3 +112,22 @@ test('the opening shows its saved effective date and original registration day i
  c.state={...c.state,incomes:[]};
  assert.match(c.stockSummaryText(part,'YT29','0'),/SALDO DE APERTURA: SIN REGISTRAR/);
 });
+
+test('the stock table shows the effective opening date and amount beside the live balance',()=>{
+ const base=movement('opening','initial',7,{fechaISO:'2026-11-03',recordedAt:'2026-11-08T12:00:00Z',partId:criterion.id});
+ const c=runtime({incomes:[base,movement('income','income',5)],pending:[{...base,cantidad:0,fechaISO:'2026-11-04'}]});
+ const html=fs.readFileSync('produccion/index.html','utf8');
+ const headers=html.match(/<tr>([^\n]+?)<\/tr><\/thead><tbody data-stock-rows>/)[1];
+ assert.deepEqual(Array.from(headers.matchAll(/<th>([^<]+)<\/th>/g),match=>match[1]),
+  ['Inventario','Fecha de apertura','# DE ÍTEM','Repuesto','Saldo de apertura','Existencia actual']);
+ c.document={createElement:()=>({cells:[],append(cell){this.cells.push(String(cell.textContent))}})};
+ vm.runInContext(source.slice(source.indexOf('function paintBalances('),source.indexOf('function paintStockRows(')),c);
+ const body={replaceChildren(...rows){this.rows=rows.map(row=>row.cells)}};
+ const other={id:'other',numero:'22',nombre:'Otro'};
+ c.paintBalances(body,[part,other],'YT29',true);
+ assert.deepEqual(body.rows[0],['YT29','04/11/2026','10','O-ring','0','5 · PENDIENTE']);
+ assert.deepEqual(body.rows[1],['YT29','—','22','Otro','—','0']);
+ c.state={...c.state,pending:[],inventoryLatest:[close({date:'2026-11-05',closedAt:'2026-11-05T16:00:00Z'})]};
+ c.paintBalances(body,[part],'YT29',true);
+ assert.deepEqual(body.rows[0],['YT29','03/11/2026','10','O-ring','7','9']);
+});
