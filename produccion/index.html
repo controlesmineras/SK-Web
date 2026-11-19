@@ -86,10 +86,14 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #queries .queryTabs{max-width:100%}
 #queries .queryTabs button{min-width:0;white-space:normal}
 #queries table{min-width:580px}
+#cqRows .consumptionExternal td:first-child{color:#a3480b;font-weight:700}
+#cqRows .consumptionExternal td:first-child>b{color:inherit}
+#cqRows .consumptionExternal .externalBadge{all:unset}
 #cqCancel{display:none}
 @media(max-width:900px){
  #queries .queryForm{grid-template-columns:repeat(2,minmax(0,1fr))}
  #queries .queryForm label:has(#cqAddField){grid-column:1/-1}
+ #cqRows .consumptionExternal td:first-child{white-space:nowrap;padding-inline:8px}
 }
 @media(max-width:440px){
  #queries .queryForm{padding-inline:8px;column-gap:8px}
