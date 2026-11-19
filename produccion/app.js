@@ -31,7 +31,7 @@ function createDeviceAccess(namespace) {
 const deviceAccess=createDeviceAccess('sk-production');
 const sessionKey='sk-production-session';
 const db=true;
-async function all(name){return name==='consumptions'?[...(state.consumptions||[]),...(state.pending||[]).filter(row=>!row.kind)]:state[name]||[]}
+async function all(name){return name==='consumptions'?window.SKConsumptionReports.consumptionMovements(state):state[name]||[]}
 let syncFailed=false,syncConnectionFailed=false;
 let session=null,state={},draft=[],syncing=false,saving=false;
 try{session=JSON.parse(localStorage.getItem(sessionKey)||'null')}catch{}
@@ -883,6 +883,7 @@ function showQueryType(panel){
   button.setAttribute('aria-pressed',String(target===panel));
   byId(target).hidden=target!==panel;
  }
+ byId('consumptionInventory').hidden=panel!=='queries'&&panel!=='consumptionSheet';
  if(panel==='incomeQueries')paintIncomeQueries();
  else if(panel==='queries')window.dispatchEvent(new Event('skweb-open-queries'));
  else paintConsumptionReport();
@@ -1065,6 +1066,12 @@ byId('countPdf').onclick=()=>{
 for(const button of mechanicButtons)button.onclick=()=>showConsumptionView(button);
 byId('queryIncome').onclick=()=>showQueryType('incomeQueries');
 byId('queryConsumption').onclick=()=>showQueryType('queries');
+byId('consumptionInventory').onchange=()=>{
+ const model=byId('reportModel').value;
+ for(const label of byId('consumptionInventory').querySelectorAll('[data-report-model]'))label.textContent=model;
+ if(!byId('queries').hidden)window.dispatchEvent(new Event('skweb-consumption-changed'));
+ else paintConsumptionReport();
+};
 byId('querySheet').onclick=()=>showQueryType('consumptionSheet');
 byId('queryDashboard').onclick=()=>showQueryType('consumptionDashboard');
 for(const field of document.querySelectorAll('.partsReport select,.partsReport input'))field.onchange=paintConsumptionReport;

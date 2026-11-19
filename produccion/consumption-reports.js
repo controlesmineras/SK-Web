@@ -32,6 +32,30 @@
   if(row.fechaISO!==cut.date)return row.fechaISO>cut.date;
   return Date.parse(row.recordedAt||row.createdAt)>Date.parse(cut.closedAt);
  }
+ function selectedOrigin(){
+  return el('consumptionInventory').querySelector('input:checked').value+el('reportModel').value;
+ }
+ function movementOrigin(row,asset){
+  const stored=String(row.origen??'').trim().replace(/\s+/g,'');
+  const full=/^(yt|columna)(28|29)$/i.exec(stored);
+  if(full)return (full[1].toLowerCase()==='yt'?'YT':'Columna')+full[2];
+  // Algunos registros antiguos guardaban solo el número de inventario.
+  const type=String(row.tipoEquipo||asset?.clase||'').trim().toLowerCase();
+  const model=/^(?:yt|columna)?\s*(28|29)a?$/i.exec(stored||String(row.modelo||asset?.modelo||'').trim());
+  if(!model||!['yt','columna'].includes(type))return '';
+  return (type==='yt'?'YT':'Columna')+model[1];
+ }
+ function consumptionMovements(state){
+  const assets=new Map((state.assets||[]).map(row=>[row.id,row]));
+  const records=new Map((state.consumptions||[]).map(row=>[row.id,row]));
+  for(const row of state.pending||[]){
+   if(!row.kind&&!row.syncRejected&&!records.has(row.id))records.set(row.id,row);
+  }
+  return Array.from(records.values()).filter(row=>!row.deleted&&!row.syncRejected).map(row=>{
+   const origen=movementOrigin(row,assets.get(row.assetId));
+   return origen===row.origen?row:{...row,origen};
+  });
+ }
  function aggregate(context,origin,range){
   const {state,catalog,compareParts,incomeMovements}=context;
   const parts=window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin);
@@ -74,10 +98,8 @@
     row.days.set(day,(row.days.get(day)||0)+qty);
    }
   }
-  for(const row of incomeMovements(state))if(row.kind==='income'||row.kind==='warehouse-return')count(row,true);
-  const consumptions=new Map((state.consumptions||[]).map(row=>[row.id,row]));
-  for(const row of state.pending||[])if(!row.kind&&!row.syncRejected&&!consumptions.has(row.id))consumptions.set(row.id,row);
-  for(const row of consumptions.values())count(row,false);
+  for(const row of incomeMovements(state))if(row.kind==='income'||row.kind==='warehouse-return')count({...row,origen:movementOrigin(row)},true);
+  for(const row of consumptionMovements(state))count(row,false);
   return Array.from(rows.values()).sort((a,b)=>compareParts(a.part,b.part));
  }
  function rank(rows,stockFor,origin){
@@ -143,7 +165,7 @@
   }));
  }
  function sheet(context){
-  const {state,today}=context,origin=el('sheetOrigin').value,byPeriod=el('sheetMode').value==='period';
+  const {state,today}=context,origin=selectedOrigin(),byPeriod=el('sheetMode').value==='period';
   const note=el('sheetDates'),history=el('sheetHistoryNote'),scroll=el('sheetScroll'),pageField=el('sheetPageField');
   const month=el('sheetMonth'),year=el('sheetYear');
   if(!month.options.length){
@@ -213,5 +235,5 @@
   if(!el('consumptionSheet').hidden)sheet(context);
   else if(!el('consumptionDashboard').hidden)dashboard(context);
  }
- window.SKConsumptionReports={render,periods,rollingRange,aggregate,rank};
+ window.SKConsumptionReports={render,periods,rollingRange,aggregate,rank,selectedOrigin,consumptionMovements};
 })();
