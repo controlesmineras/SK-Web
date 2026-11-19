@@ -144,6 +144,7 @@ function controls(){
  if(!sec||document.querySelector('#cqv2'))return;
  const production=sec.hasAttribute('data-compact-detail');
  const orderField='<label>Agregar criterio de orden<select id="cqAddField"></select></label>';
+ const orderCards='<div id="cqOrders"></div>';
  const clearButton='<button type="button" id="cqClear">Limpiar filtros</button>';
  const excelButton='<button type="button" id="cqExport">⬇ Exportar Excel</button>';
  const modes=`<div class="queryTabs" role="group" aria-label="Opciones de consulta">
@@ -159,10 +160,9 @@ function controls(){
    <label>Hasta<input id="cqTo" ${dateInputAttrs()}></label>
    ${production?'':orderField}
    ${production?modes:clearButton}
-   ${production?orderField:excelButton}
+   ${production?orderField+orderCards:excelButton}
   </form>
-  ${production?'':modes}
-  <div id="cqOrders"></div>
+  ${production?'':modes+orderCards}
   ${production?`<p class="hint">
    <span id="cqInfo"></span>
    <span class="consumptionExports" role="group" aria-label="Exportar resultados">

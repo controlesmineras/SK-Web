@@ -95,6 +95,9 @@ main:not(:has([hidden] #queries,#queries[hidden]))>#status{margin-top:0}
 #cqRows .consumptionExternal td:first-child>.externalMachine{color:#a3480b}
 #queries .queryForm{grid-template-columns:repeat(2,minmax(0,1fr))}
 #queries .queryForm label:has(#cqAddField){grid-column:1/-1}
+#queries #cqOrders{grid-column:1/-1;margin:0}
+#queries #cqOrders:empty{display:none}
+#queries .orderCard>button{grid-column:auto}
 #queries .consumptionExports{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
 #queries .consumptionExports button{min-width:0;min-height:44px;white-space:normal;text-transform:uppercase}
 #queries #cqExport{background:#b7dfc5;color:#145c32;border:1px solid #78bd91;box-shadow:0 2px 6px #145c3220}
@@ -114,9 +117,8 @@ main:not(:has([hidden] #queries,#queries[hidden]))>#status{margin-top:0}
 @media(min-width:901px){
  body>main:has(#queries:not([hidden])){max-width:1450px}
  #queries .queryForm{margin:0}
- #queries .queryForm label,#queries .queryForm button{font-weight:700;text-transform:uppercase}
+ #queries .queryForm label,#queries .queryForm>.queryTabs>button{font-weight:700;text-transform:uppercase}
  #queries .queryForm input,#queries .queryForm select{font-weight:700;text-transform:none}
- #queries .queryForm button{min-height:42px}
 }
 .productionToolbar button,.productionViews button{font-size:.85rem;line-height:1.2;text-transform:uppercase;padding-inline:6px}
 #login .productionLoginText{display:inline-block;transform:scale(1.32);text-transform:uppercase}
@@ -151,7 +153,7 @@ main:not(:has([hidden] #queries,#queries[hidden]))>#status{margin-top:0}
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=11-inicio-fijo"><script defer src="warehouse-store.js?v=2"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=3"><script defer src="consumption-reports.js?v=5-numero-item"></script><script defer src="app.js?v=61-dashboard"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=20261119-tarjetas-orden"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=3"><script defer src="consumption-reports.js?v=5-numero-item"></script><script defer src="app.js?v=61-dashboard"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=criterios-en-filtros"></script>
 <script defer src="install-ui.js?v=1"></script><script defer src="../spare-groups.js?v=20261112-spare-wording-3"></script><script defer src="../plaza/spare-picker.js?v=20261118-catalogo-completo"></script><script defer src="warehouse.js?v=12-ubicacion-cabecera"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
