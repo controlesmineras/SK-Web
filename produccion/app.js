@@ -252,6 +252,9 @@ function stockFor(part,origin){
  const total=stockBreakdown(part,origin);
  return total?total.opening+total.incomes-total.consumptions-(total.outgoings||0):0;
 }
+function currentProductionStock(part,origin){
+ return Array.isArray(state.incomes)?stockFor(part,origin):null;
+}
 let stockSummaryState,stockSummaryDay,stockSummaryCache=new Map();
 function stockPeriodSummary(part,origin,previewDate){
  const day=today();

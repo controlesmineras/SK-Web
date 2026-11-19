@@ -43,8 +43,8 @@ function machineCell(row){
  });
  return '<td>'+labels.join(' / ')+'</td>';
 }
-const partOrderFields=['item','name','qty'];
-const fields={date:'Fecha',time:'Registro',item:'# DE ÍTEM',machine:'Máquina',model:'Modelo',inv:'Inventario',name:'Repuesto',qty:'Cantidad'};
+const partOrderFields=['item','name','qty','stock'];
+const fields={date:'Fecha',time:'Registro',item:'# DE ÍTEM',machine:'Máquina',model:'Modelo',inv:'Inventario',name:'Repuesto',qty:'Cantidad',stock:'Saldo actual'};
 function inventoryMismatch(model,inv){
  const key=v=>norm(v).replace(/[^a-z0-9]/g,'');
  let m=key(model),i=key(inv);
@@ -53,14 +53,14 @@ function inventoryMismatch(model,inv){
  return m!==i;
 }
 function inventoryCell(r){return `<td${r.inventoryMismatch?' style="background:#fff0b3;color:#713f12;font-weight:700" title="Inventario diferente del modelo"':''}>${esc(r.inv)}${r.inventoryMismatch?' <span aria-label="Inventario diferente del modelo">⚠</span>':''}</td>`}
-function val(r,k){if(k==='date')return r.date||'';if(k==='time')return timeKey(r);if(k==='item')return r.item&&r.item!=='—'?r.item:null;return r[k]??''}
-function cmpVal(a,b,k){const x=val(a,k),y=val(b,k);if(k==='item'){const ax=x!==null,by=y!==null;if(ax!==by)return ax?-1:1;if(!ax)return String(a.name||'').localeCompare(String(b.name||''),'es',{sensitivity:'base'});const an=Number(x),bn=Number(y);if(Number.isFinite(an)&&Number.isFinite(bn)&&an!==bn)return an-bn}if(k==='qty')return(Number(x)||0)-(Number(y)||0);return String(x??'').localeCompare(String(y??''),'es',{numeric:true,sensitivity:'base'})}
+function val(r,k){if(k==='stock')return r.stock??null;if(k==='date')return r.date||'';if(k==='time')return timeKey(r);if(k==='item')return r.item&&r.item!=='—'?r.item:null;return r[k]??''}
+function cmpVal(a,b,k){const x=val(a,k),y=val(b,k);if(k==='item'){const ax=x!==null,by=y!==null;if(ax!==by)return ax?-1:1;if(!ax)return String(a.name||'').localeCompare(String(b.name||''),'es',{sensitivity:'base'});const an=Number(x),bn=Number(y);if(Number.isFinite(an)&&Number.isFinite(bn)&&an!==bn)return an-bn}if(k==='qty'||k==='stock')return(Number(x)||0)-(Number(y)||0);return String(x??'').localeCompare(String(y??''),'es',{numeric:true,sensitivity:'base'})}
 function sortRows(rows){
- const missingItemsLast=mode==='part'&&productionQuery();
+ const byPart=mode==='part'&&productionQuery();
  return rows.sort((a,b)=>{
   for(const order of orders){
-   if(missingItemsLast&&order.field==='item'){
-    const missing=Number(val(a,'item')===null)-Number(val(b,'item')===null);
+   if(byPart&&(order.field==='item'||order.field==='stock')){
+    const missing=Number(val(a,order.field)===null)-Number(val(b,order.field)===null);
     if(missing)return missing;
    }
    const difference=cmpVal(a,b,order.field);
@@ -148,7 +148,7 @@ function drawOrders(){
  const production=productionQuery();
  const byPart=production&&mode==='part';
  const available=Object.entries(fields).filter(([key])=>
-  (!byPart||partOrderFields.includes(key))&&!orders.some(order=>order.field===key));
+  (byPart?partOrderFields.includes(key):key!=='stock')&&!orders.some(order=>order.field===key));
  const sortOptions=available.map(([key,label])=>`<option value="${key}">${label}</option>`).join('');
  const grouping=production&&!byPart?'<optgroup label="Agrupar resultados"><option value="totalByPart">Total por repuesto</option></optgroup>':'';
  document.querySelector('#cqAddField').innerHTML='<option value="">Agregar criterio…</option>'+grouping+
@@ -161,10 +161,10 @@ function exportConsumption(format){
  if(!lastRows.length)return alert('No hay resultados para exportar.');
  const byPart=mode==='part',grouped=mode==='daily',pdf=format==='pdf';
  const production=productionQuery();
- const headers=byPart?['# DE ÍTEM','REPUESTO','CANTIDAD TOTAL']:['MÁQUINA - NO. MARCA ACTUAL',...(production?[]:['MODELO']),'INVENTARIO','FECHA',...(grouped?[]:['HORA REGISTRO']),'# DE ÍTEM','REPUESTO',grouped?'CANTIDAD TOTAL':'CANTIDAD'];
+ const headers=byPart?['# DE ÍTEM','REPUESTO','CANTIDAD TOTAL',...(production?['SALDO ACTUAL']:[])]:['MÁQUINA - NO. MARCA ACTUAL',...(production?[]:['MODELO']),'INVENTARIO','FECHA',...(grouped?[]:['HORA REGISTRO']),'# DE ÍTEM','REPUESTO',grouped?'CANTIDAD TOTAL':'CANTIDAD'];
  const values=lastRows.map(row=>{
   const part=[row.item||'',row.name||'',row.qty];
-  if(byPart)return part;
+  if(byPart)return production?[...part,row.stock??'—']:part;
   const machine=production?row.equipment.map(machineText).join(' / '):row.machine||'';
   return [machine,...(production?[]:[row.model||'']),row.inv||'',fmt(row.date),...(grouped?[]:[row.time||'']),...part];
  });
@@ -177,11 +177,11 @@ function exportConsumption(format){
  const filename=`Consumo_Repuestos_${origin?origin+'_':''}${from}_a_${to}${byPart?'_por_repuesto':grouped?'_agrupado':''}`;
  if(pdf){
   const view=document.querySelector('#cqv2 [data-mode].active').textContent;
-  const widths=byPart?[63,554,165]:[173,78,73,...(grouped?[]:[78]),43,grouped?321:243,94];
+  const widths=byPart?[68,438,150,126]:[173,78,73,...(grouped?[]:[78]),43,grouped?321:243,94];
   const blob=window.SKConsumptionPdf({title:'Producción · '+view,rangeTitle,headers,widths,values});
   downloadFile(blob,filename+'.pdf');
  }else{
-  const rows=byPart?[[rangeTitle,'',''],headers,...values]:[headers,...values];
+  const rows=byPart?[[rangeTitle],headers,...values]:[headers,...values];
   downloadTableExcel(rows,filename+'.xlsx',byPart);
  }
 }
@@ -190,7 +190,7 @@ function downloadFile(blob,filename){
  link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();
  setTimeout(()=>URL.revokeObjectURL(url),2000);
 }
-function downloadTableExcel(rows,filename,mergeRange=false){const sheet=rows.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>{const ref=`${col(ci+1)}${ri+1}`;return typeof v==='number'?`<c r="${ref}"><v>${v}</v></c>`:`<c r="${ref}" t="inlineStr"><is><t>${xml(v)}</t></is></c>`}).join('')}</row>`).join('');const files=[['[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'],['_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],['xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Consumos" sheetId="1" r:id="rId1"/></sheets></workbook>'],['xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'],['xl/worksheets/sheet1.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheet}</sheetData>${mergeRange?'<mergeCells count="1"><mergeCell ref="A1:C1"/></mergeCells>':''}</worksheet>`]];downloadFile(zipStore(files),filename)}
+function downloadTableExcel(rows,filename,mergeRange=false){const sheet=rows.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>{const ref=`${col(ci+1)}${ri+1}`;return typeof v==='number'?`<c r="${ref}"><v>${v}</v></c>`:`<c r="${ref}" t="inlineStr"><is><t>${xml(v)}</t></is></c>`}).join('')}</row>`).join('');const files=[['[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'],['_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],['xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Consumos" sheetId="1" r:id="rId1"/></sheets></workbook>'],['xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'],['xl/worksheets/sheet1.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheet}</sheetData>${mergeRange?`<mergeCells count="1"><mergeCell ref="A1:${col(rows[1].length)}1"/></mergeCells>`:''}</worksheet>`]];downloadFile(zipStore(files),filename)}
 const productionDates=()=>window.SKProductionDates;
 const dateInputAttrs=()=>productionDates()?'type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10"':'type="date"';
 window.SKDownloadTableExcel=downloadTableExcel;
@@ -267,7 +267,7 @@ async function data(){
    name:row.nombreRepuesto||'',qty:Number(row.cantidad)||0,external:external(asset),mine:mineOf(asset),inventoryMismatch:inventoryMismatch(model,inv)};
  });
 }
-function totalsByPart(rows,parts,production){
+function totalsByPart(rows,parts,production,readStock){
  const byId=new Map(),byLabel=new Map(),groups=new Map();
  const labelKey=(item,name)=>JSON.stringify([norm(item==='—'?'':item),norm(name)]);
  for(const part of parts){
@@ -284,6 +284,7 @@ function totalsByPart(rows,parts,production){
   let group=groups.get(key);
   if(!group){
    group={item:part?.numero||row.item,name:part?.nombre||row.name||'Sin nombre',qty:0};
+   group.stock=part&&readStock?readStock(part):null;
    groups.set(key,group);
   }
   group.qty+=row.qty;
@@ -333,10 +334,12 @@ async function render(){if(!db||!document.querySelector('#cqv2'))return;const se
   document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${fmt(x.date)}</td><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td></tr>`).join('')||`<tr><td colspan="${production?6:7}">No hay consumos para este período.</td></tr>`;
  }else if(mode==='part'){
   const parts=origin?window.SKSpareCatalog.filter(catalog,origin.replace(/\d+$/,''),origin):[];
-  rows=sortRows(totalsByPart(rows,parts,production));
+  const readStock=production?part=>currentProductionStock(part,origin):null;
+  rows=sortRows(totalsByPart(rows,parts,production,readStock));
   lastRows=rows;
   drawPartHead(production);
-  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td></tr>`).join('')||'<tr><td colspan="3">No hay consumos para este período.</td></tr>'}else{rows=sortRows(rows);lastRows=rows;const compact=compactDetail();
+  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td>${production?`<td>${esc(x.stock??'—')}</td>`:''}</tr>`).join('')||`<tr><td colspan="${production?4:3}">No hay consumos para este período.</td></tr>`;
+ }else{rows=sortRows(rows);lastRows=rows;const compact=compactDetail();
   document.querySelector('#cqHead').innerHTML=compact?'<tr><th>Equipo<br><small>No. marca actual</small></th><th>Inventario</th><th>Fecha</th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cant.</th></tr>':`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th>Hora registro</th><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad</th></tr>`;
   document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${compact?fmt(x.date).replace(/\b0(?=\d)/g,''):fmt(x.date)}</td>${compact?'':`<td>${esc(x.time||'—')}</td>`}<td>${esc(x.item)}</td><td>${esc(x.name)}</td><td>${x.qty}</td></tr>`).join('')||`<tr><td colspan="${compact?6:production?7:8}">No hay movimientos para este período.</td></tr>`}document.querySelector('#cqInfo').textContent=`${rows.length} resultado${rows.length===1?'':'s'} · orden: ${orders.length?orders.map((o,i)=>`${i+1}. ${fields[o.field]} ${o.dir==='asc'?'↑':'↓'}`).join(' → '):'sin filtros de orden'}.`}
 function openQueries(){
