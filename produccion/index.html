@@ -95,6 +95,7 @@ main:not(:has([hidden] #queries,#queries[hidden]))>#status{margin-top:0}
 #cqRows .consumptionExternal td:first-child>b{color:inherit}
 #cqRows .consumptionExternal .externalBadge{all:unset}
 #queries .queryForm{grid-template-columns:repeat(2,minmax(0,1fr))}
+#queries .queryForm>:is(#cqExport,#cqPdf){grid-column:auto}
 #queries .queryForm label:has(#cqAddField){grid-column:1/-1}
 #queries .queryForm #cqPdf{background:#fae4df;color:#803421;border:1px solid #d6a79c}
 #cqCancel{display:none}
