@@ -281,11 +281,19 @@ function stockPeriodSummary(part,origin,previewDate){
  }
  stockSummaryCache.set(key,result);return result;
 }
+const stockRegistrationDate=new Intl.DateTimeFormat('es-CO',{timeZone:'America/Bogota',day:'2-digit',month:'2-digit',year:'numeric'});
+function openingRegistrationDate(initial){
+ if(!initial)return 'SIN REGISTRAR';
+ const original=(state.incomes||[]).find(row=>row.id===initial.id)||initial;
+ const stamp=Date.parse(original.recordedAt||original.createdAt);
+ return Number.isFinite(stamp)?stockRegistrationDate.format(stamp):'SIN DATO';
+}
 function stockSummaryText(part,origin,value,date){
  const totals=stockPeriodSummary(part,origin),current=stockFor(part,origin),initial=initialFor(part,origin);
  const lines=[totals.closed?'PERÍODO: DESDE EL INVENTARIO DEL '+displayDate(totals.closed.date)+'.':totals.fromDate?'PERÍODO: DESDE LA APERTURA DEL '+displayDate(totals.fromDate)+'.':'PERÍODO: TODOS LOS MOVIMIENTOS · SIN INVENTARIO CERRADO.',
+  initial?'SALDO DE APERTURA REGISTRADO: '+initial.cantidad+(initial.fechaISO?' · '+displayDate(initial.fechaISO):'')+'.':'SALDO DE APERTURA: SIN REGISTRAR.',
+  'FECHA DE REGISTRO: '+openingRegistrationDate(initial)+'.',
   'INGRESOS: '+totals.incomes+' · CONSUMOS: '+totals.consumptions+'.'+(totals.outgoings?' · SALIDAS DE BODEGA: '+totals.outgoings+'.':''),
-  'SALDO DE APERTURA REGISTRADO: '+(initial?.cantidad??0)+'.',
   'SALDO ESPERADO ACTUAL: '+current+'.'];
  const pending=(state.pending||[]).find(row=>['initial','adjustment'].includes(row.kind)&&partMatches(row,part,origin));
  if(pending)lines.push(pending.syncRejected?'CANTIDAD RECHAZADA: '+pending.cantidad+' · REQUIERE REVISIÓN.':(pending.kind==='initial'?'APERTURA GUARDADA: ':'AJUSTE ANTERIOR: ')+pending.cantidad+' · PENDIENTE DE CONFIRMACIÓN.');
@@ -301,7 +309,14 @@ function stockSummaryText(part,origin,value,date){
 }
 function paintStockBalance({form:stockForm,panel,kind},part){
  const fields=stockForm.elements;
- panel.querySelector('[data-stock-balance]').textContent=stockSummaryText(part,fields.origen.value,fields.cantidad.value,kind==='initial'?parseDate(fields.fechaISO.value):'');
+ const lines=stockSummaryText(part,fields.origen.value,fields.cantidad.value,kind==='initial'?parseDate(fields.fechaISO.value):'').split('\n');
+ const middle=Math.ceil(lines.length/2);
+ const columns=[lines.slice(0,middle),lines.slice(middle)].map(group=>{
+  const column=document.createElement('span');
+  column.textContent=group.join('\n');
+  return column;
+ });
+ panel.querySelector('[data-stock-balance]').replaceChildren(...columns);
 }
 function filterParts(parts,search){
  const query=norm(search).trim();
@@ -422,6 +437,7 @@ async function saveStock(event,{form:stockForm,kind}){
     const initial=initialFor(part,record.origen,current);
     if(initial)record.id=initial.id;
     const queued=pending.find(row=>row.id===record.id);
+    if(queued?.createdAt)record.createdAt=queued.createdAt;
     if(!initial||initial.fechaISO!==date||queued?.editOpeningDate||stockForm.dataset?.openingDateEdited)record.editOpeningDate=true;
     if(record.editOpeningDate||initial?.openingFromDate)record.openingFromDate=true;
     record.correctionId=crypto.randomUUID();
