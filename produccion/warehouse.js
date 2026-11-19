@@ -14,7 +14,8 @@
  const title=el('h2','PRODUCCIÓN'),intro=el('p','Selecciona el módulo que vas a utilizar.'),modules=el('div');modules.className='productionModules';
  modules.append(button('MECÁNICA',()=>choose('mechanic')),button('BODEGA',()=>choose('warehouse')));home.append(title,intro,modules);
  const change=button('',goBack);change.id='changeProductionModule';change.hidden=true;change.setAttribute('aria-label','Volver a la pantalla anterior');change.title='Volver';change.innerHTML='<svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 5 2 12l8 7v-5h3c4.2 0 7 1.8 9 5-.8-6.5-4-10-9-10h-3V5Z"/></svg>';
- const navigation=el('nav');navigation.id='productionNavigation';navigation.setAttribute('aria-label','Ubicación en Producción');const breadcrumb=el('span');breadcrumb.id='productionBreadcrumb';navigation.append(change,breadcrumb);
+ const breadcrumb=byId('productionBreadcrumb');
+ const navigation=el('nav');navigation.id='productionNavigation';navigation.setAttribute('aria-label','Navegación del módulo');navigation.append(change);
  const mechanicTitle=byId('mechanicTitle');mechanicTitle.hidden=true;navigation.append(mechanicTitle);
  byId('productionHome').onclick=()=>choose('');
  const panel=el('section');panel.id='warehousePanel';panel.hidden=true;
@@ -282,10 +283,13 @@
   const both=session&&permits(session.user,'warehouse')&&permits(session.user,'mechanic');
   const child=module==='warehouse'?view!=='home':module==='mechanic'&&mechanicMenu.hidden;
   change.hidden=!module||!both&&!child;
-  mechanicTitle.hidden=module!=='mechanic';breadcrumb.hidden=module==='mechanic';
-  const path=['Inicio'];if(module==='warehouse')path.push('Bodega');
-  if(module==='warehouse'&&view!=='home')path.push(actions.find(([,key])=>key===view)?.[0]||view);
-  breadcrumb.textContent=path.join(' / ');byId('productionHome').disabled=!module||!both&&!child;
+  mechanicTitle.hidden=module!=='mechanic';
+  breadcrumb.hidden=module!=='warehouse';
+  if(!breadcrumb.hidden){
+   const label=view==='home'?'':actions.find(([,key])=>key===view)?.[0]||view;
+   breadcrumb.textContent=label?'Bodega / '+label:'Bodega';
+  }
+  byId('productionHome').disabled=!module||!both&&!child;
  }
  function leaveCurrent(){
   if(savingMovement||saving||countSaving){status('Espera a que termine el guardado.');return false;}
