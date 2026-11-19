@@ -33,7 +33,7 @@
   return Date.parse(row.recordedAt||row.createdAt)>Date.parse(cut.closedAt);
  }
  function selectedOrigin(){
-  return el('consumptionInventory').querySelector('input:checked').value+el('reportModel').value;
+  return el('consumptionInventory').querySelector('input:checked').value;
  }
  function movementOrigin(row,asset){
   const stored=String(row.origen??'').trim().replace(/\s+/g,'');

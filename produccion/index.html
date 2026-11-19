@@ -129,7 +129,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=8-reintegros"><script defer src="warehouse-store.js?v=2"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=2"><script defer src="consumption-reports.js?v=2"></script><script defer src="app.js?v=59-consumos-equipo"></script><script defer src="../consumption-query-v2.js?v=inventario-equipo-2"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=3"><script defer src="consumption-reports.js?v=3"></script><script defer src="app.js?v=60-inventarios-29"></script><script defer src="../consumption-query-v2.js?v=inventario-equipo-2"></script>
 <script defer src="install-ui.js?v=1"></script><script defer src="../spare-groups.js?v=20261112-spare-wording-3"></script><script defer src="../plaza/spare-picker.js?v=20261118-catalogo-completo"></script><script defer src="warehouse.js?v=11-reintegros"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
@@ -278,13 +278,12 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 <button type="button" id="querySheet" aria-controls="consumptionSheet" aria-pressed="false">HOJA DE CONSUMO</button>
 <button type="button" id="queryDashboard" aria-controls="consumptionDashboard" aria-pressed="false">DASHBOARD</button>
 </div>
-<div id="consumptionInventory" aria-label="Inventario de repuestos" role="group">
+<div id="consumptionInventory">
 <fieldset class="inventoryChoices">
 <legend>Inventario de repuestos</legend>
-<label><input type="radio" name="reportEquipment" value="YT" checked><span>YT <span data-report-model>29</span></span></label>
-<label><input type="radio" name="reportEquipment" value="Columna"><span>Columna <span data-report-model>29</span></span></label>
+<label><input type="radio" name="reportEquipment" value="YT29" checked><span>YT 29</span></label>
+<label><input type="radio" name="reportEquipment" value="Columna29"><span>Columna 29</span></label>
 </fieldset>
-<label class="reportModel">Modelo de inventario<select id="reportModel"><option>29</option><option>28</option></select></label>
 </div>
 <section id="consumptionSheet" class="partsReport" aria-labelledby="sheetTitle" hidden>
 <h2 id="sheetTitle">Hoja de consumo</h2>

@@ -1067,8 +1067,6 @@ for(const button of mechanicButtons)button.onclick=()=>showConsumptionView(butto
 byId('queryIncome').onclick=()=>showQueryType('incomeQueries');
 byId('queryConsumption').onclick=()=>showQueryType('queries');
 byId('consumptionInventory').onchange=()=>{
- const model=byId('reportModel').value;
- for(const label of byId('consumptionInventory').querySelectorAll('[data-report-model]'))label.textContent=model;
  if(!byId('queries').hidden)window.dispatchEvent(new Event('skweb-consumption-changed'));
  else paintConsumptionReport();
 };
