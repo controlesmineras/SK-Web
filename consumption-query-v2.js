@@ -38,12 +38,12 @@ function machineText(entry){return [entry.label,entry.mine].filter(Boolean).join
 function machineCell(row){
  const machines=row.equipment||[{label:row.machine||'—',mine:row.external?(row.mine||'EXTERNO'):''}];
  const labels=machines.map(({label,mine})=>{
-  if(row.equipment&&norm(mine)==='providencia')return `<span class="providenciaMachine">${esc(label)} ${esc(mine)}</span>`;
+  if(row.equipment&&mine)return `<b class="externalMachine">${esc(label)} ${esc(mine)}</b>`;
   return `<b>${esc(label)}</b>${mine?` <span class="externalBadge">${esc(mine)}</span>`:''}`;
  });
  return '<td>'+labels.join(' / ')+'</td>';
 }
-const fields={date:'Fecha',time:'Registro',item:'Número de item',machine:'Máquina',model:'Modelo',inv:'Inventario',name:'Repuesto',qty:'Cantidad'};
+const fields={date:'Fecha',time:'Registro',item:'# DE ÍTEM',machine:'Máquina',model:'Modelo',inv:'Inventario',name:'Repuesto',qty:'Cantidad'};
 function inventoryMismatch(model,inv){
  const key=v=>norm(v).replace(/[^a-z0-9]/g,'');
  let m=key(model),i=key(inv);
@@ -80,7 +80,7 @@ function exportConsumption(format){
  if(!lastRows.length)return alert('No hay resultados para exportar.');
  const byPart=mode==='part',grouped=mode==='daily',pdf=format==='pdf';
  const production=productionQuery();
- const headers=byPart?['ITEM','REPUESTO','CANTIDAD TOTAL']:['MÁQUINA - NO. MARCA ACTUAL',...(production?[]:['MODELO']),'INVENTARIO','FECHA',...(grouped?[]:['HORA REGISTRO']),'ITEM','REPUESTO',grouped?'CANTIDAD TOTAL':'CANTIDAD'];
+ const headers=byPart?['# DE ÍTEM','REPUESTO','CANTIDAD TOTAL']:['MÁQUINA - NO. MARCA ACTUAL',...(production?[]:['MODELO']),'INVENTARIO','FECHA',...(grouped?[]:['HORA REGISTRO']),'# DE ÍTEM','REPUESTO',grouped?'CANTIDAD TOTAL':'CANTIDAD'];
  const values=lastRows.map(row=>{
   const part=[row.item||'',row.name||'',row.qty];
   if(byPart)return part;
