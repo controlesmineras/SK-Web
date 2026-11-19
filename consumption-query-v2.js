@@ -37,11 +37,7 @@ function productionMachine(row,asset,model,mark){
 function machineText(entry){return [entry.label,entry.mine].filter(Boolean).join(' ')}
 function machineCell(row){
  const machines=row.equipment||[{label:row.machine||'—',mine:row.external?(row.mine||'EXTERNO'):''}];
- const labels=machines.map(({label,mine})=>{
-  if(row.equipment&&norm(mine)==='providencia')return `<span class="providenciaMachine">${esc(label)} ${esc(mine)}</span>`;
-  return `<b>${esc(label)}</b>${mine?` <span class="externalBadge">${esc(mine)}</span>`:''}`;
- });
- return '<td>'+labels.join(' / ')+'</td>';
+ return '<td>'+machines.map(({label,mine})=>`<b>${esc(label)}</b>${mine?` <span class="externalBadge">${esc(mine)}</span>`:''}`).join(' / ')+'</td>';
 }
 const fields={date:'Fecha',time:'Registro',item:'Número de item',machine:'Máquina',model:'Modelo',inv:'Inventario',name:'Repuesto',qty:'Cantidad'};
 function inventoryMismatch(model,inv){
