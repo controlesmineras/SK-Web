@@ -20,3 +20,16 @@ for(const path of ['inventory-admin.js','plaza/plaza.js','searchable-consumption
   assert.equal(match('Lubricador','','item 1'),false);
  });
 }
+
+test('Production searches current and legacy names without confusing item 1 with item 10',()=>{
+ const context=vm.createContext({window:{},norm:v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase()});
+ vm.runInContext(fs.readFileSync('spare-groups.js','utf8'),context);
+ const app=fs.readFileSync('produccion/app.js','utf8');
+ vm.runInContext(app.slice(app.indexOf('function filterParts('),app.indexOf('function paintStockView(')),context);
+ const parts=[{id:'a',numero:'1',nombre:'Pistón',secondaryName:'Émbolo',CI_NOMBRE_TERCIARIO:'Percutor'},
+  {id:'b',numero:'10',nombre:'Resorte',aliasSecundario:'Muelle',tertiaryName:'Espiral'},{id:'c',nombre:'Lubricador'}];
+ const found=q=>Array.from(context.filterParts(parts,q),p=>p.id);
+ for(const q of ['1','piston','embolo','ÍTEM 1 PERCUTOR'])assert.deepEqual(found(q),['a']);
+ for(const q of ['muelle','espiral'])assert.deepEqual(found(q),['b']);
+ assert.deepEqual(found('ítem 1 espiral'),[]);assert.deepEqual(found(''),['a','b','c']);
+});

@@ -129,3 +129,17 @@ test('Production lists every eligible item, including later search matches and z
  const plaza=picker();plaza.setItems(items);plaza.main.open();assert.equal(plaza.main.menu.children.length,80);
  assert.match(read('produccion/warehouse.js'),/SKSparePicker\.mount\(form,\{[^}]*showAllItems:true/);
 });
+
+test('a saved alternative name opens the matching folder and keeps the matching child in view',()=>{
+ const ui=picker(),items=fixtures();
+ items[1].CI_NOMBRE_TERCIARIO='Émbolo antiguo';
+ items[2].nombreSecundario='Muelle corto';
+ ui.setItems(items);
+ for(const [query,id] of [['embolo','yt12'],['muelle','yt2']]){
+  ui.clear();ui.type(query,ui.main);
+  assert.deepEqual(ui.main.menu.children.map(button=>button.dataset.spareGroup),['YT 29']);
+  ui.group('YT 29');
+  assert.deepEqual(ui.detail.menu.children.map(button=>button.dataset.itemId),[id]);
+  ui.choose(id);assert.equal(ui.select.value,id);
+ }
+});

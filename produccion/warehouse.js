@@ -2,6 +2,8 @@
  'use strict';
  const store=window.SKProductionWarehouseStore;
  let account='',snapshot={},view='home',warehouseDirty=false,busy=false,savingMovement=false,module='',exportRows=[],timer,activeSync;
+ const spareGroups=window.SKSpareGroups;
+ const stockExpanded=new Map();
  let selectedReturnId='';
  const kinds={income:'Ingreso externo',opening:'Saldo de apertura',delivery:'Entrega',loan:'Préstamo',return:'Reintegro',transfer_in:'Ingreso desde Plaza',transfer_out:'Traslado a Plaza'};
  const roles=user=>Array.isArray(user?.roles)?user.roles:[user?.role||'assistant'];
@@ -141,12 +143,12 @@
  const itemPicker=window.SKSparePicker.mount(form,{
   title:'SELECCIONE ELEMENTO A ENTREGAR',showAllItems:true,
   get isDelivery(){return ['delivery','loan','transfer_out'].includes(view)},loan:()=>view==='loan',
-  items:()=>selectableCriteria().map(row=>({...row,CI_ALIAS_SECUNDARIO:[row.CI_ALIAS_SECUNDARIO,row.spareApplication,row.application,row.ubicacionAplicacion].filter(Boolean).join(' ')})),
+  items:selectableCriteria,
   fixed:row=>row.isFixedAsset===true,availability:balance,
-  aliases:row=>[row.secondaryName,row.tertiaryName,row.spareApplication||row.application||row.ubicacionAplicacion].filter(Boolean),
+  aliases:row=>[...spareGroups.aliases(row),row.spareApplication||row.application||row.ubicacionAplicacion].filter(Boolean),
   badge:quantity=>quantity<=0?{className:'empty',text:'SIN EXISTENCIAS'}:quantity<=3?{className:'low',text:'QUEDAN: '+quantity}:{className:'available',text:'HAY: '+quantity}
  });
- itemPicker.main.input.placeholder='Escribe para buscar un elemento…';
+ itemPicker.main.input.placeholder='Nombre principal, secundario o terciario…';
  itemPicker.detail.input.closest('label').classList.add('wide');
  function itemCaption(){
   const action={delivery:'A ENTREGAR',income:'A INGRESAR',loan:'A PRESTAR',transfer_out:'A ENVIAR A PLAZA',opening:'PARA SALDO DE APERTURA'}[view]||'';
@@ -174,7 +176,7 @@
    return;
   }
   const query=norm(find('#warehouseReturnSearch').value).trim();
-  const rows=loans().filter(row=>row.left>0&&norm([row.label,row.borrower,row.document].join(' ')).includes(query));
+  const rows=loans().filter(row=>row.left>0&&matchesQuery([row.label,row.borrower,row.document],row.itemId,query));
   const list=find('#warehouseReturnList');
   list.replaceChildren(...rows.map(loan=>{
    const card=el('article'),details=el('div');
@@ -208,7 +210,7 @@
  };
  function setView(next){
   if(savingMovement||next!==view&&!leaveCurrent())return;
-  view=next;warehouseDirty=false;selectedReturnId='';
+  stockExpanded.clear();view=next;warehouseDirty=false;selectedReturnId='';
   const returning=view==='return',queryView=['stock','history','loans'].includes(view);
   form.hidden=view==='home'||queryView;
   find('.warehouseActions').hidden=view!=='home';find('.tableWrap').hidden=view==='home'||returning;
@@ -234,24 +236,83 @@
  for(const [label,value] of actions){const node=button(label,()=>setView(value));node.dataset.view=value;find('.warehouseActions').append(node);}
  f.sourceLoanId.onchange=()=>{const loan=records().find(row=>row.sourceDeliveryId===f.sourceLoanId.value);if(loan){f.quantity.value=loan.quantity;f.assetId.value=loan.assetId||'';}};
  f.assetMode.onchange=fieldsForItem;f.itemId.onchange=fieldsForItem;f.personSearch.oninput=personChoices;
- find('#warehouseSearch').oninput=renderTable;find('#warehouseLoanFilter').onchange=renderTable;
+ find('#warehouseSearch').oninput=()=>{stockExpanded.clear();renderTable()};find('#warehouseLoanFilter').onchange=renderTable;
+ function matchesQuery(values,itemId,query){
+  return !query||norm(values.join(' ')).includes(query)||spareGroups.aliases(criteriaById().get(itemId)).some(name=>norm(name).includes(query));
+ }
+ let indexedCatalog,indexedItems;
+ function criteriaById(){
+  if(!indexedItems||indexedCatalog!==snapshot.catalog){
+   indexedCatalog=snapshot.catalog;
+   indexedItems=new Map((indexedCatalog?.criteria||[]).map(row=>[row.id,row]));
+  }
+  return indexedItems;
+ }
+ function stockRows(query){
+  const values=new Map();
+  const items=criteria().filter(row=>{
+   const cells=[itemLabel(row),row.unit||'Unidad',balance(row)];
+   values.set(row.id,cells);
+   const type=spareGroups.key(row);
+   if(type&&(/\bitem\s*\d+\b/.test(query)||/^\d+$/.test(query)))return spareGroups.matches(row,query);
+   return !query||spareGroups.matches(row,query)||norm(cells.join(' ')).includes(query)||
+    (type&&norm(spareGroups.groupName(type)).includes(query));
+  });
+  const rows=[],display=[];let commonCount=0,truncated=false;
+  for(const entry of spareGroups.entries(items)){
+   if(entry.item){
+    const cells=values.get(entry.item.id);
+    rows.push(cells);
+    if(++commonCount<=250)display.push(cells);else truncated=true;
+   }else{
+    const expanded=stockExpanded.get(entry.type)??Boolean(query);
+    display.push({type:entry.type,label:entry.label,expanded});
+    for(const [index,part] of entry.items.entries()){
+     const cells=values.get(part.id);
+     rows.push(cells);
+     if(!expanded)continue;
+     if(index>=250){truncated=true;continue;}
+     display.push([[spareGroups.partName(part),part.spareApplication||part.application].filter(Boolean).join(' · '),cells[1],cells[2]]);
+    }
+   }
+  }
+  return {rows,display,truncated};
+ }
  function renderTable(){
   if(view==='return')return;
-  const query=norm(find('#warehouseSearch').value);let headers,rows;
+  const query=norm(find('#warehouseSearch').value).trim();let headers,rows,display,truncated;
   if(view==='stock'){
-   headers=['ELEMENTO','UNIDAD','DISPONIBLE EN PRODUCCIÓN'];rows=criteria().map(row=>[itemLabel(row),row.unit||'Unidad',balance(row)]);
+   headers=['ELEMENTO','UNIDAD','DISPONIBLE EN PRODUCCIÓN'];
+   ({rows,display,truncated}=stockRows(query));
   }else if(view==='loans'){
    headers=['FECHA','ELEMENTO / ACTIVO','QUIÉN RECIBIÓ','PRESTADO','PENDIENTE','ESTADO'];
    const filter=find('#warehouseLoanFilter').value;
-   rows=loans().filter(row=>filter==='all'||(filter==='pending'?row.left>0:row.left<=0)).map(row=>[displayDate(row.fechaISO),row.label,row.borrower,row.quantity,row.left,row.left>0?'PENDIENTE':'DEVUELTO']);
+   rows=loans().filter(row=>filter==='all'||(filter==='pending'?row.left>0:row.left<=0)).flatMap(row=>{
+    const cells=[displayDate(row.fechaISO),row.label,row.borrower,row.quantity,row.left,row.left>0?'PENDIENTE':'DEVUELTO'];
+    return matchesQuery(cells,row.itemId,query)?[cells]:[];
+   });
   }else{
    headers=['FECHA','MOVIMIENTO','ELEMENTO / ACTIVO','CANTIDAD','FUNCIONARIO','DESTINO','ESTADO'];
-   rows=[...records(),...pending().map(row=>({...row,itemName:item(row.itemId)?.name,personName:people().find(p=>p.id===row.personId)?.nombre,pending:true}))].reverse().map(row=>[displayDate(row.fechaISO),kinds[row.kind]||row.kind,row.assetLabel||row.itemName,row.quantity,row.personName||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO']);
+   rows=[...records(),...pending().map(row=>({...row,itemName:item(row.itemId)?.name,personName:people().find(p=>p.id===row.personId)?.nombre,pending:true}))].reverse().flatMap(row=>{
+    const cells=[displayDate(row.fechaISO),kinds[row.kind]||row.kind,row.assetLabel||row.itemName,row.quantity,row.personName||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO'];
+    return matchesQuery(cells,row.itemId,query)?[cells]:[];
+   });
   }
-  rows=rows.filter(row=>!query||norm(row.join(' ')).includes(query));exportRows=[headers,...rows];
+  exportRows=[headers,...rows];
   const head=el('tr');for(const label of headers)head.append(el('th',label));find('thead').replaceChildren(head);
-  find('tbody').replaceChildren(...rows.slice(0,250).map(values=>{const tr=el('tr');for(const value of values)tr.append(el('td',value));return tr;}));
-  if(rows.length>250){const tr=el('tr'),td=el('td','Se muestran los primeros 250 resultados. Filtra la consulta o exporta el listado completo.');td.colSpan=headers.length;tr.append(td);find('tbody').append(tr);}
+  const body=find('tbody'),visible=display||rows.slice(0,250);
+  body.replaceChildren(...visible.map(entry=>{
+   const tr=el('tr');
+   if(Array.isArray(entry)){for(const value of entry)tr.append(el('td',value));return tr}
+   const cell=el('td'),toggle=button(entry.label,()=>{
+    stockExpanded.set(entry.type,!entry.expanded);renderTable();
+    body.querySelector('[data-stock-group="'+entry.type+'"]').focus();
+   });
+   toggle.dataset.stockGroup=entry.type;toggle.setAttribute('aria-expanded',String(entry.expanded));
+   const icon=el('span',entry.expanded?'📂':'📁');icon.setAttribute('aria-hidden','true');toggle.prepend(icon);
+   cell.colSpan=headers.length;cell.append(toggle);tr.append(cell);return tr;
+  }));
+  if(truncated||(!display&&rows.length>250)){const tr=el('tr'),td=el('td','Hay más resultados. Filtra la consulta o exporta el listado completo.');td.colSpan=headers.length;tr.append(td);body.append(tr);}
  }
  function paintWarehouse(){
   const ready=snapshot.settings?.enabled;

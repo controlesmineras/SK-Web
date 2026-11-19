@@ -62,3 +62,5 @@ body:has(#workspace:not([hidden]) #changeProductionModule:not([hidden])){padding
 #warehouseReturnList article div{display:grid;gap:4px;min-width:0;overflow-wrap:anywhere}
 #warehouseReturnList button{min-height:44px}
 @media(max-width:520px){#warehouseReturnList article{display:grid}}
+
+#warehouseTable [data-stock-group]{display:flex;align-items:center;gap:.5rem;width:100%;min-height:40px;text-align:left;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3;border-radius:6px;padding:6px 10px}
