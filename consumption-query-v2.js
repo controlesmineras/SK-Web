@@ -199,6 +199,9 @@ function controls(){
  if(!sec||document.querySelector('#cqv2'))return;
  const production=sec.hasAttribute('data-compact-detail');
  const orderField=`<label>${production?'Agregar criterio de orden o agrupación':'Agregar criterio de orden'}<select id="cqAddField"></select></label>`;
+ const productionOrderField=`<div class="cqCriteriaRow">${orderField}
+  <label class="cqAllParts" hidden title="Incluir también los repuestos sin consumo en el período">TODOS<input type="checkbox" id="cqAllParts" aria-label="Todos los repuestos del inventario seleccionado"></label>
+ </div>`;
  const orderCards='<div id="cqOrders"></div>';
  const clearButton='<button type="button" id="cqClear">Limpiar filtros</button>';
  const excelButton='<button type="button" id="cqExport">⬇ Exportar Excel</button>';
@@ -215,7 +218,7 @@ function controls(){
    <label>Hasta<input id="cqTo" ${dateInputAttrs()}></label>
    ${production?'':orderField}
    ${production?modes:clearButton}
-   ${production?orderField+orderCards:excelButton}
+   ${production?productionOrderField+orderCards:excelButton}
   </form>
   ${production?'':modes+orderCards}
   ${production?`<p class="hint">
@@ -229,9 +232,12 @@ function controls(){
  </div>`;
  const today=new Date(),from=new Date(today.getFullYear(),today.getMonth()-3,today.getDate());const display=productionDates()?.displayDate||((value)=>value);document.querySelector('#cqFrom').value=display(localISO(from));document.querySelector('#cqTo').value=display(localISO(today));orders=defaultOrder();drawOrders();document.querySelector('#cqExport').onclick=()=>exportConsumption('xlsx');
  if(production)document.querySelector('#cqPdf').onclick=()=>exportConsumption('pdf');
+ const allParts=sec.querySelector('#cqAllParts');
+ if(allParts)allParts.onchange=render;
  const buttons=sec.querySelectorAll('[data-mode]');
  function selectMode(button,keepOrder=false){
   mode=button.dataset.mode;
+  if(allParts)allParts.closest('label').hidden=mode!=='part';
   const retained=keepOrder?orders.filter(order=>partOrderFields.includes(order.field)):[];
   orders=retained.length?retained:mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();
   for(const tab of buttons){
@@ -251,7 +257,10 @@ function controls(){
  };
  document.querySelector('#cqFrom').onchange=render;
  document.querySelector('#cqTo').onchange=render;
- document.querySelector('#cqClear').onclick=()=>{orders=[];drawOrders();render()};
+ document.querySelector('#cqClear').onclick=()=>{
+  if(allParts)allParts.checked=false;
+  orders=[];drawOrders();render();
+ };
 }
 async function data(){
  const [consumptions,assets]=await Promise.all([all('consumptions'),all('assets')]);
@@ -267,9 +276,13 @@ async function data(){
    name:row.nombreRepuesto||'',qty:Number(row.cantidad)||0,external:external(asset),mine:mineOf(asset),inventoryMismatch:inventoryMismatch(model,inv)};
  });
 }
-function totalsByPart(rows,parts,production,readStock){
+function totalsByPart(rows,parts,production,readStock,includeAll=false){
  const byId=new Map(),byLabel=new Map(),groups=new Map();
  const labelKey=(item,name)=>JSON.stringify([norm(item==='—'?'':item),norm(name)]);
+ const newGroup=(part,row)=>({
+  item:part?.numero||row?.item||'—',name:part?.nombre||row?.name||'Sin nombre',
+  qty:0,stock:part&&readStock?readStock(part):null
+ });
  for(const part of parts){
   byId.set(part.id,part);
   if(part.criterionId)byId.set(part.criterionId,part);
@@ -283,21 +296,26 @@ function totalsByPart(rows,parts,production,readStock){
   const key=production&&(part||id)?'id:'+(part?.id||id):label;
   let group=groups.get(key);
   if(!group){
-   group={item:part?.numero||row.item,name:part?.nombre||row.name||'Sin nombre',qty:0};
-   group.stock=part&&readStock?readStock(part):null;
+   group=newGroup(part,row);
    groups.set(key,group);
   }
   group.qty+=row.qty;
  }
+ if(includeAll){
+  for(const part of parts){
+   const key='id:'+part.id;
+   if(!groups.has(key))groups.set(key,newGroup(part));
+  }
+ }
  return Array.from(groups.values());
 }
-async function render(){if(!db||!document.querySelector('#cqv2'))return;const sequence=++renderSequence;const dateFields=['#cqFrom','#cqTo'].map(id=>document.querySelector(id)),dates=productionDates();const [from,to]=dateFields.map(input=>dates?dates.readDate(input):input.value);const invalid=dateFields.find(input=>!input.validity.valid);if(invalid){
+async function render(){if(!db||!document.querySelector('#cqv2'))return;const sequence=++renderSequence;const dateFields=['#cqFrom','#cqTo'].map(id=>document.querySelector(id)),dates=productionDates();const [from,to]=dateFields.map(input=>dates?dates.readDate(input):input.value);const invalid=dateFields.find(input=>!input.validity.valid);if(invalid||(productionQuery()&&from&&to&&from>to)){
  if(window.SKConsumptionReports){
   lastRows=[];
   document.querySelector('#cqRows').replaceChildren();
   document.querySelector('#cqInfo').textContent='Revisa el rango de fechas para ver los consumos.';
  }
- invalid.reportValidity();return
+ invalid?.reportValidity();return
 }
  const production=productionQuery();
  const modelHeading=production?'':'<th>Modelo</th>';
@@ -335,7 +353,8 @@ async function render(){if(!db||!document.querySelector('#cqv2'))return;const se
  }else if(mode==='part'){
   const parts=origin?window.SKSpareCatalog.filter(catalog,origin.replace(/\d+$/,''),origin):[];
   const readStock=production?part=>currentProductionStock(part,origin):null;
-  rows=sortRows(totalsByPart(rows,parts,production,readStock));
+  const includeAll=production&&document.querySelector('#cqAllParts').checked;
+  rows=sortRows(totalsByPart(rows,parts,production,readStock,includeAll));
   lastRows=rows;
   drawPartHead(production);
   document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td>${production?`<td>${esc(x.stock??'—')}</td>`:''}</tr>`).join('')||`<tr><td colspan="${production?4:3}">No hay consumos para este período.</td></tr>`;
