@@ -10,7 +10,7 @@ const markNo=a=>String(a?.numeroMarcaActual||a?.marcaNumero||a?.marcaAnterior||'
 const mineOf=a=>String(a?.mina||a?.minaPropietaria||'').trim();
 const external=a=>{const m=norm(mineOf(a));return !!m&&!['sandra k','sandra k.','sk 3.7','sk'].includes(m)};
 function romanToInt(s){s=String(s||'').trim().toUpperCase();if(!/^[IVXLCDM]+$/.test(s))return'';const v={I:1,V:5,X:10,L:50,C:100,D:500,M:1000};let n=0;for(let i=0;i<s.length;i++)n+=(v[s[i]]<(v[s[i+1]]||0))?-v[s[i]]:v[s[i]];return n||''}
-let mode='detail',orders=[],lastRows=[];
+let mode='detail',orders=[],lastRows=[],renderSequence=0;
 const desktopQuery=window.matchMedia('(min-width: 901px)');
 const productionQuery=()=>document.querySelector('#queries')?.hasAttribute('data-compact-detail');
 const compactDetail=()=>productionQuery()&&!desktopQuery.matches&&mode==='detail';
@@ -43,6 +43,7 @@ function machineCell(row){
  });
  return '<td>'+labels.join(' / ')+'</td>';
 }
+const partOrderFields=['item','name','qty'];
 const fields={date:'Fecha',time:'Registro',item:'# DE ÍTEM',machine:'Máquina',model:'Modelo',inv:'Inventario',name:'Repuesto',qty:'Cantidad'};
 function inventoryMismatch(model,inv){
  const key=v=>norm(v).replace(/[^a-z0-9]/g,'');
@@ -97,7 +98,14 @@ function drawOrders(){
  host.querySelectorAll('[data-before]').forEach(b=>b.onclick=()=>moveOrder(+b.dataset.before,+b.dataset.before-1));
  host.querySelectorAll('[data-after]').forEach(b=>b.onclick=()=>moveOrder(+b.dataset.after,+b.dataset.after+1));
  host.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{orders.splice(+b.dataset.remove,1);drawOrders();render()});
- const add=document.querySelector('#cqAddField');add.innerHTML='<option value="">Agregar criterio…</option>'+Object.entries(fields).filter(([k])=>!orders.some(o=>o.field===k)).map(([k,n])=>`<option value="${k}">${n}</option>`).join('');
+ const production=productionQuery();
+ const byPart=production&&mode==='part';
+ const available=Object.entries(fields).filter(([key])=>
+  (!byPart||partOrderFields.includes(key))&&!orders.some(order=>order.field===key));
+ const sortOptions=available.map(([key,label])=>`<option value="${key}">${label}</option>`).join('');
+ const grouping=production&&!byPart?'<optgroup label="Agrupar resultados"><option value="totalByPart">Total por repuesto</option></optgroup>':'';
+ document.querySelector('#cqAddField').innerHTML='<option value="">Agregar criterio…</option>'+grouping+
+  (production?`<optgroup label="Ordenar por">${sortOptions}</optgroup>`:sortOptions);
 }
 function xml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function col(n){let s='';while(n){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)}return s}
@@ -143,14 +151,14 @@ function controls(){
  const sec=document.querySelector('#queries');
  if(!sec||document.querySelector('#cqv2'))return;
  const production=sec.hasAttribute('data-compact-detail');
- const orderField='<label>Agregar criterio de orden<select id="cqAddField"></select></label>';
+ const orderField=`<label>${production?'Agregar criterio de orden o agrupación':'Agregar criterio de orden'}<select id="cqAddField"></select></label>`;
  const orderCards='<div id="cqOrders"></div>';
  const clearButton='<button type="button" id="cqClear">Limpiar filtros</button>';
  const excelButton='<button type="button" id="cqExport">⬇ Exportar Excel</button>';
  const modes=`<div class="queryTabs" role="group" aria-label="Opciones de consulta">
   <button type="button" data-mode="detail" class="active">CONSUMOS INDIVIDUALES</button>
   <button type="button" data-mode="daily">CONSUMOS AGRUPADOS</button>
-  <button type="button" data-mode="part">POR REPUESTO</button>
+  <button type="button" data-mode="part">${production?'TOTAL POR REPUESTO':'POR REPUESTO'}</button>
   ${production?clearButton:''}
  </div>`;
  sec.innerHTML=`<div id="cqv2">
@@ -174,7 +182,30 @@ function controls(){
  </div>`;
  const today=new Date(),from=new Date(today.getFullYear(),today.getMonth()-3,today.getDate());const display=productionDates()?.displayDate||((value)=>value);document.querySelector('#cqFrom').value=display(localISO(from));document.querySelector('#cqTo').value=display(localISO(today));orders=defaultOrder();drawOrders();document.querySelector('#cqExport').onclick=()=>exportConsumption('xlsx');
  if(production)document.querySelector('#cqPdf').onclick=()=>exportConsumption('pdf');
- document.querySelector('#cqAddField').onchange=e=>{if(e.target.value){orders.push({field:e.target.value,dir:'asc'});drawOrders();render()}};document.querySelector('#cqFrom').onchange=render;document.querySelector('#cqTo').onchange=render;document.querySelector('#cqClear').onclick=()=>{orders=[];drawOrders();render()};sec.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;orders=mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();drawOrders();sec.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));render()})}
+ const buttons=sec.querySelectorAll('[data-mode]');
+ function selectMode(button,keepOrder=false){
+  mode=button.dataset.mode;
+  const retained=keepOrder?orders.filter(order=>partOrderFields.includes(order.field)):[];
+  orders=retained.length?retained:mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();
+  for(const tab of buttons){
+   tab.classList.toggle('active',tab===button);
+   tab.setAttribute('aria-pressed',String(tab===button));
+  }
+  drawOrders();render();
+ }
+ for(const button of buttons){
+  button.setAttribute('aria-pressed',String(button.dataset.mode===mode));
+  button.onclick=()=>selectMode(button);
+ }
+ document.querySelector('#cqAddField').onchange=event=>{
+  const field=event.target.value;
+  if(field==='totalByPart'){selectMode(sec.querySelector('[data-mode="part"]'),true);return}
+  if(field){orders.push({field,dir:'asc'});drawOrders();render()}
+ };
+ document.querySelector('#cqFrom').onchange=render;
+ document.querySelector('#cqTo').onchange=render;
+ document.querySelector('#cqClear').onclick=()=>{orders=[];drawOrders();render()};
+}
 async function data(){
  const [consumptions,assets]=await Promise.all([all('consumptions'),all('assets')]);
  const byAsset=new Map(assets.map(asset=>[asset.id,asset]));
@@ -185,11 +216,34 @@ async function data(){
   const inv=origin||(compactDetail()&&row.origen)||invKey(row,byAsset);
   const model=String(asset?.modelo||row.modelo||'').trim(),machine=machineShort(row,byAsset);
   const equipment=production?[productionMachine(row,asset,model,machine)]:null;
-  return {date:dayOf(row),time:timeOf(row),inv,model,machine,equipment,item:row.noItem||'—',
+  return {date:dayOf(row),time:timeOf(row),inv,model,machine,equipment,partId:row.partId,criterionId:row.itemId,item:row.noItem||'—',
    name:row.nombreRepuesto||'',qty:Number(row.cantidad)||0,external:external(asset),mine:mineOf(asset),inventoryMismatch:inventoryMismatch(model,inv)};
  });
 }
-async function render(){if(!db||!document.querySelector('#cqv2'))return;const dateFields=['#cqFrom','#cqTo'].map(id=>document.querySelector(id)),dates=productionDates();const [from,to]=dateFields.map(input=>dates?dates.readDate(input):input.value);const invalid=dateFields.find(input=>!input.validity.valid);if(invalid){
+function totalsByPart(rows,parts,production){
+ const byId=new Map(),byLabel=new Map(),groups=new Map();
+ const labelKey=(item,name)=>JSON.stringify([norm(item==='—'?'':item),norm(name)]);
+ for(const part of parts){
+  byId.set(part.id,part);
+  if(part.criterionId)byId.set(part.criterionId,part);
+  const key=labelKey(part.numero,part.nombre);
+  byLabel.set(key,byLabel.has(key)?null:part);
+ }
+ for(const row of rows){
+  const label=labelKey(row.item,row.name);
+  const id=row.partId||row.criterionId;
+  const part=byId.get(row.partId)||byId.get(row.criterionId)||(!id&&byLabel.get(label));
+  const key=production&&(part||id)?'id:'+(part?.id||id):label;
+  let group=groups.get(key);
+  if(!group){
+   group={item:part?.numero||row.item,name:part?.nombre||row.name||'Sin nombre',qty:0};
+   groups.set(key,group);
+  }
+  group.qty+=row.qty;
+ }
+ return Array.from(groups.values());
+}
+async function render(){if(!db||!document.querySelector('#cqv2'))return;const sequence=++renderSequence;const dateFields=['#cqFrom','#cqTo'].map(id=>document.querySelector(id)),dates=productionDates();const [from,to]=dateFields.map(input=>dates?dates.readDate(input):input.value);const invalid=dateFields.find(input=>!input.validity.valid);if(invalid){
  if(window.SKConsumptionReports){
   lastRows=[];
   document.querySelector('#cqRows').replaceChildren();
@@ -199,7 +253,10 @@ async function render(){if(!db||!document.querySelector('#cqv2'))return;const da
 }
  const production=productionQuery();
  const modelHeading=production?'':'<th>Modelo</th>';
- let rows=(await data()).filter(x=>(!from||x.date>=from)&&(!to||x.date<=to));
+ const origin=production&&mode==='part'?window.SKConsumptionReports.selectedOrigin():'';
+ const [movements,catalog]=await Promise.all([data(),origin?window.SKSpareCatalog.read():[]]);
+ if(sequence!==renderSequence)return;
+ let rows=movements.filter(x=>(!from||x.date>=from)&&(!to||x.date<=to));
  if(mode==='daily'){
   const groups=new Map();
   for(const row of rows){
@@ -227,7 +284,10 @@ async function render(){if(!db||!document.querySelector('#cqv2'))return;const da
   lastRows=rows;
   document.querySelector('#cqHead').innerHTML=`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cantidad total</th></tr>`;
   document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${fmt(x.date)}</td><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td></tr>`).join('')||`<tr><td colspan="${production?6:7}">No hay consumos para este período.</td></tr>`;
- }else if(mode==='part'){const m=new Map;for(const x of rows){const no=norm(x.item==='—'?'':x.item),nm=norm(x.name),key=no?`N:${no}|${nm}`:`S:${nm}`;const z=m.get(key)||{item:x.item,name:x.name||'Sin nombre',qty:0};z.qty+=x.qty;m.set(key,z)}rows=sortRows([...m.values()]);lastRows=rows;document.querySelector('#cqHead').innerHTML='<tr><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad total</th></tr>';document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td></tr>`).join('')||'<tr><td colspan="3">No hay consumos para este período.</td></tr>'}else{rows=sortRows(rows);lastRows=rows;const compact=compactDetail();
+ }else if(mode==='part'){
+  const parts=origin?window.SKSpareCatalog.filter(catalog,origin.replace(/\d+$/,''),origin):[];
+  rows=sortRows(totalsByPart(rows,parts,production));
+  lastRows=rows;document.querySelector('#cqHead').innerHTML='<tr><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad total</th></tr>';document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td></tr>`).join('')||'<tr><td colspan="3">No hay consumos para este período.</td></tr>'}else{rows=sortRows(rows);lastRows=rows;const compact=compactDetail();
   document.querySelector('#cqHead').innerHTML=compact?'<tr><th>Equipo<br><small>No. marca actual</small></th><th>Inventario</th><th>Fecha</th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cant.</th></tr>':`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th>Hora registro</th><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad</th></tr>`;
   document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${compact?fmt(x.date).replace(/\b0(?=\d)/g,''):fmt(x.date)}</td>${compact?'':`<td>${esc(x.time||'—')}</td>`}<td>${esc(x.item)}</td><td>${esc(x.name)}</td><td>${x.qty}</td></tr>`).join('')||`<tr><td colspan="${compact?6:production?7:8}">No hay movimientos para este período.</td></tr>`}document.querySelector('#cqInfo').textContent=`${rows.length} resultado${rows.length===1?'':'s'} · orden: ${orders.length?orders.map((o,i)=>`${i+1}. ${fields[o.field]} ${o.dir==='asc'?'↑':'↓'}`).join(' → '):'sin filtros de orden'}.`}
 function openQueries(){

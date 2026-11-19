@@ -63,3 +63,14 @@ test('separates identical part numbers by inventory, including legacy and offlin
  assert.deepEqual(selected('Columna29'),[['seal',7,9,9]]);
  assert.deepEqual(selected('YT29'),[['pin',0,11,11]]);
 });
+
+test('totals by part combine dates, machines and catalog aliases and keep distinct part IDs separate',()=>{
+ const query=fs.readFileSync('consumption-query-v2.js','utf8');
+ const c=vm.createContext({});
+ vm.runInContext(query.slice(query.indexOf('const norm='),query.indexOf('const localISO='))+query.slice(query.indexOf('function totalsByPart('),query.indexOf('async function render(')),c);
+ const catalog=[{id:'pin',criterionId:'criterion',numero:'2',nombre:'Pin de ajuste'},{id:'other',numero:'3',nombre:'Pin de ajuste'}];
+ const sample={date:'2026-11-01',machine:'A',item:'2',name:'Pin de ajuste',qty:2};
+ const rows=[{...sample,partId:'pin',name:'Nombre anterior'},{...sample,partId:'criterion',date:'2026-11-11',machine:'B',qty:3},
+  {...sample,qty:1},{...sample,partId:'other',item:'3',qty:8}];
+ assert.deepEqual(Array.from(c.totalsByPart(rows,catalog,true),r=>[r.item,r.name,r.qty]),[['2','Pin de ajuste',6],['3','Pin de ajuste',8]]);
+});
