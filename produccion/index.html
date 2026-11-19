@@ -101,7 +101,10 @@ main:not(:has([hidden] #queries,#queries[hidden]))>#status{margin-top:0}
 #cqRows .consumptionExternal td:first-child>b{color:inherit}
 #cqRows .consumptionExternal td:first-child>.externalMachine{color:#a3480b}
 #queries .queryForm{grid-template-columns:repeat(2,minmax(0,1fr))}
-#queries .queryForm label:has(#cqAddField){grid-column:1/-1}
+#queries .cqCriteriaRow{display:grid;grid-template-columns:minmax(0,1fr) max-content;align-items:end;gap:.75rem;grid-column:1/-1;min-width:0}
+#queries .cqCriteriaRow:has(.cqAllParts[hidden]){grid-template-columns:minmax(0,1fr)}
+#queries .cqAllParts{display:inline-flex;justify-self:end;flex-direction:row;align-items:center;gap:.4em;min-height:45px;white-space:nowrap;cursor:pointer}
+#queries #cqAllParts{width:1em;height:1em;min-height:0;margin:0;padding:0;accent-color:#173d59;cursor:pointer}
 #queries #cqOrders{grid-column:1/-1;margin:0}
 #queries #cqOrders:empty{display:none}
 #queries .orderCard>button{grid-column:auto}
@@ -164,7 +167,7 @@ main:not(:has([hidden] #queries,#queries[hidden]))>#status{margin-top:0}
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=14-paleta-bodega"><script defer src="warehouse-store.js?v=2"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=4-cabecera"><script defer src="consumption-reports.js?v=7-cabecera"></script><script defer src="app.js?v=64-saldo-total-repuesto"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=saldo-total-repuesto"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=4-cabecera"><script defer src="consumption-reports.js?v=7-cabecera"></script><script defer src="app.js?v=64-saldo-total-repuesto"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=todos-repuestos"></script>
 <script defer src="install-ui.js?v=1"></script><script defer src="../spare-groups.js?v=20261112-spare-wording-3"></script><script defer src="../plaza/spare-picker.js?v=20261118-catalogo-completo"></script><script defer src="warehouse.js?v=13-orden-prestamos"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
