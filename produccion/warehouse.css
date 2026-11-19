@@ -18,8 +18,7 @@
 
 #productionHeader{display:grid;grid-template-columns:minmax(64px,1fr) auto minmax(64px,1fr);align-items:center;gap:10px}
 #productionHeader .productionHeaderLogo{justify-self:start}#productionHeader #productionSync{justify-self:end}
-#productionHomePath{display:flex;flex-direction:row;align-items:center;justify-self:center;gap:6px;min-width:0;max-width:100%}
-#productionHomePath button{flex:none}
+#productionHomePath{justify-self:center;grid-template-columns:minmax(0,1fr);min-width:0;max-width:100%}
 #productionHeader:has(#productionSync[hidden]) #productionBreadcrumb{display:none}
 #productionHome{justify-self:center;min-height:54px;padding:10px 21px;border-radius:9px;background:#fff;color:#102f45;border:1px solid #fff;box-shadow:0 2px 8px #0002;font-size:1.1rem;font-weight:750;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
 #productionHome:disabled{opacity:1;cursor:default}
@@ -30,16 +29,12 @@
 #productionNavigation #changeProductionModule:hover{background:#173d59;color:#fff}
 #productionNavigation #changeProductionModule:focus-visible{outline:3px solid #427b94;outline-offset:3px}
 body:has(#workspace:not([hidden]) #changeProductionModule:not([hidden])){padding-bottom:calc(80px + env(safe-area-inset-bottom))}
-#productionBreadcrumb{min-width:0;color:#e2edf4;font-size:.88rem;line-height:1.25;overflow-wrap:anywhere}
-#productionBreadcrumb::before{content:"/\00a0"}
+#productionBreadcrumb{min-width:0;text-align:center;color:#e2edf4;font-size:.72rem;line-height:1.2;overflow-wrap:anywhere}
 @media(max-width:720px){
  #productionHeader{gap:6px}
  #productionHome{min-height:34px;padding:5px 10px;font-size:.8rem}
  #productionHeader:has(#productionBreadcrumb:not([hidden])):has(#productionSync:not([hidden])){grid-template-columns:64px minmax(0,1fr) max-content}
- #productionHomePath{gap:4px}
- #productionBreadcrumb{font-size:.78rem}
 }
-@media(max-width:360px){#productionHomePath{flex-wrap:wrap;justify-content:center;row-gap:2px;text-align:center}}
 @media(max-width:520px){#productionNavigation{gap:8px}}
 
 /* Selector compartido con Plaza Blending; las cantidades son de Producción. */
