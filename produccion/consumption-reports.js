@@ -142,7 +142,7 @@
  }
  function drawSheet(rows,days,stockFor,origin){
   const table=el('sheetTable'),months=make('tr'),headers=make('tr');
-  for(const title of ['# DE ÍTEM','Repuesto','Ingresos','Total consumido','SALDO ACTUAL'])column(months,title).rowSpan=2;
+  for(const title of ['# DE\nÍTEM','REPUESTO','INGRESOS','TOTAL\nCONSUMIDO','SALDO\nACTUAL'])column(months,title).rowSpan=2;
   let previous='',group;
   for(const day of days){
    const month=day.slice(0,7);
