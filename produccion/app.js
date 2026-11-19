@@ -197,8 +197,9 @@ const incomeMovements=(snapshot=state)=>{
  return Array.from(rows.values());
 };
 const partMatches=(row,part,origin,snapshot=state)=>row.origen===origin&&(row.partId===part.id||row.partId===part.criterionId||(snapshot.inventoryCriteria||[]).some(item=>item.id===row.partId&&item.productionPartId===part.id&&window.SKSpareCatalog.equipment(item)===origin.toLowerCase()));
-const initialFor=(part,origin,snapshot=state)=>incomeMovements(snapshot).reverse().find(row=>
- !row.deleted&&row.kind==='initial'&&partMatches(row,part,origin,snapshot));
+const openingMovements=(origin,snapshot)=>incomeMovements(snapshot).filter(row=>row.kind==='initial'&&!row.deleted&&row.origen===origin).reverse();
+const initialFor=(part,origin,snapshot=state,openings=openingMovements(origin,snapshot))=>
+ openings.find(row=>partMatches(row,part,origin,snapshot));
 function countTotals(origin,date,parts){
  const through=date||today();
  const closed=(state.inventoryLatest||[]).filter(row=>row.status==='closed'&&row.origin===origin&&row.date<=through&&(!date||row.date<date)).sort((a,b)=>b.date.localeCompare(a.date)||String(b.closedAt||'').localeCompare(String(a.closedAt||'')))[0];
@@ -387,9 +388,13 @@ function paintStockView({form:stockForm,panel,kind}){
  }
 }
 function paintBalances(body,parts,origin,enabled){
+ const openings=enabled?openingMovements(origin,state):[];
  body.replaceChildren(...parts.map(part=>{
   const tr=document.createElement('tr');
-  for(const value of [origin,part.numero||'—',part.nombre,enabled?stockFor(part,origin)+(stockBreakdown(part,origin)?.pending?' · PENDIENTE':''):'—']){
+  const opening=initialFor(part,origin,state,openings);
+  const openingDate=opening?.fechaISO?displayDate(opening.fechaISO):'—';
+  const current=enabled?stockFor(part,origin)+(stockBreakdown(part,origin)?.pending?' · PENDIENTE':''):'—';
+  for(const value of [origin,openingDate,part.numero||'—',part.nombre,opening?.cantidad??'—',current]){
    const td=document.createElement('td');td.textContent=value;tr.append(td);
   }
   return tr;
