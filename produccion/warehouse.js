@@ -230,7 +230,7 @@
   }
   renderTable();paintNavigation();
  }
- const actions=[['ENTREGAS','delivery'],['INGRESOS','income'],['PRÉSTAMOS','loan'],['REINTEGROS','return'],['EXISTENCIAS','stock'],['CONSULTAR MOVIMIENTOS','history'],['PRÉSTAMOS PENDIENTES','loans'],['ENVIAR A PLAZA','transfer_out'],['SALDO DE APERTURA','opening']];
+ const actions=[['ENTREGAS','delivery'],['INGRESOS','income'],['PRÉSTAMOS','loan'],['REINTEGROS','return'],['PRÉSTAMOS PENDIENTES','loans'],['CONSULTAR MOVIMIENTOS','history'],['EXISTENCIAS','stock'],['ENVIAR A PLAZA','transfer_out'],['SALDO DE APERTURA','opening']];
  for(const [label,value] of actions){const node=button(label,()=>setView(value));node.dataset.view=value;find('.warehouseActions').append(node);}
  f.sourceLoanId.onchange=()=>{const loan=records().find(row=>row.sourceDeliveryId===f.sourceLoanId.value);if(loan){f.quantity.value=loan.quantity;f.assetId.value=loan.assetId||'';}};
  f.assetMode.onchange=fieldsForItem;f.itemId.onchange=fieldsForItem;f.personSearch.oninput=personChoices;
