@@ -69,7 +69,28 @@ function controls(){
  if(!sec||document.querySelector('#cqv2'))return;
  const production=sec.hasAttribute('data-compact-detail');
  const clearButton='<button type="button" id="cqClear">Limpiar filtros</button>';
- sec.innerHTML=`<div id="cqv2"><div class="sectionHead"><h2>Consultas / Control de repuestos</h2></div><form class="queryForm"><label>Desde<input id="cqFrom" ${dateInputAttrs()}></label><label>Hasta<input id="cqTo" ${dateInputAttrs()}></label><label>Agregar criterio de orden<select id="cqAddField"></select></label>${production?'':clearButton}<button type="button" id="cqExport">⬇ Exportar Excel</button>${production?'<button type="button" id="cqCancel">Cancelar</button>':''}</form><div class="queryTabs"><button type="button" data-mode="detail" class="active">CONSUMOS INDIVIDUALES</button><button type="button" data-mode="daily">CONSUMOS AGRUPADOS</button><button type="button" data-mode="part">POR REPUESTO</button>${production?clearButton:''}</div><div id="cqOrders" class="queryTabs" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;background:transparent;border:0;padding:0"></div><p class="hint" id="cqInfo"></p><div class="tableWrap"><table><thead id="cqHead"></thead><tbody id="cqRows"></tbody></table></div></div>`;const today=new Date(),from=new Date(today.getFullYear(),today.getMonth()-3,today.getDate());const display=productionDates()?.displayDate||((value)=>value);document.querySelector('#cqFrom').value=display(localISO(from));document.querySelector('#cqTo').value=display(localISO(today));orders=defaultOrder();drawOrders();document.querySelector('#cqExport').onclick=exportExcel;const cancel=document.querySelector('#cqCancel');if(cancel)cancel.onclick=()=>document.querySelector('#showRecord').click();document.querySelector('#cqAddField').onchange=e=>{if(e.target.value){orders.push({field:e.target.value,dir:'asc'});drawOrders();render()}};document.querySelector('#cqFrom').onchange=render;document.querySelector('#cqTo').onchange=render;document.querySelector('#cqClear').onclick=()=>{orders=[];drawOrders();render()};sec.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;orders=mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();drawOrders();sec.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));render()})}
+ const modes=`<div class="queryTabs" role="group" aria-label="Opciones de consulta">
+  <button type="button" data-mode="detail" class="active">CONSUMOS INDIVIDUALES</button>
+  <button type="button" data-mode="daily">CONSUMOS AGRUPADOS</button>
+  <button type="button" data-mode="part">POR REPUESTO</button>
+  ${production?clearButton:''}
+ </div>`;
+ sec.innerHTML=`<div id="cqv2">
+  <div class="sectionHead"><h2>Consultas / Control de repuestos</h2></div>
+  <form class="queryForm">
+   <label>Desde<input id="cqFrom" ${dateInputAttrs()}></label>
+   <label>Hasta<input id="cqTo" ${dateInputAttrs()}></label>
+   <label>Agregar criterio de orden<select id="cqAddField"></select></label>
+   ${production?modes:clearButton}
+   <button type="button" id="cqExport">⬇ Exportar Excel</button>
+   ${production?'<button type="button" id="cqCancel">Cancelar</button>':''}
+  </form>
+  ${production?'':modes}
+  <div id="cqOrders" class="queryTabs" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;background:transparent;border:0;padding:0"></div>
+  <p class="hint" id="cqInfo"></p>
+  <div class="tableWrap"><table><thead id="cqHead"></thead><tbody id="cqRows"></tbody></table></div>
+ </div>`;
+ const today=new Date(),from=new Date(today.getFullYear(),today.getMonth()-3,today.getDate());const display=productionDates()?.displayDate||((value)=>value);document.querySelector('#cqFrom').value=display(localISO(from));document.querySelector('#cqTo').value=display(localISO(today));orders=defaultOrder();drawOrders();document.querySelector('#cqExport').onclick=exportExcel;const cancel=document.querySelector('#cqCancel');if(cancel)cancel.onclick=()=>document.querySelector('#showRecord').click();document.querySelector('#cqAddField').onchange=e=>{if(e.target.value){orders.push({field:e.target.value,dir:'asc'});drawOrders();render()}};document.querySelector('#cqFrom').onchange=render;document.querySelector('#cqTo').onchange=render;document.querySelector('#cqClear').onclick=()=>{orders=[];drawOrders();render()};sec.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;orders=mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();drawOrders();sec.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));render()})}
 async function data(){
  const [consumptions,assets]=await Promise.all([all('consumptions'),all('assets')]);
  const byAsset=new Map(assets.map(asset=>[asset.id,asset]));
