@@ -118,3 +118,12 @@ body>main .homeAccessRegister{background:#214b63}
 .accessPersonInfo label{min-width:0}
 .accessPersonInfo input[readonly]{background:#eef2f5;color:#52687a;min-height:42px}
 @media(max-width:520px){.accessPersonInfo{gap:8px}.accessPersonInfo label{font-size:.72rem}}
+
+#cqOrders{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 16px}
+#cqOrders .orderCard{display:grid;grid-template-columns:minmax(0,1fr) 34px;gap:4px;align-items:start;max-width:100%;padding:5px;background:#dfe5ea;color:#172033;border:1px solid #c5cdd4;border-radius:12px;cursor:pointer}
+#cqOrders .orderDirection{display:grid;gap:2px;align-content:center;min-height:44px;min-width:0;padding:2px 4px;text-align:left;background:transparent;border:0;color:inherit;font:inherit;line-height:1.25}
+#cqOrders .orderSense{font-size:.85rem}
+#cqOrders .orderMoves{display:flex;gap:4px;grid-column:1/-1}
+#cqOrders .orderAction{display:inline-grid;place-items:center;box-sizing:border-box;width:34px;height:34px;min-width:0;min-height:0;padding:0;background:#fff;color:#173d59;border:2px solid #aeb8c1;border-radius:6px}
+#cqOrders .firstOrderIcon{display:inline-flex;transform:scaleX(-1)}
+#cqOrders button:focus-visible{outline:2px solid #245e80;outline-offset:1px}
