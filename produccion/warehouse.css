@@ -13,6 +13,11 @@
 #warehousePanel{color:#f8fafc}#warehouseNote,#warehousePending{color:#173d59}#warehousePanel h2{text-align:center;font-size:1.25rem}
 .warehouseActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .warehouseActions button{min-height:48px;white-space:normal;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3}
+/* Colores de las cuatro operaciones de registro de Plaza Blending. */
+.warehouseActions [data-view="delivery"]{background:linear-gradient(145deg,#faecd6,#ecc58e);border-color:#d9a65f;color:#513718}
+.warehouseActions [data-view="income"]{background:linear-gradient(145deg,#e4efe9,#bad3c5);border-color:#91b6a2;color:#173d31}
+.warehouseActions [data-view="loan"]{background:linear-gradient(135deg,#245c80,#173d59);border-color:#235575;color:#fff}
+.warehouseActions [data-view="return"]{background:linear-gradient(135deg,#34765a,#214f3b);border-color:#286247;color:#fff}
 .warehouseActions button[aria-pressed=true]{background:#214b63;color:white}
 #warehouseForm{display:grid;grid-template-columns:1fr 1fr;gap:14px;padding:16px;border:1px solid #cbd7df;border-radius:12px;background:#f8fafc}
 #warehouseForm label{display:grid;gap:6px;min-width:0}#warehouseForm .wide{grid-column:1/-1}
