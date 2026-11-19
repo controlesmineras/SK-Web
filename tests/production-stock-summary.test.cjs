@@ -86,13 +86,29 @@ test('typing reuses period totals but a new snapshot or day refreshes totals and
 });
 test('the input listener updates only the summary without saving, syncing or rebuilding the stock tables',()=>{
  const c=runtime({incomes:[movement('initial','initial',4)]});
- const handlers={},summary={textContent:''};
+ const handlers={},summary={replaceChildren(...columns){this.columns=columns.map(column=>column.textContent)}};
  vm.runInContext(source.slice(source.indexOf('function parseDate('),source.indexOf('function readDate(')),c);
  const form={dataset:{},elements:{search:{},partId:{value:part.id},origen:{value:'YT29'},fechaISO:{value:'10/11/2026',addEventListener:(name,handler)=>{handlers.date=handler}},cantidad:{value:'7',addEventListener:(name,handler)=>{handlers[name]=handler}}},querySelector:()=>({}),addEventListener(){}};
  const view={kind:'initial',form,panel:{querySelector:()=>summary}};
- Object.assign(c,{stockViews:[view],document:{addEventListener(){}},setupPicker(){},saveStock(){throw Error('unexpected save')},paintStockView(){throw Error('unexpected table redraw')}});
+ Object.assign(c,{stockViews:[view],document:{addEventListener(){},createElement:()=>({})},setupPicker(){},saveStock(){throw Error('unexpected save')},paintStockView(){throw Error('unexpected table redraw')}});
  vm.runInContext(source.slice(source.indexOf('for(const view of stockViews){'),source.indexOf("byId('reviewStockAdjustment').onclick")),c);
- handlers.input();assert.match(summary.textContent,/SALDO ESPERADO CON ESTA APERTURA: 7/);
+ handlers.input();assert.match(summary.columns[1],/SALDO ESPERADO CON ESTA APERTURA: 7/);
  form.elements.fechaISO.value='03/11/2026';handlers.date();assert.equal(form.dataset.openingDirty,'true');
- form.elements.cantidad.value='0';handlers.input();assert.match(summary.textContent,/SALDO ESPERADO CON ESTA APERTURA: 0/);
+ form.elements.cantidad.value='0';handlers.input();assert.match(summary.columns[1],/SALDO ESPERADO CON ESTA APERTURA: 0/);
+});
+
+test('the opening shows its saved effective date and original registration day in Colombia through a pending edit',()=>{
+ const base=movement('opening','initial',0,{fechaISO:'2026-11-03',recordedAt:'2026-11-08T02:30:00Z',createdAt:'2026-11-09T15:00:00Z'});
+ const c=runtime({incomes:[base],pending:[movement('opening','initial',2,{fechaISO:base.fechaISO,createdAt:'2026-11-10T15:00:00Z'})]});
+ const text=c.stockSummaryText(part,'YT29','3','2026-11-04');
+ assert.match(text,/SALDO DE APERTURA REGISTRADO: 2 · 03\/11\/2026/);
+ assert.match(text,/FECHA DE REGISTRO: 07\/11\/2026/);
+ c.state={...c.state,incomes:[base],pending:[]};
+ assert.match(c.stockSummaryText(part,'YT29','0'),/SALDO DE APERTURA REGISTRADO: 0/);
+ c.state={...c.state,incomes:[],pending:[movement('offline','initial',0,{createdAt:'2026-11-10T12:00:00Z'})]};
+ assert.match(c.stockSummaryText(part,'YT29','0'),/FECHA DE REGISTRO: 10\/11\/2026/);
+ c.state={...c.state,incomes:[movement('legacy','initial',1)],pending:[]};
+ assert.match(c.stockSummaryText(part,'YT29','1'),/FECHA DE REGISTRO: SIN DATO/);
+ c.state={...c.state,incomes:[]};
+ assert.match(c.stockSummaryText(part,'YT29','0'),/SALDO DE APERTURA: SIN REGISTRAR/);
 });
