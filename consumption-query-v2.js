@@ -92,6 +92,7 @@ function controls(){
  const production=sec.hasAttribute('data-compact-detail');
  const orderField='<label>Agregar criterio de orden<select id="cqAddField"></select></label>';
  const clearButton='<button type="button" id="cqClear">Limpiar filtros</button>';
+ const excelButton='<button type="button" id="cqExport">⬇ Exportar Excel</button>';
  const modes=`<div class="queryTabs" role="group" aria-label="Opciones de consulta">
   <button type="button" data-mode="detail" class="active">CONSUMOS INDIVIDUALES</button>
   <button type="button" data-mode="daily">CONSUMOS AGRUPADOS</button>
@@ -105,14 +106,18 @@ function controls(){
    <label>Hasta<input id="cqTo" ${dateInputAttrs()}></label>
    ${production?'':orderField}
    ${production?modes:clearButton}
-   <button type="button" id="cqExport">⬇ Exportar Excel</button>
-   ${production?`<button type="button" id="cqPdf">Exportar a PDF</button>
-    ${orderField}
-    <button type="button" id="cqCancel">Cancelar</button>`:''}
+   ${production?`${orderField}
+    <button type="button" id="cqCancel">Cancelar</button>`:excelButton}
   </form>
   ${production?'':modes}
   <div id="cqOrders" class="queryTabs" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;background:transparent;border:0;padding:0"></div>
-  <p class="hint" id="cqInfo"></p>
+  ${production?`<p class="hint">
+   <span id="cqInfo"></span>
+   <span class="consumptionExports" role="group" aria-label="Exportar resultados">
+    ${excelButton}
+    <button type="button" id="cqPdf">Exportar a PDF</button>
+   </span>
+  </p>`:'<p class="hint" id="cqInfo"></p>'}
   <div class="tableWrap"><table><thead id="cqHead"></thead><tbody id="cqRows"></tbody></table></div>
  </div>`;
  const today=new Date(),from=new Date(today.getFullYear(),today.getMonth()-3,today.getDate());const display=productionDates()?.displayDate||((value)=>value);document.querySelector('#cqFrom').value=display(localISO(from));document.querySelector('#cqTo').value=display(localISO(today));orders=defaultOrder();drawOrders();document.querySelector('#cqExport').onclick=()=>exportConsumption('xlsx');
