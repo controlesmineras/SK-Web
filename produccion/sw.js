@@ -1,5 +1,5 @@
 
-const CACHE='sk-production-shell-v102-fechas-consulta';
+const CACHE='sk-production-shell-v103-mina-en-linea';
 const files=['../spare-groups.js?v=20261112-spare-wording-3','../plaza/spare-picker.js?v=20261118-catalogo-completo','../date-calendar.js?v=3','../date-calendar.css?v=3','./warehouse.js?v=11-reintegros','./warehouse-store.js?v=2','./warehouse.css?v=8-reintegros','./','./index.html','./app.js?v=60-inventarios-29','./consumption-reports.js?v=3','./consumption-reports.css?v=3','./sync-protocol.js?v=4','./install-ui.js?v=1','./manifest.webmanifest','../styles.css','../sync-config.js','../spare-catalog.js','../consumption-query-v2.js?v=inventario-equipo-2','./produccion-yt-192.png','./produccion-yt-512.png'];
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(files.map(file=>new Request(file,{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('sk-production-shell-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));
