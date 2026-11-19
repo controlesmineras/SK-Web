@@ -72,5 +72,10 @@ test('totals by part combine dates, machines and catalog aliases and keep distin
  const sample={date:'2026-11-01',machine:'A',item:'2',name:'Pin de ajuste',qty:2};
  const rows=[{...sample,partId:'pin',name:'Nombre anterior'},{...sample,partId:'criterion',date:'2026-11-11',machine:'B',qty:3},
   {...sample,qty:1},{...sample,partId:'other',item:'3',qty:8}];
- assert.deepEqual(Array.from(c.totalsByPart(rows,catalog,true),r=>[r.item,r.name,r.qty]),[['2','Pin de ajuste',6],['3','Pin de ajuste',8]]);
+ const balances=new Map([['pin',0],['other',12]]);
+ rows.push({...sample,partId:'retired',name:'Repuesto retirado',qty:1});
+ const result=c.totalsByPart(rows,catalog,true,part=>balances.get(part.id));
+ assert.deepEqual(Array.from(result,r=>[r.item,r.name,r.qty,r.stock]),[
+  ['2','Pin de ajuste',6,0],['3','Pin de ajuste',8,12],['2','Repuesto retirado',1,null]
+ ]);
 });
