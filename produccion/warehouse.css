@@ -16,9 +16,11 @@
 #warehouseTable td,#warehouseTable th{padding:10px;white-space:normal}#warehouseExports{display:flex;gap:8px;margin:12px 0}
 @media(max-width:520px){#warehouseForm{grid-template-columns:1fr}#warehouseForm .wide{grid-column:auto}.productionModules button{font-size:.95rem}}
 
-#productionHeader{display:grid;grid-template-columns:minmax(64px,1fr) auto minmax(64px,1fr);align-items:center;gap:10px}
+#productionHeader{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));align-items:start;gap:10px}
 #productionHeader .productionHeaderLogo{justify-self:start}#productionHeader #productionSync{justify-self:end}
-#productionHomePath{justify-self:center;grid-template-columns:minmax(0,1fr);min-width:0;max-width:100%}
+#productionHomePath{justify-self:center;grid-template-columns:minmax(0,1fr);min-width:0;width:100%}
+#productionHeader #productionSync{grid-template-columns:minmax(0,1fr);min-width:0;max-width:100%}
+#productionHeader #headerLastSync{max-width:100%;white-space:normal;text-align:center;overflow-wrap:anywhere}
 #productionHeader:has(#productionSync[hidden]) #productionBreadcrumb{display:none}
 #productionHome{justify-self:center;min-height:54px;padding:10px 21px;border-radius:9px;background:#fff;color:#102f45;border:1px solid #fff;box-shadow:0 2px 8px #0002;font-size:1.1rem;font-weight:750;letter-spacing:.04em;text-transform:uppercase;cursor:pointer}
 #productionHome:disabled{opacity:1;cursor:default}
@@ -33,7 +35,6 @@ body:has(#workspace:not([hidden]) #changeProductionModule:not([hidden])){padding
 @media(max-width:720px){
  #productionHeader{gap:6px}
  #productionHome{min-height:34px;padding:5px 10px;font-size:.8rem}
- #productionHeader:has(#productionBreadcrumb:not([hidden])):has(#productionSync:not([hidden])){grid-template-columns:64px minmax(0,1fr) max-content}
 }
 @media(max-width:520px){#productionNavigation{gap:8px}}
 
