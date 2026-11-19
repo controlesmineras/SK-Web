@@ -106,8 +106,7 @@ function controls(){
    <label>Hasta<input id="cqTo" ${dateInputAttrs()}></label>
    ${production?'':orderField}
    ${production?modes:clearButton}
-   ${production?`${orderField}
-    <button type="button" id="cqCancel">Cancelar</button>`:excelButton}
+   ${production?orderField:excelButton}
   </form>
   ${production?'':modes}
   <div id="cqOrders" class="queryTabs" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;background:transparent;border:0;padding:0"></div>
@@ -122,7 +121,7 @@ function controls(){
  </div>`;
  const today=new Date(),from=new Date(today.getFullYear(),today.getMonth()-3,today.getDate());const display=productionDates()?.displayDate||((value)=>value);document.querySelector('#cqFrom').value=display(localISO(from));document.querySelector('#cqTo').value=display(localISO(today));orders=defaultOrder();drawOrders();document.querySelector('#cqExport').onclick=()=>exportConsumption('xlsx');
  if(production)document.querySelector('#cqPdf').onclick=()=>exportConsumption('pdf');
- const cancel=document.querySelector('#cqCancel');if(cancel)cancel.onclick=()=>document.querySelector('#showRecord').click();document.querySelector('#cqAddField').onchange=e=>{if(e.target.value){orders.push({field:e.target.value,dir:'asc'});drawOrders();render()}};document.querySelector('#cqFrom').onchange=render;document.querySelector('#cqTo').onchange=render;document.querySelector('#cqClear').onclick=()=>{orders=[];drawOrders();render()};sec.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;orders=mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();drawOrders();sec.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));render()})}
+ document.querySelector('#cqAddField').onchange=e=>{if(e.target.value){orders.push({field:e.target.value,dir:'asc'});drawOrders();render()}};document.querySelector('#cqFrom').onchange=render;document.querySelector('#cqTo').onchange=render;document.querySelector('#cqClear').onclick=()=>{orders=[];drawOrders();render()};sec.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;orders=mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();drawOrders();sec.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));render()})}
 async function data(){
  const [consumptions,assets]=await Promise.all([all('consumptions'),all('assets')]);
  const byAsset=new Map(assets.map(asset=>[asset.id,asset]));
