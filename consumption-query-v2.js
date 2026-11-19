@@ -99,7 +99,7 @@ function controls(){
   ${production?clearButton:''}
  </div>`;
  sec.innerHTML=`<div id="cqv2">
-  <div class="sectionHead"><h2>Consultas / Control de repuestos</h2></div>
+  ${production?'':'<div class="sectionHead"><h2>Consultas / Control de repuestos</h2></div>'}
   <form class="queryForm">
    <label>Desde<input id="cqFrom" ${dateInputAttrs()}></label>
    <label>Hasta<input id="cqTo" ${dateInputAttrs()}></label>
