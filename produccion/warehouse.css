@@ -7,6 +7,9 @@
  background:url("./produccion-yt-512.png") 24% 20% / 148% auto no-repeat;
  mix-blend-mode:lighten;
 }
+@media(min-width:901px){
+ #productionModuleHome::after{width:clamp(12rem,16vw,15rem)}
+}
 #warehousePanel{color:#f8fafc}#warehouseNote,#warehousePending{color:#173d59}#warehousePanel h2{text-align:center;font-size:1.25rem}
 .warehouseActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .warehouseActions button{min-height:48px;white-space:normal;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3}
