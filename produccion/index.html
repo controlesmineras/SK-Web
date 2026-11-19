@@ -272,18 +272,18 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 </form>
 </div>
 <div id="productionQueries" role="region" aria-labelledby="mechanicTitle" hidden>
-<div class="productionViews" role="group" aria-label="Tipo de consulta">
-<button type="button" id="queryIncome" aria-controls="incomeQueries" aria-pressed="false">INGRESOS</button>
-<button type="button" id="queryConsumption" aria-controls="queries" aria-pressed="true">CONSUMOS</button>
-<button type="button" id="querySheet" aria-controls="consumptionSheet" aria-pressed="false">HOJA DE CONSUMO</button>
-<button type="button" id="queryDashboard" aria-controls="consumptionDashboard" aria-pressed="false">DASHBOARD</button>
-</div>
 <div id="consumptionInventory">
 <fieldset class="inventoryChoices">
 <legend>Inventario de repuestos</legend>
 <label><input type="radio" name="reportEquipment" value="YT29" checked><span>YT 29</span></label>
 <label><input type="radio" name="reportEquipment" value="Columna29"><span>Columna 29</span></label>
 </fieldset>
+</div>
+<div class="productionViews" role="group" aria-label="Tipo de consulta">
+<button type="button" id="queryIncome" aria-controls="incomeQueries" aria-pressed="false">INGRESOS</button>
+<button type="button" id="queryConsumption" aria-controls="queries" aria-pressed="true">CONSUMOS</button>
+<button type="button" id="querySheet" aria-controls="consumptionSheet" aria-pressed="false">HOJA DE CONSUMO</button>
+<button type="button" id="queryDashboard" aria-controls="consumptionDashboard" aria-pressed="false">DASHBOARD</button>
 </div>
 <section id="consumptionSheet" class="partsReport" aria-labelledby="sheetTitle" hidden>
 <h2 id="sheetTitle">Hoja de consumo</h2>
