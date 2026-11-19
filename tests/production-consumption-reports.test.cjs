@@ -48,3 +48,18 @@ test('rolling three-month ranking retains zero-stock consumed parts and omits un
  const result=report.rank(rows(range),p=>p.id==='pin'?5:0,'YT29');
  assert.deepEqual(Array.from(result,r=>[r.part.id,r.consumed,r.average,r.stock,r.coverage]),[['pin',30,10,5,0.5],['spring',6,2,0,0]]);
 });
+
+test('separates identical part numbers by inventory, including legacy and offline Column 29 records',()=>{
+ const day='2026-11-14',range={from:day,to:day};
+ const column={id:'seal',numero:'2',nombre:'Pin',clase:'Columna',detalle:'29'};
+ const confirmed=movement('confirmed',day,3,{origen:'Columna29',partId:'seal'});
+ const old=movement('legacy',day,2,{origen:'29',partId:'seal',assetId:'column'});
+ const {context,report}=runtime({parts:[parts[0],column],inventoryCriteria:[],
+  assets:[{id:'column',clase:'Columna',modelo:'FT160'}],
+  consumptions:[confirmed,old,movement('yt',day,11),movement('other-model',day,42,{origen:'Columna28'})],
+  pending:[confirmed,movement('pending',day,4,{origen:'Columna 29',partId:'seal'}),movement('rejected',day,99,{origen:'Columna29',partId:'seal',syncRejected:true})],
+  incomes:[movement('income',day,7,{kind:'income',partId:'seal',origen:'Columna29'})]});
+ const selected=origin=>Array.from(report.aggregate(context,origin,range),r=>[r.part.id,r.income,r.consumed,r.days.get(day)]);
+ assert.deepEqual(selected('Columna29'),[['seal',7,9,9]]);
+ assert.deepEqual(selected('YT29'),[['pin',0,11,11]]);
+});
