@@ -12,11 +12,33 @@ const external=a=>{const m=norm(mineOf(a));return !!m&&!['sandra k','sandra k.',
 function romanToInt(s){s=String(s||'').trim().toUpperCase();if(!/^[IVXLCDM]+$/.test(s))return'';const v={I:1,V:5,X:10,L:50,C:100,D:500,M:1000};let n=0;for(let i=0;i<s.length;i++)n+=(v[s[i]]<(v[s[i+1]]||0))?-v[s[i]]:v[s[i]];return n||''}
 let mode='detail',orders=[],lastRows=[];
 const desktopQuery=window.matchMedia('(min-width: 901px)');
-const compactDetail=()=>document.querySelector('#queries')?.hasAttribute('data-compact-detail')&&!desktopQuery.matches&&mode==='detail';
+const productionQuery=()=>document.querySelector('#queries')?.hasAttribute('data-compact-detail');
+const compactDetail=()=>productionQuery()&&!desktopQuery.matches&&mode==='detail';
 const defaultOrder=()=>compactDetail()?[{field:'date',dir:'desc'},{field:'time',dir:'desc'}]:[{field:'date',dir:'asc'},{field:'item',dir:'asc'}];
 function invKey(c,a){const x=a.get(c.assetId)||{},t=/columna/i.test(x.clase||c.tipoEquipo||'')?'Columna':'YT',m=(c.origen||'').replace(/[^0-9]/g,'')||x.modelo||'';return `${t} ${m}`.trim()}
 function historicalMarkNo(c){const direct=String(c.numeroMarcaActual||c.marcaNumero||'').trim();if(direct)return direct;const raw=String(c.assetLabel||c.maquina||'').trim(),parts=raw.split(/\s+-\s+/);for(const p of parts){const n=romanToInt(p);if(n)return String(n)}return''}
 function machineShort(c,a){const x=a.get(c.assetId),n=x&&markNo(x);return String(n||historicalMarkNo(c)||'').trim()}
+function productionMachine(row,asset,model,mark){
+ const type=String(asset?.clase||row.tipoEquipo||'').trim();
+ const family=/^yt/i.test(type)?'YT':/^columna/i.test(type)?'Columna':'';
+ const parsed=/^(?:(YT|Columna)[ -]*)?(28|29)(A?)$/i.exec(model);
+ let modelLabel=model;
+ if(parsed){
+  const prefix=parsed[1]?(/^yt$/i.test(parsed[1])?'YT':'Columna'):family;
+  modelLabel=prefix+(prefix==='Columna'?' ':'')+parsed[2]+parsed[3].toUpperCase();
+ }
+ const mine=external(asset)?mineOf(asset):'';
+ const currentMark=String(asset?.marcaActual||asset?.marcaInterna||'').trim();
+ // Cuando el activo guarda P2 y su equivalencia 2, conserva el prefijo registrado.
+ const series=/^[A-Z]+(\d+)$/i.exec(currentMark);
+ const number=series&&series[1]===mark?currentMark:mark||currentMark;
+ return {label:[modelLabel,number].filter(Boolean).join(' ')||'—',mine};
+}
+function machineText(entry){return [entry.label,entry.mine].filter(Boolean).join(' ')}
+function machineCell(row){
+ const machines=row.equipment||[{label:row.machine||'—',mine:row.external?(row.mine||'EXTERNO'):''}];
+ return '<td>'+machines.map(({label,mine})=>`<b>${esc(label)}</b>${mine?` <span class="externalBadge">${esc(mine)}</span>`:''}`).join(' / ')+'</td>';
+}
 const fields={date:'Fecha',time:'Registro',item:'Número de item',machine:'Máquina',model:'Modelo',inv:'Inventario',name:'Repuesto',qty:'Cantidad'};
 function inventoryMismatch(model,inv){
  const key=v=>norm(v).replace(/[^a-z0-9]/g,'');
@@ -53,12 +75,13 @@ function zipStore(files){const te=new TextEncoder(),parts=[],central=[];let off=
 function exportConsumption(format){
  if(!lastRows.length)return alert('No hay resultados para exportar.');
  const byPart=mode==='part',grouped=mode==='daily',pdf=format==='pdf';
- const headers=byPart?['ITEM','REPUESTO','CANTIDAD TOTAL']:['MÁQUINA - NO. MARCA ACTUAL','MODELO','INVENTARIO','FECHA',...(grouped?[]:['HORA REGISTRO']),'ITEM','REPUESTO',grouped?'CANTIDAD TOTAL':'CANTIDAD'];
+ const production=productionQuery();
+ const headers=byPart?['ITEM','REPUESTO','CANTIDAD TOTAL']:['MÁQUINA - NO. MARCA ACTUAL',...(production?[]:['MODELO']),'INVENTARIO','FECHA',...(grouped?[]:['HORA REGISTRO']),'ITEM','REPUESTO',grouped?'CANTIDAD TOTAL':'CANTIDAD'];
  const values=lastRows.map(row=>{
   const part=[row.item||'',row.name||'',row.qty];
   if(byPart)return part;
-  const machine=pdf&&row.external?[row.machine,row.mine].filter(Boolean).join(' · '):row.machine||'';
-  return [machine,row.model||'',row.inv||'',fmt(row.date),...(grouped?[]:[row.time||'']),...part];
+  const machine=production?row.equipment.map(machineText).join(' / '):row.machine||'';
+  return [machine,...(production?[]:[row.model||'']),row.inv||'',fmt(row.date),...(grouped?[]:[row.time||'']),...part];
  });
  const dates=productionDates();
  const [from,to]=['#cqFrom','#cqTo'].map(id=>{
@@ -69,7 +92,7 @@ function exportConsumption(format){
  const filename=`Consumo_Repuestos_${origin?origin+'_':''}${from}_a_${to}${byPart?'_por_repuesto':grouped?'_agrupado':''}`;
  if(pdf){
   const view=document.querySelector('#cqv2 [data-mode].active').textContent;
-  const widths=byPart?[63,554,165]:[107,66,78,73,...(grouped?[]:[78]),43,grouped?321:243,94];
+  const widths=byPart?[63,554,165]:[173,78,73,...(grouped?[]:[78]),43,grouped?321:243,94];
   const blob=window.SKConsumptionPdf({title:'Producción · '+view,rangeTitle,headers,widths,values});
   downloadFile(blob,filename+'.pdf');
  }else{
@@ -126,11 +149,13 @@ async function data(){
  const [consumptions,assets]=await Promise.all([all('consumptions'),all('assets')]);
  const byAsset=new Map(assets.map(asset=>[asset.id,asset]));
  const origin=window.SKConsumptionReports?.selectedOrigin();
+ const production=productionQuery();
  return consumptions.filter(row=>!row.deleted&&(!origin||row.origen===origin)).map(row=>{
   const asset=byAsset.get(row.assetId);
   const inv=origin||(compactDetail()&&row.origen)||invKey(row,byAsset);
   const model=String(asset?.modelo||row.modelo||'').trim(),machine=machineShort(row,byAsset);
-  return {date:dayOf(row),time:timeOf(row),inv,model,machine,machineShort:machine,item:row.noItem||'—',
+  const equipment=production?[productionMachine(row,asset,model,machine)]:null;
+  return {date:dayOf(row),time:timeOf(row),inv,model,machine,equipment,item:row.noItem||'—',
    name:row.nombreRepuesto||'',qty:Number(row.cantidad)||0,external:external(asset),mine:mineOf(asset),inventoryMismatch:inventoryMismatch(model,inv)};
  });
 }
@@ -141,7 +166,40 @@ async function render(){if(!db||!document.querySelector('#cqv2'))return;const da
   document.querySelector('#cqInfo').textContent='Revisa el rango de fechas para ver los consumos.';
  }
  invalid.reportValidity();return
-}let rows=(await data()).filter(x=>(!from||x.date>=from)&&(!to||x.date<=to));if(mode==='daily'){const m=new Map;for(const x of rows){const no=norm(x.item==='—'?'':x.item),nm=norm(x.name),key=JSON.stringify([x.date,norm(x.model),norm(x.inv),no,nm]);let z=m.get(key);if(!z){z={date:x.date,item:x.item,name:x.name||'Sin nombre',qty:0,time:'',machines:new Set(),models:new Set(),inventoryMismatch:false,inventories:new Set(),external:false,mines:new Set()};m.set(key,z)}z.qty+=x.qty;z.inventoryMismatch=z.inventoryMismatch||x.inventoryMismatch;if(x.machineShort)z.machines.add(x.machineShort);if(x.model)z.models.add(x.model);if(x.inv)z.inventories.add(x.inv);if(x.external){z.external=true;if(x.mine)z.mines.add(x.mine)}}rows=[...m.values()].map(z=>({...z,model:[...z.models].sort((a,b)=>String(a).localeCompare(String(b),'es',{numeric:true})).join(' / '),machine:[...z.machines].sort((a,b)=>String(a).localeCompare(String(b),'es',{numeric:true})).join('-'),inv:[...z.inventories].sort((a,b)=>String(a).localeCompare(String(b),'es',{numeric:true})).join(' / '),mine:[...z.mines].join(' / ')}));rows=sortRows(rows);lastRows=rows;document.querySelector('#cqHead').innerHTML='<tr><th>Máquina<br><small>No. marca actual</small></th><th>Modelo</th><th>Inventario</th><th>Fecha</th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cantidad total</th></tr>';document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}"><td><b>${esc(x.machine||'—')}</b>${x.external?` <span class="externalBadge">${esc(x.mine||'EXTERNO')}</span>`:''}</td><td>${esc(x.model||'—')}</td>${inventoryCell(x)}<td>${fmt(x.date)}</td><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td></tr>`).join('')||'<tr><td colspan="7">No hay consumos para este período.</td></tr>'}else if(mode==='part'){const m=new Map;for(const x of rows){const no=norm(x.item==='—'?'':x.item),nm=norm(x.name),key=no?`N:${no}|${nm}`:`S:${nm}`;const z=m.get(key)||{item:x.item,name:x.name||'Sin nombre',qty:0};z.qty+=x.qty;m.set(key,z)}rows=sortRows([...m.values()]);lastRows=rows;document.querySelector('#cqHead').innerHTML='<tr><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad total</th></tr>';document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td></tr>`).join('')||'<tr><td colspan="3">No hay consumos para este período.</td></tr>'}else{rows=sortRows(rows);lastRows=rows;const compact=compactDetail();document.querySelector('#cqHead').innerHTML=compact?'<tr><th>Equipo<br><small>No. marca actual</small></th><th>Inventario</th><th>Fecha</th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cant.</th></tr>':'<tr><th>Máquina<br><small>No. marca actual</small></th><th>Modelo</th><th>Inventario</th><th>Fecha</th><th>Hora registro</th><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad</th></tr>';document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}"><td><b>${esc(x.machine||'—')}</b>${x.external?` <span class="externalBadge">${esc(x.mine||'EXTERNO')}</span>`:''}</td>${compact?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${compact?fmt(x.date).replace(/\b0(?=\d)/g,''):fmt(x.date)}</td>${compact?'':`<td>${esc(x.time||'—')}</td>`}<td>${esc(x.item)}</td><td>${esc(x.name)}</td><td>${x.qty}</td></tr>`).join('')||`<tr><td colspan="${compact?6:8}">No hay movimientos para este período.</td></tr>`}document.querySelector('#cqInfo').textContent=`${rows.length} resultado${rows.length===1?'':'s'} · orden: ${orders.length?orders.map((o,i)=>`${i+1}. ${fields[o.field]} ${o.dir==='asc'?'↑':'↓'}`).join(' → '):'sin filtros de orden'}.`}
+}
+ const production=productionQuery();
+ const modelHeading=production?'':'<th>Modelo</th>';
+ let rows=(await data()).filter(x=>(!from||x.date>=from)&&(!to||x.date<=to));
+ if(mode==='daily'){
+  const groups=new Map();
+  for(const row of rows){
+   const key=JSON.stringify([row.date,norm(row.model),norm(row.inv),norm(row.item==='—'?'':row.item),norm(row.name)]);
+   let group=groups.get(key);
+   if(!group){
+    group={...row,name:row.name||'Sin nombre',qty:0,time:'',marks:new Set(),models:new Set(),inventories:new Set(),mines:new Set(),equipmentByName:new Map()};
+    groups.set(key,group);
+   }
+   group.qty+=row.qty;
+   group.inventoryMismatch||=row.inventoryMismatch;
+   group.external||=row.external;
+   if(row.machine)group.marks.add(row.machine);
+   if(row.model)group.models.add(row.model);
+   if(row.inv)group.inventories.add(row.inv);
+   if(row.external&&row.mine)group.mines.add(row.mine);
+   for(const entry of row.equipment||[])group.equipmentByName.set(machineText(entry),entry);
+  }
+  const compare=(a,b)=>a.localeCompare(b,'es',{numeric:true});
+  rows=sortRows([...groups.values()].map(group=>({...group,
+   model:[...group.models].sort(compare).join(' / '),machine:[...group.marks].sort(compare).join('-'),
+   inv:[...group.inventories].sort(compare).join(' / '),mine:[...group.mines].join(' / '),
+   equipment:production?[...group.equipmentByName.values()].sort((a,b)=>compare(machineText(a),machineText(b))):null
+  })));
+  lastRows=rows;
+  document.querySelector('#cqHead').innerHTML=`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cantidad total</th></tr>`;
+  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${fmt(x.date)}</td><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td></tr>`).join('')||`<tr><td colspan="${production?6:7}">No hay consumos para este período.</td></tr>`;
+ }else if(mode==='part'){const m=new Map;for(const x of rows){const no=norm(x.item==='—'?'':x.item),nm=norm(x.name),key=no?`N:${no}|${nm}`:`S:${nm}`;const z=m.get(key)||{item:x.item,name:x.name||'Sin nombre',qty:0};z.qty+=x.qty;m.set(key,z)}rows=sortRows([...m.values()]);lastRows=rows;document.querySelector('#cqHead').innerHTML='<tr><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad total</th></tr>';document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td></tr>`).join('')||'<tr><td colspan="3">No hay consumos para este período.</td></tr>'}else{rows=sortRows(rows);lastRows=rows;const compact=compactDetail();
+  document.querySelector('#cqHead').innerHTML=compact?'<tr><th>Equipo<br><small>No. marca actual</small></th><th>Inventario</th><th>Fecha</th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cant.</th></tr>':`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th>Hora registro</th><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad</th></tr>`;
+  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${compact?fmt(x.date).replace(/\b0(?=\d)/g,''):fmt(x.date)}</td>${compact?'':`<td>${esc(x.time||'—')}</td>`}<td>${esc(x.item)}</td><td>${esc(x.name)}</td><td>${x.qty}</td></tr>`).join('')||`<tr><td colspan="${compact?6:production?7:8}">No hay movimientos para este período.</td></tr>`}document.querySelector('#cqInfo').textContent=`${rows.length} resultado${rows.length===1?'':'s'} · orden: ${orders.length?orders.map((o,i)=>`${i+1}. ${fields[o.field]} ${o.dir==='asc'?'↑':'↓'}`).join(' → '):'sin filtros de orden'}.`}
 function openQueries(){
  controls();
  return render();
