@@ -50,17 +50,39 @@ function drawOrders(){
 function xml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function col(n){let s='';while(n){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)}return s}
 function zipStore(files){const te=new TextEncoder(),parts=[],central=[];let off=0;const crcTable=(()=>{let t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();const crc=b=>{let c=0xffffffff;for(const x of b)c=crcTable[(c^x)&255]^(c>>>8);return(c^0xffffffff)>>>0};const u16=n=>new Uint8Array([n&255,(n>>>8)&255]),u32=n=>new Uint8Array([n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255]);for(const [name,text] of files){const nb=te.encode(name),b=te.encode(text),c=crc(b),local=[u32(0x04034b50),u16(20),u16(0),u16(0),u16(0),u16(0),u32(c),u32(b.length),u32(b.length),u16(nb.length),u16(0),nb,b];const len=local.reduce((a,x)=>a+x.length,0);parts.push(...local);central.push(u32(0x02014b50),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(c),u32(b.length),u32(b.length),u16(nb.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(off),nb);off+=len}const cs=central.reduce((a,x)=>a+x.length,0);parts.push(...central,u32(0x06054b50),u16(0),u16(0),u16(files.length),u16(files.length),u32(cs),u32(off),u16(0));return new Blob(parts,{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
-function exportExcel(){if(!lastRows.length)return alert('No hay resultados para exportar.');const byPart=mode==='part',grouped=mode==='daily',headers=byPart?['ITEM','REPUESTO','CANTIDAD TOTAL']:grouped?['MÁQUINA - NO. MARCA ACTUAL','MODELO','INVENTARIO','FECHA','ITEM','REPUESTO','CANTIDAD TOTAL']:['MÁQUINA - NO. MARCA ACTUAL','MODELO','INVENTARIO','FECHA','HORA REGISTRO','ITEM','REPUESTO','CANTIDAD'];const values=lastRows.map(r=>byPart?[r.item||'',r.name||'',r.qty]:grouped?[r.machine||'',r.model||'',r.inv||'',fmt(r.date),r.item||'',r.name||'',r.qty]:[r.machine||'',r.model||'',r.inv||'',fmt(r.date),r.time||'',r.item||'',r.name||'',r.qty]);
+function exportConsumption(format){
+ if(!lastRows.length)return alert('No hay resultados para exportar.');
+ const byPart=mode==='part',grouped=mode==='daily',pdf=format==='pdf';
+ const headers=byPart?['ITEM','REPUESTO','CANTIDAD TOTAL']:['MÁQUINA - NO. MARCA ACTUAL','MODELO','INVENTARIO','FECHA',...(grouped?[]:['HORA REGISTRO']),'ITEM','REPUESTO',grouped?'CANTIDAD TOTAL':'CANTIDAD'];
+ const values=lastRows.map(row=>{
+  const part=[row.item||'',row.name||'',row.qty];
+  if(byPart)return part;
+  const machine=pdf&&row.external?[row.machine,row.mine].filter(Boolean).join(' · '):row.machine||'';
+  return [machine,row.model||'',row.inv||'',fmt(row.date),...(grouped?[]:[row.time||'']),...part];
+ });
  const dates=productionDates();
  const [from,to]=['#cqFrom','#cqTo'].map(id=>{
   const input=document.querySelector(id);return dates?dates.readDate(input):input.value;
  });
  const origin=window.SKConsumptionReports?.selectedOrigin()||'';
  const rangeTitle=(origin?origin+' · ':'')+`RANGO DE FECHAS: ${from?fmt(from):'INICIO'} AL ${to?fmt(to):'HOY'}`;
- const rows=byPart?[[rangeTitle,'',''],headers,...values]:[headers,...values];
- downloadTableExcel(rows,`Consumo_Repuestos_${origin?origin+'_':''}${from}_a_${to}${byPart?'_por_repuesto':grouped?'_agrupado':''}.xlsx`,byPart);
+ const filename=`Consumo_Repuestos_${origin?origin+'_':''}${from}_a_${to}${byPart?'_por_repuesto':grouped?'_agrupado':''}`;
+ if(pdf){
+  const view=document.querySelector('#cqv2 [data-mode].active').textContent;
+  const widths=byPart?[63,554,165]:[107,66,78,73,...(grouped?[]:[78]),43,grouped?321:243,94];
+  const blob=window.SKConsumptionPdf({title:'Producción · '+view,rangeTitle,headers,widths,values});
+  downloadFile(blob,filename+'.pdf');
+ }else{
+  const rows=byPart?[[rangeTitle,'',''],headers,...values]:[headers,...values];
+  downloadTableExcel(rows,filename+'.xlsx',byPart);
+ }
 }
-function downloadTableExcel(rows,filename,mergeRange=false){const sheet=rows.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>{const ref=`${col(ci+1)}${ri+1}`;return typeof v==='number'?`<c r="${ref}"><v>${v}</v></c>`:`<c r="${ref}" t="inlineStr"><is><t>${xml(v)}</t></is></c>`}).join('')}</row>`).join('');const files=[['[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'],['_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],['xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Consumos" sheetId="1" r:id="rId1"/></sheets></workbook>'],['xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'],['xl/worksheets/sheet1.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheet}</sheetData>${mergeRange?'<mergeCells count="1"><mergeCell ref="A1:C1"/></mergeCells>':''}</worksheet>`]];const url=URL.createObjectURL(zipStore(files)),a=document.createElement('a');a.href=url;a.download=filename;document.body.append(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),2000)}
+function downloadFile(blob,filename){
+ const url=URL.createObjectURL(blob),link=document.createElement('a');
+ link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();
+ setTimeout(()=>URL.revokeObjectURL(url),2000);
+}
+function downloadTableExcel(rows,filename,mergeRange=false){const sheet=rows.map((r,ri)=>`<row r="${ri+1}">${r.map((v,ci)=>{const ref=`${col(ci+1)}${ri+1}`;return typeof v==='number'?`<c r="${ref}"><v>${v}</v></c>`:`<c r="${ref}" t="inlineStr"><is><t>${xml(v)}</t></is></c>`}).join('')}</row>`).join('');const files=[['[Content_Types].xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/worksheets/sheet1.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/></Types>'],['_rels/.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="xl/workbook.xml"/></Relationships>'],['xl/workbook.xml','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><sheets><sheet name="Consumos" sheetId="1" r:id="rId1"/></sheets></workbook>'],['xl/_rels/workbook.xml.rels','<?xml version="1.0" encoding="UTF-8" standalone="yes"?><Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/worksheet" Target="worksheets/sheet1.xml"/></Relationships>'],['xl/worksheets/sheet1.xml',`<?xml version="1.0" encoding="UTF-8" standalone="yes"?><worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main"><sheetData>${sheet}</sheetData>${mergeRange?'<mergeCells count="1"><mergeCell ref="A1:C1"/></mergeCells>':''}</worksheet>`]];downloadFile(zipStore(files),filename)}
 const productionDates=()=>window.SKProductionDates;
 const dateInputAttrs=()=>productionDates()?'type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10"':'type="date"';
 window.SKDownloadTableExcel=downloadTableExcel;
@@ -68,6 +90,7 @@ function controls(){
  const sec=document.querySelector('#queries');
  if(!sec||document.querySelector('#cqv2'))return;
  const production=sec.hasAttribute('data-compact-detail');
+ const orderField='<label>Agregar criterio de orden<select id="cqAddField"></select></label>';
  const clearButton='<button type="button" id="cqClear">Limpiar filtros</button>';
  const modes=`<div class="queryTabs" role="group" aria-label="Opciones de consulta">
   <button type="button" data-mode="detail" class="active">CONSUMOS INDIVIDUALES</button>
@@ -80,17 +103,21 @@ function controls(){
   <form class="queryForm">
    <label>Desde<input id="cqFrom" ${dateInputAttrs()}></label>
    <label>Hasta<input id="cqTo" ${dateInputAttrs()}></label>
-   <label>Agregar criterio de orden<select id="cqAddField"></select></label>
+   ${production?'':orderField}
    ${production?modes:clearButton}
    <button type="button" id="cqExport">⬇ Exportar Excel</button>
-   ${production?'<button type="button" id="cqCancel">Cancelar</button>':''}
+   ${production?`<button type="button" id="cqPdf">Exportar a PDF</button>
+    ${orderField}
+    <button type="button" id="cqCancel">Cancelar</button>`:''}
   </form>
   ${production?'':modes}
   <div id="cqOrders" class="queryTabs" style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;background:transparent;border:0;padding:0"></div>
   <p class="hint" id="cqInfo"></p>
   <div class="tableWrap"><table><thead id="cqHead"></thead><tbody id="cqRows"></tbody></table></div>
  </div>`;
- const today=new Date(),from=new Date(today.getFullYear(),today.getMonth()-3,today.getDate());const display=productionDates()?.displayDate||((value)=>value);document.querySelector('#cqFrom').value=display(localISO(from));document.querySelector('#cqTo').value=display(localISO(today));orders=defaultOrder();drawOrders();document.querySelector('#cqExport').onclick=exportExcel;const cancel=document.querySelector('#cqCancel');if(cancel)cancel.onclick=()=>document.querySelector('#showRecord').click();document.querySelector('#cqAddField').onchange=e=>{if(e.target.value){orders.push({field:e.target.value,dir:'asc'});drawOrders();render()}};document.querySelector('#cqFrom').onchange=render;document.querySelector('#cqTo').onchange=render;document.querySelector('#cqClear').onclick=()=>{orders=[];drawOrders();render()};sec.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;orders=mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();drawOrders();sec.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));render()})}
+ const today=new Date(),from=new Date(today.getFullYear(),today.getMonth()-3,today.getDate());const display=productionDates()?.displayDate||((value)=>value);document.querySelector('#cqFrom').value=display(localISO(from));document.querySelector('#cqTo').value=display(localISO(today));orders=defaultOrder();drawOrders();document.querySelector('#cqExport').onclick=()=>exportConsumption('xlsx');
+ if(production)document.querySelector('#cqPdf').onclick=()=>exportConsumption('pdf');
+ const cancel=document.querySelector('#cqCancel');if(cancel)cancel.onclick=()=>document.querySelector('#showRecord').click();document.querySelector('#cqAddField').onchange=e=>{if(e.target.value){orders.push({field:e.target.value,dir:'asc'});drawOrders();render()}};document.querySelector('#cqFrom').onchange=render;document.querySelector('#cqTo').onchange=render;document.querySelector('#cqClear').onclick=()=>{orders=[];drawOrders();render()};sec.querySelectorAll('[data-mode]').forEach(b=>b.onclick=()=>{mode=b.dataset.mode;orders=mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();drawOrders();sec.querySelectorAll('[data-mode]').forEach(x=>x.classList.toggle('active',x===b));render()})}
 async function data(){
  const [consumptions,assets]=await Promise.all([all('consumptions'),all('assets')]);
  const byAsset=new Map(assets.map(asset=>[asset.id,asset]));

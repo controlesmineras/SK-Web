@@ -91,10 +91,11 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #cqRows .consumptionExternal td:first-child{color:#a3480b;font-weight:700}
 #cqRows .consumptionExternal td:first-child>b{color:inherit}
 #cqRows .consumptionExternal .externalBadge{all:unset}
+#queries .queryForm{grid-template-columns:repeat(2,minmax(0,1fr))}
+#queries .queryForm label:has(#cqAddField){grid-column:1/-1}
+#queries .queryForm #cqPdf{background:#fae4df;color:#803421;border:1px solid #d6a79c}
 #cqCancel{display:none}
 @media(max-width:900px){
- #queries .queryForm{grid-template-columns:repeat(2,minmax(0,1fr))}
- #queries .queryForm label:has(#cqAddField){grid-column:1/-1}
  #cqRows .consumptionExternal td:first-child{white-space:nowrap;padding-inline:8px}
 }
 @media(max-width:720px){
@@ -147,7 +148,7 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=8-reintegros"><script defer src="warehouse-store.js?v=2"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=3"><script defer src="consumption-reports.js?v=4"></script><script defer src="app.js?v=61-dashboard"></script><script defer src="../consumption-query-v2.js?v=opciones-antes-excel"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=3"><script defer src="consumption-reports.js?v=4"></script><script defer src="app.js?v=61-dashboard"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=exportar-pdf"></script>
 <script defer src="install-ui.js?v=1"></script><script defer src="../spare-groups.js?v=20261112-spare-wording-3"></script><script defer src="../plaza/spare-picker.js?v=20261118-catalogo-completo"></script><script defer src="warehouse.js?v=11-reintegros"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
