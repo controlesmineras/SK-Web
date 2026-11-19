@@ -210,7 +210,7 @@
   drawSheet(rows,daysBetween(from,to));scroll.hidden=false;
  }
  function dashboard(context){
-  const {state,today,stockFor}=context,origin=el('dashboardOrigin').value;
+  const {state,today,stockFor}=context,origin=selectedOrigin();
   const note=el('dashboardDates'),results=el('dashboardResults');
   results.hidden=true;
   if(!Array.isArray(state.consumptions)||!Array.isArray(state.incomes)){note.textContent='Sincroniza Producción para cargar los movimientos.';return}
