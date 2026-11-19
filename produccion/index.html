@@ -87,6 +87,15 @@ body>main:has(#workspace:not([hidden])){margin-top:8px;padding-top:10px}
 #queries .queryTabs button{min-width:0;white-space:normal}
 #queries table{min-width:580px}
 #cqCancel{display:none}
+@media(max-width:900px){
+ #queries .queryForm{grid-template-columns:repeat(2,minmax(0,1fr))}
+ #queries .queryForm label:has(#cqAddField){grid-column:1/-1}
+}
+@media(max-width:440px){
+ #queries .queryForm{padding-inline:8px;column-gap:8px}
+ #queries .queryForm .skCalendarText>input.skCalendarEditor,#queries .queryForm .skCalendarMirror{padding-inline:3px}
+ #queries .queryForm .skCalendarIcon{flex-basis:clamp(26px,8vw,36px);width:clamp(26px,8vw,36px)}
+}
 @media(min-width:901px){
  body>main:has(#queries:not([hidden])){max-width:1450px}
  #queries .queryForm{margin:0}
