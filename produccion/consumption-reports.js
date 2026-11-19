@@ -140,9 +140,9 @@
   const [date,time]=localStamp.format(stamp).split(', ');
   return date===formatDay(cut.date)&&time?date+' '+time:formatDay(cut.date)+' (cierre '+localStamp.format(stamp)+')';
  }
- function drawSheet(rows,days){
+ function drawSheet(rows,days,stockFor,origin){
   const table=el('sheetTable'),months=make('tr'),headers=make('tr');
-  for(const title of ['# DE ÍTEM','Repuesto','Ingresos','Total consumido'])column(months,title).rowSpan=2;
+  for(const title of ['# DE ÍTEM','Repuesto','Ingresos','Total consumido','SALDO ACTUAL'])column(months,title).rowSpan=2;
   let previous='',group;
   for(const day of days){
    const month=day.slice(0,7);
@@ -151,11 +151,12 @@
    column(headers,String(Number(day.slice(-2))));
   }
   table.tHead.replaceChildren(months,headers);
-  table.tBodies[0].replaceChildren(...rows.map(({part,income,consumed,days:daily})=>{
+  table.tBodies[0].replaceChildren(...rows.map(({part,active,income,consumed,days:daily})=>{
    const tr=make('tr');
    tr.append(make('td',part.numero||'—'));
    column(tr,part.nombre,'row');
    tr.append(make('td',number.format(income)),make('td',number.format(consumed)));
+   tr.append(make('td',active?number.format(stockFor(part,origin)):'—'));
    for(const day of days){
     const cell=make('td',daily.has(day)?number.format(daily.get(day)):'—');
     if(daily.has(day))cell.className='hasConsumption';
@@ -207,7 +208,7 @@
    to=to.slice(0,7)===select.value?to:monthEnd(Number(select.value.slice(0,4)),Number(select.value.slice(-2)));
    pageField.hidden=false;note.textContent+=' Los totales corresponden a todo el período.';
   }
-  drawSheet(rows,daysBetween(from,to));scroll.hidden=false;
+  drawSheet(rows,daysBetween(from,to),context.stockFor,origin);scroll.hidden=false;
  }
  function dashboard(context){
   const {state,today,stockFor}=context,origin=selectedOrigin();
