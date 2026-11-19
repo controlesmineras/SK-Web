@@ -883,7 +883,7 @@ function showQueryType(panel){
   button.setAttribute('aria-pressed',String(target===panel));
   byId(target).hidden=target!==panel;
  }
- byId('consumptionInventory').hidden=panel!=='queries'&&panel!=='consumptionSheet';
+ byId('consumptionInventory').hidden=panel==='incomeQueries';
  if(panel==='incomeQueries')paintIncomeQueries();
  else if(panel==='queries')window.dispatchEvent(new Event('skweb-open-queries'));
  else paintConsumptionReport();
