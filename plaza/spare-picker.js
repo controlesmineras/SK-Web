@@ -61,8 +61,13 @@
       }));empty(menu);
     },button=>{
       if(button.dataset.spareGroup){
-        const type=button.dataset.spareGroup;if(!groups.parts(available(),type).length)return main.open();
-        select.value='';selectedGroup=type;main.input.value=groups.groupName(type);detail.input.value='';main.close();notify();refresh();detail.input.focus();
+        const type=button.dataset.spareGroup,items=available(),parts=groups.parts(items,type);
+        if(!parts.length)return main.open();
+        const query=selectedGroup||select.value?'':main.input.value.trim();
+        const matchCount=query?groups.parts(items,type,query).length:0;
+        select.value='';selectedGroup=type;main.input.value=groups.groupName(type);
+        detail.input.value=matchCount>0&&matchCount<parts.length?query:'';
+        main.close();notify();refresh();detail.input.focus();
       }else chooseItem(button.dataset.itemId);
     });
     const detail=picker(child,'SpareSearch','Busca por número o nombre del ítem…',(menu,input)=>{

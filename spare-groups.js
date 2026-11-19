@@ -17,9 +17,16 @@
     if(!type||!clean(item.spareItemName))return rawName(item);
     return[typeLabel(type),clean(item.spareItemNumber)?'Ítem '+clean(item.spareItemNumber):'',clean(item.spareItemName)].filter(Boolean).join(' · ');
   }
+  function aliases(item){
+    if(!item)return [];
+    const names=[item.secondaryName||item.nombreSecundario||item.CI_NOMBRE_SECUNDARIO||item.CI_ALIAS_SECUNDARIO||item.aliasSecundario,
+      item.tertiaryName||item.nombreTerciario||item.CI_NOMBRE_TERCIARIO||item.CI_ALIAS_TERCIARIO||item.aliasTerciario,
+      item.CI_ALIAS_SECUNDARIO,item.CI_ALIAS_TERCIARIO];
+    return [...new Set(names.map(clean).filter(Boolean))];
+  }
   function matches(item,query){
     let q=normalize(query);if(!q)return true;
-    const text=normalize([rawName(item),recordName(item),item.secondaryName,item.tertiaryName,item.CI_ALIAS_SECUNDARIO,item.CI_ALIAS_TERCIARIO].filter(Boolean).join(' '));
+    const text=normalize([rawName(item),recordName(item),...aliases(item),item.spareApplication,item.application,item.ubicacionAplicacion].filter(Boolean).join(' '));
     const requested=q.match(/\bitem\s*(\d+)\b/)||q.match(/^(\d+)$/);
     if(requested&&key(item)){
       if(clean(item.spareItemNumber)!==requested[1])return false;
@@ -38,5 +45,5 @@
     const groups=types.map(type=>({type,label:groupName(type),items:parts(active,type)})).filter(group=>group.items.length&&(!q||normalize(typeLabel(group.type)).includes(q)||group.items.some(item=>matches(item,q))));
     return [...groups,...active.filter(item=>!key(item)&&matches(item,query)).map(item=>({item}))];
   }
-  window.SKSpareGroups={types,key,typeLabel,groupName,partName,recordName,matches,parts,entries};
+  window.SKSpareGroups={types,key,typeLabel,groupName,partName,recordName,aliases,matches,parts,entries};
 })();

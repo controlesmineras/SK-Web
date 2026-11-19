@@ -329,7 +329,9 @@ function filterParts(parts,search){
  const nameQuery=itemQuery?query.replace(itemQuery[0],' ').replace(/\s+/g,' ').trim():exactNumber?'':query;
  return parts.filter(row=>{
   const number=String(row.numero??'').trim();
-  return (!exactNumber||number===exactNumber)&&norm(row.nombre).includes(nameQuery);
+  if(exactNumber&&number!==exactNumber)return false;
+  if(!nameQuery)return true;
+  return [row.nombre,...window.SKSpareGroups.aliases(row)].some(name=>norm(name).includes(nameQuery));
  });
 }
 function paintStockView({form:stockForm,panel,kind}){
