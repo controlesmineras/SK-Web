@@ -66,8 +66,8 @@ test('la ficha impide guardar una nueva marca repetida entre clases, incluso de 
 test('abrir una ficha sin nuevaMarca después de AAS limpia el campo antes de guardar',async()=>{
  const assets=[issued(),legacy('legacy')],nodes=new Map();
  const fields=new Proxy({}, {get(object,key){return object[key]||=( {value:'',options:[],replaceChildren(){},add(){}} )}}),form={elements:fields,dataset:{}};
- const ctx={document:{querySelector:selector=>selector==='#assetForm'?form:(nodes.get(selector)||nodes.set(selector,{value:''}).get(selector))},$:selector=>selector==='#assetForm'?form:{},all:async()=>assets,txt:value=>String(value||'').trim(),fillAssignedArea(){},updateAssetFields(){},restoreAssetValue(){},setAssetMode(){},Option:class {}};
- ctx.window={SKAssetHistoryUI:{read:async()=>({personal:[]}),show(){}},SKAssetHistory:{project:asset=>({asset,events:[]})},SKAssetFields:{canonical:asset=>({numeroClase:asset.numeroClase,marcaActual:asset.marcaActual,numeroMarcaActual:asset.numeroMarcaActual})}};
+ const ctx={document:{querySelector:selector=>selector==='#assetForm'?form:(nodes.get(selector)||nodes.set(selector,{value:''}).get(selector))},$:selector=>selector==='#assetForm'?form:{},all:async()=>assets,txt:value=>String(value||'').trim(),fillAssignedArea(){},updateAssetFields(){},restoreAssetValue(){},syncModelChoices(){},setAssetMode(){},Option:class {}};
+ ctx.window={SKAssetPeople:{restore(){}},SKAssetHistoryUI:{read:async()=>({personal:[]}),show(){}},SKAssetHistory:{project:asset=>({asset,events:[]}),operationStatus:()=>'Sí'},SKAssetFields:{canonical:asset=>({numeroClase:asset.numeroClase,marcaActual:asset.marcaActual,numeroMarcaActual:asset.numeroMarcaActual})}};
  vm.createContext(ctx);const ui=read('asset-admin-ui.js'),app=read('app.js');
  vm.runInContext(ui.slice(ui.indexOf('async function hydrateEdit(){'),ui.indexOf('window.SKAssetAdminUI={hydrateEdit};'))+'window.SKAssetAdminUI={hydrateEdit};',ctx);
  vm.runInContext(app.slice(app.indexOf('async function editAsset(id){'),app.indexOf('function newAsset(')),ctx);
