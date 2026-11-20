@@ -133,7 +133,38 @@ main:not(:has([hidden] #queries,#queries[hidden]))>#status{margin-top:0}
 .productionToolbar button,.productionViews button{font-size:.85rem;line-height:1.2;text-transform:uppercase;padding-inline:6px}
 #login .productionLoginText{display:inline-block;transform:scale(1.32);text-transform:uppercase}
 .productionHeaderLogo{transform:scale(1.45);transform-origin:left center}
-.productionAccessLogo{display:block;width:230.4px;max-width:100%;height:auto;margin:20px auto 0;border-radius:16px}
+body:has(#access:not([hidden])){
+ display:flex;
+ flex-direction:column;
+ min-height:100svh;
+}
+body>main:has(#access:not([hidden])),#access{
+ display:flex;
+ flex:1;
+ flex-direction:column;
+}
+#access{margin-block:12px 0}
+#access form{margin:0}
+.productionAccessBrand{
+ flex:1 0 6rem;
+ margin-top:16px;
+ container-type:size;
+ display:grid;
+ place-items:center;
+}
+.productionAccessLogo{
+ display:block;
+ width:min(100cqw,100cqh,512px);
+ height:auto;
+ border-radius:16px;
+}
+@media(max-width:720px){
+ main:has(#access:not([hidden]))>#status{margin:2px 0 6px}
+ #access{margin-top:4px}
+ #access>h2{font-size:1.25rem;margin-bottom:12px}
+ #access form{padding:12px;gap:8px}
+ .productionAccessBrand{margin-top:10px}
+}
 #record .productionSaveText{display:inline-block;transform:scale(1.4)}
 #countTable{min-width:1050px}#countTable input{width:100%;min-width:85px}#countForm button{grid-column:auto}#physicalCount label{min-width:0}
 #offlineEntry{max-width:560px;margin:8px auto;padding:22px;background:#fff;color:#172033;border:1px solid #cbd7df;border-radius:16px}
@@ -189,7 +220,7 @@ main:not(:has([hidden] #queries,#queries[hidden]))>#status{margin-top:0}
 <form id="login"><label>Documento<input name="document" autocomplete="username" required></label><label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label><button disabled><span class="productionLoginText">Ingresar</span></button></form>
 <p id="accessStatus" role="status">Si Ingresar sigue deshabilitado, vuelve a cargar Producción con conexión.</p>
 <form id="activate" hidden><h3>Crear contraseña</h3><label>Documento<input name="document" readonly required></label><label>Nueva contraseña<input name="password" type="password" autocomplete="new-password" minlength="8" required></label><button>Activar acceso</button></form>
-<img class="productionAccessLogo" src="./produccion-yt-512.png" width="192" height="192" alt="Logo de Producción SK 3.7">
+<div class="productionAccessBrand"><img class="productionAccessLogo" src="./produccion-yt-512.png" width="512" height="512" alt="Logo de Producción SK 3.7"></div>
 </section>
 <section id="offlineEntry" aria-labelledby="offlineEntryTitle" hidden>
 <svg aria-hidden="true" width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"><path d="m3 3 18 18M2 8a16 16 0 0 1 3-2m4-1a16 16 0 0 1 13 3M5 12a10 10 0 0 1 4-2m5 0a10 10 0 0 1 5 2M8 16a5 5 0 0 1 8 0"/><circle cx="12" cy="20" r="1" fill="currentColor"/></svg>
