@@ -43,7 +43,7 @@
  const criteria=()=>(snapshot.catalog?.criteria||[]).filter(row=>!row.deleted&&row.active!==false&&!isEpp(row)),people=()=>snapshot.catalog?.personal||[];
  const pending=()=>snapshot.pending||[],records=()=>[...(snapshot.records||[])].sort((a,b)=>a.revision-b.revision);
  const item=id=>criteria().find(row=>row.id===id),assetLabel=row=>[row.clase,row.marcaActual||row.marcaInterna||row.marcaAnterior,row.numeroClase&&'N.º '+row.numeroClase,row.serial].filter(Boolean).join(' · ');
- const itemLabel=row=>row.isYtSpare?[row.spareEquipment,'Ítem '+row.spareItemNumber,row.spareItemName||row.name,row.spareApplication||row.application].filter(Boolean).join(' · '):[row.name,row.application||row.ubicacionAplicacion].filter(Boolean).join(' · ');
+ const itemLabel=row=>row.isYtSpare?[row.spareEquipment,String(row.spareItemNumber??'').trim()?'Ítem '+row.spareItemNumber:'',row.spareItemName||row.name,row.spareApplication||row.application||row.ubicacionAplicacion].filter(Boolean).join(' · '):[row.name,row.application||row.ubicacionAplicacion].filter(Boolean).join(' · ');
  // Los préstamos y sus reintegros locales participan antes de que llegue la confirmación.
  function warehouseLoans(snapshot){
   const movements=new Map(),returned=new Map();
@@ -154,7 +154,7 @@
   selectOptions(f.sourceLoanId,sourceLoans.map(row=>[row.sourceDeliveryId,`${displayDate(row.fechaISO)} · ${row.assetLabel||row.itemName} · ${row.quantity}`]),'Traslado normal / no corresponde a un préstamo');
  }
  const itemPicker=window.SKSparePicker.mount(form,{
-  title:'SELECCIONE ELEMENTO A ENTREGAR',showAllItems:true,
+  title:'SELECCIONE ELEMENTO A ENTREGAR',showAllItems:true,showPartCode:false,
   get isDelivery(){return ['delivery','loan','transfer_out'].includes(view)},loan:()=>view==='loan',
   items:selectableCriteria,
   fixed:row=>row.isFixedAsset===true,availability:balance,
@@ -336,7 +336,7 @@
  function stockRows(query){
   const values=new Map();
   const items=criteria().filter(row=>{
-   const cells=[itemLabel(row),row.unit||'Unidad',balance(row)];
+   const cells=[[itemLabel(row),row.isYtSpare&&row.sparePartCode].filter(Boolean).join(' · '),row.unit||'Unidad',balance(row)];
    values.set(row.id,cells);
    const type=spareGroups.key(row);
    if(type&&(/\bitem\s*\d+\b/.test(query)||/^\d+$/.test(query)))return spareGroups.matches(row,query);
@@ -357,7 +357,7 @@
      rows.push(cells);
      if(!expanded)continue;
      if(index>=250){truncated=true;continue;}
-     display.push([[spareGroups.partName(part),part.spareApplication||part.application].filter(Boolean).join(' · '),cells[1],cells[2]]);
+     display.push([[spareGroups.partName(part),part.spareApplication||part.application||part.ubicacionAplicacion,part.sparePartCode].filter(Boolean).join(' · '),cells[1],cells[2]]);
     }
    }
   }

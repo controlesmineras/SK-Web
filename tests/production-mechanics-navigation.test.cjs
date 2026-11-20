@@ -25,7 +25,7 @@ function navigation(role){
  byId('showPhysicalCount').hidden=role==='mechanic';
  const c=vm.createContext({byId,mechanicMenu:menu,mechanicButtons:buttons,mechanicTitle:byId('mechanicTitle'),module:'mechanic',
   session:{user:{role}},permits:(user,scope)=>user.role==='admin'||scope==='mechanic',change:byId('back'),breadcrumb:byId('crumb'),countSaving:false,countDirty:false,
-  stockViews:['showIncome','showStockEdit'].map(id=>({button:byId(id)})),paintStockView(){},paintCount(){},showQueryType(){},window:{},
+  stockViews:['showIncome','showStockEdit'].map(id=>({button:byId(id)})),paintStockView(){},paintStockLookup(){},paintCount(){},showQueryType(){},window:{},
   leaveCurrent:()=>true,choose:()=>{throw Error('Unexpected module change')}});
  vm.runInContext(app.slice(app.indexOf('function showConsumptionView('),app.indexOf('function incomeEditable(')),c);
  vm.runInContext(app.slice(app.indexOf('for(const button of mechanicButtons)button.onclick'),app.indexOf("byId('queryIncome').onclick")),c);
@@ -39,7 +39,7 @@ test('each mechanics action opens one panel and Back returns to the buttons, inc
  const {c,buttons,byId,menu,visiblePanels}=navigation('admin');
  c.showConsumptionView();
  assert.deepEqual(visiblePanels(),[]);assert.equal(menu.hidden,false);assert.equal(c.mechanicTitle.textContent,'MECÁNICA');
- const titles=['INGRESOS','CONSUMOS','CONSULTAS','EXISTENCIAS','INVENTARIO FÍSICO'];
+ const titles=['INGRESOS','CONSUMOS','CONSULTAS','EXISTENCIAS','SALDO DE APERTURA','INVENTARIO FÍSICO'];
  assert.equal(buttons.length,titles.length);
  for(const [index,button] of buttons.entries()){
   button.onclick();c.paintNavigation();
@@ -56,6 +56,7 @@ test('a mechanic with only one module enters the menu and can return from a perm
  c.showConsumptionView();assert.equal(c.change.hidden,true);
  byId('showStockEdit').onclick();byId('showPhysicalCount').onclick();
  assert.equal(menu.hidden,false);assert.deepEqual(visiblePanels(),[]);
+ byId('showStockLookup').onclick();assert.deepEqual(visiblePanels(),['stockLookupPanel']);c.goBack();
  byId('showRecord').onclick();assert.equal(c.change.hidden,false);assert.equal(byId('productionHome').disabled,false);
  c.goBack();assert.equal(c.change.hidden,true);assert.deepEqual(visiblePanels(),[]);
 });
