@@ -2,8 +2,7 @@
 (()=>{
 const norm=v=>(v??'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
 const localISO=d=>{const z=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${z(d.getMonth()+1)}-${z(d.getDate())}`};
-const dayOf=x=>{const r=x.fechaISO||'';if(/^\d{4}-\d{2}-\d{2}$/.test(r))return r;const m=(x.fechaLocal||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`:(x.createdAt||'').slice(0,10)};
-const timeOf=x=>x.horaRegistro||x.horaLocal||(()=>{const d=new Date(x.createdAt||'');return Number.isNaN(d.getTime())?'':d.toLocaleTimeString('es-CO',{hour12:false})})();
+const dayOf=(x,localCreation)=>{const r=x.fechaISO||'';if(/^\d{4}-\d{2}-\d{2}$/.test(r))return r;const m=(x.fechaLocal||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{4})/);return m?`${m[3]}-${m[2].padStart(2,'0')}-${m[1].padStart(2,'0')}`:window.SKMovementTime.day(window.SKMovementTime.registered(x,localCreation))};
 const timeKey=x=>{const t=x.time||'',m=t.match(/(\d{1,2}):(\d{2})(?::(\d{2}))?\s*(a\.?\s*m\.?|p\.?\s*m\.?)?/i);if(!m)return t;let h=+m[1],ap=(m[4]||'').toLowerCase();if(ap.includes('p')&&h<12)h+=12;if(ap.includes('a')&&h===12)h=0;return `${String(h).padStart(2,'0')}:${m[2]}:${m[3]||'00'}`};
 const fmt=d=>{if(!d)return'';const[y,m,x]=d.split('-');return `${x}/${m}/${y}`},esc=s=>(s??'').toString().replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const markNo=a=>String(a?.numeroMarcaActual||a?.marcaNumero||a?.marcaAnterior||'').trim();
@@ -272,7 +271,7 @@ async function data(){
   const inv=origin||(compactDetail()&&row.origen)||invKey(row,byAsset);
   const model=String(asset?.modelo||row.modelo||'').trim(),machine=machineShort(row,byAsset);
   const equipment=production?[productionMachine(row,asset,model,machine)]:null;
-  return {date:dayOf(row),time:timeOf(row),inv,model,machine,equipment,partId:row.partId,criterionId:row.itemId,item:row.noItem||'—',
+  return {date:dayOf(row,!production),time:window.SKMovementTime.recordHour(row,!production),inv,model,machine,equipment,partId:row.partId,criterionId:row.itemId,item:row.noItem||'—',
    name:row.nombreRepuesto||'',qty:Number(row.cantidad)||0,external:external(asset),mine:mineOf(asset),inventoryMismatch:inventoryMismatch(model,inv)};
  });
 }
@@ -359,8 +358,8 @@ async function render(){if(!db||!document.querySelector('#cqv2'))return;const se
   drawPartHead(production);
   document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td>${production?`<td>${esc(x.stock??'—')}</td>`:''}</tr>`).join('')||`<tr><td colspan="${production?4:3}">No hay consumos para este período.</td></tr>`;
  }else{rows=sortRows(rows);lastRows=rows;const compact=compactDetail();
-  document.querySelector('#cqHead').innerHTML=compact?'<tr><th>Equipo<br><small>No. marca actual</small></th><th>Inventario</th><th>Fecha</th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cant.</th></tr>':`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th>Hora registro</th><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad</th></tr>`;
-  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${compact?fmt(x.date).replace(/\b0(?=\d)/g,''):fmt(x.date)}</td>${compact?'':`<td>${esc(x.time||'—')}</td>`}<td>${esc(x.item)}</td><td>${esc(x.name)}</td><td>${x.qty}</td></tr>`).join('')||`<tr><td colspan="${compact?6:production?7:8}">No hay movimientos para este período.</td></tr>`}document.querySelector('#cqInfo').textContent=`${rows.length} resultado${rows.length===1?'':'s'} · orden: ${orders.length?orders.map((o,i)=>`${i+1}. ${fields[o.field]} ${o.dir==='asc'?'↑':'↓'}`).join(' → '):'sin filtros de orden'}.`}
+  document.querySelector('#cqHead').innerHTML=compact?'<tr><th>Equipo<br><small>No. marca actual</small></th><th>Inventario</th><th>Fecha<br><small>Hora registro</small></th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cant.</th></tr>':`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th>Hora registro</th><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad</th></tr>`;
+  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${compact?fmt(x.date).replace(/\b0(?=\d)/g,'')+'<br><small>'+esc(x.time||'—')+'</small>':fmt(x.date)}</td>${compact?'':`<td>${esc(x.time||'—')}</td>`}<td>${esc(x.item)}</td><td>${esc(x.name)}</td><td>${x.qty}</td></tr>`).join('')||`<tr><td colspan="${compact?6:production?7:8}">No hay movimientos para este período.</td></tr>`}document.querySelector('#cqInfo').textContent=`${rows.length} resultado${rows.length===1?'':'s'} · orden: ${orders.length?orders.map((o,i)=>`${i+1}. ${fields[o.field]} ${o.dir==='asc'?'↑':'↓'}`).join(' → '):'sin filtros de orden'}.`}
 function openQueries(){
  controls();
  return render();

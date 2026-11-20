@@ -225,3 +225,41 @@ test('Reintegros lists open internal loans by original borrower, including offli
  pending.push(back('r5','local',1),back('r6','partial',2));
  assert.deepEqual(open(),[]);
 });
+
+test('offline transfer keeps device registration and first server receipt across apps and retries',()=>{
+ const r=runtime(),original='2026-01-01T13:00:00.000Z';
+ r.sync([op('income',4)]);
+ const out=op('transfer_out',2,{createdAt:original});
+ assert.equal(r.sync([out]).receipts[0].status,'accepted');
+ const row=r.production.warehouseMovements.find(entry=>entry.id===out.id);
+ assert.equal(row.recordedAt,original);
+ assert.notEqual(row.createdAt,original);
+ const mirrored=r.central.blendingIncomes[0];
+ assert.equal(mirrored.createdAt,original);
+ assert.equal(mirrored.syncedAt,row.createdAt);
+ assert.equal(r.sync([out]).receipts[0].status,'already-applied');
+ assert.deepEqual(r.central.blendingIncomes,[mirrored]);
+});
+
+test('historical transfer timestamps are recovered without replaying stock or overwriting unknown times',()=>{
+ const original='2025-12-28T18:00:00.000Z',receipt='2025-12-29T16:00:00.000Z';
+ const movement={id:'sample',kind:'transfer_out',createdAt:receipt,revision:1,requestSignature:JSON.stringify({id:'sample',createdAt:original})};
+ const transfer={id:'production-sample',sourceWarehouseId:'production',sourceMovementId:'sample',createdAt:receipt};
+ const r=runtime({central:{blendingIncomes:[transfer]},production:{warehouseMovements:[movement],warehouseRevision:1}});
+ r.sync();
+ assert.equal(r.central.blendingIncomes[0].createdAt,original);
+ assert.equal(r.central.blendingIncomes[0].syncedAt,receipt);
+ assert.equal(r.central.inventoryStock[0].quantity,3);
+ const writes=r.counts.central;r.sync();assert.equal(r.counts.central,writes);
+});
+
+test('central acceptance preserves initial capture and receipt when an admin record is retried',()=>{
+ const r=runtime(),date='2026-02-10T16:25:00.000Z',record={id:'rec',createdAt:date,updatedAt:date};
+ const first=r.c.merge_({}, {consumptions:[record]}).consumptions[0];
+ assert.equal(first.createdAt,date);
+ assert.ok(Date.parse(first.syncedAt)>Date.parse(date));
+ const retry={...record,updatedAt:'2026-02-12T19:00:00.000Z',createdAt:'2026-02-12T18:00:00.000Z',syncedAt:'2099-01-01'};
+ const last=r.c.merge_({consumptions:[first]},{consumptions:[retry]}).consumptions[0];
+ assert.equal(last.createdAt,date);
+ assert.equal(last.syncedAt,first.syncedAt);
+});
