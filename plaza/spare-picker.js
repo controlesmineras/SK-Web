@@ -39,7 +39,7 @@
       const button=document.createElement('button'),names=document.createElement('span'),strong=document.createElement('strong'),stock=document.createElement('span');
       button.type='button';button.id=form.id+prefix+index;button.dataset.itemId=item.id;button.setAttribute('role','option');button.setAttribute('aria-selected',String(select.value===item.id));button.disabled=disabled(item);
       names.className='itemSearchNames';strong.textContent=short?groups.partName(item):groups.recordName(item);names.append(strong);
-      if(short&&item.sparePartCode){
+      if(short&&api.showPartCode!==false&&item.sparePartCode){
         const code=document.createElement('span');code.textContent='Código: '+item.sparePartCode;names.append(code);
       }
       for(const alias of api.aliases(item).slice(0,2)){const span=document.createElement('span');span.textContent=alias;names.append(span)}
@@ -73,7 +73,7 @@
         main.close();notify();refresh();detail.input.focus();
       }else chooseItem(button.dataset.itemId);
     });
-    const detail=picker(child,'SpareSearch','Busca por ítem, código o nombre…',(menu,input)=>{
+    const detail=picker(child,'SpareSearch',api.showPartCode===false?'Busca por ítem o nombre…':'Busca por ítem, código o nombre…',(menu,input)=>{
       const rows=groups.parts(available(),selectedGroup,select.value?'':input.value);
       menu.replaceChildren(...rows.map((item,index)=>itemButton(item,index,'SpareOption',true)));empty(menu);
     },button=>chooseItem(button.dataset.itemId));
@@ -97,7 +97,7 @@
       detail.input.setCustomValidity(selectedGroup&&!item?'Selecciona un ítem de este grupo.':'');
       if(selectedGroup)main.input.value=groups.groupName(selectedGroup);
       else if(item)main.input.value=groups.recordName(item);
-      if(item&&selectedGroup)detail.input.value=[groups.partName(item),item.sparePartCode].filter(Boolean).join(' · ');
+      if(item&&selectedGroup)detail.input.value=[groups.partName(item),api.showPartCode!==false&&item.sparePartCode].filter(Boolean).join(' · ');
       balance.textContent=item?`Existencia disponible: ${api.availability(item)} ${api.fixed(item)?'activos':item.unit||item.CI_UNIDAD_MEDIDA||'unidades'}`:'';balance.hidden=!item;
       (selectedGroup?child:label).append(balance);
       if(!main.menu.hidden)main.open();if(!detail.menu.hidden){if(selectedGroup)detail.open();else detail.close()}

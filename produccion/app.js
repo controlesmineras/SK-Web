@@ -354,7 +354,7 @@ function paintStockView({form:stockForm,panel,kind}){
  const picker=stockForm.querySelector('.partOptions');
  if(!picker.hidden)paintPartCards(picker,filterParts(options,part?'':incomeFields.search.value),origin,row=>{
   incomeFields.partId.value=row.id;
-  incomeFields.search.value=[partLabel(row),row.sparePartCode].filter(Boolean).join(' · ');
+  incomeFields.search.value=partLabel(row);
   picker.hidden=true;
   paintStockView({form:stockForm,panel,kind});
  });
@@ -527,16 +527,42 @@ function appendPartApplication(node,part){
   const text=document.createElement('span');
   text.className='spareUse';text.textContent=' '+value;node.append(text);
  }
- if(part?.sparePartCode)node.append(' · '+part.sparePartCode);
+
+}
+function partDescription(row){
+ const description=document.createElement('span'),name=document.createElement('strong');
+ name.className='spareName';name.textContent=partLabel(row);
+ description.append(name);appendPartApplication(description,row);
+ return description;
+}
+function paintStockLookup(){
+ const panel=byId('stockLookupPanel');
+ if(panel.hidden)return;
+ const origin=byId('lookupOrigin').value;
+ const parts=window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin);
+ const query=byId('lookupSearch').value,rows=filterParts(parts,query),available=Array.isArray(state.incomes);
+ panel.querySelector('tbody').replaceChildren(...rows.map(row=>{
+  const tr=document.createElement('tr'),detail=document.createElement('td'),quantity=document.createElement('td');
+  detail.append(partDescription(row));
+  if(row.sparePartCode){
+   const code=document.createElement('small');code.textContent='Código: '+row.sparePartCode;detail.append(code);
+  }
+  quantity.textContent=available?stockFor(row,origin):'—';
+  tr.append(detail,quantity);return tr;
+ }));
+ const note=byId('lookupStatus');
+ note.textContent=!available?'Sincroniza para consultar las existencias de este inventario.':!rows.length?'No hay repuestos que coincidan.':'';
+ note.hidden=!note.textContent;
 }
 function paintPartCards(container,rows,origin,choose){
  container.replaceChildren(...rows.map(row=>{
   const button=document.createElement('button');
   button.type='button';
-  const name=document.createElement('strong');
-  name.className='spareName';name.textContent=partLabel(row);button.append(name);
-  appendPartApplication(button,row);
-  if(Array.isArray(state.incomes))button.append(' · Existencia: '+stockFor(row,origin));
+  button.append(partDescription(row));
+  if(Array.isArray(state.incomes)){
+   const quantity=document.createElement('span');quantity.className='partAvailable';
+   quantity.textContent='Existencia: '+stockFor(row,origin);button.append(quantity);
+  }
   button.onclick=()=>{if(!saving)choose(row)};
   return button;
  }));
@@ -665,7 +691,7 @@ function paint(){
  filterMachines();
  paintParts();paintPeople();paintDraft();
  for(const view of stockViews)if(!view.panel.hidden)paintStockView(view);
- paintCount();paintSync();
+ paintStockLookup();paintCount();paintSync();
  if(!byId('productionQueries').hidden){
   if(!byId('incomeQueries').hidden)paintIncomeQueries();
   else if(!byId('queries').hidden)window.dispatchEvent(new Event('skweb-consumption-changed'));
@@ -787,6 +813,7 @@ function showConsumptionView(button){
  title.textContent=button?button.textContent.replace(/^\s*[+−]\s*/,'').trim():'MECÁNICA';
  const stockView=stockViews.find(view=>view.button===button);
  if(stockView)paintStockView(stockView);
+ if(button===byId('showStockLookup'))paintStockLookup();
  if(button===byId('showPhysicalCount'))paintCount();
  if(button===byId('showConsumptionQueries'))showQueryType();
  window.SKProductionWarehouse?.paintNavigation?.();
@@ -1100,6 +1127,8 @@ byId('countPdf').onclick=()=>{
  doc.body.append(title,info,note,table);report.focus();report.print();
 };
 
+byId('lookupOrigin').onchange=paintStockLookup;
+byId('lookupSearch').oninput=paintStockLookup;
 for(const button of mechanicButtons)button.onclick=()=>showConsumptionView(button);
 byId('queryIncome').onclick=()=>showQueryType('incomeQueries');
 byId('queryConsumption').onclick=()=>showQueryType('queries');

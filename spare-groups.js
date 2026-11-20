@@ -36,10 +36,11 @@
     }
     return q.split(/\s+/).filter(Boolean).every(word=>text.includes(word));
   }
+  const sleeve=item=>normalize(item.spareItemName||rawName(item))==='funda de revestimiento';
   function parts(items,type,query=''){
     return items.filter(item=>!item.deleted&&item.active!==false&&key(item)===type&&matches(item,query)).sort((a,b)=>{
       const an=clean(a.spareItemNumber),bn=clean(b.spareItemNumber);
-      return Number(!an)-Number(!bn)||an.localeCompare(bn,'es',{numeric:true})||partName(a).localeCompare(partName(b),'es',{numeric:true});
+      return Number(sleeve(a))-Number(sleeve(b))||Number(!an)-Number(!bn)||an.localeCompare(bn,'es',{numeric:true})||partName(a).localeCompare(partName(b),'es',{numeric:true});
     });
   }
   function entries(items,query=''){

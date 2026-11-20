@@ -40,6 +40,7 @@ function injectStyle(){if(document.querySelector('#inventoryAdminStyle'))return;
 #inventoryItemCount{align-self:center;background:#edf4f8;color:#29475a}
 #inventoryItemList{align-self:start;background:#edf3f7;border:1px solid #c8d7e1;border-radius:12px;padding:6px}
 #inventoryItemList .invItem{background:#fff;color:#172f40;border:1px solid #cad7df}
+#inventoryItemList .invPartUse{font-weight:400;color:#536875}
 #inventoryItemList .invItem small{color:#425969}
 #inventoryItemList .invMissingCriterion{border-style:dashed}
 #inventoryItemList .invItem[aria-current="true"]{background:#d7eefb;color:#0d3a52;border:1px solid #17749b;box-shadow:inset 4px 0 #17749b}
@@ -100,6 +101,7 @@ function syncSpareFields(f){
   f.elements.name.value=window.SKSpareGroups.recordName({isYtSpare:true,spareEquipment:equipment,spareItemNumber:number,spareItemName:name});
  }
 }
+const spareUse=item=>item.spareApplication||item.application||item.ubicacionAplicacion||'';
 const validationLabels={name:'Nombre del elemento',unit:'Unidad de medida',initialQuantity:'Cantidad inicial',spareEquipment:'Tipo de repuesto',spareItemName:'Nombre del ítem',containerUnit:'Unidad contenedora'};
 function clearValidation(f){
  delete f.dataset.validationAttempted;
@@ -141,15 +143,17 @@ async function render(){
   if(!key||registeredNames.has(key)||registeredIds.has(asset.criteriaId)||q&&!key.includes(q))continue;
   if(!classes.has(key))classes.set(key,name);
  }
- const rows=active.filter(x=>matchesItemSearch([itemName(x),x.isYtSpare?window.SKSpareGroups.recordName(x):'',itemSecondary(x),itemTertiary(x),itemUnit(x),x.id].filter(Boolean).join(' '),x.spareItemNumber,q,x.isYtSpare?x.sparePartCode:'')).map(item=>({name:item.isYtSpare?window.SKSpareGroups.recordName(item):itemName(item),item}));
+ const ordered=catalogKind==='spare'?window.SKSpareGroups.parts(active,currentSpareType()):active;
+ const rows=ordered.filter(x=>matchesItemSearch([itemName(x),x.isYtSpare?window.SKSpareGroups.recordName(x):'',itemSecondary(x),itemTertiary(x),itemUnit(x),x.isYtSpare&&spareUse(x),x.id].filter(Boolean).join(' '),x.spareItemNumber,q,x.isYtSpare?x.sparePartCode:'')).map(item=>({name:item.isYtSpare?window.SKSpareGroups.recordName(item):itemName(item),item}));
  for(const name of classes.values())rows.push({name});
- rows.sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true,sensitivity:'base'}));
+ if(catalogKind==='common')rows.sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true,sensitivity:'base'}));
  const count=document.querySelector('#inventoryItemCount'),list=document.querySelector('#inventoryItemList');
  if(count)count.textContent=(q?`${rows.length} coincidencia${rows.length===1?'':'s'}`:`${rows.length} elementos`)+(classes.size?` · ${classes.size} sin criterio`:'');
  if(list)list.innerHTML=rows.map(({name,item})=>{
   if(!item)return `<button type="button" class="invItem invMissingCriterion" data-inv-class="${esc(name)}"><span><b>${esc(name)}</b><small>Solo en Activos fijos · Sin criterio de inventario</small></span><span class="invMissingAction">Crear criterio</span></button>`;
   const qty=Number(sm.get(item.id)?.quantity)||0,unit=itemUnit(item);
-  return `<button type="button" class="invItem" data-inv-id="${esc(item.id)}"><span><b>${esc(name||'Sin nombre')}</b><small>${item.isYtSpare&&item.sparePartCode?esc(item.sparePartCode)+' · ':''}${esc(unit)} · ${qty===0?'Sin existencias':'Disponible'}</small></span><span class="invQty">${qty}</span></button>`;
+  const application=item.isYtSpare&&spareUse(item);
+  return `<button type="button" class="invItem" data-inv-id="${esc(item.id)}"><span><b>${esc(name||'Sin nombre')}</b>${application?` <span class="invPartUse">${esc(application)}</span>`:''}<small>${item.isYtSpare&&item.sparePartCode?esc(item.sparePartCode)+' · ':''}${esc(unit)} · ${qty===0?'Sin existencias':'Disponible'}</small></span><span class="invQty">${qty}</span></button>`;
  }).join('')||'<p class="hint">No hay elementos que coincidan.</p>';
  syncResultSelection(form);
 }
