@@ -97,11 +97,15 @@ body:has(#plazaNavigation:not([hidden])) #deliveryScrollTop{bottom:calc(80px + e
 #deliveryCategoryFilter .deliveryCategoryOptions{grid-template-columns:repeat(4,minmax(0,1fr))}
 #incomeCategoryFilter .deliveryCategoryOptions{grid-template-columns:repeat(2,minmax(0,1fr))}
 .recentMovements .recentMovementList{min-width:0;grid-template-columns:minmax(0,1fr)}
-.recentSortControls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 4px}
-.recentSortControls label{font-weight:700}
-.recentSortControls select{flex:1 1 135px;min-width:0;width:auto;max-width:270px}
-.recentSortControls button{width:auto;min-height:44px;white-space:nowrap}
-.recentSortStatus{font-size:.84rem;color:#405970;margin:6px 0 10px}
+.recentSortStatus{display:flex;align-items:center;flex-wrap:wrap;gap:2px .5rem;font-size:.84rem;color:#405970;margin:6px 0}
+.recentSortEntry{display:inline-flex;align-items:center;gap:2px}
+.recentSortEntry+.recentSortEntry{border-inline-start:1px solid #cfdae1;padding-inline-start:.5rem}
+.recentSortEntry button,.recentSortControls button{width:auto;min-height:30px;padding:2px 5px;border:0;border-radius:3px;background:transparent;color:#173d59;font:inherit;cursor:pointer;box-shadow:none}
+.recentSortEntry button{min-width:26px;font-weight:700}
+.recentSortEntry button:hover,.recentSortControls button:hover{background:#e3edf2}
+.recentSortEntry button:focus-visible,.recentSortControls button:focus-visible{outline:2px solid #396687;outline-offset:-2px}
+.recentSortControls{display:flex;gap:6px;overflow-x:auto;margin:0 0 8px;border-bottom:1px solid #d4dfe6}
+.recentSortControls button{flex:none;min-height:40px;font-size:.85rem;white-space:nowrap}
 @media(max-width:540px){
   #deliveryCategoryFilter .deliveryCategoryOptions{grid-template-columns:repeat(2,minmax(0,1fr))}
 }

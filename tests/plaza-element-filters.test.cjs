@@ -24,7 +24,7 @@ function client(){
  ];
  const ctx=vm.createContext({Blob,console,alert:message=>alerts.push(message),document:{querySelector:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input\[value="all"\]$/);return match?radios[match[1]][0]:node(key)},querySelectorAll:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input$/);return match?radios[match[1]]:[]}},window:{alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:()=>null},setTimeout(){},clearTimeout(){},crypto:{}});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../asset-record-rules.js'),'utf8'),ctx);
- vm.runInContext(source+`\ndownloadBlob=(blob,name)=>window.capture(blob,name);window.audit={set:value=>{data=value},sort:recentSort,rows:recentQueryRows,render:renderRecentQueries,reset:resetRecentFilters,excel:exportMovementExcel,pdf:exportMovementPdf};})();`,ctx);
+ vm.runInContext(source+`\ndownloadBlob=(blob,name)=>window.capture(blob,name);window.audit={set:value=>{data=value},sort:recentSort,priority:changeRecentPriority,rows:recentQueryRows,render:renderRecentQueries,reset:resetRecentFilters,excel:exportMovementExcel,pdf:exportMovementPdf};})();`,ctx);
  ctx.window.capture=(blob,name)=>downloads.push({blob,name});ctx.window.audit.set(data);
  return{api:ctx.window.audit,data,node,alerts,downloads,select(kind,id){node('#'+kind+'HistoryQueryForm').elements.itemId.value=id},category(value,kind='delivery'){radios[kind].forEach(r=>r.checked=r.value===value)}};
 }
@@ -67,24 +67,30 @@ test('clearing restores each default date range and removes the selected element
  for(const kind of ['delivery','income']){c.select(kind,'b4');c.node('#'+kind+'TimeFrom').value='12:00';c.api.reset(kind);assert.equal(c.node('#'+kind+'HistoryQueryForm').elements.itemId.value,'');assert.equal(c.node('#'+kind+'TimeFrom').value,'');assert.equal(c.node('#'+kind+'TimeTo').value,'');const start=new Date(c.node('#'+kind+'DateFrom').value+'T12:00:00'),end=new Date(c.node('#'+kind+'DateTo').value+'T12:00:00');assert.equal(Math.round((end-start)/86400000),kind==='delivery'?6:29)}
 });
 
-test('header order promotes the latest column and toggles the primary while keeping earlier tiebreakers',async()=>{
- const c=client(),kind='delivery',base={createdAt:'2026-10-01T12:00:00',balanceBefore:15};
- c.data.blendingDeliveries=[
-  {...base,id:'z',itemName:'Tuerca',quantity:2,balanceAfter:10,shiftKeeperName:'Ana',operatorName:'Rosa'},
-  {...base,id:'a',itemName:'Árbol',quantity:2,balanceAfter:2,shiftKeeperName:'Beto',operatorName:'Luis'},
-  {...base,id:'b',itemName:'Broca',quantity:10,balanceAfter:1,shiftKeeperName:'Ana',operatorName:'Zoé'}];
- const ids=()=>Array.from(c.api.rows(kind),r=>r.id);
- c.api.sort(kind,'item');assert.deepEqual(ids(),['a','b','z']);
- c.api.sort(kind,'quantity');assert.deepEqual(ids(),['a','z','b']);
- c.api.sort(kind,'quantity');assert.deepEqual(ids(),['b','a','z']);
- c.api.sort(kind,'balance');assert.deepEqual(ids(),['b','a','z']);
- c.api.sort(kind,'operator');assert.deepEqual(ids(),['a','z','b']);
- c.api.sort(kind,'keeper');assert.deepEqual(ids(),['z','b','a']);
- c.api.render();assert.match(c.node('#deliverySortStatus').textContent,/1\. Bodeguero\/a de turno ↑ · 2\. Registrado por ↑/);
- assert.doesNotMatch(c.node('#incomeSortStatus').textContent,/Registrado por/);
- c.api.excel(kind);const xml=await c.downloads.at(-1).blob.text();
- assert.ok(xml.indexOf('Tuerca')<xml.indexOf('Broca')&&xml.indexOf('Broca')<xml.indexOf('Árbol'));
- c.api.reset(kind);c.api.render();assert.equal(c.node('#deliverySortStatus').textContent,'Orden: 1. Fecha y hora de registro ↓');
+test('columns append in tap order, direction stays in place, and only the line changes priority',async()=>{
+ for(const [kind,store] of [['delivery','blendingDeliveries'],['income','blendingIncomes']]){
+  const c=client();
+  const row=(id,itemName,quantity,hour)=>({id,itemName,quantity,createdAt:'2026-10-01T'+hour+':00:00'});
+  c.data[store]=[row('a','Tuerca',2,'10'),row('b','Broca',10,'11'),row('c','Broca',3,'09')];
+  const ids=()=>Array.from(c.api.rows(kind),r=>r.id);
+  const tap=key=>c.api.sort(kind,key),change=(key,action)=>c.api.priority(kind,key,action);
+  assert.deepEqual(ids(),['b','a','c']);
+  tap('item');tap('date');assert.deepEqual(ids(),['c','b','a']);
+  tap('date');assert.deepEqual(ids(),['b','c','a']);
+  tap('item');assert.deepEqual(ids(),['a','b','c']);
+  tap('quantity');change('quantity','left');assert.deepEqual(ids(),['a','c','b']);
+  change('quantity','left');assert.deepEqual(ids(),['a','c','b']);
+  tap('quantity');assert.deepEqual(ids(),['b','c','a']);
+  change('quantity','right');change('item','remove');assert.deepEqual(ids(),['b','c','a']);
+  c.api.render();
+  assert.match(c.node('#'+kind+'SortStatus').innerHTML,/1\. Cantidad[\s\S]*2\. Fecha y hora/);
+  c.api.excel(kind);const xml=await c.downloads.at(-1).blob.text();
+  assert.ok(xml.indexOf('Broca')<xml.indexOf('Tuerca'));
+  change('quantity','remove');change('date','remove');assert.deepEqual(ids(),['b','a','c']);
+  c.api.render();assert.match(c.node('#'+kind+'SortStatus').innerHTML,/Más recientes primero/);
+  tap('date');assert.deepEqual(ids(),['c','a','b']);
+  c.api.reset(kind);c.api.render();assert.match(c.node('#'+kind+'SortStatus').innerHTML,/Más recientes primero/);
+ }
 });
 test('reversals include each matching original and counterpart across dates in the view and exports',async()=>{
  for(const [kind,store] of [['income','blendingIncomes'],['delivery','blendingDeliveries']]){
