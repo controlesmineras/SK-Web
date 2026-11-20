@@ -545,7 +545,9 @@ function matchesItemSearch(text,number,query){
   function movementDate(row){const date=new Date(row.createdAt||row.updatedAt||0);return Number.isNaN(date.getTime())?null:date}
   function movementItem(row){return row.itemName||itemName(findItem(row.itemId))||'Elemento sin nombre'}
   function localDateValue(date){const pad=value=>String(value).padStart(2,'0');return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`}
-  const recentOrder={delivery:[{key:'date',dir:-1}],income:[{key:'date',dir:-1}]};
+  const recentOrder={delivery:[],income:[]};
+  const defaultRecentOrder=[{key:'date',dir:-1}];
+  const activeRecentOrder=kind=>recentOrder[kind].length?recentOrder[kind]:defaultRecentOrder;
   const recentCollator=new Intl.Collator('es-CO',{sensitivity:'base',numeric:true});
   const categoryLabels={all:'Todo',epp:'Solo EPP',assets:'Activos fijos',reversals:'Reversiones'};
   function recentCategory(kind){
@@ -558,10 +560,17 @@ function matchesItemSearch(text,number,query){
       company:'Empresa / Área',keeper:'Bodeguero/a de turno',operator:'Registrado por'};
   }
   function recentSort(kind,key){
-    const order=recentOrder[kind],primary=order[0];
     if(!Object.hasOwn(recentColumns(kind),key))return;
-    const dir=primary.key===key?-primary.dir:1;
-    recentOrder[kind]=[{key,dir},...order.filter(entry=>entry.key!==key)];
+    const order=recentOrder[kind],entry=order.find(column=>column.key===key);
+    if(entry)entry.dir=-entry.dir;
+    else order.push({key,dir:1});
+  }
+  function changeRecentPriority(kind,key,action){
+    const order=recentOrder[kind],index=order.findIndex(entry=>entry.key===key);
+    if(index<0)return;
+    if(action==='remove'){order.splice(index,1);return}
+    const next=index+({left:-1,right:1}[action]??0);
+    if(next>=0&&next<order.length)[order[index],order[next]]=[order[next],order[index]];
   }
   function recentPeople(){
     const personal=data.personal||[];
@@ -578,7 +587,7 @@ function matchesItemSearch(text,number,query){
       keeper:row.shiftKeeperName||row.shiftKeeperDocument||'',operator:operator?.nombre||row.operatorName||document||''};
   }
   function sortRecentGroups(kind,groups,people){
-    const order=recentOrder[kind];
+    const order=activeRecentOrder(kind);
     const indexed=groups.map(rows=>{
       const row=rows[rows.length-1],details=recentDetails(kind,row,people);
       const values={...details,date:movementDate(row)?.getTime(),item:movementItem(row),
@@ -651,7 +660,7 @@ function matchesItemSearch(text,number,query){
     $('#'+kind+'TimeFrom').value='';$('#'+kind+'TimeTo').value='';
     clearItemSearch($('#'+kind+'HistoryQueryForm'));
     $('#'+kind+'CategoryFilter input[value="all"]').checked=true;
-    recentOrder[kind]=[{key:'date',dir:-1}];
+    recentOrder[kind]=[];
   }
   function loanReturnSummary(row){if(norm(row.deliveryType)!=='prestamo')return '';const back=(data.blendingDeliveries||[]).find(event=>!event.deleted&&!event.reversed&&!event.reversado&&event.movementType==='DEVOLUCIÓN'&&event.loanId===row.id);return back?`DEVUELTO · ${new Date(back.returnedAt||back.createdAt).toLocaleString('es-CO')} · Devuelve: ${back.returnedByName||back.returnedByDocument||''} · Bodeguero/a de turno: ${back.shiftKeeperName||'Sin dato histórico'} · Registrado por: ${back.operatorName||back.actorDocument||back.operatorDocument||''}${back.notes?' · '+back.notes:''}`:`Préstamo: ${window.SKPlazaReturns?.loanState(data,row)||'PENDIENTE'}`}
   function deliveryReplacementLabel(row){
@@ -791,16 +800,21 @@ function matchesItemSearch(text,number,query){
   function movementSyncStatus(row){return row.syncState==='pending'?`<span><b>PENDIENTE DE SINCRONIZACIÓN</b>${row.syncError?' · '+esc(row.syncError):''}</span>`:''}
   const wideQueries=window.matchMedia?.('(min-width: 1000px)');
   const recentDateFormat=new Intl.DateTimeFormat('es-CO',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Bogota'});
+  function recentHeaderButton(kind,key,title){
+    const order=recentOrder[kind],index=order.findIndex(entry=>entry.key===key);
+    const dir=activeRecentOrder(kind).find(entry=>entry.key===key)?.dir;
+    const name=key==='balance'?'Saldo nuevo':title;
+    const hint=index<0?'Ordenar por '+name+' en orden ascendente':
+      name+', prioridad '+(index+1)+'. Cambiar a '+(dir===1?'descendente':'ascendente');
+    const arrow=dir===1?'↑':dir===-1?'↓':'↕';
+    return '<button type="button" data-recent-sort="'+key+'" title="'+hint+'" aria-label="'+hint+'">'+
+      title+' <span aria-hidden="true">'+arrow+(index<0?'':'<sup>'+(index+1)+'</sup>')+'</span></button>';
+  }
   function recentMovementTable(kind,rows,people,dateLabel){
-    const delivery=kind==='delivery',columns=recentColumns(kind),order=recentOrder[kind];
+    const delivery=kind==='delivery',columns=recentColumns(kind),primary=activeRecentOrder(kind)[0];
     const head=Object.entries(columns).map(([key,title])=>{
-      const index=order.findIndex(entry=>entry.key===key),dir=order[index]?.dir;
-      const aria=index===0?' aria-sort="'+(dir===1?'ascending':'descending')+'"':'';
-      const arrow=dir===1?'↑':dir===-1?'↓':'↕';
-      const name=key==='balance'?'Saldo nuevo':title;
-      const hint='Ordenar por '+name+' '+(index===0&&dir===1?'descendente':'ascendente');
-      return '<th scope="col"'+aria+'><button type="button" data-recent-sort="'+key+'" title="'+hint+'" aria-label="'+hint+'">'+
-        title+' <span aria-hidden="true">'+arrow+(index<0?'':'<sup>'+(index+1)+'</sup>')+'</span></button></th>';
+      const aria=key===primary.key?' aria-sort="'+(primary.dir===1?'ascending':'descending')+'"':'';
+      return '<th scope="col"'+aria+'>'+recentHeaderButton(kind,key,title)+'</th>';
     }).join('');
     const line=value=>value?'<span>'+esc(value)+'</span>':'';
     const body=rows.map(row=>{
@@ -840,36 +854,51 @@ function matchesItemSearch(text,number,query){
   }
   function setupRecentSort(kind){
     const list=$('#'+(kind==='delivery'?'recentDeliveriesList':'recentIncomesList'));
-    const controls=document.createElement('div');controls.className='recentSortControls';
-    const options=Object.entries(recentColumns(kind)).map(([key,title])=>'<option value="'+key+'">'+(key==='balance'?'Saldo nuevo':title)+'</option>').join('');
-    controls.innerHTML='<label for="'+kind+'SortField">Ordenar por</label><select id="'+kind+'SortField">'+options+
-      '</select><button type="button" id="'+kind+'SortDirection"></button>';
-    list.before(controls);
-    const status=document.createElement('p');status.id=kind+'SortStatus';status.className='recentSortStatus';
-    status.setAttribute('aria-live','polite');list.before(status);
-    const field=$('#'+kind+'SortField');
-    function sort(key){
-      recentSort(kind,key);renderRecentQueries();
-    }
-    field.addEventListener('change',()=>sort(field.value));
-    $('#'+kind+'SortDirection').addEventListener('click',()=>sort(field.value));
-    list.addEventListener('click',event=>{
-      const button=event.target.closest('[data-recent-sort]');if(!button)return;
-      const key=button.dataset.recentSort,left=list.querySelector('.recentTableScroll').scrollLeft;
-      sort(key);
-      list.querySelector('.recentTableScroll').scrollLeft=left;
-      list.querySelector('[data-recent-sort="'+key+'"]').focus({preventScroll:true});
+    const controls=document.createElement('div');
+    controls.className='recentSortControls';controls.id=kind+'SortControls';
+    controls.setAttribute('role','group');controls.setAttribute('aria-label','Ordenar por columna');
+    const status=document.createElement('div');status.id=kind+'SortStatus';status.className='recentSortStatus';
+    status.tabIndex=-1;status.setAttribute('aria-label','Prioridad de orden');
+    list.before(status,controls);
+    const section=list.closest('section');
+    section.addEventListener('click',event=>{
+      const button=event.target.closest('[data-recent-sort],[data-priority]');
+      if(!button)return;
+      const key=button.dataset.recentSort||button.dataset.key,action=button.dataset.priority;
+      const scroll=list.querySelector('.recentTableScroll')?.scrollLeft;
+      if(action)changeRecentPriority(kind,key,action);
+      else recentSort(kind,key);
+      renderRecentQueries();
+      const table=list.querySelector('.recentTableScroll');
+      if(table&&scroll!=null)table.scrollLeft=scroll;
+      let focus;
+      if(action){
+        focus=status.querySelector('[data-key="'+key+'"][data-priority="'+action+'"]:enabled')||
+          status.querySelector('[data-key="'+key+'"]:enabled')||status.querySelector('button:enabled')||status;
+      }else{
+        focus=(wideQueries?.matches?list:controls).querySelector('[data-recent-sort="'+key+'"]');
+      }
+      focus?.focus({preventScroll:true});
     });
   }
   function updateRecentSort(kind){
-    const order=recentOrder[kind],columns=recentColumns(kind),primary=order[0];
-    $('#'+kind+'SortField').value=primary.key;
-    const button=$('#'+kind+'SortDirection'),ascending=primary.dir===1;
-    button.textContent=ascending?'↑ Ascendente':'↓ Descendente';
-    button.ariaLabel=ascending?'Cambiar a descendente':'Cambiar a ascendente';
-    $('#'+kind+'SortStatus').textContent='Orden: '+order.map(({key,dir},i)=>
-      (i+1)+'. '+(key==='balance'?'Saldo nuevo':columns[key])+(dir===1?' ↑':' ↓')).join(' · ')+
-      (recentCategory(kind)==='reversals'?' · Cada par se ordena por la reversión. Incluye ambos movimientos si uno está en el rango.':'');
+    const order=recentOrder[kind],columns=recentColumns(kind);
+    const controls=$('#'+kind+'SortControls');
+    const headers=Object.entries(columns).map(([key,title])=>recentHeaderButton(kind,key,title)).join('');
+    if(controls.innerHTML!==headers)controls.innerHTML=headers;
+    const entries=order.map(({key},index)=>{
+      const name=key==='balance'?'Saldo nuevo':columns[key];
+      const control=(action,symbol,label)=>'<button type="button" data-key="'+key+'" data-priority="'+action+
+        '" title="'+label+'" aria-label="'+label+'">'+symbol+'</button>';
+      return '<span class="recentSortEntry"><span>'+(index+1)+'. '+name+'</span>'+
+        (index>0?control('left','←','Subir prioridad de '+name):'')+
+        (index+1<order.length?control('right','→','Bajar prioridad de '+name):'')+
+        control('remove','×','Quitar '+name+' del orden')+'</span>';
+    });
+    const status=$('#'+kind+'SortStatus');
+    const line='<span>Orden:</span> '+(entries.join(' ')||'Más recientes primero')+
+      (recentCategory(kind)==='reversals'?'<span>Cada par se ordena por la reversión. Incluye ambos movimientos si uno está en el rango.</span>':'');
+    if(status.innerHTML!==line)status.innerHTML=line;
   }
   function setupQueryMenu(){if(!$('#recentDeliveries')){const contacts=$('#contacts'),delivery=document.createElement('section'),income=document.createElement('section');delivery.id='recentDeliveries';delivery.className='view recentMovements';delivery.innerHTML='<div class="deliveryQueryTitle"><h2>ENTREGAS RECIENTES</h2><button type="button" id="clearDeliveryFilters">LIMPIAR FILTROS</button></div><div class="deliveryQueryFilters"><label>DESDE FECHA<input id="deliveryDateFrom" type="date"></label><label>DESDE HORA<input id="deliveryTimeFrom" type="time"></label><label>HASTA FECHA<input id="deliveryDateTo" type="date"></label><label>HASTA HORA<input id="deliveryTimeTo" type="time"></label><form id="deliveryHistoryQueryForm" class="recentElementFilter"><label>FILTRAR POR ELEMENTO<select name="itemId"></select></label></form>'+recentControls('delivery')+'<div class="deliveryExportActions"><button type="button" id="exportDeliveriesExcel">DESCARGAR EXCEL</button><button type="button" id="exportDeliveriesPdf">DESCARGAR PDF</button></div></div><p id="recentDeliveriesCount" class="permission"></p><div id="recentDeliveriesList" class="recentMovementList"></div>';income.id='recentIncomes';income.className='view recentMovements';income.innerHTML='<div class="deliveryQueryTitle"><h2>INGRESOS RECIENTES</h2><button type="button" id="clearIncomeFilters">LIMPIAR FILTROS</button></div><div class="deliveryQueryFilters"><label>DESDE FECHA<input id="incomeDateFrom" type="date"></label><label>DESDE HORA<input id="incomeTimeFrom" type="time"></label><label>HASTA FECHA<input id="incomeDateTo" type="date"></label><label>HASTA HORA<input id="incomeTimeTo" type="time"></label><form id="incomeHistoryQueryForm" class="recentElementFilter"><label>FILTRAR POR ELEMENTO<select name="itemId"></select></label></form>'+recentControls('income')+'<div class="deliveryExportActions"><button type="button" id="exportIncomesExcel">DESCARGAR EXCEL</button><button type="button" id="exportIncomesPdf">DESCARGAR PDF</button></div></div><p id="recentIncomesCount" class="permission"></p><div id="recentIncomesList" class="recentMovementList"></div>';contacts.after(delivery,income)}if(!$('#queryMenuStyle')){const style=document.createElement('style');style.id='queryMenuStyle';style.textContent='.queryMenuGrid{display:grid;grid-template-columns:1fr;gap:12px}.queryMenuGrid button{min-height:70px;font-size:1.02rem;background:linear-gradient(145deg,#f4f5f6,#d5dade);color:#263642;border:1px solid #c4cacf}.recentMovementList{display:grid;gap:10px}.recentMovementList article{border:1px solid #d7e0e7;border-radius:10px;padding:12px;background:#fff}.recentMovementList article>div{display:grid;gap:4px}.recentMovementList span{color:#52687a}.deliveryQueryFilters{display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:12px;margin:12px 0 16px}.deliveryQueryFilters label{display:flex;flex-direction:column;gap:6px;font-weight:800}.recentElementFilter{grid-column:1/-1;min-width:0}.deliveryCategoryFilter{grid-column:1/-1;min-width:0;margin:0;padding:0;border:0}.deliveryCategoryFilter legend{font-weight:800;font-size:.85rem;margin-bottom:7px;padding:0}.deliveryCategoryOptions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:5px;background:#edf2f6;border:1px solid #d7e0e7;border-radius:10px}.deliveryCategoryOptions label{position:relative;min-width:0;cursor:pointer}.deliveryCategoryOptions input{position:absolute;opacity:0;width:1px;height:1px;margin:0}.deliveryCategoryOptions span{display:flex;align-items:center;justify-content:center;min-height:42px;padding:7px 5px;border:1px solid transparent;border-radius:7px;text-align:center;color:#334e62;font-size:.82rem;line-height:1.2;box-sizing:border-box}.deliveryCategoryOptions input:checked+span{background:#173d59;color:#fff;border-color:#173d59;box-shadow:0 1px 3px #173d5926}.deliveryCategoryOptions input:focus-visible+span{outline:3px solid #e7b45a;outline-offset:2px}.deliveryQueryTitle{display:flex;align-items:center;justify-content:space-between;gap:12px}.deliveryQueryTitle h2{margin:0}.deliveryQueryTitle button{width:auto;min-height:38px;padding:8px 14px;background:#eef3f7;color:#173d59;border:1px solid #b9c8d3;font-weight:800}.deliveryExportActions{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap}.deliveryExportActions button{flex:1;min-width:160px;color:#fff}.deliveryExportActions #exportDeliveriesExcel,.deliveryExportActions #exportIncomesExcel{background:#217346;border:1px solid #185c37}.deliveryExportActions #exportDeliveriesExcel:hover,.deliveryExportActions #exportDeliveriesExcel:focus-visible,.deliveryExportActions #exportIncomesExcel:hover,.deliveryExportActions #exportIncomesExcel:focus-visible{background:#185c37}.deliveryExportActions #exportDeliveriesPdf,.deliveryExportActions #exportIncomesPdf{background:#c62828;border:1px solid #a91f1f}.deliveryExportActions #exportDeliveriesPdf:hover,.deliveryExportActions #exportDeliveriesPdf:focus-visible,.deliveryExportActions #exportIncomesPdf:hover,.deliveryExportActions #exportIncomesPdf:focus-visible{background:#a91f1f}@media(max-width:600px){.deliveryQueryFilters{grid-template-columns:1fr}.recentElementFilter,.deliveryCategoryFilter,.deliveryExportActions{grid-column:1}.deliveryExportActions{flex-direction:column}}';document.head.append(style)}const overlay=document.createElement('div');overlay.id='plazaQueryMenu';overlay.className='registerMenuOverlay';overlay.hidden=true;overlay.innerHTML='<div class="registerMenu"><div class="registerMenuHead"><h2>HACER CONSULTAS</h2><button type="button" data-close-query aria-label="Volver a Inicio">VOLVER</button></div><p>SELECCIONA LA CONSULTA.</p><div class="queryMenuGrid"><button type="button" data-query-view="stockQuery">CONSULTAR EXISTENCIAS</button><button type="button" data-query-view="contacts">PERSONAL</button><button type="button" data-query-view="loanHistory">PRÉSTAMOS Y DEVOLUCIONES</button><button type="button" data-query-view="recentDeliveries">ENTREGAS RECIENTES <small>ÚLTIMOS 7 DÍAS</small></button><button type="button" data-query-view="recentIncomes">INGRESOS RECIENTES <small>ÚLTIMOS 30 DÍAS</small></button></div></div>';document.body.append(overlay);const close=()=>{overlay.hidden=true};overlay.addEventListener('click',event=>{if(event.target===overlay||event.target.closest('[data-close-query]'))close();const button=event.target.closest('[data-query-view]');if(button){close();showView(button.dataset.queryView)}});for(const kind of ['delivery','income']){const form=$('#'+kind+'HistoryQueryForm');setupItemSearch(form,'Filtrar '+(kind==='delivery'?'entregas':'ingresos')+' por elemento');form.addEventListener('submit',event=>event.preventDefault());form.addEventListener('change',renderRecentQueries);resetRecentFilters(kind);$('#clear'+(kind==='delivery'?'Delivery':'Income')+'Filters').addEventListener('click',()=>{resetRecentFilters(kind);renderRecentQueries()});for(const field of ['DateFrom','TimeFrom','DateTo','TimeTo'])$('#'+kind+field).addEventListener('change',renderRecentQueries);
     setupRecentSort(kind);$('#'+kind+'CategoryFilter').addEventListener('change',renderRecentQueries)
