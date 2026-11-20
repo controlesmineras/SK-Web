@@ -95,7 +95,9 @@ function mountIncome(){
  const input=name=>panel.querySelector(`[data-income-asset-input="${name}"]`),currentItem=()=>{const data=window.SKPlaza?.getData?.()||{};return(data.inventoryCriteria||[]).find(item=>item.id===form.elements.itemId.value)},selectedAsset=()=> (window.SKPlaza?.getData?.().assets||[]).find(row=>row.id===registeredId);
  const classAssets=item=>{const type=norm(itemName(item));return(window.SKPlaza?.getData?.().assets||[]).filter(asset=>!asset.deleted&&!/dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`)&&norm(asset.clase)===type).sort((a,b)=>assetNumber(a).localeCompare(assetNumber(b),'es',{numeric:true}))};
  const blockedReason=asset=>/dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`)?'Este activo está dado de baja o retirado.':norm(asset.ubicacion)==='bodega de superficie'?'Este activo ya está en Bodega de Superficie. No necesita otro ingreso.':'';
- const matches=()=>{const query=norm(search.value);return classAssets(currentItem()).filter(asset=>!query||norm([asset.serial,assetNumber(asset),asset.marcaActual,asset.marcaInterna,asset.nuevaMarca,asset.marcaAnterior,asset.minaOrigen,asset.mina].join(' ')).includes(query))};
+ const matches=query=>query.rows(classAssets(currentItem()),asset=>[
+  assetLabel(asset),blockedReason(asset)||[asset.ubicacion||'Sin ubicación registrada',asset.minaOrigen&&'Origen: '+asset.minaOrigen].filter(Boolean).join(' · ')
+ ]);
  const fillMines=()=>{const current=originMine.value,values=window.SKFormOptions?.values?.('asset.owner')||['Sandra K','Providencia','El Silencio','Carla','Alianza'];originMine.replaceChildren(new Option('Seleccionar…',''),...values.map(value=>new Option(value,value)));if(current&&!values.includes(current))originMine.add(new Option(current,current));originMine.value=current};
  const markingContext=()=>{const special=isRepairClass(itemName(currentItem())),external=special&&incomeType.value==='REPARACIÓN'&&!!originMine.value&&!isSandraK(originMine.value);return{clase:itemName(currentItem()),minaOrigen:originMine.value,activoExterno:external,incomeMarking:special&&!!originMine.value&&!!incomeType.value&&window.SKPlaza?.getData?.().capabilities?.externalIncomeV1===true}};
  const rememberNew=()=>{if(mode==='new')newValues.areaAsignada=input('areaAsignada').value;if(mode==='new')for(const name of Object.keys(incomeFields(currentItem(),true,markingContext())))newValues[name]=input(name).value};
@@ -122,15 +124,20 @@ function mountIncome(){
  const choose=asset=>{if(blockedReason(asset))return;registeredId=asset.id;search.value=window.SKAssetRules.isColumn(asset)?(window.SKAssetRules.columnIdentity(asset).number||window.SKAssetRules.columnIdentity(asset).mark):(asset.serial||asset.marcaActual||asset.marcaInterna||assetNumber(asset));const mine=clean(asset.mina||asset.minaOrigen);if(mine){if(!Array.from(originMine.options).some(option=>option.value===mine))originMine.add(new Option(mine,mine));originMine.value=mine}status.textContent='Seleccionado: '+assetLabel(asset);configure()};
  const renderSearch=()=>{
   const item=currentItem();if(!isFixed(item)||mode!=='registered')return;
-  const rows=matches(),query=clean(search.value);results.replaceChildren();results.hidden=false;
+  const query=clean(search.value),matcher=window.SKAssetSearch.query(query),rows=matches(matcher);results.replaceChildren();results.hidden=false;
   status.textContent=rows.length?`${rows.length} ${rows.length===1?'activo encontrado':'activos encontrados'}. Selecciona el que ingresa.`:query?`No se encontró un activo con “${query}”. Si no está registrado, elige ACTIVO NUEVO.`:'No hay activos registrados de esta clase. Elige ACTIVO NUEVO para registrarlo.';
-  rows.slice(0,20).forEach(asset=>{const button=document.createElement('button'),label=document.createElement('b'),detail=document.createElement('small'),reason=blockedReason(asset);button.type='button';button.dataset.incomeAsset=asset.id;button.disabled=!!reason;label.textContent=assetLabel(asset);detail.textContent=reason||[asset.ubicacion||'Sin ubicación registrada',asset.minaOrigen&&`Origen: ${asset.minaOrigen}`].filter(Boolean).join(' · ');button.append(label,detail);button.addEventListener('click',()=>choose(asset));results.append(button)});
+  rows.slice(0,20).forEach(({asset,lines,detail})=>{
+   const button=document.createElement('button'),label=document.createElement('b'),note=document.createElement('small');
+   button.type='button';button.dataset.incomeAsset=asset.id;button.disabled=!!blockedReason(asset);
+   label.innerHTML=matcher.html(lines[0]);note.innerHTML=matcher.html([lines[1],detail].filter(Boolean).join(' · '));
+   button.append(label,note);button.addEventListener('click',()=>choose(asset));results.append(button);
+  });
  };
  const refresh=()=>{const id=form.elements.itemId.value;if(id!==lastItemId){lastItemId=id;mode='registered';newValues={};registeredId='';search.value='';incomeType.value='';originMine.value=''}fillMines();configure();if(!registeredId)renderSearch()};
  panel.querySelector('[data-class-number-info]').addEventListener('click',()=>alert(CLASS_NUMBER_HELP));
  panel.querySelectorAll('[data-income-mode]').forEach(button=>button.addEventListener('click',()=>{rememberNew();mode=button.dataset.incomeMode;configure();if(mode==='registered'&&!registeredId)renderSearch()}));
  search.addEventListener('input',()=>{registeredId='';configure();renderSearch()});
- search.addEventListener('keydown',event=>{if(event.key==='ArrowDown'){const first=results.querySelector('button:not(:disabled)');if(first){event.preventDefault();first.focus()}}if(event.key==='Enter'){event.preventDefault();const rows=matches().filter(asset=>!blockedReason(asset));if(rows.length===1)choose(rows[0])}});
+ search.addEventListener('keydown',event=>{if(event.key==='ArrowDown'){const first=results.querySelector('button:not(:disabled)');if(first){event.preventDefault();first.focus()}}if(event.key==='Enter'){event.preventDefault();const rows=matches(window.SKAssetSearch.query(search.value)).filter(({asset})=>!blockedReason(asset));if(rows.length===1)choose(rows[0].asset)}});
  for(const control of [incomeType,originMine])control.addEventListener('change',()=>{rememberNew();configure()});
  panel.addEventListener('focusin',event=>{if(event.target===input('fabricante'))recentManufacturerControl(event.target,itemName(currentItem()))});
  form.elements.itemId.addEventListener('change',refresh);

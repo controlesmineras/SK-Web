@@ -613,16 +613,6 @@ function paintDraft(){
   li.append(identity,button,stepper);return li;
  }));
 }
-function filterMachines(){
- const terms=norm(byId('machineSearch').value).trim().split(/\s+/);
- const cards=Array.from(byId('machineOptions').children);
- for(const card of cards){
-  const label=norm(card.textContent);
-  card.hidden=!terms.every(term=>label.includes(term));
- }
- byId('machineSearchEmpty').hidden=machineOptions.hidden||!cards.length||cards.some(card=>!card.hidden);
-}
-byId('machineSearch').oninput=filterMachines;
 function availableForConsumption(asset){
  return !/^yt/i.test(asset.clase||'')||!/dad(?:o\/a|o|a) de baja|retirad[oa]|desechad[oa]/.test(norm(asset.estado)+' '+norm(asset.ubicacion));
 }
@@ -630,28 +620,32 @@ function machinePickerLabel(row){
  const label=labelAsset(row);
  return /^YT$/i.test(row.clase)&&row.modelo?label.replace(/^YT · /i,'YT'):label;
 }
-function paint(){
- const machines=(state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value))&&availableForConsumption(row));
- const selected=machines.find(row=>String(row.id)===fields.assetId.value);
- fields.assetId.value=selected?.id??'';
- selectedMachineLabel=selected?machinePickerLabel(selected):'';
- if(machineOptions.hidden)machineSearch.value=selectedMachineLabel;
- byId('machineOptions').replaceChildren(...machines.map(row=>{
+function machinesForType(){
+ return (state.assets||[]).filter(row=>norm(row.clase).startsWith(norm(fields.tipoEquipo.value))&&availableForConsumption(row));
+}
+function filterMachines(){
+ const machines=machinesForType(),query=window.SKAssetSearch.query(machineOptions.hidden?'':machineSearch.value);
+ const hits=query.rows(machines,row=>[machinePickerLabel(row)]);
+ machineOptions.replaceChildren(...hits.map(({asset,lines,detail})=>{
   const button=document.createElement('button');
-  button.type='button';
-  button.textContent=machinePickerLabel(row);
-  button.setAttribute('aria-pressed',String(row===selected));
+  button.type='button';button.innerHTML=query.html([lines[0],detail].filter(Boolean).join(' · '));
+  button.setAttribute('aria-pressed',String(String(asset.id)===fields.assetId.value));
   button.onclick=()=>{
-   fields.assetId.value=row.id;
-   selectedMachineLabel=machinePickerLabel(row);
+   fields.assetId.value=asset.id;selectedMachineLabel=lines[0];
    machineOptions.querySelector('[aria-pressed="true"]')?.setAttribute('aria-pressed','false');
-   button.setAttribute('aria-pressed','true');
-   machineSearch.blur();
-   closeMachine();
+   button.setAttribute('aria-pressed','true');machineSearch.blur();closeMachine();
   };
   return button;
  }));
- if(!machines.length)byId('machineOptions').textContent='No hay equipos disponibles para este tipo.';
+ if(!machines.length)machineOptions.textContent='No hay equipos disponibles para este tipo.';
+ byId('machineSearchEmpty').hidden=machineOptions.hidden||!machines.length||hits.length>0;
+}
+machineSearch.oninput=filterMachines;
+function paint(){
+ const selected=machinesForType().find(row=>String(row.id)===fields.assetId.value);
+ fields.assetId.value=selected?.id??'';
+ selectedMachineLabel=selected?machinePickerLabel(selected):'';
+ if(machineOptions.hidden)machineSearch.value=selectedMachineLabel;
  filterMachines();
  paintParts();paintPeople();paintDraft();
  for(const view of stockViews)if(!view.panel.hidden)paintStockView(view);

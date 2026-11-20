@@ -131,15 +131,25 @@ function installAssetPicker(){
  const style=document.createElement('style');style.textContent='#noveltyForm #novAssetSearchResults{display:grid;gap:5px;max-height:280px;overflow:auto;margin-top:6px}#noveltyForm #novAssetSearchResults[hidden]{display:none}#novAssetSearchResults button{width:100%;text-align:left;white-space:normal;background:#f2f6f9;color:#173d59;border:1px solid #ccd8e0;padding:10px;font-weight:500}#novAssetSearchResults button:focus-visible{outline:3px solid #e7b45a}';document.head.append(style);
  let rows=[],version=0;
  const label=asset=>window.SKAssetRules?.isColumn(asset)?window.SKAssetRules.columnLabel(asset):[asset.clase,asset.fabricante,asset.serial&&'Serial: '+asset.serial,asset.marcaPrevia&&'Marca: '+asset.marcaPrevia,asset.marcaActual||asset.marcaInterna,asset.nuevaMarca,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.mina].filter(Boolean).join(' · ');
- const filtered=()=>rows.filter(asset=>(!classes.value||norm(asset.clase)===norm(classes.value))&&(!norm(input.value)||norm([asset.serial,asset.marcaPrevia,asset.marcaAnterior,asset.marcaActual,asset.marcaInterna,asset.nuevaMarca,asset.numeroClase,asset.numeroYT,asset.fabricante,...(window.SKAssetRules?.isColumn(asset)?[asset.numeroMarcaActual,asset.orden]:[])].filter(Boolean).join(' ')).includes(norm(input.value))));
+ const filtered=query=>query.rows(rows.filter(asset=>!classes.value||norm(asset.clase)===norm(classes.value)),asset=>[label(asset)]);
  const close=()=>{results.hidden=true;input.setAttribute('aria-expanded','false')};
  const choose=asset=>{if(![...select.options].some(option=>option.value===asset.id))select.add(new Option(label(asset),asset.id));select.value=asset.id;classes.value=asset.clase;input.value=label(asset);input.setCustomValidity('');status.textContent='Activo seleccionado.';close();select.dispatchEvent(new Event('change',{bubbles:true}))};
- const draw=()=>{const selected=rows.find(asset=>asset.id===select.value),matches=selected?rows.filter(asset=>!classes.value||norm(asset.clase)===norm(classes.value)):filtered();results.replaceChildren();for(const asset of matches.slice(0,30)){const button=document.createElement('button');button.type='button';button.textContent=label(asset);button.addEventListener('click',()=>choose(asset));results.append(button)}status.textContent=matches.length?matches.length+' activos encontrados. Selecciona uno.':'No hay coincidencias. Revisa la clase, el serial o la marca.';results.hidden=false;input.setAttribute('aria-expanded','true')};
+ const draw=()=>{
+  const query=window.SKAssetSearch.query(input.value),matches=filtered(query);
+  results.replaceChildren();
+  for(const {asset,lines,detail} of matches.slice(0,30)){
+   const button=document.createElement('button');button.type='button';
+   button.innerHTML=query.html([...lines,detail].filter(Boolean).join(' · '));
+   button.addEventListener('click',()=>choose(asset));results.append(button);
+  }
+  status.textContent=matches.length?matches.length+' activos encontrados. Selecciona uno.':'No hay coincidencias. Revisa la clase, el serial o la marca.';
+  results.hidden=false;input.setAttribute('aria-expanded','true');
+ };
  const load=async()=>{if(typeof db==='undefined'||!db)return;const token=++version,next=(await all('assets')).filter(asset=>!asset.deleted);if(token!==version)return;rows=next;const current=classes.value,values=[...new Set(rows.map(asset=>asset.clase).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));classes.replaceChildren(new Option('Todas las clases',''),...values.map(value=>new Option(value,value)));classes.value=values.includes(current)?current:'';const selected=rows.find(asset=>asset.id===select.value);if(selected){input.value=label(selected);input.setCustomValidity('');status.textContent='Activo seleccionado.'}else if(!results.hidden)draw()};
  classes.addEventListener('change',()=>{select.value='';input.value='';input.setCustomValidity('Selecciona un activo de la lista.');update();draw()});
  input.addEventListener('input',()=>{select.value='';input.setCustomValidity('Selecciona un activo de la lista.');update();draw()});
  input.addEventListener('focus',()=>{load().then(draw).catch(console.error)});input.addEventListener('click',draw);
- input.addEventListener('keydown',event=>{if(event.key==='Escape')close();if(event.key==='ArrowDown'){event.preventDefault();draw();results.querySelector('button')?.focus()}if(event.key==='Enter'&&!select.value){event.preventDefault();const matches=filtered();if(matches.length===1)choose(matches[0])}});
+ input.addEventListener('keydown',event=>{if(event.key==='Escape')close();if(event.key==='ArrowDown'){event.preventDefault();draw();results.querySelector('button')?.focus()}if(event.key==='Enter'&&!select.value){event.preventDefault();const matches=filtered(window.SKAssetSearch.query(input.value));if(matches.length===1)choose(matches[0].asset)}});
  results.addEventListener('pointerdown',event=>event.preventDefault());document.addEventListener('pointerdown',event=>{if(!assetField.contains(event.target))close()});
  form.addEventListener('reset',()=>setTimeout(()=>{classes.value='';input.value='';input.setCustomValidity('');status.textContent='';close();load().catch(console.error)},0));
  new MutationObserver(()=>load().catch(console.error)).observe(select,{childList:true});

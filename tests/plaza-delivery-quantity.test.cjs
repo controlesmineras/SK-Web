@@ -17,8 +17,9 @@ function formClient(){
     alert:message=>alerts.push(message),sessionStorage:{getItem:()=>null},localStorage:{getItem:()=>null},
     Event:class {constructor(type){this.type=type}},Option:class {constructor(text,value){this.text=text;this.value=value}},console});
   vm.runInContext(read('spare-groups.js'),ctx);vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
+  vm.runInContext(read('asset-search.js'),ctx);
   const prefix=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
-  vm.runInContext(prefix+`\nwindow.testing={matchesAssetSearch,selectionLabel:assetSelectionLabel,historyLabel:assetLabel,set:value=>{data=value},mode:value=>{deliveryMode=value},update:updateDeliveryFields,capture:currentDeliveryItem,add:addDeliveryItem,draft:()=>deliveryDraft,recipientChanged:recipientDestinationChanged};})();`,ctx);
+  vm.runInContext(prefix+`\nwindow.testing={matchesAssetSearch:(asset,value)=>deliveryAssetResults([asset],window.SKAssetSearch.query(value)).length>0,selectionLabel:assetSelectionLabel,historyLabel:assetLabel,set:value=>{data=value},mode:value=>{deliveryMode=value},update:updateDeliveryFields,capture:currentDeliveryItem,add:addDeliveryItem,draft:()=>deliveryDraft,recipientChanged:recipientDestinationChanged};})();`,ctx);
   const api=ctx.window.testing,data={
     inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true,allowLoan:true},{id:'pliers',name:'Alicates',allowLoan:true},{id:'cable',name:'Cable',allowLoan:true,fractionable:true}],
     assets:[{id:'asset',clase:'Motosierra',serial:'TEST-57951',ubicacion:'Bodega de Superficie'}],

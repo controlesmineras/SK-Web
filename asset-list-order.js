@@ -14,7 +14,18 @@ const label=a=>{
   : summary;
 };
 const compare=(a,b)=>{const pa=isSK(a)?0:1,pb=isSK(b)?0:1;if(pa!==pb)return pa-pb;const cls=clean(a.clase).localeCompare(clean(b.clase),'es',{numeric:true,sensitivity:'base'});if(cls)return cls;const na=num(a),nb=num(b);if(!!na!==!!nb)return na?-1:1;return na.localeCompare(nb,'es',{numeric:true,sensitivity:'base'})||label(a).localeCompare(label(b),'es',{numeric:true,sensitivity:'base'})};
-function search(rows,query){const q=norm(query);return rows.filter(a=>!a.deleted&&(!q||norm(Object.values(a).join(' ')).includes(q))).sort(compare)}
+function results(rows,value){
+ const query=window.SKAssetSearch.query(value);
+ const entries=query.rows(rows.filter(a=>!a.deleted),a=>[
+  label(a),
+  'Mina propietaria: '+(a.mina||'Sin registrar')+' · Ubicación: '+(a.ubicacion||'Sin ubicación')+' · '+(a.estado||'Sin estado')+(isSK(a)?'':' · TRANSITORIO'),
+  isSK(a)?'':'EXTERNO'
+ ]);
+ return entries.sort((a,b)=>compare(a.asset,b.asset)).map(({asset,lines:[title,note,badge],detail})=>({
+  asset,external:!!badge,content:'<b>'+(badge?'<span class="externalBadge">'+query.html(badge)+'</span> ':'')+query.html(title)+'</b><small>'+query.html(note)+'</small>'+(detail?'<small>'+query.html(detail)+'</small>':'')
+ }));
+}
+function search(rows,value){return results(rows,value).map(entry=>entry.asset)}
 const classPatterns={yt:/^yt(?:\b|\d)/,columna:/^columnas?(?:\b|\d)/,autorrescatador:/^autorrescatador(?:es)?\b/};
 let listClass='';
 const matchesListClass=asset=>!listClass||classPatterns[listClass].test(norm(asset.clase));
@@ -29,8 +40,12 @@ function setupListClasses(){
   window.renderAssetList(await all('assets'));
  });
 }
-function render(rows){const box=document.querySelector('#assetAdminList');if(!box)return;const filtered=search(rows.filter(matchesListClass),document.querySelector('#assetSearch')?.value);box.innerHTML=filtered.map(a=>{const ext=!isSK(a);return `<button class="assetRow${ext?' assetRowExternal':''}" data-id="${a.id}"><b>${ext?'<span class="externalBadge">EXTERNO</span> ':''}${label(a)}</b><small>Mina propietaria: ${a.mina||'Sin registrar'} · Ubicación: ${a.ubicacion||'Sin ubicación'} · ${a.estado||'Sin estado'}${ext?' · TRANSITORIO':''}</small></button>`}).join('')||'<p class="hint">No hay activos que coincidan.</p>'}
+function render(rows){
+ const box=document.querySelector('#assetAdminList');if(!box)return;
+ const hits=results(rows.filter(matchesListClass),document.querySelector('#assetSearch')?.value);
+ box.innerHTML=hits.map(({asset,external,content})=>`<button type="button" class="assetRow${external?' assetRowExternal':''}" data-id="${window.SKAssetSearch.escape(asset.id)}">${content}</button>`).join('')||'<p class="hint">No hay activos que coincidan.</p>';
+}
 async function rerender(){if(typeof all!=='function')return;render(await all('assets'))}
 window.addEventListener('load',()=>{setupListClasses();setTimeout(rerender,1700);document.querySelector('#assetSearch')?.addEventListener('input',()=>rerender(),true);document.querySelector('#nav')?.addEventListener('click',e=>{if(e.target.closest('[data-view="assets"]'))setTimeout(rerender,60)},true);window.addEventListener('skweb-assets-normalized',rerender)});
-window.SKAssetOwnership={isSK,compare,search,label,rerender,matchesListClass};
+window.SKAssetOwnership={isSK,compare,search,results,label,render,rerender,matchesListClass};
 })();
