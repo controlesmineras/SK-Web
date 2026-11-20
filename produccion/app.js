@@ -798,7 +798,7 @@ function paintIncomeQueries(){
  const rows=incomeMovements().filter(row=>row.kind==='income'&&!row.deleted).reverse(),parts=catalog();
  notice.textContent=!Array.isArray(state.incomes)?'Sincroniza para cargar los ingresos.':'Aún no hay ingresos registrados.';notice.hidden=rows.length>0;
  byId('incomeQueryRows').replaceChildren(...rows.map(row=>{
-  const part=parts.find(part=>partMatches(row,part,row.origen)),tr=incomeRowCells([displayDate(row.fechaISO),part?partLabel(part):row.partId,row.origen,row.cantidad]),actions=document.createElement('td');
+  const part=parts.find(part=>partMatches(row,part,row.origen)),tr=incomeRowCells([displayDate(row.fechaISO),window.SKMovementTime.recordHour(row)||'—',part?partLabel(part):row.partId,row.origen,row.cantidad]),actions=document.createElement('td');
   const pending=(state.incomeChanges||[]).some(op=>op.incomeId===row.id)||(state.pending||[]).some(op=>op.id===row.id);
   if(admin){
    const disabled=saving||pending||!incomeEditable(row);
@@ -820,7 +820,7 @@ function paintIncomeQueries(){
  byId('incomeChangeRows').replaceChildren(...history.map(entry=>{
   const current=(state.incomes||[]).find(row=>row.id===entry.incomeId),part=parts.find(part=>partMatches(entry.before,part,entry.before.origen));
   const show=row=>(row.deleted?'ELIMINADO':row.cantidad)+' · '+displayDate(row.fechaISO);
-  const tr=incomeRowCells([new Date(entry.at).toLocaleString('es-CO',{timeZone:'America/Bogota'}),part?partLabel(part):entry.before.partId,entry.before.origen,({edit:'Edición',delete:'Eliminación',revert:'Reversión'})[entry.action],show(entry.before),show(entry.after)]),action=document.createElement('td');
+  const tr=incomeRowCells([entry.operation?.recordedAt?new Date(entry.operation.recordedAt).toLocaleString('es-CO',{timeZone:'America/Bogota'}):'—',part?partLabel(part):entry.before.partId,entry.before.origen,({edit:'Edición',delete:'Eliminación',revert:'Reversión'})[entry.action],show(entry.before),show(entry.after)]),action=document.createElement('td');
   if(entry.action!=='revert'&&!entry.revertedBy&&current?.revision===entry.id&&incomeEditable(current))action.append(incomeAction('REVERTIR',()=>revertIncome(entry),saving||(state.incomeChanges||[]).some(op=>op.incomeId===entry.incomeId)));
   else action.textContent=entry.revertedBy?'REVERTIDO':entry.action==='revert'?'RESTAURADO':'CAMBIO POSTERIOR O CIERRE';
   tr.append(action);return tr;
@@ -846,7 +846,7 @@ async function queueIncomeChange(row,action,values,historyId){
  const active=session;if(!active||active.user.role!=='admin'||saving)return false;
  saving=true;
  try{
-  const operation={id:crypto.randomUUID(),incomeId:row.id,baseRevision:row.revision||'original',action,...(historyId?{historyId}:{}),...(action==='edit'?{cantidad:values.cantidad,fechaISO:values.fechaISO}:{}),after:values,label:row.origen+' · '+(catalog().find(part=>partMatches(row,part,row.origen))?.nombre||row.partId)};
+  const operation={id:crypto.randomUUID(),recordedAt:new Date().toISOString(),incomeId:row.id,baseRevision:row.revision||'original',action,...(historyId?{historyId}:{}),...(action==='edit'?{cantidad:values.cantidad,fechaISO:values.fechaISO}:{}),after:values,label:row.origen+' · '+(catalog().find(part=>partMatches(row,part,row.origen))?.nombre||row.partId)};
   const fresh=await changeState(active.user.document,current=>{
    const stored=(current.incomes||[]).find(x=>x.id===row.id);
    if(!stored||stored.kind!=='income'||(stored.revision||'original')!==operation.baseRevision)throw new Error('El ingreso cambió. Revisa la versión actual.');

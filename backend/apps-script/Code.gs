@@ -536,7 +536,7 @@ function adminReverseMovement_(q){
   const now=new Date().toISOString(),reversalId='REV-'+q.type+'-'+movementId;
   if(rows.some(x=>x&&x.id===reversalId))throw new Error('El identificador de reversión ya existe. Sincroniza antes de continuar.');
   // Se conserva el detalle y el bodeguero del original; no se registra al ejecutor.
-  const reversal=Object.assign({},row,{id:reversalId,syncEventId:reversalId,movementType:'REVERSIÓN',reversalOf:movementId,reversalSource:q.type,originalCreatedAt:row.createdAt||row.updatedAt,reversalRequestedBy:requestedBy,quantity:qty,stockDelta:delta,balanceBefore:current,balanceAfter:next,createdAt:now,updatedAt:now,syncState:'synced'});
+  const reversal=Object.assign({},row,{id:reversalId,syncEventId:reversalId,movementType:'REVERSIÓN',reversalOf:movementId,reversalSource:q.type,originalCreatedAt:row.createdAt||row.updatedAt,reversalRequestedBy:requestedBy,quantity:qty,stockDelta:delta,balanceBefore:current,balanceAfter:next,createdAt:now,syncedAt:now,updatedAt:now,syncState:'synced'});
   ['reversed','reversado','reversedAt','reversedBy','reversalMovementId','reversalBalanceBefore','reversalBalanceAfter','syncError'].forEach(key=>delete reversal[key]);
   const target=stock||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0};
   target.quantity=next;target.updatedAt=now;if(!stock)stockRows.push(target);
@@ -717,7 +717,16 @@ function enablePlazaUser(document,pin,role){document=String(document||'').trim()
 function plazaUserAdmin_(q){const document=String(q.document||'').trim(),enabled=q.enabled===true,pin=String(q.pin||''),role=q.role==='supervisor'?'supervisor':'operator';if(!document)throw new Error('Selecciona un colaborador');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id,lock):{},matches=(cloud.personal||[]).filter(x=>String(x.documento||'').trim()===document&&!x.deleted),person=matches[0];if(!person)throw new Error('El colaborador no existe en la base central');const now=nextRevision_(cloud.updatedAt),existingHash=matches.map(x=>x.pinHash).find(Boolean),pinHash=pin?hashPin_(document,pin):existingHash;if(enabled&&!pinHash)throw new Error('Escribe una contraseña para habilitar el acceso');matches.forEach(x=>{if(enabled){x.pinHash=pinHash;x.plazaEnabled=true;x.plazaRole=role}else{x.plazaEnabled=false;delete x.pinHash;delete x.plazaRole}x.updatedAt=now});if(!enabled)revokeInvitations_('plaza',document);cloud.personal=dedupePersonal_(cloud.personal||[]);const saved=(cloud.personal||[]).find(x=>String(x.documento||'').trim()===document&&!x.deleted)||person;cloud.updatedAt=now;writeFile_(id,cloud);return json_({ok:true,user:{id:saved.id,documento:document,nombre:saved.nombre||'',plazaEnabled:saved.plazaEnabled===true,plazaRole:saved.plazaRole||''}})}finally{lock.releaseLock()}}
 function plazaCollaborator_(q){const input=q.collaborator||{},document=String(input.documento||'').trim(),primerNombre=String(input.primerNombre||'').trim(),segundoNombre=String(input.segundoNombre||'').trim(),primerApellido=String(input.primerApellido||'').trim(),segundoApellido=String(input.segundoApellido||'').trim(),nombre=[primerNombre,segundoNombre,primerApellido,segundoApellido].filter(Boolean).join(' '),empresa=String(input.empresa||'').trim(),area=String(input.area||'').trim(),cargo=String(input.cargo||'No informado').trim()||'No informado',telefono=String(input.telefono||'').trim();if(!document||!primerNombre||!primerApellido||!empresa||!area)throw new Error('Documento, primer nombre, primer apellido, empresa y área son obligatorios');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id,lock):{},auth=verifyToken_(q.token,cloud),rows=Array.isArray(cloud.personal)?cloud.personal:(cloud.personal=[]),existing=rows.find(x=>String(x.documento||'').trim()===document&&!x.deleted);if(existing&&!q.update)return json_({ok:true,exists:true,user:publicPerson_(existing)});const now=nextRevision_(cloud.updatedAt),person=existing||{id:'PERSONAL-PLAZA-'+Utilities.getUuid(),createdAt:now};Object.assign(person,{documento:document,primerNombre:primerNombre,segundoNombre:segundoNombre,primerApellido:primerApellido,segundoApellido:segundoApellido,nombre:nombre,empresa:empresa,area:area,cargo:cargo,telefono:telefono,deleted:false,updatedAt:now,syncState:'synced',registeredBy:auth.document});if(!existing)rows.push(person);cloud.personal=dedupePersonal_(rows);cloud.updatedAt=now;writeFile_(id,cloud);return json_({ok:true,exists:false,user:publicPerson_(person)})}finally{lock.releaseLock()}}
 function publicPerson_(x){return{id:x.id,createdAt:x.createdAt||'',updatedAt:x.updatedAt||'',documento:x.documento||'',primerNombre:x.primerNombre||'',segundoNombre:x.segundoNombre||'',primerApellido:x.primerApellido||'',segundoApellido:x.segundoApellido||'',nombre:x.nombre||'',empresa:x.empresa||'',area:x.area||'',cargo:x.cargo||'No informado',telefono:x.telefono||'',deleted:!!x.deleted}}
-function merge_(cloud,local){const out={schema:6,updatedAt:nextRevision_(cloud.updatedAt)},names=new Set(Object.keys(cloud||{}).concat(Object.keys(local||{})));names.delete('schema');names.delete('updatedAt');names.forEach(name=>{const map=new Map(),remote=Array.isArray(cloud[name])?cloud[name]:[],device=Array.isArray(local[name])?local[name]:[];remote.forEach(x=>{if(x&&x.id)map.set(x.id,x)});device.forEach(x=>{if(!x||!x.id)return;const central=map.get(x.id),chosen=(name==='assets'&&central?.deleted||['blendingIncomes','blendingDeliveries'].includes(name)&&central&&(central.reversed===true||central.reversado===true||central.movementType==='REVERSIÓN'))?central:choose_(x,central);if(name==='personal'&&central){const merged=Object.assign({},central,chosen);for(const field of ['pinHash','plazaEnabled','plazaRole']){if(Object.prototype.hasOwnProperty.call(central,field))merged[field]=central[field];else delete merged[field]}map.set(x.id,merged)}else map.set(x.id,chosen)});out[name]=Array.from(map.values())});if(Array.isArray(out.personal)){out.personal=dedupePersonal_(out.personal);const centralByDocument=new Map();(Array.isArray(cloud.personal)?cloud.personal:[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()).forEach(x=>{const key=String(x.documento).trim(),old=centralByDocument.get(key);centralByDocument.set(key,choose_(x,old))});out.personal.forEach(x=>{const central=centralByDocument.get(String(x.documento||'').trim());if(central&&central.plazaEnabled===true&&central.pinHash){x.plazaEnabled=true;x.pinHash=central.pinHash;x.plazaRole=central.plazaRole||'operator'}else{delete x.pinHash;delete x.plazaEnabled;delete x.plazaRole}})}return out}
+function withFirstSync_(name,chosen,central){
+ if(chosen===central||!['consumptions','incomes','assets','novelties','actas','blendingDeliveries','blendingIncomes'].includes(name))return chosen;
+ const saved=Object.assign({},chosen);
+ if(!central)saved.syncedAt=new Date().toISOString();
+ else if(central.syncedAt)saved.syncedAt=central.syncedAt;
+ else delete saved.syncedAt;
+ if(central?.createdAt)saved.createdAt=central.createdAt;
+ return saved;
+}
+function merge_(cloud,local){const out={schema:6,updatedAt:nextRevision_(cloud.updatedAt)},names=new Set(Object.keys(cloud||{}).concat(Object.keys(local||{})));names.delete('schema');names.delete('updatedAt');names.forEach(name=>{const map=new Map(),remote=Array.isArray(cloud[name])?cloud[name]:[],device=Array.isArray(local[name])?local[name]:[];remote.forEach(x=>{if(x&&x.id)map.set(x.id,x)});device.forEach(x=>{if(!x||!x.id)return;const central=map.get(x.id),chosen=(name==='assets'&&central?.deleted||['blendingIncomes','blendingDeliveries'].includes(name)&&central&&(central.reversed===true||central.reversado===true||central.movementType==='REVERSIÓN'))?central:choose_(x,central);if(name==='personal'&&central){const merged=Object.assign({},central,chosen);for(const field of ['pinHash','plazaEnabled','plazaRole']){if(Object.prototype.hasOwnProperty.call(central,field))merged[field]=central[field];else delete merged[field]}map.set(x.id,merged)}else map.set(x.id,withFirstSync_(name,chosen,central))});out[name]=Array.from(map.values())});if(Array.isArray(out.personal)){out.personal=dedupePersonal_(out.personal);const centralByDocument=new Map();(Array.isArray(cloud.personal)?cloud.personal:[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()).forEach(x=>{const key=String(x.documento).trim(),old=centralByDocument.get(key);centralByDocument.set(key,choose_(x,old))});out.personal.forEach(x=>{const central=centralByDocument.get(String(x.documento||'').trim());if(central&&central.plazaEnabled===true&&central.pinHash){x.plazaEnabled=true;x.pinHash=central.pinHash;x.plazaRole=central.plazaRole||'operator'}else{delete x.pinHash;delete x.plazaEnabled;delete x.plazaRole}})}return out}
 function dedupePersonal_(rows){const map=new Map();rows.forEach(x=>{if(!x||!x.id)return;const document=String(x.documento||'').trim(),key=document?'doc:'+document:'id:'+x.id,old=map.get(key);if(!old){map.set(key,x);return}const chosen=choose_(x,old);map.set(key,Object.assign({},old,chosen,{id:old.id||chosen.id}))});return Array.from(map.values())}
 function choose_(local,remote){if(!remote)return local;if(!local)return remote;const ls=local.syncState==='seed',rs=remote.syncState==='seed';if(ls!==rs)return ls?remote:local;return stamp_(local)>=stamp_(remote)?local:remote}
 function stamp_(x){const n=Date.parse(x.updatedAt||x.createdAt||'');return isNaN(n)?0:n}
@@ -838,12 +847,12 @@ function productionSync_(q){
      for(const x of known.values())if(includes(x))before-=x.cantidad;
      if(protocol&&!Number.isSafeInteger(row.baseQuantity))throw new Error('Este ajuste de una versión anterior necesita revisión. Saldo actual: '+before+'. Retira el ajuste rechazado y vuelve a guardar la cantidad.');
      if(protocol&&row.baseQuantity!==before)throw new Error('La existencia cambió en la base central. Saldo actual: '+before+'. Revisa la cantidad antes de volver a guardar.');
-     incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad-before,target:row.cantidad,before,fechaISO:date,createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document});
+     incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad-before,target:row.cantidad,before,fechaISO:date,sourceCreatedAt:originalStamp_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document});
      changed=true;
      continue;
     }
     if(row.kind==='initial'&&Array.from(incomes.values()).some(x=>!x.deleted&&x.kind==='initial'&&part.aliases.includes(x.partId)&&x.origen===row.origen))throw new Error('El repuesto ya tiene un saldo inicial.');
-    incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,recordedAt:productionRecordedAt_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,...(row.editOpeningDate?{openingFromDate:true}:{}),...(row.kind==='initial'&&row.correctionId?{correctionId:row.correctionId}:{})});
+    incomes.set(row.id,{id:row.id,kind:row.kind,partId,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,recordedAt:productionRecordedAt_(row.createdAt),sourceCreatedAt:originalStamp_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,...(row.editOpeningDate?{openingFromDate:true}:{}),...(row.kind==='initial'&&row.correctionId?{correctionId:row.correctionId}:{})});
     changed=true;
     continue;
    }
@@ -854,7 +863,7 @@ function productionSync_(q){
    if(row.turno!=null&&!/^[DTS]$/.test(row.turno))throw new Error('Turno no válido');
    const responsible=personal.find(person=>person.id===row.responsableId);
    if(productionWarehouseSettings_().enabled&&row.cantidad>productionSpareBalance_({...data,incomes:Array.from(incomes.values()),consumptions:Array.from(known.values())},{partId:row.partId,origen:row.origen},central))throw new Error('La cantidad supera las existencias actuales de Producción. Revisa los pendientes.');
-   const saved={id:row.id,assetId:row.assetId,responsableId:row.responsableId,responsableNombre:responsible.nombre||responsible.documento,partId:row.partId,itemId:String(row.itemId||''),noItem:String(row.noItem||''),nombreRepuesto:String(row.nombreRepuesto||'').slice(0,200),tipoEquipo:row.tipoEquipo,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,recordedAt:productionRecordedAt_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,registradoPorId:recorder.id};
+   const saved={id:row.id,assetId:row.assetId,responsableId:row.responsableId,responsableNombre:responsible.nombre||responsible.documento,partId:row.partId,itemId:String(row.itemId||''),noItem:String(row.noItem||''),nombreRepuesto:String(row.nombreRepuesto||'').slice(0,200),tipoEquipo:row.tipoEquipo,origen:row.origen,cantidad:row.cantidad,fechaISO:row.fechaISO,recordedAt:productionRecordedAt_(row.createdAt),sourceCreatedAt:originalStamp_(row.createdAt),createdAt:new Date().toISOString(),registradoPor:user.document,registradoPorNombre:recorder.nombre||user.document,registradoPorId:recorder.id};
    if(row.turno)saved.turno=row.turno;
    known.set(saved.id,saved);changed=true;
    }catch(error){
@@ -885,6 +894,12 @@ function productionSync_(q){
    const body=JSON.stringify({...data,schema:3,consumptions,incomes:Array.from(incomes.values())});
    if(file)file.setContent(body);else DriveApp.createFile(PRODUCTION_FILE,body,MimeType.PLAIN_TEXT);
   }
+  const warehouseById=new Map((data.warehouseMovements||[]).map(row=>[row.id,row]));
+  const visibleIncomes=Array.from(incomes.values(),income=>{
+   if(income.sourceCreatedAt!==undefined||(!income.sourceWarehouseMovementId&&!income.sourceDeliveryId))return income;
+   const source=warehouseById.get(income.sourceWarehouseMovementId||income.id);
+   return source?Object.assign({},income,{sourceCreatedAt:warehouseOriginalStamp_(source)}):income;
+  });
   const spareIds=new Set(criteria.filter(x=>x.isYtSpare).map(x=>x.id));
   const deliveries=(central.blendingDeliveries||[]).filter(row=>!row.deleted&&cargoNorm_(row.destination)==='produccion'&&spareIds.has(row.itemId)).map(row=>({id:row.id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,createdAt:row.createdAt,reversed:row.reversed===true||row.reversado===true}));
   // Igual que Plaza: los recibos se emiten solo después de guardar en Drive.
@@ -892,7 +907,7 @@ function productionSync_(q){
   return json_({ok:true,incomeChangesV1:true,incomeChangeReceipts,incomeHistory:(data.incomeHistory||[]).filter(row=>Date.now()-Date.parse(row.at)<=30*86400000||incomeChanges.some(op=>op.id===row.id)),...(protocol?{syncProtocol:'production-receipts-v1',acknowledgements}:{}),productionRole:productionRole_(user.role),productionRoles:productionRoles_(user),warehouseV1:true,personal:personal.map(row=>({id:row.id,nombre:row.nombre,documento:row.documento})),assets:assets.map(row=>({id:row.id,clase:row.clase,modelo:row.modelo,marcaActual:row.marcaActual,marcaInterna:row.marcaInterna,numeroMarcaActual:row.numeroMarcaActual,marcaAnterior:row.marcaAnterior,marcaNumero:row.marcaNumero,mina:row.mina,serial:row.serial,estado:row.estado,ubicacion:row.ubicacion})),parts:parts,inventoryCriteria:criteria.filter(row=>row.isYtSpare),deliveries:deliveries,inventoryResult,stockAdjustment:true,stockAdjustmentLocalV1:true,
    openingDateV1:true,inventoryCounts:counts.filter(row=>row.status!=='closed'&&(row.owner===user.document||user.role==='admin'&&row.status==='submitted')),
    inventoryClosures:counts.filter(row=>row.status==='closed').map(({id,origin,date,closedAt})=>({id,origin,date,closedAt})),
-   inventoryLatest:Array.from(latest.values()),incomes:Array.from(incomes.values()),consumptions:consumptions,ack:pending.filter(row=>!rejected.has(row?.id||'')).map(row=>row.id),superseded:pending.filter(row=>row.correctionId&&incomes.get(row.id)?.correctionId!==row.correctionId&&(incomes.get(row.id)?.appliedCorrections||[]).includes(row.correctionId)).map(row=>({id:row.id,correctionId:row.correctionId}))});
+   inventoryLatest:Array.from(latest.values()),incomes:visibleIncomes,consumptions:consumptions,ack:pending.filter(row=>!rejected.has(row?.id||'')).map(row=>row.id),superseded:pending.filter(row=>row.correctionId&&incomes.get(row.id)?.correctionId!==row.correctionId&&(incomes.get(row.id)?.appliedCorrections||[]).includes(row.correctionId)).map(row=>({id:row.id,correctionId:row.correctionId}))});
  }finally{lock.releaseLock()}
 }
 
@@ -1011,6 +1026,18 @@ function productionDate_(value){
  const date=new Date(value+'T00:00:00Z');
  return Number.isFinite(date.getTime())&&date.toISOString().slice(0,10)===value;
 }
+function originalStamp_(value){
+ const stamp=Date.parse(value);
+ return Number.isFinite(stamp)?new Date(stamp).toISOString():'';
+}
+function warehouseOriginalStamp_(row){
+ if(row.sourceCreatedAt||row.recordedAt)return originalStamp_(row.sourceCreatedAt||row.recordedAt);
+ if(!row.requestSignature)return '';
+ try{
+  const request=JSON.parse(row.requestSignature);
+  return request&&request.id===row.id?originalStamp_(request.createdAt):'';
+ }catch(error){return '';}
+}
 function productionRecordedAt_(value){
  const stamp=Date.parse(value),now=Date.now();
  return Number.isFinite(stamp)&&stamp<=now?new Date(stamp).toISOString():new Date(now).toISOString();
@@ -1101,7 +1128,7 @@ function productionImportPlaza_(data,central){
   const item=criteria.get(source.itemId);if(!item||productionWarehouseEpp_(item)||!Number.isFinite(Number(source.quantity))||Number(source.quantity)<=0)continue;
   const spare=productionSpare_(item,central),now=new Date().toISOString();
   const event=productionWarehouseAppend_(data,{id,kind:'transfer_in',itemId:item.id,itemName:item.name,quantity:Number(source.quantity),delta:Number(source.quantity),assetId:source.assetId||'',sourceDeliveryId:source.id,sourceLoan:cargoNorm_(source.deliveryType)==='prestamo',source:'plaza',target:spare?'mechanics':'warehouse',createdAt:now,fechaISO:Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'),sourceCreatedAt:source.createdAt,personName:source.recipientName||'',status:'synced'});
-  if(spare)(data.incomes||(data.incomes=[])).push({id,kind:'income',...spare,cantidad:event.quantity,fechaISO:Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'),createdAt:now,recordedAt:now,sourceDeliveryId:source.id,registradoPorNombre:'Traslado desde Plaza Blending'});
+  if(spare)(data.incomes||(data.incomes=[])).push({id,kind:'income',...spare,cantidad:event.quantity,fechaISO:Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd'),createdAt:now,recordedAt:now,sourceCreatedAt:source.createdAt,sourceDeliveryId:source.id,registradoPorNombre:'Traslado desde Plaza Blending'});
   existing.add(id);changed=true;
  }
  return changed;
@@ -1169,7 +1196,7 @@ function productionWarehouseApply_(data,central,request,user){
   const input=request.newAsset;
   if(!/^[-a-zA-Z0-9]{16,100}$/.test(String(input.id||'')))throw new Error('Identificador del activo no válido.');
   if((central.assets||[]).some(row=>row.id===input.id))throw new Error('El activo ya existe. Selecciónalo como registrado.');
-  newAsset={id:input.id,clase:item.name,serial:String(input.serial||'').trim().slice(0,160),modelo:String(input.modelo||'').trim().slice(0,100),marcaComercial:String(input.marcaComercial||'').trim().slice(0,100),marcaAnterior:String(input.marcaAnterior||'').trim().slice(0,100),numeroClase:String(input.numeroClase||'').trim().slice(0,30),minaOrigen:String(input.minaOrigen||'Sandra K').trim().slice(0,100),longitud:String(input.longitud||'').trim().slice(0,40),estado:request.incomeType==='REPARACIÓN'?'En reparación':'Operativo/a',ubicacion:'Producción',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),syncState:'synced'};
+  newAsset={id:input.id,clase:item.name,serial:String(input.serial||'').trim().slice(0,160),modelo:String(input.modelo||'').trim().slice(0,100),marcaComercial:String(input.marcaComercial||'').trim().slice(0,100),marcaAnterior:String(input.marcaAnterior||'').trim().slice(0,100),numeroClase:String(input.numeroClase||'').trim().slice(0,30),minaOrigen:String(input.minaOrigen||'Sandra K').trim().slice(0,100),longitud:String(input.longitud||'').trim().slice(0,40),estado:request.incomeType==='REPARACIÓN'?'En reparación':'Operativo/a',ubicacion:'Producción',createdAt:originalStamp_(request.createdAt),syncedAt:new Date().toISOString(),updatedAt:new Date().toISOString(),syncState:'synced'};
   newAsset.mina=newAsset.minaOrigen;newAsset.criteriaId=item.id;newAsset.largo=newAsset.longitud;newAsset.fabricante=newAsset.marcaComercial;
   for(const [flag,field,label] of [['usesLength','largo','largo'],['usesModel','modelo','modelo'],['usesManufacturer','fabricante','fabricante']])if(truthy_(item[flag])&&!newAsset[field])throw new Error('Falta '+label+' del activo.');
   if(repairIncomeClass_(newAsset.clase)){newAsset.tipoIngresoInicial=request.incomeType==='REPARACIÓN'?'REPARACIÓN':'TRASLADO';newAsset.incomeMarking=true;preparePlazaIncomeAsset_(newAsset);}
@@ -1212,10 +1239,10 @@ function productionWarehouseApply_(data,central,request,user){
  }
  const destination=String(request.destination||'').trim().slice(0,160);
  if(['delivery','loan'].includes(request.kind)&&!destination)throw new Error('Indica dónde estará el elemento.');
- const now=new Date().toISOString(),row=productionWarehouseAppend_(data,{id:request.id,kind:request.kind,itemId:item.id,itemName:item.name,unit:item.unit||'Unidad',quantity,delta:outgoing?-quantity:quantity,assetId:asset?.id||'',assetLabel:asset?[asset.marcaActual||asset.marcaInterna||asset.marcaAnterior,asset.serial].filter(Boolean).join(' · '):'',personId:person?.id||'',personName:person?.nombre||'',destination:request.kind==='transfer_out'?'Plaza Blending':destination,loanId:loan?.id||'',sourceLoanId:sourceLoan?.sourceDeliveryId||'',notes:String(request.notes||'').slice(0,1000),fechaISO:date,createdAt:now,recordedBy:user.document,target:spare?'mechanics':'warehouse',status:'synced',requestSignature:JSON.stringify(request)});
+ const now=new Date().toISOString(),row=productionWarehouseAppend_(data,{id:request.id,kind:request.kind,itemId:item.id,itemName:item.name,unit:item.unit||'Unidad',quantity,delta:outgoing?-quantity:quantity,assetId:asset?.id||'',assetLabel:asset?[asset.marcaActual||asset.marcaInterna||asset.marcaAnterior,asset.serial].filter(Boolean).join(' · '):'',personId:person?.id||'',personName:person?.nombre||'',destination:request.kind==='transfer_out'?'Plaza Blending':destination,loanId:loan?.id||'',sourceLoanId:sourceLoan?.sourceDeliveryId||'',notes:String(request.notes||'').slice(0,1000),fechaISO:date,recordedAt:originalStamp_(request.createdAt),createdAt:now,recordedBy:user.document,target:spare?'mechanics':'warehouse',status:'synced',requestSignature:JSON.stringify(request)});
  if(spare){
   const kind=outgoing?'warehouse-out':request.kind==='return'?'warehouse-return':'income';
-  (data.incomes||(data.incomes=[])).push({id:'warehouse-'+row.id,kind,...spare,cantidad:quantity,fechaISO:date,createdAt:now,recordedAt:now,sourceWarehouseMovementId:row.id,registradoPor:user.document,registradoPorNombre:person?.nombre||'Bodega de Producción'});
+  (data.incomes||(data.incomes=[])).push({id:'warehouse-'+row.id,kind,...spare,cantidad:quantity,fechaISO:date,createdAt:now,recordedAt:now,sourceCreatedAt:row.recordedAt,sourceWarehouseMovementId:row.id,registradoPor:user.document,registradoPorNombre:person?.nombre||'Bodega de Producción'});
  }
  if(asset||request.kind==='transfer_out'){
   row.bridgePending=true;
@@ -1255,7 +1282,8 @@ function productionRecoverBridge_(centralId,central,heldLock){
    if(row.kind==='transfer_out'){
     const id='production-'+row.id,incomes=row.sourceLoanId?(central.blendingDeliveries||(central.blendingDeliveries=[])):(central.blendingIncomes||(central.blendingIncomes=[]));
     if(!incomes.some(income=>income.id===id)){
-     incomes.push({id,syncEventId:id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,assetId:row.assetId,assetLabel:row.assetLabel,broughtById:row.personId,broughtByName:row.personName,sourceWarehouseId:'production',sourceMovementId:row.id,...(row.sourceLoanId?{movementType:'DEVOLUCIÓN',loanId:row.sourceLoanId,returnedAt:row.createdAt,returnedById:row.personId,returnedByName:row.personName,destination:'Bodega de Superficie'}:{}),notes:row.notes,createdAt:row.createdAt,updatedAt:row.createdAt,syncState:'synced'});
+     const recordedAt=warehouseOriginalStamp_(row);
+     incomes.push({id,syncEventId:id,itemId:row.itemId,itemName:row.itemName,quantity:row.quantity,assetId:row.assetId,assetLabel:row.assetLabel,broughtById:row.personId,broughtByName:row.personName,sourceWarehouseId:'production',sourceMovementId:row.id,...(row.sourceLoanId?{movementType:'DEVOLUCIÓN',loanId:row.sourceLoanId,returnedAt:recordedAt,returnedById:row.personId,returnedByName:row.personName,destination:'Bodega de Superficie'}:{}),notes:row.notes,createdAt:recordedAt,syncedAt:row.createdAt,updatedAt:row.createdAt,syncState:'synced'});
      if(!row.assetId){const stocks=central.inventoryStock||(central.inventoryStock=[]);let stock=stocks.find(x=>x.itemId===row.itemId);if(!stock){stock={id:'stock-'+row.itemId,itemId:row.itemId,quantity:0};stocks.push(stock)}stock.quantity=Number(stock.quantity||0)+row.quantity;stock.updatedAt=row.createdAt;}
      changed=true;
     }
@@ -1268,6 +1296,24 @@ function productionRecoverBridge_(centralId,central,heldLock){
   return central;
  }finally{if(!owned)lock.releaseLock()}
 }
+// Recupera la hora original de traslados antiguos a partir de la solicitud guardada.
+function restorePlazaTransferTimes_(central,data){
+ const transfers=[...(central.blendingIncomes||[]),...(central.blendingDeliveries||[])].filter(row=>
+  row.sourceWarehouseId==='production'&&row.sourceMovementId&&!row.syncedAt&&row.movementType!=='REVERSIÓN');
+ if(!transfers.length)return false;
+ const sources=new Map((data.warehouseMovements||[]).map(row=>[row.id,row]));
+ let changed=false;
+ for(const transfer of transfers){
+  const source=sources.get(transfer.sourceMovementId);
+  const original=source&&warehouseOriginalStamp_(source);
+  if(!original||!source.createdAt)continue;
+  if(transfer.returnedAt===transfer.createdAt)transfer.returnedAt=original;
+  transfer.syncedAt=source.createdAt;
+  transfer.createdAt=original;
+  changed=true;
+ }
+ return changed;
+}
 function productionWarehouseSync_(q){
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
@@ -1275,6 +1321,10 @@ function productionWarehouseSync_(q){
   const id=findFile_(),central=id?readFile_(id,lock):{},person=(central.personal||[]).find(row=>row.id===user.personId&&!row.deleted);
   if(!person)throw new Error('Colaborador no disponible.');
   let file=productionDataFile_(),data=productionReadData_(file),changed=productionImportPlaza_(data,central);
+  if(id&&restorePlazaTransferTimes_(central,data)){
+   central.updatedAt=nextRevision_(central.updatedAt);
+   writeFile_(id,central);
+  }
   const pending=Array.isArray(q.pending)?q.pending:[];
   if(pending.length>1000||new Set(pending.map(row=>row.id)).size!==pending.length)throw new Error('Envía un máximo de 1000 movimientos con identificadores únicos.');
   const receipts=[];

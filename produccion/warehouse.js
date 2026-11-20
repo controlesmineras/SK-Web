@@ -181,7 +181,7 @@
   list.replaceChildren(...rows.map(loan=>{
    const card=el('article'),details=el('div');
    details.append(el('strong',loan.label),el('span','Prestado a: '+loan.borrower),
-    el('span',displayDate(loan.fechaISO)+' · Pendiente: '+loan.left+' '+loan.unit));
+    el('span',displayDate(loan.fechaISO)+' · '+registrationHour(loan)+' · Pendiente: '+loan.left+' '+loan.unit));
    card.append(details,button('REINTEGRAR',()=>selectReturn(loan.id)));return card;
   }));
   if(!rows.length)list.append(el('p',query?'No hay préstamos pendientes que coincidan con la búsqueda.':'No hay préstamos pendientes de reintegro.'));
@@ -278,6 +278,7 @@
   }
   return {rows,display,truncated};
  }
+ function registrationHour(row){return window.SKMovementTime.hour(window.SKMovementTime.warehouse(row))||'—';}
  function renderTable(){
   if(view==='return')return;
   const query=norm(find('#warehouseSearch').value).trim();let headers,rows,display,truncated;
@@ -285,16 +286,16 @@
    headers=['ELEMENTO','UNIDAD','DISPONIBLE EN PRODUCCIÓN'];
    ({rows,display,truncated}=stockRows(query));
   }else if(view==='loans'){
-   headers=['FECHA','ELEMENTO / ACTIVO','QUIÉN RECIBIÓ','PRESTADO','PENDIENTE','ESTADO'];
+   headers=['FECHA','HORA REGISTRO','ELEMENTO / ACTIVO','QUIÉN RECIBIÓ','PRESTADO','PENDIENTE','ESTADO'];
    const filter=find('#warehouseLoanFilter').value;
    rows=loans().filter(row=>filter==='all'||(filter==='pending'?row.left>0:row.left<=0)).flatMap(row=>{
-    const cells=[displayDate(row.fechaISO),row.label,row.borrower,row.quantity,row.left,row.left>0?'PENDIENTE':'DEVUELTO'];
+    const cells=[displayDate(row.fechaISO),registrationHour(row),row.label,row.borrower,row.quantity,row.left,row.left>0?'PENDIENTE':'DEVUELTO'];
     return matchesQuery(cells,row.itemId,query)?[cells]:[];
    });
   }else{
-   headers=['FECHA','MOVIMIENTO','ELEMENTO / ACTIVO','CANTIDAD','FUNCIONARIO','DESTINO','ESTADO'];
+   headers=['FECHA','HORA REGISTRO','MOVIMIENTO','ELEMENTO / ACTIVO','CANTIDAD','FUNCIONARIO','DESTINO','ESTADO'];
    rows=[...records(),...pending().map(row=>({...row,itemName:item(row.itemId)?.name,personName:people().find(p=>p.id===row.personId)?.nombre,pending:true}))].reverse().flatMap(row=>{
-    const cells=[displayDate(row.fechaISO),kinds[row.kind]||row.kind,row.assetLabel||row.itemName,row.quantity,row.personName||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO'];
+    const cells=[displayDate(row.fechaISO),registrationHour(row),kinds[row.kind]||row.kind,row.assetLabel||row.itemName,row.quantity,row.personName||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO'];
     return matchesQuery(cells,row.itemId,query)?[cells]:[];
    });
   }
