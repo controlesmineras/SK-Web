@@ -143,3 +143,14 @@ test('a saved alternative name opens the matching folder and keeps the matching 
   ui.choose(id);assert.equal(ui.select.value,id);
  }
 });
+
+test('el selector encuentra y conserva el código del repuesto seleccionado',()=>{
+ const c=picker();
+ c.items[0].sparePartCode='YT25-3.20';c.items[1].sparePartCode='00102';
+ c.group('YT 29');
+ c.type('yt25-3.20');
+ assert.deepEqual(c.detail.menu.children.map(x=>x.dataset.itemId),['yt1']);
+ assert.ok(c.detail.menu.children[0].children[0].children.some(x=>x.textContent==='Código: YT25-3.20'));
+ c.choose('yt1');assert.equal(c.detail.input.value,'1 · Resorte · YT25-3.20');
+ c.type('00102');assert.deepEqual(c.detail.menu.children.map(x=>x.dataset.itemId),['yt12']);
+});

@@ -31,12 +31,13 @@ test('guarda repuesto, saldo e ingreso inicial offline; limpia el formulario al 
  assert.ok(h.events.includes('skweb-local-change'));assert.match(h.status.textContent,/guardado en este dispositivo/);
 });
 test('el número es opcional y admite Columna 29',async()=>{
- const h=await harness();h.form.elements.spareEquipment.value='Columna 29';h.form.elements.spareItemNumber.value='';await h.save();
+ const h=await harness();h.form.elements.spareEquipment.value='Columna 29';h.form.elements.spareItemNumber.value='';h.form.elements.sparePartCode.value='009-A';await h.save();
+ assert.equal((await h.rows())[0].row.sparePartCode,'009-A');
  assert.equal((await h.rows())[0].row.name,'Repuesto de columna 29 · Pieza de prueba');
 });
 test('un elemento común no conserva los campos de repuesto',async()=>{
- const h=await harness();h.form.elements.spareApplication.value='Texto solo para repuestos';h.form.elements.isYtSpare.checked=false;h.form.elements.name.value='Guantes';await h.save();
- const item=(await h.rows())[0].row;assert.equal(item.name,'Guantes');assert.equal(item.spareItemName,'');assert.equal(item.spareEquipment,'');assert.equal(item.spareItemNumber,'');
+ const h=await harness();h.form.elements.sparePartCode.value='YT25-3.20';h.form.elements.spareApplication.value='Texto solo para repuestos';h.form.elements.isYtSpare.checked=false;h.form.elements.name.value='Guantes';await h.save();
+ const item=(await h.rows())[0].row;assert.equal(item.name,'Guantes');assert.equal(item.sparePartCode,'');assert.equal(h.form.elements.sparePartCode.disabled,true);assert.equal(h.form.elements.sparePartCode.closest().hidden,true);assert.equal(item.spareItemName,'');assert.equal(item.spareEquipment,'');assert.equal(item.spareItemNumber,'');
  assert.equal(h.form.elements.spareItemName.closest().hidden,true);assert.equal(h.form.elements.spareItemName.disabled,true);assert.equal(item.spareApplication,'');assert.equal(h.form.elements.spareApplication.closest().hidden,true);assert.equal(h.form.elements.spareApplication.disabled,true);assert.equal(h.form.elements.spareApplication.required,false);
 });
 test('equipos desconocidos o nombres vacíos no guardan nada',async()=>{

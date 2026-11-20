@@ -92,7 +92,7 @@
    ['_rels/.rels',relationships([[1,'officeDocument','xl/workbook.xml']])],
    ['xl/workbook.xml',`<workbook xmlns="${spreadsheet}" xmlns:r="${rel}"><bookViews><workbookView/></bookViews><sheets><sheet name="${report}" sheetId="1" r:id="rId1"/><sheet name="${dashboard}" sheetId="2" r:id="rId2"/></sheets></workbook>`],
    ['xl/_rels/workbook.xml.rels',relationships([[1,'worksheet','worksheets/sheet1.xml'],[2,'worksheet','worksheets/sheet2.xml'],[3,'styles','styles.xml']])],['xl/styles.xml',styles],
-   ['xl/worksheets/sheet1.xml',worksheet(report,metadata,['N.º de ítem','Repuesto','Aplicación / Ubicación','Código de parte','Consumo del período','Existencia al descargar'],detail,[15,42,50,24,24,27],false,cells)],
+   ['xl/worksheets/sheet1.xml',worksheet(report,metadata,['N.º de ítem','Repuesto','Aplicación / Ubicación','Código de elemento','Consumo del período','Existencia al descargar'],detail,[15,42,50,24,24,27],false,cells)],
    ['xl/worksheets/sheet2.xml',worksheet(hasChart?dashboard:'Dashboard de consumos · Sin consumo en el período',metadata,['N.º de ítem','Repuesto','Aplicación / Ubicación','Consumo del período','Existencia al descargar'],ranking,[15,42,58,24,27],hasChart,cells)]];
   if(hasChart)files.push(...chartFiles(ranking,xml));
   return zipStore(files);

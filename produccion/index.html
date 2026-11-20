@@ -200,8 +200,8 @@ body>main:has(#access:not([hidden])),#access{
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=17-turno"><script defer src="../movement-time.js?v=1"></script><script defer src="warehouse-store.js?v=2"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="../spare-groups.js?v=20261119-alias"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=4-cabecera"><script defer src="purchase-workbook.js?v=2"></script><script defer src="consumption-reports.js?v=20261120-compras-1"></script><script defer src="../asset-search.js?v=20261120-coincidencias-activos-1"></script><script defer src="app.js?v=20261120-compras-1"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=20261120-compras-1"></script>
-<script defer src="install-ui.js?v=1"></script><script defer src="../plaza/spare-picker.js?v=20261119-buscar-alias"></script><script defer src="warehouse.js?v=20261120-bodeguero-turno"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="../spare-groups.js?v=20261120-codigo-elemento"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=4-cabecera"><script defer src="purchase-workbook.js?v=20261120-codigo-elemento"></script><script defer src="consumption-reports.js?v=20261120-compras-1"></script><script defer src="../asset-search.js?v=20261120-coincidencias-activos-1"></script><script defer src="app.js?v=20261120-codigo-elemento"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=20261120-compras-1"></script>
+<script defer src="install-ui.js?v=1"></script><script defer src="../plaza/spare-picker.js?v=20261120-codigo-elemento"></script><script defer src="warehouse.js?v=20261120-bodeguero-turno"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
 <header id="productionHeader" hidden><img class="productionHeaderLogo" src="./produccion-yt-192.png" width="44" height="44" alt="Producción">
@@ -260,7 +260,7 @@ body>main:has(#access:not([hidden])),#access{
 <section id="incomePanel" aria-labelledby="mechanicTitle" hidden>
 <form id="productionIncome">
 <label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
-<div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem, nombre principal, secundario o terciario" autocomplete="off" aria-controls="incomePartOptions"></label>
+<div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem, código o nombre del repuesto" autocomplete="off" aria-controls="incomePartOptions"></label>
 <div id="incomePartOptions" class="machineOptions partOptions" hidden></div>
 <input type="hidden" name="partId"></div>
 <label>Fecha<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
@@ -274,7 +274,7 @@ body>main:has(#access:not([hidden])),#access{
 <form id="productionStockEdit">
 <label>Inventario<select name="origen"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
 <label>Fecha del saldo de apertura<input name="fechaISO" type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10" required></label>
-<div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem, nombre principal, secundario o terciario" autocomplete="off" aria-controls="stockPartOptions"></label>
+<div class="productionField"><label>Seleccionar repuesto<input name="search" type="search" placeholder="Ítem, código o nombre del repuesto" autocomplete="off" aria-controls="stockPartOptions"></label>
 <div id="stockPartOptions" class="machineOptions partOptions" hidden></div>
 <input type="hidden" name="partId"></div>
 <label>Saldo de apertura<input name="cantidad" type="number" min="0" step="1" placeholder="0" required></label>
@@ -293,7 +293,7 @@ body>main:has(#access:not([hidden])),#access{
 <label>INVENTARIO<select name="origin"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
 <label>FECHA DE INVENTARIO<input name="date" inputmode="numeric" placeholder="dd/mm/aaaa" required></label>
 <label>REGISTRO<select name="record"></select></label>
-<label>BUSCAR REPUESTO<input name="search" type="search" placeholder="Ítem, nombre principal, secundario o terciario"></label>
+<label>BUSCAR REPUESTO<input name="search" type="search" placeholder="Ítem, código o nombre del repuesto"></label>
 <button type="submit">GUARDAR BORRADOR</button>
 <button id="submitCount" type="button">SOLICITAR AUTORIZACIÓN</button>
 <button id="approveCount" type="button" hidden>APROBAR Y CERRAR</button>
@@ -337,7 +337,7 @@ body>main:has(#access:not([hidden])),#access{
 <label>Inventario de origen<input id="inventoryOrigin" readonly></label>
 <ul id="draft" class="productionField" hidden></ul>
 <div id="partPicker" class="productionField">
-<label>Seleccionar repuesto<input id="partSearch" type="search" placeholder="Ítem, nombre principal, secundario o terciario" autocomplete="off" aria-controls="partOptions"></label>
+<label>Seleccionar repuesto<input id="partSearch" type="search" placeholder="Ítem, código o nombre del repuesto" autocomplete="off" aria-controls="partOptions"></label>
 <div id="partOptions" class="machineOptions partOptions" hidden></div>
 </div>
 <div id="responsiblePicker" class="productionField">

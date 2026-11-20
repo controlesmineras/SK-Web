@@ -26,7 +26,9 @@
   }
   function matches(item,query){
     let q=normalize(query);if(!q)return true;
-    const text=normalize([rawName(item),recordName(item),...aliases(item),item.spareApplication,item.application,item.ubicacionAplicacion].filter(Boolean).join(' '));
+    const code=key(item)?clean(item.sparePartCode):'';
+    if(q===normalize(code))return true;
+    const text=normalize([rawName(item),recordName(item),...aliases(item),code,item.spareApplication,item.application,item.ubicacionAplicacion].filter(Boolean).join(' '));
     const requested=q.match(/\bitem\s*(\d+)\b/)||q.match(/^(\d+)$/);
     if(requested&&key(item)){
       if(clean(item.spareItemNumber)!==requested[1])return false;
