@@ -148,3 +148,25 @@ test('editar marca el tipo del registro y cambiarlo en los botones se guarda con
  h.api.openKind('common');assert.equal(h.node('#inventoryFormTitle').textContent,'Datos del elemento');assert.equal(h.node('#spareCatalogFilter').hidden,true);assert.equal(h.form.elements.spareEquipment.disabled,true);
  h.api.openKind('spare');assert.equal(h.node('#spareCatalogFilter').hidden,false);assert.equal(h.form.elements.spareEquipment.value,'YT 28');
 });
+
+test('cancelar limpia la edición sin modificar el criterio, sus existencias ni la categoría',async()=>{
+ const h=await harness();await h.save();
+ const before=await h.rows(),item=before.find(entry=>entry.table==='inventoryCriteria').row;
+ h.api.openKind('spare');await h.api.edit(item.id);
+ h.form.elements.spareItemName.value='Cambio sin guardar';
+ h.form.elements.initialQuantity.value='128';
+ const changes=h.events.filter(type=>type==='skweb-local-change').length;
+ h.node('#inventoryItemCancel').handlers.click();
+ assert.equal(h.form.elements.id.value,'');
+ assert.equal(h.form.elements.spareItemName.value,'');
+ assert.equal(h.form.elements.initialQuantity.value,'');
+ assert.equal(h.form.elements.isYtSpare.checked,true);
+ assert.equal(h.form.elements.spareEquipment.value,item.spareEquipment);
+ assert.equal(h.node('#inventoryItemDeactivate').hidden,true);
+ assert.deepEqual(await h.rows(),before);
+ assert.equal(h.events.filter(type=>type==='skweb-local-change').length,changes);
+ const pending=h.api.edit(item.id);
+ h.node('#inventoryItemCancel').handlers.click();await pending;
+ assert.equal(h.form.elements.id.value,'');
+ await h.api.edit(item.id);assert.equal(h.form.elements.spareItemName.value,item.spareItemName);
+});
