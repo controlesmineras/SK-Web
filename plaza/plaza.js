@@ -545,8 +545,71 @@ function matchesItemSearch(text,number,query){
   function movementDate(row){const date=new Date(row.createdAt||row.updatedAt||0);return Number.isNaN(date.getTime())?null:date}
   function movementItem(row){return row.itemName||itemName(findItem(row.itemId))||'Elemento sin nombre'}
   function localDateValue(date){const pad=value=>String(value).padStart(2,'0');return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`}
-  function deliveryCategory(){return [...document.querySelectorAll('#deliveryCategoryFilter input')].find(input=>input.checked)?.value||'all'}
-  function deliveryCategoryLabel(){return {all:'Todo',epp:'Solo EPP',assets:'Activos fijos'}[deliveryCategory()]||'Todo'}
+  const recentOrder={delivery:[{key:'date',dir:-1}],income:[{key:'date',dir:-1}]};
+  const recentCollator=new Intl.Collator('es-CO',{sensitivity:'base',numeric:true});
+  const categoryLabels={all:'Todo',epp:'Solo EPP',assets:'Activos fijos',reversals:'Reversiones'};
+  function recentCategory(kind){
+    return [...document.querySelectorAll('#'+kind+'CategoryFilter input')].find(input=>input.checked)?.value||'all';
+  }
+  function recentColumns(kind){
+    const delivery=kind==='delivery';
+    return {date:'Fecha y hora de registro',item:'Elemento',quantity:'Cantidad',
+      ...(delivery?{balance:'Saldos'}:{origin:'Origen'}),person:delivery?'Recibe':'Quién trae',
+      company:'Empresa / Área',keeper:'Bodeguero/a de turno',operator:'Registrado por'};
+  }
+  function recentSort(kind,key){
+    const order=recentOrder[kind],primary=order[0];
+    if(!Object.hasOwn(recentColumns(kind),key))return;
+    const dir=primary.key===key?-primary.dir:1;
+    recentOrder[kind]=[{key,dir},...order.filter(entry=>entry.key!==key)];
+  }
+  function recentPeople(){
+    const personal=data.personal||[];
+    return {byId:new Map(personal.map(p=>[p.id,p])),
+      byDocument:new Map(personal.filter(p=>p.documento).map(p=>[String(p.documento),p]))};
+  }
+  function recentDetails(kind,row,people){
+    const delivery=kind==='delivery',person=people.byId.get(delivery?row.recipientId:row.broughtById);
+    const document=String(row.actorDocument||row.operatorDocument||'');
+    const operator=people.byDocument.get(document)||people.byId.get(row.operatorId);
+    return {person:person?.nombre||(delivery?row.recipientName:row.broughtByName)||'',
+      document:person?.documento||(delivery?row.recipientDocument:row.broughtByDocument),
+      company:(delivery?row.recipientCompany:'')||person?.empresa||'',area:person?.area||'',
+      keeper:row.shiftKeeperName||row.shiftKeeperDocument||'',operator:operator?.nombre||row.operatorName||document||''};
+  }
+  function sortRecentGroups(kind,groups,people){
+    const order=recentOrder[kind];
+    const indexed=groups.map(rows=>{
+      const row=rows[rows.length-1],details=recentDetails(kind,row,people);
+      const values={...details,date:movementDate(row)?.getTime(),item:movementItem(row),
+        quantity:row.quantity==null?null:Number(row.quantity),balance:row.balanceAfter==null?null:Number(row.balanceAfter),
+        origin:row.originMine,company:[details.company,details.area].filter(Boolean).join(' / ')};
+      return {rows,values};
+    });
+    indexed.sort((a,b)=>{
+      for(const {key,dir} of order){
+        const x=a.values[key],y=b.values[key],missingX=x==null||x==='',missingY=y==null||y==='';
+        if(missingX!==missingY)return missingX?1:-1;
+        if(missingX)continue;
+        const diff=typeof x==='number'?x-y:recentCollator.compare(x,y);
+        if(diff)return dir*diff;
+      }
+      return 0;
+    });
+    return indexed.flatMap(group=>group.rows);
+  }
+  function reversalGroups(rows,matches){
+    const originals=new Map(rows.filter(row=>row.reversalMovementId).map(row=>[row.reversalMovementId,row.id]));
+    const linkedIds=new Set(rows.map(row=>row.reversalOf).filter(Boolean)),groups=new Map();
+    for(const row of rows){
+      if(!(row.reversed||row.reversado||row.reversalOf||row.reversalMovementId||row.movementType==='REVERSIÓN'||linkedIds.has(row.id)||originals.has(row.id)))continue;
+      const id=row.reversalOf||originals.get(row.id)||row.id;
+      if(!groups.has(id))groups.set(id,[]);
+      const group=groups.get(id);
+      if(row.id===id)group.unshift(row);else group.push(row);
+    }
+    return [...groups.values()].filter(group=>group.some(matches));
+  }
   function recentItemId(kind){return $('#'+kind+'HistoryQueryForm')?.elements?.itemId?.value||''}
   function refreshRecentItemFilters(){
     for(const kind of ['delivery','income']){
@@ -562,24 +625,24 @@ function matchesItemSearch(text,number,query){
     const fromValue=$('#'+kind+'DateFrom')?.value,toValue=$('#'+kind+'DateTo')?.value,fromTime=$('#'+kind+'TimeFrom')?.value||'00:00',toTime=$('#'+kind+'TimeTo')?.value||'23:59';
     return{from:fromValue?new Date(fromValue+'T'+fromTime+':00'):null,to:toValue?new Date(toValue+'T'+toTime+':59.999'):null};
   }
-  function recentQueryRows(kind){
-    const {from,to}=recentDateRange(kind),itemId=recentItemId(kind),category=kind==='delivery'?deliveryCategory():'all';
+  function recentQueryRows(kind,people=recentPeople()){
+    const {from,to}=recentDateRange(kind),itemId=recentItemId(kind),category=recentCategory(kind);
     if(from&&to&&from>to)return [];
-    return(data[kind==='delivery'?'blendingDeliveries':'blendingIncomes']||[]).filter(row=>{
+    const rows=(data[kind==='delivery'?'blendingDeliveries':'blendingIncomes']||[])
+      .filter(row=>!row.deleted&&!(kind==='delivery'&&row.movementType==='DEVOLUCIÓN'));
+    function matches(row){
       const date=movementDate(row);
-      if(row.deleted||kind==='delivery'&&row.movementType==='DEVOLUCIÓN'||!date)return false;
-      if(from&&date<from||to&&date>to||itemId&&!queryMatchesItem(row,itemId))return false;
-      const criterion=findItem(row.itemId);
-      if(category==='epp'&&criterion?.isEpp!==true)return false;
-      if(category==='assets'&&!row.assetId&&!isFixedItem(criterion))return false;
+      if(!date||from&&date<from||to&&date>to||itemId&&!queryMatchesItem(row,itemId))return false;
+      if(category==='epp')return findItem(row.itemId)?.isEpp===true;
+      if(category==='assets')return Boolean(row.assetId||isFixedItem(findItem(row.itemId)));
       return true;
-    }).sort((a,b)=>movementDate(b)-movementDate(a));
+    }
+    const groups=category==='reversals'?reversalGroups(rows,matches):rows.filter(matches).map(row=>[row]);
+    return sortRecentGroups(kind,groups,people);
   }
-  function deliveryQueryRows(){return recentQueryRows('delivery')}
-  function incomeQueryRows(){return recentQueryRows('income')}
   function recentFilterLabel(kind){
     const item=findItem(recentItemId(kind)),labels=[item?itemName(item):'Todos los elementos'];
-    if(kind==='delivery')labels.push(deliveryCategoryLabel());
+    labels.push(categoryLabels[recentCategory(kind)]);
     return labels.join(' · ');
   }
   function resetRecentFilters(kind){
@@ -587,7 +650,8 @@ function matchesItemSearch(text,number,query){
     $('#'+kind+'DateFrom').value=localDateValue(from);$('#'+kind+'DateTo').value=localDateValue(today);
     $('#'+kind+'TimeFrom').value='';$('#'+kind+'TimeTo').value='';
     clearItemSearch($('#'+kind+'HistoryQueryForm'));
-    if(kind==='delivery')$('#deliveryCategoryFilter input[value="all"]').checked=true;
+    $('#'+kind+'CategoryFilter input[value="all"]').checked=true;
+    recentOrder[kind]=[{key:'date',dir:-1}];
   }
   function loanReturnSummary(row){if(norm(row.deliveryType)!=='prestamo')return '';const back=(data.blendingDeliveries||[]).find(event=>!event.deleted&&!event.reversed&&!event.reversado&&event.movementType==='DEVOLUCIÓN'&&event.loanId===row.id);return back?`DEVUELTO · ${new Date(back.returnedAt||back.createdAt).toLocaleString('es-CO')} · Devuelve: ${back.returnedByName||back.returnedByDocument||''} · Bodeguero/a de turno: ${back.shiftKeeperName||'Sin dato histórico'} · Registrado por: ${back.operatorName||back.actorDocument||back.operatorDocument||''}${back.notes?' · '+back.notes:''}`:`Préstamo: ${window.SKPlazaReturns?.loanState(data,row)||'PENDIENTE'}`}
   function deliveryReplacementLabel(row){
@@ -602,7 +666,7 @@ function matchesItemSearch(text,number,query){
     return{...deliveryReportRow(row),tipoIngreso:row.incomeType||'',origen:row.originMine||'',funcionario:person?.nombre||row.broughtByName||'No informado',documento:person?.documento||row.broughtByDocument||'No informado',empresa:person?.empresa||'No informada',area:person?.area||'No informada'};
   }
   function reportFileBase(kind='delivery'){
-    const from=$('#'+kind+'DateFrom')?.value||'inicio',to=$('#'+kind+'DateTo')?.value||'hoy',suffix=kind==='delivery'?({all:'',epp:'_EPP',assets:'_ACTIVOS_FIJOS'}[deliveryCategory()]||''):'',item=findItem(recentItemId(kind)),element=item?'_'+norm(itemName(item)).replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,''):'';
+    const from=$('#'+kind+'DateFrom')?.value||'inicio',to=$('#'+kind+'DateTo')?.value||'hoy',suffix=({epp:'_EPP',assets:'_ACTIVOS_FIJOS',reversals:'_REVERSIONES'}[recentCategory(kind)]||''),item=findItem(recentItemId(kind)),element=item?'_'+norm(itemName(item)).replace(/[^a-z0-9]+/g,'_').replace(/^_|_$/g,''):'';
     return`${kind==='delivery'?'entregas':'ingresos'}_${from}_a_${to}${suffix}${element}`;
   }
   function downloadBlob(blob,name){const url=URL.createObjectURL(blob),link=document.createElement('a');link.href=url;link.download=name;document.body.append(link);link.click();link.remove();setTimeout(()=>URL.revokeObjectURL(url),1500)}
@@ -727,41 +791,89 @@ function matchesItemSearch(text,number,query){
   function movementSyncStatus(row){return row.syncState==='pending'?`<span><b>PENDIENTE DE SINCRONIZACIÓN</b>${row.syncError?' · '+esc(row.syncError):''}</span>`:''}
   const wideQueries=window.matchMedia?.('(min-width: 1000px)');
   const recentDateFormat=new Intl.DateTimeFormat('es-CO',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Bogota'});
-  function recentMovementTable(kind,rows,people,byDocument,dateLabel){
-    const delivery=kind==='delivery';
-    const headers=['Fecha y hora de registro','Elemento', 'Cantidad',delivery?'Saldos':'Origen',
-      delivery?'Recibe':'Quién trae','Empresa / Área','Bodeguero y registro'];
-    const head=headers.map(title=>'<th scope="col">'+title+'</th>').join('');
+  function recentMovementTable(kind,rows,people,dateLabel){
+    const delivery=kind==='delivery',columns=recentColumns(kind),order=recentOrder[kind];
+    const head=Object.entries(columns).map(([key,title])=>{
+      const index=order.findIndex(entry=>entry.key===key),dir=order[index]?.dir;
+      const aria=index===0?' aria-sort="'+(dir===1?'ascending':'descending')+'"':'';
+      const arrow=dir===1?'↑':dir===-1?'↓':'↕';
+      const name=key==='balance'?'Saldo nuevo':title;
+      const hint='Ordenar por '+name+' '+(index===0&&dir===1?'descendente':'ascendente');
+      return '<th scope="col"'+aria+'><button type="button" data-recent-sort="'+key+'" title="'+hint+'" aria-label="'+hint+'">'+
+        title+' <span aria-hidden="true">'+arrow+(index<0?'':'<sup>'+(index+1)+'</sup>')+'</span></button></th>';
+    }).join('');
     const line=value=>value?'<span>'+esc(value)+'</span>':'';
     const body=rows.map(row=>{
-      const person=people.get(delivery?row.recipientId:row.broughtById);
-      const operatorDocument=String(row.actorDocument||row.operatorDocument||'');
-      const operator=byDocument.get(operatorDocument)||people.get(row.operatorId);
-      const name=person?.nombre||(delivery?row.recipientName:row.broughtByName);
-      const document=person?.documento||(delivery?row.recipientDocument:row.broughtByDocument);
-      const company=(delivery?row.recipientCompany:'')||person?.empresa;
+      const detail=recentDetails(kind,row,people);
       const replacement=delivery?deliveryReplacementLabel(row):'';
       const isReversal=row.movementType==='REVERSIÓN';
       const asset=row.assetId||row.assetLabel?movementAssetLabel(row):'';
       const element='<strong>'+esc((isReversal?'REVERSIÓN · ':'')+movementItem(row))+'</strong>'+
         line(asset)+line(delivery?row.deliveryType:row.incomeType)+line(row.destination)+
         line(replacement?'Trae reposición: '+replacement:'')+line(row.notes)+
-        (delivery?line(loanReturnSummary(row)):'')+reversalStatus(row)+reversalRequester(row)+movementSyncStatus(row);
+        (delivery?line(loanReturnSummary(row)):'')+reversalStatus(row)+reversalRequester(row)+
+        (isReversal?line('Bodeguero y registro del movimiento original'):'')+movementSyncStatus(row);
       const balances=delivery||isReversal?
         (row.balanceBefore!=null?line('Anterior: '+row.balanceBefore):'')+
         (row.balanceAfter!=null?line('Nuevo: '+row.balanceAfter):''):'';
-      const values=[esc(dateLabel(row)),element,esc(row.quantity??'—'),
+      const quantity=esc(row.quantity??'—')+(isReversal?line(row.stockDelta>0?'Reintegrada':'Retirada'):'');
+      const values=[esc(dateLabel(row)),element,quantity,
         (balances+(!delivery?line(row.originMine):''))||'—',
-        line(name||'No informado')+line(document),line(company||'No informada')+line(person?.area),
-        movementPeople(row,operator?.nombre||row.operatorName||operatorDocument||'No informado')];
+        line(detail.person||'No informado')+line(detail.document),line(detail.company||'No informada')+line(detail.area),
+        line(detail.keeper||'Sin dato histórico'),line(detail.operator||'No informado')];
       return '<tr'+reversalAppearance(row)+'>'+values.map(value=>'<td>'+value+'</td>').join('')+'</tr>';
     }).join('');
     const title=delivery?'Entregas recientes':'Ingresos recientes';
     return '<div class="recentTableScroll" tabindex="0" role="region" aria-label="'+title+'"><table aria-label="'+title+'"><thead><tr>'+head+'</tr></thead><tbody>'+body+'</tbody></table></div>';
   }
   wideQueries?.addEventListener('change',()=>{if($('#app')&&!$('#app').hidden)renderRecentQueries()});
-  function renderRecentQueries(){const deliveries=$('#recentDeliveriesList'),incomes=$('#recentIncomesList');if(!deliveries||!incomes)return;const personal=data.personal||[],people=new Map(personal.map(person=>[person.id,person])),peopleByDocument=new Map(personal.map(person=>[String(person.documento||''),person]));const deliveryRows=deliveryQueryRows(),incomeRows=incomeQueryRows(),dateLabel=row=>{const date=movementDate(row);return date?recentDateFormat.format(date):'—'};const deliveryRange=recentDateRange('delivery'),incomeRange=recentDateRange('income');$('#recentDeliveriesCount').textContent=deliveryRange.from&&deliveryRange.to&&deliveryRange.from>deliveryRange.to?'La fecha inicial debe ser anterior o igual a la fecha final.':`${deliveryRows.length} ${deliveryRows.length===1?'entrega encontrada':'entregas encontradas'} · ${recentFilterLabel('delivery')}`;deliveries.innerHTML=wideQueries?.matches&&deliveryRows.length?recentMovementTable('delivery',deliveryRows,people,peopleByDocument,dateLabel):deliveryRows.map(row=>{const person=people.get(row.recipientId),operatorDocument=String(row.actorDocument||row.operatorDocument||''),operator=peopleByDocument.get(operatorDocument)||people.get(row.operatorId),operatorName=operator?.nombre||row.operatorName||operatorDocument||'No informado';return `<article${reversalAppearance(row)}><div><b>${row.movementType==='REVERSIÓN'?'REVERSIÓN · ':''}${esc(movementItem(row))}</b>${reversalStatus(row)}${row.movementType==='REVERSIÓN'?reversalBalance(row):!row.assetId&&Number.isFinite(Number(row.balanceBefore))&&Number.isFinite(Number(row.balanceAfter))?`<span><b>Saldo:</b> ${esc(row.balanceBefore)} · <b>− Cantidad entregada:</b> ${esc(row.quantity||0)} · <b>Nuevo saldo:</b> ${esc(row.balanceAfter)}</span>`:''}<span>${esc(dateLabel(row))}</span>${deliveryReplacementLabel(row)?`<span>Trae reposición: ${esc(deliveryReplacementLabel(row))}</span>`:''}${movementSyncStatus(row)}<span>Recibe: ${esc(person?.nombre||row.recipientName||'No informado')}</span><span>Documento: ${esc(person?.documento||row.recipientDocument||'No informado')}</span><span>Empresa: ${esc(row.recipientCompany||person?.empresa||'No informada')}</span><span>Área: ${esc(person?.area||'No informada')}</span>${reversalRequester(row)}${movementPeople(row,operatorName)}${row.assetLabel?`<span>Activo específico: ${esc(movementAssetLabel(row))}</span>`:''}${row.assetId||row.deliveryType?`<span>Tipo de entrega: ${esc(row.deliveryType||'No especificado')}</span>`:''}${row.destination?`<span>Destino: ${esc(row.destination)}</span>`:''}${loanReturnSummary(row)?`<span>${esc(loanReturnSummary(row))}</span>`:''}</div></article>`}).join('')||'<p class="permission">No hay entregas que coincidan con el rango y los filtros seleccionados.</p>';$('#recentIncomesCount').textContent=incomeRange.from&&incomeRange.to&&incomeRange.from>incomeRange.to?'La fecha inicial debe ser anterior o igual a la fecha final.':`${incomeRows.length} ${incomeRows.length===1?'ingreso encontrado':'ingresos encontrados'} · ${recentFilterLabel('income')}`;incomes.innerHTML=wideQueries?.matches&&incomeRows.length?recentMovementTable('income',incomeRows,people,peopleByDocument,dateLabel):incomeRows.map(row=>`<article${reversalAppearance(row)}><div><b>${row.movementType==='REVERSIÓN'?'REVERSIÓN · ':''}${esc(movementItem(row))}</b><span>${esc(dateLabel(row))} · Cantidad: ${esc(row.quantity||1)}</span>${reversalStatus(row)}${row.movementType==='REVERSIÓN'?reversalBalance(row)+reversalRequester(row):''}${movementPeopleFromPersonal(row)}${movementSyncStatus(row)}${row.assetLabel?`<span>${esc(movementAssetLabel(row))}</span>`:''}${row.incomeType?`<span>${esc(row.incomeType)} · Mina de origen: ${esc(row.originMine)}</span>`:''}${row.notes?`<span>Observaciones: ${esc(row.notes)}</span>`:''}</div></article>`).join('')||'<p class="permission">No hay ingresos que coincidan con el rango y los filtros seleccionados.</p>'}
-  function setupQueryMenu(){if(!$('#recentDeliveries')){const contacts=$('#contacts'),delivery=document.createElement('section'),income=document.createElement('section');delivery.id='recentDeliveries';delivery.className='view recentMovements';delivery.innerHTML='<div class="deliveryQueryTitle"><h2>ENTREGAS RECIENTES</h2><button type="button" id="clearDeliveryFilters">LIMPIAR FILTROS</button></div><div class="deliveryQueryFilters"><label>DESDE FECHA<input id="deliveryDateFrom" type="date"></label><label>DESDE HORA<input id="deliveryTimeFrom" type="time"></label><label>HASTA FECHA<input id="deliveryDateTo" type="date"></label><label>HASTA HORA<input id="deliveryTimeTo" type="time"></label><form id="deliveryHistoryQueryForm" class="recentElementFilter"><label>FILTRAR POR ELEMENTO<select name="itemId"></select></label></form><fieldset id="deliveryCategoryFilter" class="deliveryCategoryFilter"><legend>MOSTRAR</legend><div class="deliveryCategoryOptions"><label><input type="radio" name="deliveryCategory" value="all" checked><span>TODO</span></label><label><input type="radio" name="deliveryCategory" value="epp"><span>SOLO EPP</span></label><label><input type="radio" name="deliveryCategory" value="assets"><span>ACTIVOS FIJOS</span></label></div></fieldset><div class="deliveryExportActions"><button type="button" id="exportDeliveriesExcel">DESCARGAR EXCEL</button><button type="button" id="exportDeliveriesPdf">DESCARGAR PDF</button></div></div><p id="recentDeliveriesCount" class="permission"></p><div id="recentDeliveriesList" class="recentMovementList"></div>';income.id='recentIncomes';income.className='view recentMovements';income.innerHTML='<div class="deliveryQueryTitle"><h2>INGRESOS RECIENTES</h2><button type="button" id="clearIncomeFilters">LIMPIAR FILTROS</button></div><div class="deliveryQueryFilters"><label>DESDE FECHA<input id="incomeDateFrom" type="date"></label><label>DESDE HORA<input id="incomeTimeFrom" type="time"></label><label>HASTA FECHA<input id="incomeDateTo" type="date"></label><label>HASTA HORA<input id="incomeTimeTo" type="time"></label><form id="incomeHistoryQueryForm" class="recentElementFilter"><label>FILTRAR POR ELEMENTO<select name="itemId"></select></label></form><div class="deliveryExportActions"><button type="button" id="exportIncomesExcel">DESCARGAR EXCEL</button><button type="button" id="exportIncomesPdf">DESCARGAR PDF</button></div></div><p id="recentIncomesCount" class="permission"></p><div id="recentIncomesList" class="recentMovementList"></div>';contacts.after(delivery,income)}if(!$('#queryMenuStyle')){const style=document.createElement('style');style.id='queryMenuStyle';style.textContent='.queryMenuGrid{display:grid;grid-template-columns:1fr;gap:12px}.queryMenuGrid button{min-height:70px;font-size:1.02rem;background:linear-gradient(145deg,#f4f5f6,#d5dade);color:#263642;border:1px solid #c4cacf}.recentMovementList{display:grid;gap:10px}.recentMovementList article{border:1px solid #d7e0e7;border-radius:10px;padding:12px;background:#fff}.recentMovementList article>div{display:grid;gap:4px}.recentMovementList span{color:#52687a}.deliveryQueryFilters{display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:12px;margin:12px 0 16px}.deliveryQueryFilters label{display:flex;flex-direction:column;gap:6px;font-weight:800}.recentElementFilter{grid-column:1/-1;min-width:0}.deliveryCategoryFilter{grid-column:1/-1;min-width:0;margin:0;padding:0;border:0}.deliveryCategoryFilter legend{font-weight:800;font-size:.85rem;margin-bottom:7px;padding:0}.deliveryCategoryOptions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:5px;background:#edf2f6;border:1px solid #d7e0e7;border-radius:10px}.deliveryCategoryOptions label{position:relative;min-width:0;cursor:pointer}.deliveryCategoryOptions input{position:absolute;opacity:0;width:1px;height:1px;margin:0}.deliveryCategoryOptions span{display:flex;align-items:center;justify-content:center;min-height:42px;padding:7px 5px;border:1px solid transparent;border-radius:7px;text-align:center;color:#334e62;font-size:.82rem;line-height:1.2;box-sizing:border-box}.deliveryCategoryOptions input:checked+span{background:#173d59;color:#fff;border-color:#173d59;box-shadow:0 1px 3px #173d5926}.deliveryCategoryOptions input:focus-visible+span{outline:3px solid #e7b45a;outline-offset:2px}.deliveryQueryTitle{display:flex;align-items:center;justify-content:space-between;gap:12px}.deliveryQueryTitle h2{margin:0}.deliveryQueryTitle button{width:auto;min-height:38px;padding:8px 14px;background:#eef3f7;color:#173d59;border:1px solid #b9c8d3;font-weight:800}.deliveryExportActions{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap}.deliveryExportActions button{flex:1;min-width:160px;color:#fff}.deliveryExportActions #exportDeliveriesExcel,.deliveryExportActions #exportIncomesExcel{background:#217346;border:1px solid #185c37}.deliveryExportActions #exportDeliveriesExcel:hover,.deliveryExportActions #exportDeliveriesExcel:focus-visible,.deliveryExportActions #exportIncomesExcel:hover,.deliveryExportActions #exportIncomesExcel:focus-visible{background:#185c37}.deliveryExportActions #exportDeliveriesPdf,.deliveryExportActions #exportIncomesPdf{background:#c62828;border:1px solid #a91f1f}.deliveryExportActions #exportDeliveriesPdf:hover,.deliveryExportActions #exportDeliveriesPdf:focus-visible,.deliveryExportActions #exportIncomesPdf:hover,.deliveryExportActions #exportIncomesPdf:focus-visible{background:#a91f1f}@media(max-width:600px){.deliveryQueryFilters{grid-template-columns:1fr}.recentElementFilter,.deliveryCategoryFilter,.deliveryExportActions{grid-column:1}.deliveryExportActions{flex-direction:column}}';document.head.append(style)}const overlay=document.createElement('div');overlay.id='plazaQueryMenu';overlay.className='registerMenuOverlay';overlay.hidden=true;overlay.innerHTML='<div class="registerMenu"><div class="registerMenuHead"><h2>HACER CONSULTAS</h2><button type="button" data-close-query aria-label="Volver a Inicio">VOLVER</button></div><p>SELECCIONA LA CONSULTA.</p><div class="queryMenuGrid"><button type="button" data-query-view="stockQuery">CONSULTAR EXISTENCIAS</button><button type="button" data-query-view="contacts">PERSONAL</button><button type="button" data-query-view="loanHistory">PRÉSTAMOS Y DEVOLUCIONES</button><button type="button" data-query-view="recentDeliveries">ENTREGAS RECIENTES <small>ÚLTIMOS 7 DÍAS</small></button><button type="button" data-query-view="recentIncomes">INGRESOS RECIENTES <small>ÚLTIMOS 30 DÍAS</small></button></div></div>';document.body.append(overlay);const close=()=>{overlay.hidden=true};overlay.addEventListener('click',event=>{if(event.target===overlay||event.target.closest('[data-close-query]'))close();const button=event.target.closest('[data-query-view]');if(button){close();showView(button.dataset.queryView)}});for(const kind of ['delivery','income']){const form=$('#'+kind+'HistoryQueryForm');setupItemSearch(form,'Filtrar '+(kind==='delivery'?'entregas':'ingresos')+' por elemento');form.addEventListener('submit',event=>event.preventDefault());form.addEventListener('change',renderRecentQueries);resetRecentFilters(kind);$('#clear'+(kind==='delivery'?'Delivery':'Income')+'Filters').addEventListener('click',()=>{resetRecentFilters(kind);renderRecentQueries()});for(const field of ['DateFrom','TimeFrom','DateTo','TimeTo'])$('#'+kind+field).addEventListener('change',renderRecentQueries)}$('#deliveryCategoryFilter').addEventListener('change',renderRecentQueries);$('#exportDeliveriesExcel').addEventListener('click',exportDeliveriesExcel);$('#exportDeliveriesPdf').addEventListener('click',exportDeliveriesPdf);$('#exportIncomesExcel').addEventListener('click',exportIncomesExcel);$('#exportIncomesPdf').addEventListener('click',exportIncomesPdf);let scrollTop=$('#deliveryScrollTop');if(!scrollTop){scrollTop=document.createElement('button');scrollTop.id='deliveryScrollTop';scrollTop.type='button';scrollTop.hidden=true;scrollTop.textContent='↑';scrollTop.setAttribute('aria-label','Volver al inicio de Entregas recientes');scrollTop.title='Volver arriba';document.body.append(scrollTop);scrollTop.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));window.addEventListener('scroll',()=>{scrollTop.hidden=!(currentView==='recentDeliveries'&&window.scrollY>480)},{passive:true})}window.openPlazaQueryMenu=()=>{showView('home');overlay.hidden=false}}
+  function renderRecentQueries(){const deliveries=$('#recentDeliveriesList'),incomes=$('#recentIncomesList');if(!deliveries||!incomes)return;const directory=recentPeople(),people=directory.byId,peopleByDocument=directory.byDocument;
+    const deliveryRows=recentQueryRows('delivery',directory),incomeRows=recentQueryRows('income',directory),dateLabel=row=>{const date=movementDate(row);return date?recentDateFormat.format(date):'—'};const deliveryRange=recentDateRange('delivery'),incomeRange=recentDateRange('income');$('#recentDeliveriesCount').textContent=deliveryRange.from&&deliveryRange.to&&deliveryRange.from>deliveryRange.to?'La fecha inicial debe ser anterior o igual a la fecha final.':`${deliveryRows.length} ${deliveryRows.length===1?'entrega encontrada':'entregas encontradas'} · ${recentFilterLabel('delivery')}`;deliveries.innerHTML=wideQueries?.matches&&deliveryRows.length?recentMovementTable('delivery',deliveryRows,directory,dateLabel):deliveryRows.map(row=>{const person=people.get(row.recipientId),operatorDocument=String(row.actorDocument||row.operatorDocument||''),operator=peopleByDocument.get(operatorDocument)||people.get(row.operatorId),operatorName=operator?.nombre||row.operatorName||operatorDocument||'No informado';return `<article${reversalAppearance(row)}><div><b>${row.movementType==='REVERSIÓN'?'REVERSIÓN · ':''}${esc(movementItem(row))}</b>${reversalStatus(row)}${row.movementType==='REVERSIÓN'?reversalBalance(row):!row.assetId&&Number.isFinite(Number(row.balanceBefore))&&Number.isFinite(Number(row.balanceAfter))?`<span><b>Saldo:</b> ${esc(row.balanceBefore)} · <b>− Cantidad entregada:</b> ${esc(row.quantity||0)} · <b>Nuevo saldo:</b> ${esc(row.balanceAfter)}</span>`:''}<span>${esc(dateLabel(row))}</span>${deliveryReplacementLabel(row)?`<span>Trae reposición: ${esc(deliveryReplacementLabel(row))}</span>`:''}${movementSyncStatus(row)}<span>Recibe: ${esc(person?.nombre||row.recipientName||'No informado')}</span><span>Documento: ${esc(person?.documento||row.recipientDocument||'No informado')}</span><span>Empresa: ${esc(row.recipientCompany||person?.empresa||'No informada')}</span><span>Área: ${esc(person?.area||'No informada')}</span>${reversalRequester(row)}${movementPeople(row,operatorName)}${row.assetLabel?`<span>Activo específico: ${esc(movementAssetLabel(row))}</span>`:''}${row.assetId||row.deliveryType?`<span>Tipo de entrega: ${esc(row.deliveryType||'No especificado')}</span>`:''}${row.destination?`<span>Destino: ${esc(row.destination)}</span>`:''}${loanReturnSummary(row)?`<span>${esc(loanReturnSummary(row))}</span>`:''}</div></article>`}).join('')||'<p class="permission">No hay entregas que coincidan con el rango y los filtros seleccionados.</p>';$('#recentIncomesCount').textContent=incomeRange.from&&incomeRange.to&&incomeRange.from>incomeRange.to?'La fecha inicial debe ser anterior o igual a la fecha final.':`${incomeRows.length} ${incomeRows.length===1?'ingreso encontrado':'ingresos encontrados'} · ${recentFilterLabel('income')}`;incomes.innerHTML=wideQueries?.matches&&incomeRows.length?recentMovementTable('income',incomeRows,directory,dateLabel):incomeRows.map(row=>`<article${reversalAppearance(row)}><div><b>${row.movementType==='REVERSIÓN'?'REVERSIÓN · ':''}${esc(movementItem(row))}</b><span>${esc(dateLabel(row))} · Cantidad: ${esc(row.quantity||1)}</span>${reversalStatus(row)}${row.movementType==='REVERSIÓN'?reversalBalance(row)+reversalRequester(row):''}${movementPeopleFromPersonal(row)}${movementSyncStatus(row)}${row.assetLabel?`<span>${esc(movementAssetLabel(row))}</span>`:''}${row.incomeType?`<span>${esc(row.incomeType)} · Mina de origen: ${esc(row.originMine)}</span>`:''}${row.notes?`<span>Observaciones: ${esc(row.notes)}</span>`:''}</div></article>`).join('')||'<p class="permission">No hay ingresos que coincidan con el rango y los filtros seleccionados.</p>';
+    updateRecentSort('delivery');updateRecentSort('income');
+  }
+  function recentControls(kind){
+    const categories=kind==='delivery'?['all','epp','assets','reversals']:['all','reversals'];
+    const choices=categories.map(key=>'<label><input type="radio" name="'+kind+'Category" value="'+key+'"'+
+      (key==='all'?' checked':'')+'><span>'+categoryLabels[key].toLocaleUpperCase('es')+'</span></label>').join('');
+    return '<fieldset id="'+kind+'CategoryFilter" class="deliveryCategoryFilter"><legend>MOSTRAR</legend>'+
+      '<div class="deliveryCategoryOptions">'+choices+'</div></fieldset>';
+  }
+  function setupRecentSort(kind){
+    const list=$('#'+(kind==='delivery'?'recentDeliveriesList':'recentIncomesList'));
+    const controls=document.createElement('div');controls.className='recentSortControls';
+    const options=Object.entries(recentColumns(kind)).map(([key,title])=>'<option value="'+key+'">'+(key==='balance'?'Saldo nuevo':title)+'</option>').join('');
+    controls.innerHTML='<label for="'+kind+'SortField">Ordenar por</label><select id="'+kind+'SortField">'+options+
+      '</select><button type="button" id="'+kind+'SortDirection"></button>';
+    list.before(controls);
+    const status=document.createElement('p');status.id=kind+'SortStatus';status.className='recentSortStatus';
+    status.setAttribute('aria-live','polite');list.before(status);
+    const field=$('#'+kind+'SortField');
+    function sort(key){
+      recentSort(kind,key);renderRecentQueries();
+    }
+    field.addEventListener('change',()=>sort(field.value));
+    $('#'+kind+'SortDirection').addEventListener('click',()=>sort(field.value));
+    list.addEventListener('click',event=>{
+      const button=event.target.closest('[data-recent-sort]');if(!button)return;
+      const key=button.dataset.recentSort,left=list.querySelector('.recentTableScroll').scrollLeft;
+      sort(key);
+      list.querySelector('.recentTableScroll').scrollLeft=left;
+      list.querySelector('[data-recent-sort="'+key+'"]').focus({preventScroll:true});
+    });
+  }
+  function updateRecentSort(kind){
+    const order=recentOrder[kind],columns=recentColumns(kind),primary=order[0];
+    $('#'+kind+'SortField').value=primary.key;
+    const button=$('#'+kind+'SortDirection'),ascending=primary.dir===1;
+    button.textContent=ascending?'↑ Ascendente':'↓ Descendente';
+    button.ariaLabel=ascending?'Cambiar a descendente':'Cambiar a ascendente';
+    $('#'+kind+'SortStatus').textContent='Orden: '+order.map(({key,dir},i)=>
+      (i+1)+'. '+(key==='balance'?'Saldo nuevo':columns[key])+(dir===1?' ↑':' ↓')).join(' · ')+
+      (recentCategory(kind)==='reversals'?' · Cada par se ordena por la reversión. Incluye ambos movimientos si uno está en el rango.':'');
+  }
+  function setupQueryMenu(){if(!$('#recentDeliveries')){const contacts=$('#contacts'),delivery=document.createElement('section'),income=document.createElement('section');delivery.id='recentDeliveries';delivery.className='view recentMovements';delivery.innerHTML='<div class="deliveryQueryTitle"><h2>ENTREGAS RECIENTES</h2><button type="button" id="clearDeliveryFilters">LIMPIAR FILTROS</button></div><div class="deliveryQueryFilters"><label>DESDE FECHA<input id="deliveryDateFrom" type="date"></label><label>DESDE HORA<input id="deliveryTimeFrom" type="time"></label><label>HASTA FECHA<input id="deliveryDateTo" type="date"></label><label>HASTA HORA<input id="deliveryTimeTo" type="time"></label><form id="deliveryHistoryQueryForm" class="recentElementFilter"><label>FILTRAR POR ELEMENTO<select name="itemId"></select></label></form>'+recentControls('delivery')+'<div class="deliveryExportActions"><button type="button" id="exportDeliveriesExcel">DESCARGAR EXCEL</button><button type="button" id="exportDeliveriesPdf">DESCARGAR PDF</button></div></div><p id="recentDeliveriesCount" class="permission"></p><div id="recentDeliveriesList" class="recentMovementList"></div>';income.id='recentIncomes';income.className='view recentMovements';income.innerHTML='<div class="deliveryQueryTitle"><h2>INGRESOS RECIENTES</h2><button type="button" id="clearIncomeFilters">LIMPIAR FILTROS</button></div><div class="deliveryQueryFilters"><label>DESDE FECHA<input id="incomeDateFrom" type="date"></label><label>DESDE HORA<input id="incomeTimeFrom" type="time"></label><label>HASTA FECHA<input id="incomeDateTo" type="date"></label><label>HASTA HORA<input id="incomeTimeTo" type="time"></label><form id="incomeHistoryQueryForm" class="recentElementFilter"><label>FILTRAR POR ELEMENTO<select name="itemId"></select></label></form>'+recentControls('income')+'<div class="deliveryExportActions"><button type="button" id="exportIncomesExcel">DESCARGAR EXCEL</button><button type="button" id="exportIncomesPdf">DESCARGAR PDF</button></div></div><p id="recentIncomesCount" class="permission"></p><div id="recentIncomesList" class="recentMovementList"></div>';contacts.after(delivery,income)}if(!$('#queryMenuStyle')){const style=document.createElement('style');style.id='queryMenuStyle';style.textContent='.queryMenuGrid{display:grid;grid-template-columns:1fr;gap:12px}.queryMenuGrid button{min-height:70px;font-size:1.02rem;background:linear-gradient(145deg,#f4f5f6,#d5dade);color:#263642;border:1px solid #c4cacf}.recentMovementList{display:grid;gap:10px}.recentMovementList article{border:1px solid #d7e0e7;border-radius:10px;padding:12px;background:#fff}.recentMovementList article>div{display:grid;gap:4px}.recentMovementList span{color:#52687a}.deliveryQueryFilters{display:grid;grid-template-columns:repeat(2,minmax(150px,1fr));gap:12px;margin:12px 0 16px}.deliveryQueryFilters label{display:flex;flex-direction:column;gap:6px;font-weight:800}.recentElementFilter{grid-column:1/-1;min-width:0}.deliveryCategoryFilter{grid-column:1/-1;min-width:0;margin:0;padding:0;border:0}.deliveryCategoryFilter legend{font-weight:800;font-size:.85rem;margin-bottom:7px;padding:0}.deliveryCategoryOptions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;padding:5px;background:#edf2f6;border:1px solid #d7e0e7;border-radius:10px}.deliveryCategoryOptions label{position:relative;min-width:0;cursor:pointer}.deliveryCategoryOptions input{position:absolute;opacity:0;width:1px;height:1px;margin:0}.deliveryCategoryOptions span{display:flex;align-items:center;justify-content:center;min-height:42px;padding:7px 5px;border:1px solid transparent;border-radius:7px;text-align:center;color:#334e62;font-size:.82rem;line-height:1.2;box-sizing:border-box}.deliveryCategoryOptions input:checked+span{background:#173d59;color:#fff;border-color:#173d59;box-shadow:0 1px 3px #173d5926}.deliveryCategoryOptions input:focus-visible+span{outline:3px solid #e7b45a;outline-offset:2px}.deliveryQueryTitle{display:flex;align-items:center;justify-content:space-between;gap:12px}.deliveryQueryTitle h2{margin:0}.deliveryQueryTitle button{width:auto;min-height:38px;padding:8px 14px;background:#eef3f7;color:#173d59;border:1px solid #b9c8d3;font-weight:800}.deliveryExportActions{grid-column:1/-1;display:flex;gap:10px;flex-wrap:wrap}.deliveryExportActions button{flex:1;min-width:160px;color:#fff}.deliveryExportActions #exportDeliveriesExcel,.deliveryExportActions #exportIncomesExcel{background:#217346;border:1px solid #185c37}.deliveryExportActions #exportDeliveriesExcel:hover,.deliveryExportActions #exportDeliveriesExcel:focus-visible,.deliveryExportActions #exportIncomesExcel:hover,.deliveryExportActions #exportIncomesExcel:focus-visible{background:#185c37}.deliveryExportActions #exportDeliveriesPdf,.deliveryExportActions #exportIncomesPdf{background:#c62828;border:1px solid #a91f1f}.deliveryExportActions #exportDeliveriesPdf:hover,.deliveryExportActions #exportDeliveriesPdf:focus-visible,.deliveryExportActions #exportIncomesPdf:hover,.deliveryExportActions #exportIncomesPdf:focus-visible{background:#a91f1f}@media(max-width:600px){.deliveryQueryFilters{grid-template-columns:1fr}.recentElementFilter,.deliveryCategoryFilter,.deliveryExportActions{grid-column:1}.deliveryExportActions{flex-direction:column}}';document.head.append(style)}const overlay=document.createElement('div');overlay.id='plazaQueryMenu';overlay.className='registerMenuOverlay';overlay.hidden=true;overlay.innerHTML='<div class="registerMenu"><div class="registerMenuHead"><h2>HACER CONSULTAS</h2><button type="button" data-close-query aria-label="Volver a Inicio">VOLVER</button></div><p>SELECCIONA LA CONSULTA.</p><div class="queryMenuGrid"><button type="button" data-query-view="stockQuery">CONSULTAR EXISTENCIAS</button><button type="button" data-query-view="contacts">PERSONAL</button><button type="button" data-query-view="loanHistory">PRÉSTAMOS Y DEVOLUCIONES</button><button type="button" data-query-view="recentDeliveries">ENTREGAS RECIENTES <small>ÚLTIMOS 7 DÍAS</small></button><button type="button" data-query-view="recentIncomes">INGRESOS RECIENTES <small>ÚLTIMOS 30 DÍAS</small></button></div></div>';document.body.append(overlay);const close=()=>{overlay.hidden=true};overlay.addEventListener('click',event=>{if(event.target===overlay||event.target.closest('[data-close-query]'))close();const button=event.target.closest('[data-query-view]');if(button){close();showView(button.dataset.queryView)}});for(const kind of ['delivery','income']){const form=$('#'+kind+'HistoryQueryForm');setupItemSearch(form,'Filtrar '+(kind==='delivery'?'entregas':'ingresos')+' por elemento');form.addEventListener('submit',event=>event.preventDefault());form.addEventListener('change',renderRecentQueries);resetRecentFilters(kind);$('#clear'+(kind==='delivery'?'Delivery':'Income')+'Filters').addEventListener('click',()=>{resetRecentFilters(kind);renderRecentQueries()});for(const field of ['DateFrom','TimeFrom','DateTo','TimeTo'])$('#'+kind+field).addEventListener('change',renderRecentQueries);
+    setupRecentSort(kind);$('#'+kind+'CategoryFilter').addEventListener('change',renderRecentQueries)
+  }$('#exportDeliveriesExcel').addEventListener('click',exportDeliveriesExcel);$('#exportDeliveriesPdf').addEventListener('click',exportDeliveriesPdf);$('#exportIncomesExcel').addEventListener('click',exportIncomesExcel);$('#exportIncomesPdf').addEventListener('click',exportIncomesPdf);let scrollTop=$('#deliveryScrollTop');if(!scrollTop){scrollTop=document.createElement('button');scrollTop.id='deliveryScrollTop';scrollTop.type='button';scrollTop.hidden=true;scrollTop.textContent='↑';scrollTop.setAttribute('aria-label','Volver al inicio de Entregas recientes');scrollTop.title='Volver arriba';document.body.append(scrollTop);scrollTop.addEventListener('click',()=>window.scrollTo({top:0,behavior:'smooth'}));window.addEventListener('scroll',()=>{scrollTop.hidden=!(currentView==='recentDeliveries'&&window.scrollY>480)},{passive:true})}window.openPlazaQueryMenu=()=>{showView('home');overlay.hidden=false}}
   let historyPersonId='';
   const validQueryRow=row=>!row.deleted&&!row.reversed&&!row.reversado;
   function queryPerson(row){return(data.personal||[]).find(person=>person.id===row.recipientId||person.id===row.broughtById)||null}
