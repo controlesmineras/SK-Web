@@ -107,7 +107,7 @@ body>main .homeAccessRegister{background:#214b63}
 .assetDetailedForm .assetModelChoices label:has(input:checked){border-color:#173d59;background:#e4f1fa}
 .assetDetailedForm .assetModelChoices label:has(input:focus-visible){outline:3px solid #8bc7e8;outline-offset:2px}
 .assetDetailedForm .assetModelChoices label:has(input:disabled){cursor:default;opacity:.75}
-.assetDetailedForm .assetClassNumberMine,.assetDetailedForm .assetModelField small{display:block;margin-top:3px;color:#667085;font-size:.8rem;line-height:1.35;font-weight:400;text-transform:none;letter-spacing:normal}
+.assetDetailedForm .assetModelField small{display:block;margin-top:3px;color:#667085;font-size:.8rem;line-height:1.35;font-weight:400;text-transform:none;letter-spacing:normal}
 .accessPersonField{position:relative}
 .accessPersonResults{position:absolute;z-index:45;left:0;right:0;top:100%;max-height:320px;overflow:auto;margin-top:4px;padding:5px;background:#fff;border:1px solid #b9c6d1;border-radius:9px;box-shadow:0 12px 28px rgba(23,61,89,.18)}
 .accessPersonResults[hidden],.accessPersonInfo[hidden]{display:none}
