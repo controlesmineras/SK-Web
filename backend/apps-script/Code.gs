@@ -1066,7 +1066,7 @@ function productionRoles_(user){
  return [...new Set(roles)];
 }
 function productionPrimaryRole_(roles){return ['admin','assistant','mechanic','warehouse'].find(role=>roles.includes(role))}
-function productionCan_(user,module){const roles=productionRoles_(user);return roles.includes('admin')||(module==='mechanic'?roles.some(role=>['mechanic','assistant'].includes(role)):roles.includes('warehouse'))}
+function productionCan_(user,module){const roles=productionRoles_(user);return roles.includes('admin')||roles.includes('assistant')||roles.includes(module==='mechanic'?'mechanic':'warehouse')}
 function productionWarehouseSettings_(){
  const raw=typeof PropertiesService!=='undefined'?PropertiesService.getScriptProperties().getProperty('SK_PRODUCTION_WAREHOUSE'):null;
  return raw?JSON.parse(raw):{enabled:false,allowSpareDelivery:false,transferStartAt:''};
@@ -1167,7 +1167,7 @@ function productionWarehouseCanIssue_(asset,state){
  return !['no','false','0'].includes(cargoNorm_(String(asset.disponibleEntrega??'')))&&
   (!status||/^operativ[oa](?:\/[oa])?$/.test(status)||status==='apto segun inspeccion');
 }
-function productionWarehouseApply_(data,central,request,user){
+function productionWarehouseApply_(data,central,request,user,actor,withShift){
  if(!/^[-a-zA-Z0-9]{16,100}$/.test(String(request.id||'')))throw new Error('Identificador no válido.');
  const original=(data.warehouseMovements||[]).find(row=>row.id===request.id);
  if(original){
@@ -1177,6 +1177,12 @@ function productionWarehouseApply_(data,central,request,user){
  const settings=productionWarehouseSettings_();if(!settings.enabled)throw new Error('La bodega aún no está activada desde SK Web Admin.');
  const allowed=['income','opening','delivery','loan','return','transfer_out'];if(!allowed.includes(request.kind))throw new Error('Movimiento no válido.');
  if(request.kind==='opening'&&!productionRoles_(user).includes('admin'))throw new Error('Solo el administrador registra saldos de apertura.');
+ const roles=productionRoles_(user),automatic=roles.includes('warehouse');
+ if(withShift&&String(request.recordedBy||'')!==String(user.document))throw new Error('El movimiento pertenece a otra sesión.');
+ const keeper=automatic?actor:(central.personal||[]).find(p=>p.id===request.shiftKeeperId&&!p.deleted&&p.active!==false);
+ // Los administradores podían tener movimientos sin turno en la cola anterior.
+ const legacyAdmin=!withShift&&roles.includes('admin');
+ if(!legacyAdmin&&!keeper||withShift&&keeper?.id!==request.shiftKeeperId)throw new Error('Selecciona un bodeguero de turno válido.');
  const item=(central.inventoryCriteria||[]).find(row=>row.id===request.itemId&&!row.deleted&&row.active!==false);
  if(!item)throw new Error('Elemento no disponible en Criterios de inventario.');
  if(productionWarehouseEpp_(item))throw new Error('Los elementos EPP se administran en Plaza Blending y no están habilitados en Producción.');
@@ -1239,10 +1245,10 @@ function productionWarehouseApply_(data,central,request,user){
  }
  const destination=String(request.destination||'').trim().slice(0,160);
  if(['delivery','loan'].includes(request.kind)&&!destination)throw new Error('Indica dónde estará el elemento.');
- const now=new Date().toISOString(),row=productionWarehouseAppend_(data,{id:request.id,kind:request.kind,itemId:item.id,itemName:item.name,unit:item.unit||'Unidad',quantity,delta:outgoing?-quantity:quantity,assetId:asset?.id||'',assetLabel:asset?[asset.marcaActual||asset.marcaInterna||asset.marcaAnterior,asset.serial].filter(Boolean).join(' · '):'',personId:person?.id||'',personName:person?.nombre||'',destination:request.kind==='transfer_out'?'Plaza Blending':destination,loanId:loan?.id||'',sourceLoanId:sourceLoan?.sourceDeliveryId||'',notes:String(request.notes||'').slice(0,1000),fechaISO:date,recordedAt:originalStamp_(request.createdAt),createdAt:now,recordedBy:user.document,target:spare?'mechanics':'warehouse',status:'synced',requestSignature:JSON.stringify(request)});
+ const now=new Date().toISOString(),row=productionWarehouseAppend_(data,{id:request.id,kind:request.kind,itemId:item.id,itemName:item.name,unit:item.unit||'Unidad',quantity,delta:outgoing?-quantity:quantity,assetId:asset?.id||'',assetLabel:asset?[asset.marcaActual||asset.marcaInterna||asset.marcaAnterior,asset.serial].filter(Boolean).join(' · '):'',personId:person?.id||'',personName:person?.nombre||'',destination:request.kind==='transfer_out'?'Plaza Blending':destination,loanId:loan?.id||'',sourceLoanId:sourceLoan?.sourceDeliveryId||'',notes:String(request.notes||'').slice(0,1000),fechaISO:date,recordedAt:originalStamp_(request.createdAt),createdAt:now,recordedBy:user.document,recordedByName:actor.nombre||user.document,shiftKeeperId:keeper?.id||'',shiftKeeperName:keeper?.nombre||'',shiftKeeperDocument:keeper?.documento||'',target:spare?'mechanics':'warehouse',status:'synced',requestSignature:JSON.stringify(request)});
  if(spare){
   const kind=outgoing?'warehouse-out':request.kind==='return'?'warehouse-return':'income';
-  (data.incomes||(data.incomes=[])).push({id:'warehouse-'+row.id,kind,...spare,cantidad:quantity,fechaISO:date,createdAt:now,recordedAt:now,sourceCreatedAt:row.recordedAt,sourceWarehouseMovementId:row.id,registradoPor:user.document,registradoPorNombre:person?.nombre||'Bodega de Producción'});
+  (data.incomes||(data.incomes=[])).push({id:'warehouse-'+row.id,kind,...spare,cantidad:quantity,fechaISO:date,createdAt:now,recordedAt:now,sourceCreatedAt:row.recordedAt,sourceWarehouseMovementId:row.id,registradoPor:user.document,registradoPorNombre:row.recordedByName});
  }
  if(asset||request.kind==='transfer_out'){
   row.bridgePending=true;
@@ -1325,11 +1331,11 @@ function productionWarehouseSync_(q){
    central.updatedAt=nextRevision_(central.updatedAt);
    writeFile_(id,central);
   }
-  const pending=Array.isArray(q.pending)?q.pending:[];
+  const withShift=Array.isArray(q.shiftMovements),pending=withShift?q.shiftMovements:Array.isArray(q.pending)?q.pending:[];
   if(pending.length>1000||new Set(pending.map(row=>row.id)).size!==pending.length)throw new Error('Envía un máximo de 1000 movimientos con identificadores únicos.');
   const receipts=[];
   for(const request of pending){
-   try{const applied=productionWarehouseApply_(data,central,request,user);changed=changed||!applied.duplicate;receipts.push({id:request.id,status:applied.duplicate?'already-applied':'accepted'});}
+   try{const applied=productionWarehouseApply_(data,central,request,user,person,withShift||request.recordedBy!==undefined);changed=changed||!applied.duplicate;receipts.push({id:request.id,status:applied.duplicate?'already-applied':'accepted'});}
    catch(error){receipts.push({id:request.id,status:'rejected',error:String(error.message||error)});}
   }
   if(changed){
@@ -1353,8 +1359,8 @@ function productionWarehouseSync_(q){
   }
   const balances=criteria.map(item=>({itemId:item.id,quantity:item.isFixedAsset===true?(fixedCounts.get(cargoNorm_(item.name))||0):productionWarehouseBalance_(data,item,central)}));
   const assetRevision=(data.warehouseMovements||[]).filter(row=>row.assetId).at(-1)?.revision||0;
-  const catalogRevision='warehouse-assets-v2|'+(central.updatedAt||'')+'|'+assetRevision;
+  const catalogRevision='warehouse-assets-v2|turno1|'+(central.updatedAt||'')+'|'+assetRevision;
   const catalogChanged=q.catalogRevision!==catalogRevision;
-  return json_({ok:true,protocol:'production-warehouse-v1',reset,cursor:revision,rows,receipts,balances,settings:productionWarehouseSettings_(),roles:productionRoles_(user),catalogRevision,...(catalogChanged?{catalog:{criteria,personal:(central.personal||[]).filter(row=>!row.deleted).map(row=>({id:row.id,nombre:row.nombre,documento:row.documento,empresa:row.empresa})),assets}}:{}),syncedAt:new Date().toISOString()});
+  return json_({ok:true,protocol:'production-warehouse-v1',shiftKeeperV1:true,reset,cursor:revision,rows,receipts,balances,settings:productionWarehouseSettings_(),roles:productionRoles_(user),catalogRevision,...(catalogChanged?{catalog:{criteria,personal:(central.personal||[]).filter(row=>!row.deleted&&row.active!==false).map(row=>({id:row.id,nombre:row.nombre,documento:row.documento,empresa:row.empresa})),assets}}:{}),syncedAt:new Date().toISOString()});
  }finally{lock.releaseLock()}
 }

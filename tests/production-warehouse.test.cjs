@@ -263,3 +263,33 @@ test('central acceptance preserves initial capture and receipt when an admin rec
  assert.equal(last.createdAt,date);
  assert.equal(last.syncedAt,first.syncedAt);
 });
+
+test('Bodega separa la sesión, el turno y el receptor, y valida el turno de cada rol',()=>{
+ const actor={id:'person',documento:'doc',nombre:'Auxiliar de captura'};
+ const keeper={id:'turno',documento:'222',nombre:'Bodeguera de turno'};
+ const recipient={id:'receptor',documento:'333',nombre:'Colaborador receptor'};
+ const r=runtime({central:{personal:[actor,keeper,recipient,{id:'inactivo',active:false}]}});
+ const submit=(token,row)=>r.sync([],{token,shiftMovements:[row]});
+ const entry=op('income',2,{recordedBy:'doc',shiftKeeperId:'turno',personId:'receptor',recordedByName:'Nombre del navegador',shiftKeeperName:'Nombre del navegador'});
+ for(const role of ['assistant','admin']){
+  const row={...entry,id:randomUUID()};
+  const response=submit(role,row);
+  assert.equal(response.shiftKeeperV1,true);assert.equal(response.receipts[0].status,'accepted');
+  const saved=response.rows.find(x=>x.id===row.id);
+  assert.deepEqual([saved.recordedBy,saved.recordedByName,saved.shiftKeeperId,saved.shiftKeeperDocument,saved.shiftKeeperName,saved.personName],
+   ['doc',actor.nombre,'turno','222',keeper.nombre,recipient.nombre]);
+  assert.equal(submit(role,row).receipts[0].status,'already-applied');
+  for(const override of [{recordedBy:'333'},{shiftKeeperId:''},{shiftKeeperId:'inactivo'}]){
+   assert.equal(submit(role,{...row,...override,id:randomUUID()}).receipts[0].status,'rejected');
+  }
+ }
+ for(const role of ['warehouse','both']){
+  assert.equal(submit(role,{...entry,id:randomUUID()}).receipts[0].status,'rejected');
+  const row={...entry,id:randomUUID(),shiftKeeperId:actor.id},response=submit(role,row);
+  assert.equal(response.receipts[0].status,'accepted');
+  assert.equal(response.rows.find(x=>x.id===row.id).shiftKeeperName,actor.nombre);
+ }
+ assert.equal(r.sync([op('income')],{token:'assistant'}).receipts[0].status,'rejected');
+ const old=r.sync([op('income')],{token:'admin'});assert.equal(old.receipts[0].status,'accepted');assert.equal(old.rows.at(-1).shiftKeeperName,'');
+ assert.equal(submit('assistant',{...entry,id:randomUUID(),kind:'opening'}).receipts[0].status,'rejected');
+});
