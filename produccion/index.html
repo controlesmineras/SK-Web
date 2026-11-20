@@ -30,6 +30,8 @@ main form,main .tableWrap{color:#172033}
 .machineOptions button[aria-pressed="true"]{background:#e4f1fa;color:#172033}
 #record:has(input[name="tipoEquipo"][value="YT"]:checked) #machineOptions button{font-size:.95rem;line-height:1.2;height:44px}
 .partOptions button{white-space:normal}
+.spareName{font-weight:600}.spareUse{font-weight:400;color:#566572}.partOptions button .spareUse{color:#d2e3eb}
+#sheetPurchasesExcel{margin-bottom:10px}
 #partOptions button{font-size:1rem}
 #draft{display:grid;gap:8px;list-style:none;padding:0;margin:0}
 #draft li{display:grid;grid-template-columns:minmax(0,1fr) 34px;gap:8px;align-items:center;border:1px solid #cbd3da;border-radius:8px;padding:10px;margin:0}
@@ -198,7 +200,7 @@ body>main:has(#access:not([hidden])),#access{
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=17-turno"><script defer src="../movement-time.js?v=1"></script><script defer src="warehouse-store.js?v=2"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="../spare-groups.js?v=20261119-alias"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=4-cabecera"><script defer src="consumption-reports.js?v=7-cabecera"></script><script defer src="../asset-search.js?v=20261120-coincidencias-activos-1"></script><script defer src="app.js?v=20261120-coincidencias-activos-1"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=20261119-hora-registro"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="../spare-groups.js?v=20261119-alias"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=4-cabecera"><script defer src="purchase-workbook.js?v=1"></script><script defer src="consumption-reports.js?v=20261120-compras-1"></script><script defer src="../asset-search.js?v=20261120-coincidencias-activos-1"></script><script defer src="app.js?v=20261120-compras-1"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=20261120-compras-1"></script>
 <script defer src="install-ui.js?v=1"></script><script defer src="../plaza/spare-picker.js?v=20261119-buscar-alias"></script><script defer src="warehouse.js?v=20261120-bodeguero-turno"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
@@ -371,6 +373,7 @@ body>main:has(#access:not([hidden])),#access{
 </div>
 <p id="sheetDates" class="reportNote" role="status"></p>
 <p id="sheetHistoryNote" class="reportNote" hidden></p>
+<button id="sheetPurchasesExcel" type="button" disabled>Descargar Excel de compras</button>
 <div id="sheetScroll" class="reportScroll" role="region" aria-label="Consumo diario por repuesto" tabindex="0" hidden><table id="sheetTable"><thead></thead><tbody></tbody></table></div>
 </section>
 <section id="consumptionDashboard" class="partsReport" aria-labelledby="dashboardTitle" hidden>

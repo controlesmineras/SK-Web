@@ -86,3 +86,27 @@ test('totals by part combine dates, machines and catalog aliases and keep distin
  const empty=c.totalsByPart([],catalog,true,part=>balances.get(part.id),true);
  assert.deepEqual(Array.from(empty,r=>r.qty),[0,0,0]);
 });
+
+test('el libro de compras mantiene las columnas de compra y ordena el consumo del mismo conjunto',()=>{
+ const window={},context=vm.createContext({window});
+ const query=fs.readFileSync('consumption-query-v2.js','utf8');
+ vm.runInContext(query.slice(query.indexOf('function xml('),query.indexOf('function zipStore(')),context);
+ vm.runInContext(fs.readFileSync('produccion/purchase-workbook.js','utf8'),context);
+ const rows=[
+  {item:'08',name:'Tuerca & sello',application:'tubo de aire',partCode:'001-A',qty:3,stock:0},
+  {item:'2',name:'Pin',qty:7,stock:null},
+  {item:'9',name:'Aro',qty:0,stock:12}
+ ];
+ const build=rows=>new Map(window.SKPurchaseWorkbook.build({rows,origin:'YT29',period:'01/01/2025 al 31/01/2025',
+  downloadedAt:'2025-02-02T01:00:00Z',lastSyncAt:'2025-02-01T01:00:00Z',offline:true},
+ {xml:context.xml,col:context.col,zipStore:entries=>entries}));
+ const book=build(rows),detail=book.get('xl/worksheets/sheet1.xml'),dashboard=book.get('xl/worksheets/sheet2.xml');
+ assert.match(detail,/<c r="A6" s="1" t="inlineStr">.*?>08</);
+ assert.match(detail,/<c r="B6" s="1" t="inlineStr">.*?>Tuerca &amp; sello</);
+ assert.match(detail,/<c r="D6" s="0" t="inlineStr">.*?>001-A</);
+ assert.match(detail,/<c r="F6" s="0"><v>0<\/v>/);assert.match(detail,/<c r="F7" s="0"\/>/);
+ for(const sheet of [detail,dashboard]){assert.match(sheet,/31\/01\/2025/);assert.match(sheet,/Sin conexión/)}
+ assert.ok(dashboard.indexOf('>Pin<')<dashboard.indexOf('>Tuerca &amp; sello<'));assert.doesNotMatch(dashboard,/>Aro</);
+ assert.match(book.get('xl/charts/chart1.xml'),/\$D\$6:\$D\$7/);
+ assert.equal(build([rows[2]]).has('xl/charts/chart1.xml'),false);
+});

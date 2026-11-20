@@ -26,10 +26,10 @@ test('Production searches current and legacy names without confusing item 1 with
  vm.runInContext(fs.readFileSync('spare-groups.js','utf8'),context);
  const app=fs.readFileSync('produccion/app.js','utf8');
  vm.runInContext(app.slice(app.indexOf('function filterParts('),app.indexOf('function paintStockView(')),context);
- const parts=[{id:'a',numero:'1',nombre:'Pistón',secondaryName:'Émbolo',CI_NOMBRE_TERCIARIO:'Percutor'},
+ const parts=[{id:'a',numero:'1',nombre:'Pistón',spareApplication:'tubo de aire',secondaryName:'Émbolo',CI_NOMBRE_TERCIARIO:'Percutor'},
   {id:'b',numero:'10',nombre:'Resorte',aliasSecundario:'Muelle',tertiaryName:'Espiral'},{id:'c',nombre:'Lubricador'}];
  const found=q=>Array.from(context.filterParts(parts,q),p=>p.id);
- for(const q of ['1','piston','embolo','ÍTEM 1 PERCUTOR'])assert.deepEqual(found(q),['a']);
+ for(const q of ['1','piston','pistón tubo de aire','tubo de aire','embolo','ÍTEM 1 PERCUTOR'])assert.deepEqual(found(q),['a']);
  for(const q of ['muelle','espiral'])assert.deepEqual(found(q),['b']);
  assert.deepEqual(found('ítem 1 espiral'),[]);assert.deepEqual(found(''),['a','b','c']);
 });

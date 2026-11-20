@@ -7,7 +7,7 @@ async function harness(){
  const typeButtons=Array.from(sourceText.matchAll(/data-spare-filter="([^"]+)"/g),m=>({dataset:{spareFilter:m[1]},attributes:{},setAttribute(k,v){this.attributes[k]=v},closest(){return this}}));
  const nodes=new Map();
  const node=s=>{if(!nodes.has(s))nodes.set(s,{dataset:{},handlers:{},value:'',innerHTML:'',textContent:'',querySelectorAll:()=>[],addEventListener(t,fn){this.handlers[t]=fn}});return nodes.get(s)};
- for(const key of ['allowAccessories','id','name','secondaryName','tertiaryName','unit','initialQuantity','containerUnit','spareEquipment','spareItemNumber','spareItemName','spareApplication','isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable']){
+ for(const key of ['allowAccessories','id','name','secondaryName','tertiaryName','unit','initialQuantity','containerUnit','spareEquipment','spareItemNumber','spareItemName','spareApplication','sparePartCode','isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable']){
   const label={hidden:false};elements[key]={value:'',checked:false,dataset:{},options:[{value:'Unidad'}],closest:()=>label,focus(){}};
  }
  const form={elements,dataset:{},addEventListener(){},reportValidity(){},scrollIntoView(){},closest:()=>form,querySelectorAll:()=>[],querySelector:()=>null,reset(){for(const field of Object.values(elements)){field.value='';field.checked=false;}}};
@@ -79,11 +79,13 @@ test('new wording rejects duplicate legacy spares and renamed imported items ret
 
 test('ubicación o aplicación es opcional, se guarda offline y permite editarla o quitarla sin alterar el saldo',async()=>{
  const h=await harness(),application='Va con el pin de ajuste del cabezal';
+ h.form.elements.sparePartCode.value='  007-AB  ';
  h.form.elements.initialQuantity.value='12';h.form.elements.spareApplication.value='  '+application+'  ';h.form.elements.secondaryName.value='Muelle';await h.save();
  let rows=await h.rows(),item=rows.find(x=>x.table==='inventoryCriteria').row;
- assert.equal(item.spareApplication,application);assert.equal(item.secondaryName,'Muelle');assert.equal(item.syncState,'pending');assert.equal(h.form.elements.spareApplication.value,'');
+ assert.equal(item.sparePartCode,'007-AB');assert.equal(item.spareApplication,application);assert.equal(item.secondaryName,'Muelle');assert.equal(item.syncState,'pending');assert.equal(h.form.elements.spareApplication.value,'');
  const stock=rows.find(x=>x.table==='inventoryStock').row,income=rows.find(x=>x.table==='incomes').row;
  await h.api.edit(item.id);
+ assert.equal(h.form.elements.sparePartCode.value,'007-AB');assert.equal(h.form.elements.sparePartCode.required,false);
  assert.equal(h.form.elements.spareApplication.value,application);assert.equal(h.form.elements.spareApplication.required,false);assert.equal(h.form.elements.spareApplication.disabled,false);assert.equal(h.form.elements.spareApplication.closest().hidden,false);
  h.form.elements.spareApplication.value='En el cabezal';await h.save();await h.api.edit(item.id);assert.equal(h.form.elements.spareApplication.value,'En el cabezal');
  h.form.elements.spareApplication.value='';await h.save();await h.api.edit(item.id);assert.equal(h.form.elements.spareApplication.value,'');

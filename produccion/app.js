@@ -331,7 +331,8 @@ function filterParts(parts,search){
   const number=String(row.numero??'').trim();
   if(exactNumber&&number!==exactNumber)return false;
   if(!nameQuery)return true;
-  return [row.nombre,...window.SKSpareGroups.aliases(row)].some(name=>norm(name).includes(nameQuery));
+  const application=row.spareApplication||row.application||row.ubicacionAplicacion||'';
+  return [[row.nombre,application].filter(Boolean).join(' '),...window.SKSpareGroups.aliases(row)].some(name=>norm(name).includes(nameQuery));
  });
 }
 function paintStockView({form:stockForm,panel,kind}){
@@ -518,11 +519,20 @@ byId('reviewStockAdjustment').onclick=async()=>{
  }catch(error){if(session===active)stockStatus(stockEditForm,error.message,true);}
 };
 const partLabel=row=>[row.numero,row.nombre].filter(Boolean).join(' · ');
+function appendPartApplication(node,part){
+ const value=part?.spareApplication||part?.application||part?.ubicacionAplicacion;
+ if(!value)return;
+ const text=document.createElement('span');
+ text.className='spareUse';text.textContent=' '+value;node.append(text);
+}
 function paintPartCards(container,rows,origin,choose){
  container.replaceChildren(...rows.map(row=>{
   const button=document.createElement('button');
   button.type='button';
-  button.textContent=partLabel(row)+(Array.isArray(state.incomes)?' · Existencia: '+stockFor(row,origin):'');
+  const name=document.createElement('strong');
+  name.className='spareName';name.textContent=partLabel(row);button.append(name);
+  appendPartApplication(button,row);
+  if(Array.isArray(state.incomes))button.append(' · Existencia: '+stockFor(row,origin));
   button.onclick=()=>{if(!saving)choose(row)};
   return button;
  }));
@@ -571,11 +581,13 @@ function paintPeople(){
 function paintDraft(){
  const list=byId('draft');
  list.hidden=!draft.length;
+ const parts=new Map((draft.length?catalog():[]).map(part=>[part.id,part]));
  list.replaceChildren(...draft.map((row,index)=>{
   const li=document.createElement('li'),button=document.createElement('button');
   const identity=document.createElement('strong'),origin=document.createElement('small');
   identity.textContent=[row.noItem,row.nombreRepuesto].filter(Boolean).join(' · ');
   origin.textContent='Inventario '+row.origen;
+  identity.className='spareName';appendPartApplication(identity,parts.get(row.partId));
   identity.append(origin);
   const quantityLabel=document.createElement('label'),quantity=document.createElement('input');
   quantity.id='partQuantity'+index;quantityLabel.htmlFor=quantity.id;
@@ -908,8 +920,9 @@ function showQueryType(panel){
  else if(panel==='queries')window.dispatchEvent(new Event('skweb-open-queries'));
  else paintConsumptionReport();
 }
+function productionReportContext(){return {state,today:today(),catalog,incomeMovements,stockFor,compareParts}}
 function paintConsumptionReport(){
- window.SKConsumptionReports.render({state,today:today(),catalog,incomeMovements,stockFor,compareParts});
+ window.SKConsumptionReports.render(productionReportContext());
 }
 const countForm=byId('countForm'),countFields=countForm.elements;
 const countHeaders=['FECHA DE INVENTARIO','INVENTARIO','REPUESTO','SALDO DE APERTURA','INGRESOS','CONSUMOS','SALIDAS BODEGA','SALDO ESPERADO','EXISTENCIA FÍSICA','DIFERENCIA','SALDO DE CIERRE'];
@@ -1092,6 +1105,7 @@ byId('consumptionInventory').onchange=()=>{
 };
 byId('querySheet').onclick=()=>showQueryType('consumptionSheet');
 byId('queryDashboard').onclick=()=>showQueryType('consumptionDashboard');
+byId('sheetPurchasesExcel').onclick=()=>window.SKConsumptionReports.sheet(productionReportContext(),true);
 for(const field of document.querySelectorAll('.partsReport select,.partsReport input'))field.onchange=paintConsumptionReport;
 function placeInstallControls(container){
  container.append(byId('installProduction'),byId('installProductionHelp'));
