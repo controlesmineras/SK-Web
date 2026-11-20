@@ -118,9 +118,7 @@ body:has(#plazaNavigation:not([hidden])) #deliveryScrollTop{bottom:calc(80px + e
   #app:has(.view.active:is(.recentMovements,.inventoryQuery,#contacts)) #plazaNavigation{
     width:100%;max-width:none;
   }
-  #app:has(.view.active:is(.recentMovements,.inventoryQuery,#contacts)) #plazaShift{
-    max-width:440px;margin:0 0 12px;
-  }
+
   #app .recentMovements .deliveryQueryFilters{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 20px;align-items:end}
   #app .recentMovements .recentElementFilter{grid-column:span 2}
   #app .recentMovements .deliveryCategoryFilter{grid-column:span 2}
@@ -143,3 +141,6 @@ body:has(#plazaNavigation:not([hidden])) #deliveryScrollTop{bottom:calc(80px + e
   .recentTableScroll td>span,.recentTableScroll td>strong{display:block}
   .recentTableScroll td>span+span{margin-top:3px}
 }
+
+#app form>#plazaShift{grid-column:1/-1;min-width:0;max-width:none;margin:0 0 4px;padding:10px 12px;border-left:3px solid #6591a6;border-radius:6px;background:#edf4f7}
+#plazaShift[hidden]{display:none!important}

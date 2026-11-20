@@ -7,7 +7,7 @@
  let selectedReturnId='';
  const kinds={income:'Ingreso externo',opening:'Saldo de apertura',delivery:'Entrega',loan:'Préstamo',return:'Reintegro',transfer_in:'Ingreso desde Plaza',transfer_out:'Traslado a Plaza'};
  const roles=user=>Array.isArray(user?.roles)?user.roles:[user?.role||'assistant'];
- const permits=(user,scope)=>roles(user).includes('admin')||(scope==='mechanic'?roles(user).some(role=>['mechanic','assistant'].includes(role)):roles(user).includes('warehouse'));
+ const permits=(user,scope)=>roles(user).some(role=>role==='admin'||role==='assistant'||role===scope);
  const el=(tag,text)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;return node};
  const button=(text,action)=>{const node=el('button',text);node.type='button';node.onclick=action;return node};
  const host=byId('workspace'),toolbar=host.querySelector('.productionToolbar'),mechanics=el('div');mechanics.id='mechanicsWorkspace';
@@ -21,7 +21,20 @@
  const mechanicTitle=byId('mechanicTitle');mechanicTitle.hidden=true;navigation.append(mechanicTitle);
  byId('productionHome').onclick=()=>choose('');
  const panel=el('section');panel.id='warehousePanel';panel.hidden=true;
- panel.innerHTML='<h2>BODEGA DE PRODUCCIÓN</h2><p id="warehouseNote" class="warehouseHint"></p><div class="warehouseActions" role="group" aria-label="Tareas de bodega"></div><p id="warehouseStatus" role="status" aria-live="polite"></p><div id="warehousePending"></div><div id="warehouseReturnPicker" hidden><label>BUSCAR PRÉSTAMO<input id="warehouseReturnSearch" type="search" placeholder="Elemento, marca, serial, nombre o documento" autocomplete="off"></label><div id="warehouseReturnList"></div></div><form id="warehouseForm" hidden><strong data-return-summary class="wide" hidden></strong><label class="wide" id="warehouseItemField"><span data-item-caption>SELECCIONE ELEMENTO A ENTREGAR</span><select name="itemId" required></select></label><label data-asset-mode class="wide" hidden>ACTIVO<select name="assetMode"><option value="registered">Registrado</option><option value="new">Registrar activo nuevo</option></select></label><div data-new-asset class="wide" hidden><label>SERIAL<input name="newSerial" maxlength="160"></label><label>MODELO<input name="newModel" maxlength="100"></label><label>MARCA COMERCIAL<input name="newBrand" maxlength="100"></label><label>MARCA O NÚMERO ANTERIOR<input name="newMark" maxlength="100"></label><label>NÚMERO DE CLASE (YT / COLUMNA)<input name="newNumber" maxlength="30"></label><label>MINA DE ORIGEN<input name="newMine" value="Sandra K" maxlength="100"></label><label>LONGITUD<input name="newLength" maxlength="40" placeholder="Cuando aplique"></label></div><label data-asset class="wide" hidden>ACTIVO REGISTRADO<select name="assetId"></select></label><label data-source-loan class="wide" hidden>PRÉSTAMO DE PLAZA A DEVOLVER<select name="sourceLoanId"></select></label><label>FECHA<input name="fechaISO" type="text" placeholder="DD/MM/AAAA" inputmode="numeric" maxlength="10" required></label><label>CANTIDAD<input name="quantity" type="number" min="0.001" step="any" required></label><div data-person class="productionField wide"><label for="warehousePersonSearch" data-person-label>QUIÉN RECIBE</label><div class="warehousePersonInput"><input id="warehousePersonSearch" name="personSearch" type="text" placeholder="Buscar por nombre o documento…" autocomplete="off" aria-controls="warehousePersonResults" aria-describedby="warehousePersonInfo"><button type="button" data-person-clear aria-label="Quitar funcionario seleccionado" hidden>×</button></div><input type="hidden" name="personId"><div id="warehousePersonResults" class="machineOptions" hidden></div><small id="warehousePersonInfo" hidden></small></div><label data-destination class="wide">DÓNDE ESTARÁ EL ELEMENTO<input name="destination" maxlength="160" placeholder="Área, nivel o lugar"></label><label data-income class="wide" hidden>MOTIVO DEL INGRESO<select name="incomeType"><option value="ENTRADA">Entrada externa</option><option value="REPARACIÓN">Reparación</option></select></label><label class="wide">OBSERVACIONES<textarea name="notes" rows="2" maxlength="1000"></textarea></label><button class="wide" type="submit">GUARDAR</button><button type="button" class="wide" data-cancel-return hidden>CANCELAR</button></form><div id="warehouseFilters"><input type="search" id="warehouseSearch" placeholder="Buscar en la consulta"><select id="warehouseLoanFilter" aria-label="Estado de préstamos" hidden><option value="pending">PENDIENTES</option><option value="returned">DEVUELTOS</option><option value="all">TODOS</option></select></div><div id="warehouseExports"><button type="button" data-excel>EXPORTAR EXCEL</button><button type="button" data-pdf>EXPORTAR PDF</button></div><div class="tableWrap"><table id="warehouseTable"><thead></thead><tbody></tbody></table></div>';
+ function personField(key,caption){
+  const id=key==='keeper'?'warehouseKeeper':'warehousePerson';
+  return `<div data-${key} class="productionField wide" ${key==='keeper'?'hidden':''}>
+   <label for="${id}Search" data-${key}-label>${caption}</label>
+   <div class="warehousePersonInput">
+    <input id="${id}Search" name="${key}Search" type="text" placeholder="Buscar en Personal por nombre o documento…" autocomplete="off" aria-controls="${id}Results" aria-describedby="${id}Info">
+    <button type="button" data-${key}-clear aria-label="Quitar ${caption.toLowerCase()}" hidden>×</button>
+   </div>
+   <input type="hidden" name="${key}Id">
+   <div id="${id}Results" class="machineOptions" hidden></div>
+   <small id="${id}Info" hidden></small>
+  </div>`;
+ }
+ panel.innerHTML='<h2>BODEGA DE PRODUCCIÓN</h2><p id="warehouseNote" class="warehouseHint"></p><div class="warehouseActions" role="group" aria-label="Tareas de bodega"></div><p id="warehouseStatus" role="status" aria-live="polite"></p><div id="warehousePending"></div><div id="warehouseReturnPicker" hidden><label>BUSCAR PRÉSTAMO<input id="warehouseReturnSearch" type="search" placeholder="Elemento, marca, serial, nombre o documento" autocomplete="off"></label><div id="warehouseReturnList"></div></div><form id="warehouseForm" hidden>'+personField('keeper','BODEGUERO/A DE TURNO')+'<strong data-return-summary class="wide" hidden></strong><label class="wide" id="warehouseItemField"><span data-item-caption>SELECCIONE ELEMENTO A ENTREGAR</span><select name="itemId" required></select></label><label data-asset-mode class="wide" hidden>ACTIVO<select name="assetMode"><option value="registered">Registrado</option><option value="new">Registrar activo nuevo</option></select></label><div data-new-asset class="wide" hidden><label>SERIAL<input name="newSerial" maxlength="160"></label><label>MODELO<input name="newModel" maxlength="100"></label><label>MARCA COMERCIAL<input name="newBrand" maxlength="100"></label><label>MARCA O NÚMERO ANTERIOR<input name="newMark" maxlength="100"></label><label>NÚMERO DE CLASE (YT / COLUMNA)<input name="newNumber" maxlength="30"></label><label>MINA DE ORIGEN<input name="newMine" value="Sandra K" maxlength="100"></label><label>LONGITUD<input name="newLength" maxlength="40" placeholder="Cuando aplique"></label></div><label data-asset class="wide" hidden>ACTIVO REGISTRADO<select name="assetId"></select></label><label data-source-loan class="wide" hidden>PRÉSTAMO DE PLAZA A DEVOLVER<select name="sourceLoanId"></select></label><label>FECHA<input name="fechaISO" type="text" placeholder="DD/MM/AAAA" inputmode="numeric" maxlength="10" required></label><label>CANTIDAD<input name="quantity" type="number" min="0.001" step="any" required></label>'+personField('person','QUIÉN RECIBE')+'<label data-destination class="wide">DÓNDE ESTARÁ EL ELEMENTO<input name="destination" maxlength="160" placeholder="Área, nivel o lugar"></label><label data-income class="wide" hidden>MOTIVO DEL INGRESO<select name="incomeType"><option value="ENTRADA">Entrada externa</option><option value="REPARACIÓN">Reparación</option></select></label><label class="wide">OBSERVACIONES<textarea name="notes" rows="2" maxlength="1000"></textarea></label><button class="wide" type="submit">GUARDAR</button><button type="button" class="wide" data-cancel-return hidden>CANCELAR</button></form><div id="warehouseFilters"><input type="search" id="warehouseSearch" placeholder="Buscar en la consulta"><select id="warehouseLoanFilter" aria-label="Estado de préstamos" hidden><option value="pending">PENDIENTES</option><option value="returned">DEVUELTOS</option><option value="all">TODOS</option></select></div><div id="warehouseExports"><button type="button" data-excel>EXPORTAR EXCEL</button><button type="button" data-pdf>EXPORTAR PDF</button></div><div class="tableWrap"><table id="warehouseTable"><thead></thead><tbody></tbody></table></div>';
  toolbar.after(navigation,home,panel);
  const find=s=>panel.querySelector(s),form=find('form'),f=form.elements,feedback=find('#warehouseStatus');
  const tell=message=>{feedback.textContent=message};
@@ -154,54 +167,82 @@
   const action={delivery:'A ENTREGAR',income:'A INGRESAR',loan:'A PRESTAR',transfer_out:'A ENVIAR A PLAZA',opening:'PARA SALDO DE APERTURA'}[view]||'';
   const caption='SELECCIONE ELEMENTO '+action;find('[data-item-caption]').textContent=caption;itemPicker.main.input.setAttribute('aria-label',caption);
  }
- const personResults=find('#warehousePersonResults'),personInfo=find('#warehousePersonInfo'),clearPerson=find('[data-person-clear]');
- function selectedPerson(){
-  return people().find(row=>row.id&&String(row.id)===f.personId.value&&!row.deleted&&row.active!==false);
+ function mountPersonPicker(key,onPick){
+  const field=find('[data-'+key+']'),search=f[key+'Search'],id=f[key+'Id'];
+  const personResults=field.querySelector('.machineOptions'),personInfo=field.querySelector('small'),clearPerson=field.querySelector('button');
+  function selectedPerson(){
+   return people().find(row=>row.id&&String(row.id)===id.value&&!row.deleted&&row.active!==false);
+  }
+  function selectPerson(person){
+   id.value=person?.id||'';
+   search.value=person?.nombre||'';
+   search.setCustomValidity('');
+   personInfo.textContent=[person?.documento&&'Documento: '+person.documento,person?.empresa].filter(Boolean).join(' · ');
+   personInfo.hidden=!personInfo.textContent;clearPerson.hidden=!person;
+   personResults.hidden=true;
+  }
+  function showPersonMatches(){
+   const query=norm(search.value).trim();
+   if(!query||id.value){personResults.hidden=true;return;}
+   const tokens=query.split(/\s+/),digits=/^[\d.\s-]+$/.test(query)?query.replace(/\D/g,''):'';
+   const matches=people().filter(person=>{
+    if(!person.id||person.deleted||person.active===false)return false;
+    const label=norm(personLabel(person));
+    return tokens.every(token=>label.includes(token))||Boolean(digits&&String(person.documento||'').replace(/\D/g,'').includes(digits));
+   }).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es',{sensitivity:'base'}));
+   personResults.replaceChildren(...matches.slice(0,20).map(person=>{
+    const option=button('',()=>{selectPerson(person);onPick?.(person);warehouseDirty=true;search.focus();});
+    option.append(el('strong',person.nombre),el('span',[person.documento,person.empresa].filter(Boolean).join(' · ')));
+    return option;
+   }));
+   if(!matches.length)personResults.textContent=people().length?'Sin coincidencias.':'Sin personal descargado. Sincroniza la bodega para cargar el listado.';
+   personResults.hidden=false;
+  }
+  setupPicker(search,personResults,showPersonMatches,()=>{personResults.hidden=true});
+  search.oninput=()=>{
+   if(id.value)onPick?.(null);
+   id.value='';clearPerson.hidden=true;personInfo.hidden=true;personInfo.textContent='';
+   search.setCustomValidity('');showPersonMatches();
+  };
+  search.addEventListener('keydown',event=>{
+   if(personResults.hidden)return;
+   const first=personResults.querySelector('button');
+   if(event.key==='ArrowDown'&&first){event.preventDefault();first.focus();}
+   if(event.key==='Enter'&&first&&personResults.childElementCount===1){event.preventDefault();first.click();}
+  });
+  clearPerson.onclick=()=>{selectPerson(null);onPick?.(null);warehouseDirty=true;search.focus();};
+  function refreshPersonPicker(){
+   if(id.value)selectPerson(selectedPerson());
+   else if(document.activeElement===search)showPersonMatches();
+  }
+  return {selected:selectedPerson,select:selectPerson,refresh:refreshPersonPicker};
  }
- function selectPerson(person){
-  f.personId.value=person?.id||'';
-  f.personSearch.value=person?.nombre||'';
-  f.personSearch.setCustomValidity('');
-  personInfo.textContent=[person?.documento&&'Documento: '+person.documento,person?.empresa].filter(Boolean).join(' · ');
-  personInfo.hidden=!personInfo.textContent;clearPerson.hidden=!person;
-  personResults.hidden=true;
+ const recipientPicker=mountPersonPicker('person');
+ const keeperPicker=mountPersonPicker('keeper',rememberKeeper);
+ // Los turnos de Colombia cambian a las 06:00, 14:00 y 22:00.
+ const currentShift=()=>Math.floor((Date.now()-11*3600000)/(8*3600000));
+ const shiftKey=()=>`sk-production-warehouse-shift:${session.user.document}`;
+ let keeperShift=null;
+ function rememberKeeper(person){
+  keeperShift=currentShift();
+  try{
+   if(person)localStorage.setItem(shiftKey(),JSON.stringify({shift:keeperShift,id:person.id}));
+   else localStorage.removeItem(shiftKey());
+  }catch{}
  }
- function showPersonMatches(){
-  const query=norm(f.personSearch.value).trim();
-  if(!query||f.personId.value){personResults.hidden=true;return;}
-  const tokens=query.split(/\s+/),digits=/^[\d.\s-]+$/.test(query)?query.replace(/\D/g,''):'';
-  const matches=people().filter(person=>{
-   if(!person.id||person.deleted||person.active===false)return false;
-   const label=norm(personLabel(person));
-   return tokens.every(token=>label.includes(token))||Boolean(digits&&String(person.documento||'').replace(/\D/g,'').includes(digits));
-  }).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es',{sensitivity:'base'}));
-  personResults.replaceChildren(...matches.slice(0,20).map(person=>{
-   const option=button('',()=>{selectPerson(person);warehouseDirty=true;f.personSearch.focus();});
-   option.append(el('strong',person.nombre),el('span',[person.documento,person.empresa].filter(Boolean).join(' · ')));
-   return option;
-  }));
-  if(!matches.length)personResults.textContent=people().length?'Sin coincidencias.':'Sin personal descargado. Sincroniza la bodega para cargar el listado.';
-  personResults.hidden=false;
- }
- setupPicker(f.personSearch,personResults,showPersonMatches,()=>{personResults.hidden=true});
- f.personSearch.oninput=()=>{
-  f.personId.value='';clearPerson.hidden=true;personInfo.hidden=true;personInfo.textContent='';
-  f.personSearch.setCustomValidity('');showPersonMatches();
- };
- f.personSearch.addEventListener('keydown',event=>{
-  if(personResults.hidden)return;
-  const first=personResults.querySelector('button');
-  if(event.key==='ArrowDown'&&first){event.preventDefault();first.focus();}
-  if(event.key==='Enter'&&first&&personResults.childElementCount===1){event.preventDefault();first.click();}
- });
- clearPerson.onclick=()=>{selectPerson(null);warehouseDirty=true;f.personSearch.focus();};
- function refreshPersonPicker(){
-  if(f.personId.value)selectPerson(selectedPerson());
-  else if(document.activeElement===f.personSearch)showPersonMatches();
+ function updateKeeper(reset=false){
+  const required=Boolean(session)&&!roles(session.user).includes('warehouse');
+  find('[data-keeper]').hidden=!required;f.keeperSearch.required=required;
+  if(!required){keeperPicker.select(null);keeperShift=null;return;}
+  if(!reset&&keeperShift===currentShift()){keeperPicker.refresh();return;}
+  keeperShift=currentShift();
+  let saved;
+  try{saved=JSON.parse(localStorage.getItem(shiftKey()));}catch{}
+  keeperPicker.select(saved?.shift===keeperShift?people().find(p=>p.id===saved.id&&!p.deleted&&p.active!==false):null);
  }
  function resetMovementForm(date){
   form.reset();
-  selectPerson(null);
+  recipientPicker.select(null);updateKeeper(true);
   itemPicker.clear();
   f.fechaISO.setCustomValidity('');f.fechaISO.value=displayDate(date);
   f.quantity.value='';
@@ -237,14 +278,14 @@
   if(!loan){renderReturns();return;}
   resetMovementForm(today());
   const person=people().find(row=>row.id===loan.personId);
-  if(person&&!person.deleted&&person.active!==false)selectPerson(person);
+  if(person&&!person.deleted&&person.active!==false)recipientPicker.select(person);
   const fixed=Boolean(loan.assetId),criterion=item(loan.itemId);
   const wholeUnits=fixed||criterion?.isYtSpare||criterion&&!criterion.fractionable;
   f.quantity.readOnly=fixed;
   f.quantity.min=wholeUnits?'1':'0.000001';
   f.quantity.step=wholeUnits?'1':'any';
   f.quantity.value=loan.left;
-  renderReturns();f.fechaISO.focus();
+  renderReturns();(f.keeperSearch.required&&!keeperPicker.selected()?f.keeperSearch:f.fechaISO).focus();
  }
  f.fechaISO.addEventListener('input',()=>f.fechaISO.setCustomValidity(''));
  find('#warehouseReturnSearch').oninput=renderReturns;
@@ -337,9 +378,9 @@
     return matchesQuery(cells,row.itemId,query)?[cells]:[];
    });
   }else{
-   headers=['FECHA','HORA REGISTRO','MOVIMIENTO','ELEMENTO / ACTIVO','CANTIDAD','FUNCIONARIO','DESTINO','ESTADO'];
+   headers=['FECHA','HORA REGISTRO','MOVIMIENTO','ELEMENTO / ACTIVO','CANTIDAD','FUNCIONARIO','BODEGUERO/A DE TURNO','REGISTRADO POR','DESTINO','ESTADO'];
    rows=[...records(),...pending().map(row=>({...row,itemName:item(row.itemId)?.name,personName:people().find(p=>p.id===row.personId)?.nombre,pending:true}))].reverse().flatMap(row=>{
-    const cells=[displayDate(row.fechaISO),registrationHour(row),kinds[row.kind]||row.kind,row.assetLabel||row.itemName,row.quantity,row.personName||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO'];
+    const cells=[displayDate(row.fechaISO),registrationHour(row),kinds[row.kind]||row.kind,row.assetLabel||row.itemName,row.quantity,row.personName||'—',row.shiftKeeperName||'—',row.recordedByName||row.recordedBy||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO'];
     return matchesQuery(cells,row.itemId,query)?[cells]:[];
    });
   }
@@ -366,8 +407,9 @@
   if(ready&&snapshot.catalog&&!String(snapshot.catalogRevision||'').startsWith('warehouse-assets-v2|'))find('#warehouseNote').textContent+=' Para incluir los activos de la bodega del nivel 4, actualiza Code.gs y sincroniza.';
   for(const node of panel.querySelectorAll('[data-view]')){node.hidden=node.dataset.view==='opening'&&!roles(session?.user).includes('admin');node.disabled=false;}
   find('[type=submit]').disabled=savingMovement||!ready||!snapshot.catalog;
-  if(view==='return'){renderReturns();if(!form.hidden)refreshPersonPicker();}
-  else if(!form.hidden){choices();refreshPersonPicker();}
+  if(view==='return'){renderReturns();if(!form.hidden)recipientPicker.refresh();}
+  else if(!form.hidden){choices();recipientPicker.refresh();}
+  if(!form.hidden)updateKeeper();
   const box=find('#warehousePending');box.replaceChildren();
   for(const row of pending().filter(row=>row.syncRejected)){
    const message=el('p',(item(row.itemId)?.name||row.itemId)+': '+row.syncError);
@@ -444,8 +486,12 @@
    try{
     let again;
     do{
-     const local=await store.read(active.user.document),sent=(local.pending||[]).filter(row=>!row.syncRejected).slice(0,1000).map(store.clean);
-     const result=await api('productionWarehouseSync',{token:active.token,protocol:'production-warehouse-v1',pending:sent,cursor:local.cursor||0,catalogRevision:local.catalogRevision||''});
+     const local=await store.read(active.user.document),waiting=(local.pending||[]).filter(row=>!row.syncRejected).slice(0,1000);
+     // Respeta el orden de captura cuando quedan pendientes de una versión anterior.
+     const withShift=Boolean(waiting[0]?.recordedBy),boundary=waiting.findIndex(row=>Boolean(row.recordedBy)!==withShift);
+     const sent=(boundary<0?waiting:waiting.slice(0,boundary)).map(store.clean);
+     const result=await api('productionWarehouseSync',{token:active.token,protocol:'production-warehouse-v1',...(withShift?{shiftMovements:sent}:{pending:sent}),cursor:local.cursor||0,catalogRevision:local.catalogRevision||''});
+     if(withShift&&!result.shiftKeeperV1)throw new Error('Actualiza Code.gs y publica la nueva versión para sincronizar el bodeguero de turno. Los registros siguen guardados en este equipo.');
      await store.reconcile(active.user.document,result,sent);
      const fresh=await store.read(active.user.document);
      if(session!==active)return {ok:false};snapshot=fresh;session.user.roles=result.roles;try{localStorage.setItem(sessionKey,JSON.stringify(session))}catch{}
@@ -465,12 +511,19 @@
   const selected=item(returning?loan?.itemId:f.itemId.value),date=readDate(f.fechaISO);
   try{
    if(!snapshot.settings?.enabled)throw new Error('La bodega aún no está activa.');
+   updateKeeper();
+   const actor=active.user,keeper=roles(actor).includes('warehouse')?
+    {id:actor.personId,documento:actor.document,nombre:actor.name}:keeperPicker.selected();
+   if(!keeper){
+    f.keeperSearch.setCustomValidity('Busca y selecciona al bodeguero o bodeguera de turno.');
+    f.keeperSearch.reportValidity();return;
+   }
    if(returning&&!loan)throw new Error('Selecciona un préstamo pendiente de reintegro.');
    if(returning&&!selected)throw new Error('El elemento de este préstamo ya no está habilitado en el catálogo.');
    if(returning&&!date)throw new Error('Escribe una fecha válida para el reintegro.');
    if(!returning&&(!find('#warehouseItemField')._validateItemSearch()||!selected||!date))throw new Error('Selecciona el elemento de la lista y una fecha válida.');
    if(selected.isYtSpare&&['delivery','loan','transfer_out'].includes(view)&&(state.pending||[]).some(row=>!row.kind&&!row.syncRejected))throw new Error('Hay consumos de Mecánica pendientes en este equipo. Sincronízalos antes de entregar repuestos desde Bodega.');
-   if(view!=='opening'&&!selectedPerson()){
+   if(view!=='opening'&&!recipientPicker.selected()){
     f.personSearch.setCustomValidity('Busca y selecciona una persona del listado de Personal.');
     f.personSearch.reportValidity();return;
    }
@@ -482,7 +535,7 @@
    if(selected.isFixedAsset&&!assetId&&!creating)throw new Error('Selecciona el activo registrado.');
    if(selected.isFixedAsset&&outgoing(view)&&!fixedAssets(selected,view).some(asset=>asset.id===assetId))throw new Error('El activo no está disponible en Bodega de Producción.');
    if(view==='transfer_out'&&!confirm('¿Enviar '+quantity+' '+selected.name+' a Plaza Blending? Al sincronizar se descontará en Producción y se registrará el ingreso en Plaza.'))return;
-   const row={id:crypto.randomUUID(),kind:view,itemId:selected.id,quantity,fechaISO:date,assetId,personId:f.personId.value,destination:f.destination.value.trim(),loanId:loan?.id||'',sourceLoanId:view==='transfer_out'?f.sourceLoanId.value:'',incomeType:view==='income'?f.incomeType.value:'',notes:f.notes.value.trim(),createdAt:new Date().toISOString(),...(creating?{newAsset:{id:crypto.randomUUID(),serial:f.newSerial.value,modelo:f.newModel.value,marcaComercial:f.newBrand.value,marcaAnterior:f.newMark.value,numeroClase:f.newNumber.value,minaOrigen:f.newMine.value,longitud:f.newLength.value}}:{})};
+   const row={id:crypto.randomUUID(),kind:view,recordedBy:actor.document,recordedByName:actor.name,shiftKeeperId:keeper.id,shiftKeeperDocument:keeper.documento,shiftKeeperName:keeper.nombre,itemId:selected.id,quantity,fechaISO:date,assetId,personId:f.personId.value,destination:f.destination.value.trim(),loanId:loan?.id||'',sourceLoanId:view==='transfer_out'?f.sourceLoanId.value:'',incomeType:view==='income'?f.incomeType.value:'',notes:f.notes.value.trim(),createdAt:new Date().toISOString(),...(creating?{newAsset:{id:crypto.randomUUID(),serial:f.newSerial.value,modelo:f.newModel.value,marcaComercial:f.newBrand.value,marcaAnterior:f.newMark.value,numeroClase:f.newNumber.value,minaOrigen:f.newMine.value,longitud:f.newLength.value}}:{})};
    savingMovement=true;find('[type=submit]').disabled=true;
    await store.queue(active.user.document,row);
    if(session!==active)return;
