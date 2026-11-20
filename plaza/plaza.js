@@ -79,9 +79,8 @@ const deviceAccess=createDeviceAccess('sk-plaza');
     const previousMark=usesPreviousMark?[asset.marcaPrevia,asset.marcaAnterior,asset.numeroMarcaActual,asset.marcaActual,asset.marcaInterna].map(clean).find(Boolean):'';
     return[clean(asset.fabricante||asset.marcaComercial),window.SKAssetRules.isColumn(asset)?'':clean(asset.serial),newMark||previousMark,clean(asset.modelo)].filter(Boolean).join(' · ')||'Sin datos de identificación';
   }
-  function matchesAssetSearch(asset,query){
-    const text=norm([assetSelectionLabel(asset),asset.marcaPrevia,asset.marcaAnterior,asset.numeroMarcaActual].filter(Boolean).join(' '));
-    return norm(query).split(/\s+/).filter(Boolean).every(part=>text.includes(part));
+  function deliveryAssetResults(assets,query){
+    return query.rows(assets,asset=>[assetSelectionLabel(asset)]);
   }
   function setupDeliveryAssetSearch(){
     const form=$('#deliveryForm'),field=$('#deliveryAssetField'),select=$('#deliveryAssetId');
@@ -100,9 +99,10 @@ const deviceAccess=createDeviceAccess('sk-plaza');
     const close=()=>{menu.hidden=true;field.classList.remove('isOpen');input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');activeIndex=-1};
     const draw=()=>{
       if(input.disabled)return close();
-      const item=findItem(form.elements.itemId.value),query=select.value?'':input.value,rows=availableAssets(item);
-      visibleRows=rows.filter(asset=>matchesAssetSearch(asset,query));activeIndex=-1;input.removeAttribute('aria-activedescendant');
-      menu.innerHTML=visibleRows.map((asset,index)=>`<button type="button" role="option" tabindex="-1" id="deliveryAssetOption-${index}" data-asset-id="${esc(asset.id)}" aria-selected="${asset.id===select.value}"><span class="itemSearchNames"><strong>${highlightMatch(assetSelectionLabel(asset),norm(query))}</strong></span></button>`).join('')||`<p role="status">${rows.length?'No hay activos que coincidan con la búsqueda.':'No hay activos disponibles de esta clase.'}</p>`;
+      const item=findItem(form.elements.itemId.value),rows=availableAssets(item),query=window.SKAssetSearch.query(input.value);
+      const hits=deliveryAssetResults(rows,query);
+      visibleRows=hits.map(hit=>hit.asset);activeIndex=-1;input.removeAttribute('aria-activedescendant');
+      menu.innerHTML=hits.map(({asset,lines,detail},index)=>`<button type="button" role="option" tabindex="-1" id="deliveryAssetOption-${index}" data-asset-id="${esc(asset.id)}" aria-selected="${asset.id===select.value}"><span class="itemSearchNames"><strong>${query.html(lines[0])}</strong>${detail?'<small>'+query.html(detail)+'</small>':''}</span></button>`).join('')||`<p role="status">${rows.length?'No hay activos que coincidan con la búsqueda.':'No hay activos disponibles de esta clase.'}</p>`;
       menu.hidden=false;field.classList.add('isOpen');input.setAttribute('aria-expanded','true');
     };
     const refresh=()=>{

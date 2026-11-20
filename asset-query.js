@@ -98,16 +98,10 @@
  function draw(){
   const list=document.getElementById('assetQueryList');if(!list)return;
   const projections=new Map(assets.filter(a=>!a.deleted).map(a=>[a.id,window.SKAssetHistory.project(a,data)]));
-  const rows=window.SKAssetOwnership.search([...projections.values()].map(p=>p.asset),document.getElementById('assetQuerySearch').value);
-  if(!rows.some(a=>a.id===selectedId))selectedId='';
+  const rows=window.SKAssetOwnership.results([...projections.values()].map(p=>p.asset),document.getElementById('assetQuerySearch').value);
+  if(!rows.some(({asset})=>asset.id===selectedId))selectedId='';
   document.getElementById('assetQueryCount').textContent=`${rows.length} activo${rows.length===1?'':'s'} encontrado${rows.length===1?'':'s'}`;
-  list.innerHTML=rows.map(a=>{
-   const external=!window.SKAssetOwnership.isSK(a);
-   return `<button type="button" class="assetRow${external?' assetRowExternal':''}" data-query-asset-id="${esc(a.id)}" aria-pressed="${a.id===selectedId}" aria-controls="assetQueryDetail">
-    <b>${external?'<span class="externalBadge">EXTERNO</span> ':''}${esc(window.SKAssetOwnership.label(a))}</b>
-    <small>Mina propietaria: ${esc(a.mina||'Sin registrar')} · Ubicación: ${esc(a.ubicacion||'Sin ubicación')} · ${esc(a.estado||'Sin estado')}${external?' · TRANSITORIO':''}</small>
-   </button>`;
-  }).join('')||'<p class="hint">No hay activos que coincidan.</p>';
+  list.innerHTML=rows.map(({asset,external,content})=>`<button type="button" class="assetRow${external?' assetRowExternal':''}" data-query-asset-id="${esc(asset.id)}" aria-pressed="${asset.id===selectedId}" aria-controls="assetQueryDetail">${content}</button>`).join('')||'<p class="hint">No hay activos que coincidan.</p>';
   drawDetail(projections.get(selectedId));
  }
 

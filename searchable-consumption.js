@@ -16,7 +16,24 @@ function matchesItemSearch(text,number,query){
 }
 function box(input,id){let b=document.querySelector('#'+id);if(!b){b=document.createElement('div');b.id=id;b.className='liveSuggestions';input.parentElement.append(b)}return b}
 function closeBoxes(){document.querySelectorAll('.liveSuggestions').forEach(b=>b.classList.remove('open'))}
-function render(input,id,rows,onPick){const b=box(input,id),q=norm(input.value),hits=rows.filter(x=>x.p?matchesItemSearch(x.label,x.p.numero,q):!q||norm(x.label).includes(q)).slice(0,50);b.innerHTML=hits.map((x,i)=>`<button type="button" data-i="${i}">${x.label}</button>`).join('')||(q?'<div class="noSuggestion">Sin coincidencias</div>':'');b.classList.toggle('open',!!hits.length||!!q);b.onclick=e=>{const bt=e.target.closest('[data-i]');if(!bt)return;const x=hits[Number(bt.dataset.i)];onPick(x);b.classList.remove('open')}}
+function render(input,id,rows,onPick){
+ const b=box(input,id),q=norm(input.value),query=window.SKAssetSearch.query(input.value);
+ const hits=[];
+ for(const row of rows){
+  let content;
+  if(row.a){
+   const detail=query.extra(row.a,row.label);if(detail===null)continue;
+   content=query.html([row.label,detail].filter(Boolean).join(' · '));
+  }else{
+   if(!(row.p?matchesItemSearch(row.label,row.p.numero,q):!q||norm(row.label).includes(q)))continue;
+   content=window.SKAssetSearch.escape(row.label);
+  }
+  hits.push({row,content});if(hits.length===50)break;
+ }
+ b.innerHTML=hits.map(({content},i)=>`<button type="button" data-i="${i}">${content}</button>`).join('')||(q?'<div class="noSuggestion">Sin coincidencias</div>':'');
+ b.classList.toggle('open',!!hits.length||!!q);
+ b.onclick=e=>{const bt=e.target.closest('[data-i]');if(!bt)return;onPick(hits[Number(bt.dataset.i)].row);b.classList.remove('open')};
+}
 async function rebuildMachines(clear=false){if(typeof all!=='function')return;const t=$('#equipmentType').value,input=$('#conAssetSearch');if(clear){input.value='';$('#conAsset').value='';$('#conModel').value='';$('#conSerial').value=''}$('#serialField').hidden=t==='Columna';input.disabled=!t;input.placeholder=t==='Columna'?'Marca interna romana de la Columna…':'Número de YT o marca interna romana…';machines=(await all('assets')).filter(a=>!a.deleted&&norm(a.clase)===norm(t)).map(a=>({a,label:machineLabel(a,t)})).filter(x=>x.label).sort((x,y)=>(Number(assetNo(x.a))||999999)-(Number(assetNo(y.a))||999999)||x.label.localeCompare(y.label,'es',{numeric:true}))}
 function syncOrigin(model){const type=$('#equipmentType').value||'YT',sel=$('#origin'),number=model||sel.value.match(/(28|29)$/)?.[1]||'29';sel.innerHTML=['29','28'].map(n=>`<option value="${type}${n}">${type} ${n}</option>`).join('');sel.value=type+number}
 async function loadMachines(){await rebuildMachines(true);syncOrigin();await loadParts();box($('#conAssetSearch'),'machineLive').innerHTML=''}
