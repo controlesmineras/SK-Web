@@ -108,5 +108,16 @@ test('el libro de compras mantiene las columnas de compra y ordena el consumo de
  for(const sheet of [detail,dashboard]){assert.match(sheet,/31\/01\/2025/);assert.match(sheet,/Sin conexión/)}
  assert.ok(dashboard.indexOf('>Pin<')<dashboard.indexOf('>Tuerca &amp; sello<'));assert.doesNotMatch(dashboard,/>Aro</);
  assert.match(book.get('xl/charts/chart1.xml'),/\$D\$6:\$D\$7/);
+ const chart=book.get('xl/charts/chart1.xml');
+ assert.match(chart,/LOS 10 REPUESTOS MÁS USADOS/);
+ assert.match(chart,/<c:overlay val="0"/);
+ assert.match(chart,/<c:cat><c:strRef>.*?\$A\$6:\$A\$7.*?<c:v>2<\/c:v>.*?<c:v>08<\/c:v>/s);
+ assert.match(chart,/<c:dLblPos val="ctr".*?<c:showVal val="1"/s);
+ assert.match(chart,/<c:catAx>.*?<c:delete val="0".*?<c:axPos val="l".*?<c:tickLblSkip val="1"/s);
+ assert.match(book.get('xl/drawings/drawing1.xml'),/<xdr:oneCellAnchor>.*?<xdr:ext cx="4762500"/s);
+ const many=Array.from({length:12},(_,i)=>({item:String(i+1),name:'Repuesto',qty:12-i}));
+ const top=build(many).get('xl/charts/chart1.xml');
+ assert.match(top,/<c:cat><c:numRef>.*?\$A\$6:\$A\$15.*?<c:ptCount val="10"/s);
+ assert.match(top,/<c:val><c:numRef>.*?\$D\$6:\$D\$15.*?<c:ptCount val="10"/s);
  assert.equal(build([rows[2]]).has('xl/charts/chart1.xml'),false);
 });
