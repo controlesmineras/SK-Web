@@ -94,7 +94,19 @@ body:has(#app:not([hidden]) #plazaNavigation:not([hidden])){padding-bottom:calc(
 
 body:has(#plazaNavigation:not([hidden])) #deliveryScrollTop{bottom:calc(80px + env(safe-area-inset-bottom))}
 
+#deliveryCategoryFilter .deliveryCategoryOptions{grid-template-columns:repeat(4,minmax(0,1fr))}
+#incomeCategoryFilter .deliveryCategoryOptions{grid-template-columns:repeat(2,minmax(0,1fr))}
+.recentMovements .recentMovementList{min-width:0;grid-template-columns:minmax(0,1fr)}
+.recentSortControls{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:12px 0 4px}
+.recentSortControls label{font-weight:700}
+.recentSortControls select{flex:1 1 135px;min-width:0;width:auto;max-width:270px}
+.recentSortControls button{width:auto;min-height:44px;white-space:nowrap}
+.recentSortStatus{font-size:.84rem;color:#405970;margin:6px 0 10px}
+@media(max-width:540px){
+  #deliveryCategoryFilter .deliveryCategoryOptions{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
 @media(min-width:1000px){
+  .recentSortControls{display:none}
   main:has(#app:not([hidden]) .view.active:is(.recentMovements,.inventoryQuery,#contacts)){
     width:100%;max-width:1520px;padding-inline:clamp(24px,2.5vw,40px);
   }
@@ -106,16 +118,22 @@ body:has(#plazaNavigation:not([hidden])) #deliveryScrollTop{bottom:calc(80px + e
     max-width:440px;margin:0 0 12px;
   }
   #app .recentMovements .deliveryQueryFilters{grid-template-columns:repeat(4,minmax(0,1fr));gap:12px 20px;align-items:end}
-  #app #recentDeliveries .recentElementFilter{grid-column:span 2}
-  #app #recentDeliveries .deliveryCategoryFilter{grid-column:span 2}
+  #app .recentMovements .recentElementFilter{grid-column:span 2}
+  #app .recentMovements .deliveryCategoryFilter{grid-column:span 2}
   .recentTableScroll{width:100%;overflow:auto;border:1px solid #d4dfe6;border-radius:10px}
   .recentTableScroll:focus-visible{outline:3px solid #397497}
-  .recentTableScroll table{width:100%;border-collapse:collapse;table-layout:fixed;font-size:.91rem}
+  .recentTableScroll table{min-width:1320px;width:100%;border-collapse:collapse;table-layout:fixed;font-size:.91rem}
   .recentTableScroll th,.recentTableScroll td{text-align:left;vertical-align:top;padding:10px 12px;overflow-wrap:anywhere}
   .recentTableScroll th{background:#e3edf2;color:#173d59;font-size:.84rem}
-  .recentTableScroll th:nth-child(1){width:13%}.recentTableScroll th:nth-child(2){width:21%}
-  .recentTableScroll th:nth-child(3){width:7%}.recentTableScroll th:nth-child(4){width:11%}
-  .recentTableScroll th:nth-child(7){width:18%}
+  .recentTableScroll th{padding:0}
+  .recentTableScroll th button{display:block;width:100%;min-height:44px;padding:9px 12px;
+    text-align:left;line-height:1.3;border:0;border-radius:0;background:transparent;color:inherit;font:inherit;font-weight:750;cursor:pointer}
+  .recentTableScroll th button:hover,.recentTableScroll th[aria-sort]{background:#cfdee7}
+  .recentTableScroll th button:focus-visible{outline:2px solid #396687;outline-offset:-3px}
+  .recentTableScroll th button span{white-space:nowrap;color:#365972}
+  .recentTableScroll th:nth-child(1){width:12%}.recentTableScroll th:nth-child(2){width:17%}
+  .recentTableScroll th:nth-child(3){width:8%}.recentTableScroll th:nth-child(4){width:9%}
+  .recentTableScroll th:nth-child(5){width:15%}.recentTableScroll th:nth-child(6){width:13%}
   .recentTableScroll tbody tr+tr{border-top:1px solid #dce5eb}
   .recentTableScroll tbody tr:nth-child(even){background:#f6f9fb}
   .recentTableScroll td>span,.recentTableScroll td>strong{display:block}

@@ -2,8 +2,9 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../plaza/plaza.js'),'utf8').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
 function client(){
- const nodes=new Map(),alerts=[],downloads=[],radios=['all','epp','assets'].map(value=>({value,checked:value==='all'}));
- const blank=()=>({value:'',textContent:'',innerHTML:'',addEventListener(){}});
+ const nodes=new Map(),alerts=[],downloads=[],radios={delivery:['all','epp','assets','reversals'],income:['all','reversals']};
+ for(const kind of Object.keys(radios))radios[kind]=radios[kind].map(value=>({value,checked:value==='all'}));
+ const blank=()=>({value:'',textContent:'',innerHTML:'',addEventListener(){},setAttribute(name,value){this[name]=value}});
  const node=key=>{if(!nodes.has(key))nodes.set(key,blank());return nodes.get(key)};
  for(const kind of ['delivery','income']){
   const label={classList:{contains:()=>false},_refreshItemSearch(){},_clearItemSearch(){select.value=''}},select={value:'',innerHTML:'',closest:()=>label};
@@ -21,11 +22,11 @@ function client(){
   row(kind+'-different-id','b6','2026-10-02T11:00:00',{itemName:'Barreno 4 ft'}),row(kind+'-bad-date','b4','invalid'),
   row(kind+'-epp','epp','2026-10-02T11:00:00'),row(kind+'-asset','asset','2026-10-02T11:00:00')
  ];
- const ctx=vm.createContext({Blob,console,alert:message=>alerts.push(message),document:{querySelector:key=>key==='#deliveryCategoryFilter input[value="all"]'?radios[0]:node(key),querySelectorAll:key=>key==='#deliveryCategoryFilter input'?radios:[]},window:{alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:()=>null},setTimeout(){},clearTimeout(){},crypto:{}});
+ const ctx=vm.createContext({Blob,console,alert:message=>alerts.push(message),document:{querySelector:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input\[value="all"\]$/);return match?radios[match[1]][0]:node(key)},querySelectorAll:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input$/);return match?radios[match[1]]:[]}},window:{alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:()=>null},setTimeout(){},clearTimeout(){},crypto:{}});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../asset-record-rules.js'),'utf8'),ctx);
- vm.runInContext(source+`\ndownloadBlob=(blob,name)=>window.capture(blob,name);window.audit={set:value=>{data=value},rows:recentQueryRows,render:renderRecentQueries,reset:resetRecentFilters,excel:exportMovementExcel,pdf:exportMovementPdf};})();`,ctx);
+ vm.runInContext(source+`\ndownloadBlob=(blob,name)=>window.capture(blob,name);window.audit={set:value=>{data=value},sort:recentSort,rows:recentQueryRows,render:renderRecentQueries,reset:resetRecentFilters,excel:exportMovementExcel,pdf:exportMovementPdf};})();`,ctx);
  ctx.window.capture=(blob,name)=>downloads.push({blob,name});ctx.window.audit.set(data);
- return{api:ctx.window.audit,data,node,alerts,downloads,select(kind,id){node('#'+kind+'HistoryQueryForm').elements.itemId.value=id},category(value){radios.forEach(r=>r.checked=r.value===value)}};
+ return{api:ctx.window.audit,data,node,alerts,downloads,select(kind,id){node('#'+kind+'HistoryQueryForm').elements.itemId.value=id},category(value,kind='delivery'){radios[kind].forEach(r=>r.checked=r.value===value)}};
 }
 test('exact catalog IDs and inclusive dates apply independently to deliveries and incomes',()=>{
  const c=client(),before=JSON.stringify(c.data);
@@ -64,4 +65,43 @@ test('cards, Excel and PDF share the selected rows and retain reversal informati
 test('clearing restores each default date range and removes the selected element and times',()=>{
  const c=client();c.category('epp');
  for(const kind of ['delivery','income']){c.select(kind,'b4');c.node('#'+kind+'TimeFrom').value='12:00';c.api.reset(kind);assert.equal(c.node('#'+kind+'HistoryQueryForm').elements.itemId.value,'');assert.equal(c.node('#'+kind+'TimeFrom').value,'');assert.equal(c.node('#'+kind+'TimeTo').value,'');const start=new Date(c.node('#'+kind+'DateFrom').value+'T12:00:00'),end=new Date(c.node('#'+kind+'DateTo').value+'T12:00:00');assert.equal(Math.round((end-start)/86400000),kind==='delivery'?6:29)}
+});
+
+test('header order promotes the latest column and toggles the primary while keeping earlier tiebreakers',async()=>{
+ const c=client(),kind='delivery',base={createdAt:'2026-10-01T12:00:00',balanceBefore:15};
+ c.data.blendingDeliveries=[
+  {...base,id:'z',itemName:'Tuerca',quantity:2,balanceAfter:10,shiftKeeperName:'Ana',operatorName:'Rosa'},
+  {...base,id:'a',itemName:'Árbol',quantity:2,balanceAfter:2,shiftKeeperName:'Beto',operatorName:'Luis'},
+  {...base,id:'b',itemName:'Broca',quantity:10,balanceAfter:1,shiftKeeperName:'Ana',operatorName:'Zoé'}];
+ const ids=()=>Array.from(c.api.rows(kind),r=>r.id);
+ c.api.sort(kind,'item');assert.deepEqual(ids(),['a','b','z']);
+ c.api.sort(kind,'quantity');assert.deepEqual(ids(),['a','z','b']);
+ c.api.sort(kind,'quantity');assert.deepEqual(ids(),['b','a','z']);
+ c.api.sort(kind,'balance');assert.deepEqual(ids(),['b','a','z']);
+ c.api.sort(kind,'operator');assert.deepEqual(ids(),['a','z','b']);
+ c.api.sort(kind,'keeper');assert.deepEqual(ids(),['z','b','a']);
+ c.api.render();assert.match(c.node('#deliverySortStatus').textContent,/1\. Bodeguero\/a de turno ↑ · 2\. Registrado por ↑/);
+ assert.doesNotMatch(c.node('#incomeSortStatus').textContent,/Registrado por/);
+ c.api.excel(kind);const xml=await c.downloads.at(-1).blob.text();
+ assert.ok(xml.indexOf('Tuerca')<xml.indexOf('Broca')&&xml.indexOf('Broca')<xml.indexOf('Árbol'));
+ c.api.reset(kind);c.api.render();assert.equal(c.node('#deliverySortStatus').textContent,'Orden: 1. Fecha y hora de registro ↓');
+});
+test('reversals include each matching original and counterpart across dates in the view and exports',async()=>{
+ for(const [kind,store] of [['income','blendingIncomes'],['delivery','blendingDeliveries']]){
+  const c=client(),base={itemId:'b4',itemName:'Barreno 4 ft',quantity:2,createdAt:'2026-10-01T12:00:00'};
+  c.data[store]=[{...base,id:'first',notes:'original-uno',createdAt:'2026-09-05T12:00:00',reversalMovementId:'undo1',reversed:true},
+   {...base,id:'other',notes:'movimiento-normal'}, {...base,id:'undo2',reversalOf:'second',movementType:'REVERSIÓN',createdAt:'2026-10-05T12:00:00'},
+   {...base,id:'undo1',notes:'contra-uno',reversalOf:'first',createdAt:'2026-10-02T12:00:00',movementType:'REVERSIÓN'},
+   {...base,id:'second',reversado:true},{...base,id:'legacy',reversado:true},
+   {...base,id:'third',createdAt:'2026-10-07T10:00:00',reversado:true},
+   {...base,id:'deleted',deleted:true,reversed:true},{...base,id:'unrelated',movementType:'DEVOLUCIÓN'}];
+  c.category('reversals',kind);assert.deepEqual(Array.from(c.api.rows(kind),r=>r.id),['second','undo2','first','undo1','legacy']);
+  c.api.render();assert.match(c.node(kind==='delivery'?'#recentDeliveriesCount':'#recentIncomesCount').textContent,/5 .*Reversiones/);
+  for(const exportAs of ['excel','pdf']){
+   c.api[exportAs](kind);const out=c.downloads.at(-1);assert.match(out.name,/_REVERSIONES\./);
+   const content=await out.blob.text();assert.match(content,/original-uno/);assert.match(content,/contra-uno/);
+   assert.doesNotMatch(content,/movimiento-normal/);
+  }
+  c.select(kind,'b6');assert.equal(c.api.rows(kind).length,0);
+ }
 });
