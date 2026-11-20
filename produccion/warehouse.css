@@ -64,3 +64,9 @@ body:has(#workspace:not([hidden]) #changeProductionModule:not([hidden])){padding
 @media(max-width:520px){#warehouseReturnList article{display:grid}}
 
 #warehouseTable [data-stock-group]{display:flex;align-items:center;gap:.5rem;width:100%;min-height:40px;text-align:left;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3;border-radius:6px;padding:6px 10px}
+#warehouseForm .warehousePersonInput{display:flex;align-items:center;position:relative;margin-top:6px}
+#warehouseForm .warehousePersonInput input{padding-inline-end:2.75rem}
+#warehouseForm [data-person-clear]{position:absolute;right:2px;min-height:36px;width:36px;padding:0;border:0;background:transparent;color:#173d59;font-size:1.25rem}
+#warehousePersonResults button{display:grid;gap:2px;white-space:normal;background:white;color:#173d59}
+#warehousePersonResults span,#warehousePersonInfo{color:#465b68;font-size:.85rem}
+#warehousePersonInfo{display:block;margin-top:4px}
