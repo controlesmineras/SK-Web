@@ -88,7 +88,7 @@
    if(!row){
     // Un repuesto retirado puede conservar movimientos con su identificador anterior.
     const criterion=criteria.get(partId),id=criterion?.productionPartId||partId,old=legacy.get(id);
-    row=rows.get(id)||add({id,numero:movement.noItem||criterion?.spareItemNumber||old?.numero||'',
+    row=rows.get(id)||add({...old,...criterion,id,numero:movement.noItem||criterion?.spareItemNumber||old?.numero||'',
      nombre:movement.nombreRepuesto||criterion?.spareItemName||old?.nombre||id},false);
     aliases.set(partId,row);
    }
@@ -154,7 +154,8 @@
   table.tBodies[0].replaceChildren(...rows.map(({part,active,income,consumed,days:daily})=>{
    const tr=make('tr');
    tr.append(make('td',part.numero||'—'));
-   column(tr,part.nombre,'row');
+   const name=column(tr,part.nombre,'row'),application=part.spareApplication||part.application||part.ubicacionAplicacion;
+   if(application){const use=make('span',' '+application);use.className='spareUse';name.append(use)}
    tr.append(make('td',number.format(income)),make('td',number.format(consumed)));
    tr.append(make('td',active?number.format(stockFor(part,origin)):'—'));
    for(const day of days){
@@ -165,10 +166,11 @@
    return tr;
   }));
  }
- function sheet(context){
+ function sheet(context,download=false){
   const {state,today}=context,origin=selectedOrigin(),byPeriod=el('sheetMode').value==='period';
   const note=el('sheetDates'),history=el('sheetHistoryNote'),scroll=el('sheetScroll'),pageField=el('sheetPageField');
-  const month=el('sheetMonth'),year=el('sheetYear');
+  const month=el('sheetMonth'),year=el('sheetYear'),excel=el('sheetPurchasesExcel');
+  excel.disabled=true;
   if(!month.options.length){
    options(month,Array.from({length:12},(_,i)=>{
     const key=String(i+1).padStart(2,'0');return [key,monthName.format(utc('2000-'+key+'-01'))];
@@ -199,6 +201,13 @@
   }
   const rows=aggregate(context,origin,range);
   if(!rows.length){note.textContent+=' No hay repuestos en este inventario.';return}
+  excel.disabled=false;
+  if(download){
+   const values=rows.map(({part,active,consumed})=>({item:part.numero,name:part.nombre,
+    application:part.spareApplication||part.application||part.ubicacionAplicacion||'',partCode:part.sparePartCode||'',
+    qty:consumed,stock:active?context.stockFor(part,origin):null}));
+   window.SKDownloadPurchaseExcel({rows:values,origin,period:note.textContent,from:range.from,to:range.to});
+  }
   let from=range.from,to=range.to;
   const months=monthsBetween(from,to);
   if(months.length>3){
@@ -236,5 +245,5 @@
   if(!el('consumptionSheet').hidden)sheet(context);
   else if(!el('consumptionDashboard').hidden)dashboard(context);
  }
- window.SKConsumptionReports={render,periods,rollingRange,aggregate,rank,selectedOrigin,consumptionMovements};
+ window.SKConsumptionReports={render,sheet,periods,rollingRange,aggregate,rank,selectedOrigin,consumptionMovements};
 })();

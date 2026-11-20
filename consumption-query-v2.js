@@ -156,7 +156,14 @@ function drawOrders(){
 function xml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;')}
 function col(n){let s='';while(n){n--;s=String.fromCharCode(65+n%26)+s;n=Math.floor(n/26)}return s}
 function zipStore(files){const te=new TextEncoder(),parts=[],central=[];let off=0;const crcTable=(()=>{let t=[];for(let n=0;n<256;n++){let c=n;for(let k=0;k<8;k++)c=(c&1)?0xedb88320^(c>>>1):c>>>1;t[n]=c>>>0}return t})();const crc=b=>{let c=0xffffffff;for(const x of b)c=crcTable[(c^x)&255]^(c>>>8);return(c^0xffffffff)>>>0};const u16=n=>new Uint8Array([n&255,(n>>>8)&255]),u32=n=>new Uint8Array([n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255]);for(const [name,text] of files){const nb=te.encode(name),b=te.encode(text),c=crc(b),local=[u32(0x04034b50),u16(20),u16(0),u16(0),u16(0),u16(0),u32(c),u32(b.length),u32(b.length),u16(nb.length),u16(0),nb,b];const len=local.reduce((a,x)=>a+x.length,0);parts.push(...local);central.push(u32(0x02014b50),u16(20),u16(20),u16(0),u16(0),u16(0),u16(0),u32(c),u32(b.length),u32(b.length),u16(nb.length),u16(0),u16(0),u16(0),u16(0),u32(0),u32(off),nb);off+=len}const cs=central.reduce((a,x)=>a+x.length,0);parts.push(...central,u32(0x06054b50),u16(0),u16(0),u16(files.length),u16(files.length),u32(cs),u32(off),u16(0));return new Blob(parts,{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'})}
-function exportConsumption(format){
+async function exportConsumption(format){
+ if(format==='xlsx'&&mode==='part'&&productionQuery()){
+  const view=await render();
+  if(!view)return;
+  if(!view.rows.length)return alert('No hay resultados para exportar.');
+  window.SKDownloadPurchaseExcel(view);
+  return;
+ }
  if(!lastRows.length)return alert('No hay resultados para exportar.');
  const byPart=mode==='part',grouped=mode==='daily',pdf=format==='pdf';
  const production=productionQuery();
@@ -193,6 +200,11 @@ function downloadTableExcel(rows,filename,mergeRange=false){const sheet=rows.map
 const productionDates=()=>window.SKProductionDates;
 const dateInputAttrs=()=>productionDates()?'type="text" inputmode="numeric" placeholder="DD/MM/AAAA" maxlength="10"':'type="date"';
 window.SKDownloadTableExcel=downloadTableExcel;
+window.SKDownloadPurchaseExcel=({rows,origin,period,from,to})=>{
+ const blob=window.SKPurchaseWorkbook.build({rows,origin,period,downloadedAt:new Date(),
+  lastSyncAt:state.lastSyncAt,offline:!navigator.onLine},{xml,col,zipStore});
+ downloadFile(blob,'Compras_'+origin+'_'+(from||'inicio')+'_a_'+(to||'sin_limite')+'.xlsx');
+};
 function controls(){
  const sec=document.querySelector('#queries');
  if(!sec||document.querySelector('#cqv2'))return;
@@ -280,6 +292,7 @@ function totalsByPart(rows,parts,production,readStock,includeAll=false){
  const labelKey=(item,name)=>JSON.stringify([norm(item==='—'?'':item),norm(name)]);
  const newGroup=(part,row)=>({
   item:part?.numero||row?.item||'—',name:part?.nombre||row?.name||'Sin nombre',
+  application:part?.spareApplication||part?.application||part?.ubicacionAplicacion||'',partCode:part?.sparePartCode||'',
   qty:0,stock:part&&readStock?readStock(part):null
  });
  for(const part of parts){
@@ -356,10 +369,12 @@ async function render(){if(!db||!document.querySelector('#cqv2'))return;const se
   rows=sortRows(totalsByPart(rows,parts,production,readStock,includeAll));
   lastRows=rows;
   drawPartHead(production);
-  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td>${production?`<td>${esc(x.stock??'—')}</td>`:''}</tr>`).join('')||`<tr><td colspan="${production?4:3}">No hay consumos para este período.</td></tr>`;
+  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${production?`<strong class="spareName">${esc(x.name)}</strong>${x.application?` <span class="spareUse">${esc(x.application)}</span>`:''}`:esc(x.name)}</td><td><b>${x.qty}</b></td>${production?`<td>${esc(x.stock??'—')}</td>`:''}</tr>`).join('')||`<tr><td colspan="${production?4:3}">No hay consumos para este período.</td></tr>`;
  }else{rows=sortRows(rows);lastRows=rows;const compact=compactDetail();
   document.querySelector('#cqHead').innerHTML=compact?'<tr><th>Equipo<br><small>No. marca actual</small></th><th>Inventario</th><th>Fecha<br><small>Hora registro</small></th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cant.</th></tr>':`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th>Hora registro</th><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad</th></tr>`;
-  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${compact?fmt(x.date).replace(/\b0(?=\d)/g,'')+'<br><small>'+esc(x.time||'—')+'</small>':fmt(x.date)}</td>${compact?'':`<td>${esc(x.time||'—')}</td>`}<td>${esc(x.item)}</td><td>${esc(x.name)}</td><td>${x.qty}</td></tr>`).join('')||`<tr><td colspan="${compact?6:production?7:8}">No hay movimientos para este período.</td></tr>`}document.querySelector('#cqInfo').textContent=`${rows.length} resultado${rows.length===1?'':'s'} · orden: ${orders.length?orders.map((o,i)=>`${i+1}. ${fields[o.field]} ${o.dir==='asc'?'↑':'↓'}`).join(' → '):'sin filtros de orden'}.`}
+  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${compact?fmt(x.date).replace(/\b0(?=\d)/g,'')+'<br><small>'+esc(x.time||'—')+'</small>':fmt(x.date)}</td>${compact?'':`<td>${esc(x.time||'—')}</td>`}<td>${esc(x.item)}</td><td>${esc(x.name)}</td><td>${x.qty}</td></tr>`).join('')||`<tr><td colspan="${compact?6:production?7:8}">No hay movimientos para este período.</td></tr>`}document.querySelector('#cqInfo').textContent=`${rows.length} resultado${rows.length===1?'':'s'} · orden: ${orders.length?orders.map((o,i)=>`${i+1}. ${fields[o.field]} ${o.dir==='asc'?'↑':'↓'}`).join(' → '):'sin filtros de orden'}.`;
+ if(production&&mode==='part')return {rows,origin,from,to,period:(from?fmt(from):'Inicio')+' al '+(to?fmt(to):'último registro')};
+}
 function openQueries(){
  controls();
  return render();
