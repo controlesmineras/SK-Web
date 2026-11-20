@@ -329,10 +329,12 @@ function filterParts(parts,search){
  const nameQuery=itemQuery?query.replace(itemQuery[0],' ').replace(/\s+/g,' ').trim():exactNumber?'':query;
  return parts.filter(row=>{
   const number=String(row.numero??'').trim();
+  const code=norm(row.sparePartCode).trim();
+  if(code&&query===code)return true;
   if(exactNumber&&number!==exactNumber)return false;
   if(!nameQuery)return true;
   const application=row.spareApplication||row.application||row.ubicacionAplicacion||'';
-  return [[row.nombre,application].filter(Boolean).join(' '),...window.SKSpareGroups.aliases(row)].some(name=>norm(name).includes(nameQuery));
+  return [[row.nombre,application].filter(Boolean).join(' '),...window.SKSpareGroups.aliases(row),code].some(name=>norm(name).includes(nameQuery));
  });
 }
 function paintStockView({form:stockForm,panel,kind}){
@@ -352,7 +354,7 @@ function paintStockView({form:stockForm,panel,kind}){
  const picker=stockForm.querySelector('.partOptions');
  if(!picker.hidden)paintPartCards(picker,filterParts(options,part?'':incomeFields.search.value),origin,row=>{
   incomeFields.partId.value=row.id;
-  incomeFields.search.value=partLabel(row);
+  incomeFields.search.value=[partLabel(row),row.sparePartCode].filter(Boolean).join(' · ');
   picker.hidden=true;
   paintStockView({form:stockForm,panel,kind});
  });
@@ -521,9 +523,11 @@ byId('reviewStockAdjustment').onclick=async()=>{
 const partLabel=row=>[row.numero,row.nombre].filter(Boolean).join(' · ');
 function appendPartApplication(node,part){
  const value=part?.spareApplication||part?.application||part?.ubicacionAplicacion;
- if(!value)return;
- const text=document.createElement('span');
- text.className='spareUse';text.textContent=' '+value;node.append(text);
+ if(value){
+  const text=document.createElement('span');
+  text.className='spareUse';text.textContent=' '+value;node.append(text);
+ }
+ if(part?.sparePartCode)node.append(' · '+part.sparePartCode);
 }
 function paintPartCards(container,rows,origin,choose){
  container.replaceChildren(...rows.map(row=>{
