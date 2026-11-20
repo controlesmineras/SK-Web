@@ -288,56 +288,76 @@ function matchesItemSearch(text,number,query){
   // Turnos de ocho horas desde las 06:00 en Colombia (11:00 UTC).
   const plazaShiftId=(now=Date.now())=>Math.floor((now-11*3600000)/(8*3600000));
   const shiftStorageKey=()=>`skPlazaShift:${user?.documento||''}`;
-  const shiftPeople=()=> (data.personal||[]).filter(person=>!person.deleted&&person.active!==false&&person.documento&&person.nombre);
-  function placeShiftField(){
-    const field=$('#plazaShift');
-    if(!field)return;
-    const form=currentView==='delivery'?$('#deliveryForm'):currentView==='income'?$('#incomeForm'):
-      currentView==='assetReturns'&&navigationRoute==='assetReturns'?$('#assetReturnForm'):null;
-    field.hidden=!user||user.role==='plaza_operator'||!form;
-    if(!field.hidden&&form.firstElementChild!==field)form.prepend(field);
-  }
+  const shiftPeople=()=> (data.personal||[]).filter(person=>!person.deleted&&person.active!==false&&String(person.documento||'').trim());
+  const shiftName=person=>person.nombre||[person.primerNombre,person.segundoNombre,person.primerApellido,person.segundoApellido].filter(Boolean).join(' ')||String(person.documento);
   function selectedShiftPerson(){
-    if(user?.role==='plaza_operator')return user;
+    if(!user)return null;
     let selection;
-    try{selection=JSON.parse(localStorage.getItem(shiftStorageKey())||'null')}catch(_){return null}
-    if(selection?.shift!==plazaShiftId())return null;
-    return shiftPeople().find(person=>String(person.documento)===selection.document)||null;
+    try{selection=JSON.parse(sessionStorage.getItem(shiftStorageKey())||'null')}catch(_){}
+    if(selection?.shift===plazaShiftId()){
+      return shiftPeople().find(person=>String(person.documento)===selection.document)||null;
+    }
+    return null;
   }
   function renderShiftStatus(){
-    placeShiftField();
-    const search=$('#plazaShiftSearch'),clear=$('#plazaShiftClear'),results=$('#plazaShiftResults'),status=$('#plazaShiftStatus');if(!search)return;
+    const field=$('#plazaShift'),search=$('#plazaShiftSearch'),clear=$('#plazaShiftClear'),results=$('#plazaShiftResults'),status=$('#plazaShiftStatus');
+    if(!field||!search)return;
     const person=selectedShiftPerson(),wasSelected=search.readOnly;
+    field.hidden=!user||currentView!=='home';
     search.readOnly=Boolean(person);
-    if(person)search.value=person.nombre;
+    if(person)search.value=shiftName(person);
     else if(wasSelected)search.value='';
-    if(clear)clear.hidden=!person;
-    if(person||wasSelected){results.innerHTML='';results.hidden=true}
-    if(status){status.hidden=Boolean(person);status.textContent=person?'':'Selecciona quién está de turno antes de guardar.'}
+    clear.hidden=!person;
+    if(field.hidden||person||wasSelected){results.innerHTML='';results.hidden=true}
+    status.hidden=Boolean(person);
+    status.textContent=person?'':'Selecciona quién está de turno antes de guardar un movimiento.';
+    const summary=$('#plazaShiftSummary');
+    summary.hidden=!user||currentView==='home';
+    $('#plazaShiftName').textContent=person?shiftName(person):'Sin seleccionar';
   }
   function renderShiftResults(){
-    if(selectedShiftPerson()){renderShiftStatus();return}
-    const search=$('#plazaShiftSearch'),results=$('#plazaShiftResults'),query=norm(search.value.trim());
-    const matches=query?shiftPeople().filter(person=>norm(`${person.nombre} ${person.documento}`).includes(query)).slice(0,30):[];
-    results.innerHTML=matches.map(person=>`<button type="button" data-shift-person="${esc(person.documento)}"><b>${esc(person.nombre)}</b><span>${esc(person.documento)}</span></button>`).join('');
-    results.hidden=!matches.length;
+    if(currentView!=='home'||!user||selectedShiftPerson())return;
+    const search=$('#plazaShiftSearch'),results=$('#plazaShiftResults'),query=norm(search.value);
+    const matches=shiftPeople().filter(person=>norm(shiftName(person)+' '+person.documento).includes(query))
+      .sort((a,b)=>shiftName(a).localeCompare(shiftName(b),'es')).slice(0,30);
+    results.innerHTML=matches.map(person=>`<button type="button" data-shift-person="${esc(person.documento)}"><b>${esc(shiftName(person))}</b><span>${esc(person.documento)}</span></button>`).join('')||'<small>Sin coincidencias</small>';
+    results.hidden=false;
   }
   function movementShift(){
     const person=selectedShiftPerson();
-    if(!person){renderShiftStatus();$('#plazaShiftSearch')?.focus();throw new Error('Selecciona al bodeguero o bodeguera de turno antes de guardar.')}
-    return {shiftKeeperId:person.id,shiftKeeperDocument:String(person.documento),shiftKeeperName:person.nombre};
+    if(!person){
+      renderShiftStatus();
+      throw new Error('Selecciona al bodeguero o bodeguera de turno en Inicio antes de guardar.');
+    }
+    return {shiftKeeperId:person.id,shiftKeeperDocument:String(person.documento),shiftKeeperName:shiftName(person)};
+  }
+  function saveShiftSelection(documento){
+    if(documento)sessionStorage.setItem(shiftStorageKey(),JSON.stringify({shift:plazaShiftId(),document:documento}));
+    else sessionStorage.removeItem(shiftStorageKey());
+    renderShiftStatus();
   }
   $('#plazaShiftSearch')?.addEventListener('input',renderShiftResults);
+  $('#plazaShiftSearch')?.addEventListener('focus',renderShiftResults);
+  $('#plazaShift')?.addEventListener('focusout',event=>{
+    if(!event.currentTarget.contains(event.relatedTarget))$('#plazaShiftResults').hidden=true;
+  });
   $('#plazaShiftResults')?.addEventListener('click',event=>{
     const button=event.target.closest('[data-shift-person]');
-    if(!button||!user)return;
-    localStorage.setItem(shiftStorageKey(),JSON.stringify({shift:plazaShiftId(),document:button.dataset.shiftPerson}));
-    renderShiftStatus();
+    if(!user||currentView!=='home'||!button)return;
+    if(!shiftPeople().some(person=>String(person.documento)===button.dataset.shiftPerson)){renderShiftResults();return}
+    saveShiftSelection(button.dataset.shiftPerson);
+    $('#plazaShiftSearch').focus();
   });
   $('#plazaShiftClear')?.addEventListener('click',()=>{
-    localStorage.removeItem(shiftStorageKey());
-    const search=$('#plazaShiftSearch');search.value='';
-    renderShiftStatus();renderShiftResults();search.focus();
+    if(!user||currentView!=='home')return;
+    saveShiftSelection('');
+    $('#plazaShiftSearch').focus();
+    renderShiftResults();
+  });
+  $('#plazaShiftInfo')?.addEventListener('click',()=>{
+    const help=$('#plazaShiftHelp');
+    help.hidden=!help.hidden;
+    $('#plazaShiftInfo').setAttribute('aria-expanded',String(!help.hidden));
   });
   function render(){showLastSync();renderShiftStatus();const incomeId=$('#incomeForm').elements.itemId.value,deliveryId=$('#deliveryForm').elements.itemId.value;const criteria=(data.inventoryCriteria||[]).filter(item=>!item.deleted&&item.active!==false);$('#incomeForm').elements.itemId.innerHTML=options(criteria,item=>itemName(item)||'Elemento');$('#deliveryForm').elements.itemId.innerHTML=options(deliveryCatalog(),item=>itemName(item)||'Elemento');$('#incomeForm').elements.itemId.value=incomeId;$('#deliveryForm').elements.itemId.value=deliveryId;refreshRecentItemFilters();refreshItemSearches();renderIncomeDraft();window.SKPlaza?.renderRecipients?.();const collaborator=(data.personal||[]).find(person=>person.id===user?.id||String(person.documento||'')===String(user?.documento||''));$('#userName').textContent=collaborator?.nombre||user?.nombre||user?.documento||'';$('#homeUserRole').textContent=user?.role==='plaza_assistant'?'Auxiliar de Plaza Blending':collaborator?.cargo||'Cargo no informado';updateDeliveryFields();updatePendingBadge();renderRecentQueries();renderInventoryQueries();window.SKPlazaReturns?.refresh()}
   function overlayPendingStock(snapshot){
@@ -509,19 +529,26 @@ function matchesItemSearch(text,number,query){
   async function openApp(showGreeting=false){appReady=false;data=await readLocalData();appReady=true;$('#login').hidden=true;$('#app').hidden=false;$('#syncBtn').hidden=false;$('#logoutBtn').hidden=false;render();sync(true);if(showGreeting)showWelcomeMessage()}
   const welcomeMessages=['TU TRABAJO MANTIENE TODO EN MOVIMIENTO.','CADA REGISTRO PRECISO HACE LA DIFERENCIA.','ORDEN, COMPROMISO Y SEGURIDAD EN CADA TAREA.','HOY ES UNA NUEVA OPORTUNIDAD PARA HACERLO BIEN.','GRACIAS POR CUIDAR LOS RECURSOS QUE ESTÁN EN TUS MANOS.','RESPIRA: VAS MEJOR DE LO QUE CREES.','QUE HOY TE PASE ALGO BONITO.','CONFÍA EN TI; HAS SUPERADO DÍAS MÁS DIFÍCILES.','UN PASO A LA VEZ TAMBIÉN TE LLEVA LEJOS.','HOY TAMBIÉN CUENTA PARA EMPEZAR DE NUEVO.','NO OLVIDES REGALARTE UN MOMENTO DE CALMA.','TU SONRISA TAMBIÉN PUEDE CAMBIAR EL DÍA.','QUE TENGAS UN DÍA TRANQUILO Y LLENO DE COSAS BUENAS.'];
   function showWelcomeMessage(){const dialog=$('#sessionWelcome');if(!dialog)return;const firstName=String(user?.nombre||'').trim().split(/\s+/)[0];$('#sessionWelcomeTitle').textContent=firstName?`¡HOLA, ${firstName.toUpperCase()}!`:'¡HOLA!';$('#sessionWelcomeMessage').textContent=welcomeMessages[Math.floor(Math.random()*welcomeMessages.length)];dialog.hidden=false;requestAnimationFrame(()=>dialog.classList.add('visible'))}
-  function closeWelcomeMessage(){const dialog=$('#sessionWelcome');if(!dialog)return;dialog.classList.remove('visible');setTimeout(()=>{dialog.hidden=true},180)}
+  function closeWelcomeMessage(){const dialog=$('#sessionWelcome');if(!dialog)return;dialog.classList.remove('visible');setTimeout(()=>{dialog.hidden=true;if(currentView==='home'&&!selectedShiftPerson())$('#plazaShiftSearch').focus()},180)}
   let recordConfirmationTimer=0;
   function setupRecordConfirmation(){if($('#recordConfirmation'))return;const overlay=document.createElement('section');overlay.id='recordConfirmation';overlay.className='recordConfirmation';overlay.hidden=true;overlay.setAttribute('role','status');overlay.setAttribute('aria-live','assertive');overlay.innerHTML='<div class="recordConfirmationCard"><div class="recordConfirmationCheck" aria-hidden="true">✓</div><h2>REGISTRO GUARDADO</h2><p>Ya tenemos tu registro.<br>No necesitas volver a ingresarlo.</p><strong id="recordConfirmationCount"></strong><small>Toca cualquier lugar para continuar</small></div>';const close=()=>{clearTimeout(recordConfirmationTimer);overlay.classList.remove('visible');setTimeout(()=>{overlay.hidden=true},180)};overlay.addEventListener('pointerdown',close);overlay.addEventListener('click',close);document.addEventListener('keydown',event=>{if(!overlay.hidden&&(event.key==='Escape'||event.key==='Enter'||event.key===' '))close()});overlay._show=count=>{clearTimeout(recordConfirmationTimer);$('#recordConfirmationCount').textContent=`${count} ${count===1?'elemento guardado correctamente':'elementos guardados correctamente'}`;overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('visible'));recordConfirmationTimer=setTimeout(close,3000)};document.body.append(overlay)}
   function showRecordConfirmation(count){setupRecordConfirmation();$('#recordConfirmation')._show(Math.max(1,Number(count)||1))}
   window.alert=message=>{const text=String(message||''),success=/^(INGRESO|ENTREGA) REGISTRAD[AO]/.test(text);if(!success)return nativeAlert(message);const match=text.match(/\n\n(\d+)\s/);showRecordConfirmation(match?Number(match[1]):1)};
-  async function acceptLogin(result,greet=false){token=result.token;user=result.user;sessionStorage.setItem('skPlazaToken',token);sessionStorage.setItem('skPlazaUser',JSON.stringify(user));await openApp(greet)}
+  async function acceptLogin(result,greet=false){token=result.token;user=result.user;if(greet)sessionStorage.removeItem(shiftStorageKey());sessionStorage.setItem('skPlazaToken',token);sessionStorage.setItem('skPlazaUser',JSON.stringify(user));await openApp(greet)}
   async function renewLogin(document,pin,previousToken){try{const result=await loginWithRetry({action:'plazaLogin',document,pin});if(token!==previousToken)return;await acceptLogin(result);await deviceAccess.remember(document,pin,result)}catch(error){if(/contraseña|credenciales|desactiv|no tiene acceso|no habilitado|no autorizado|documento.*incorrect/i.test(error.message)&&token===previousToken){deviceAccess.remove(document);logout()}}}
   function logout(){sessionStorage.removeItem('skPlazaToken');sessionStorage.removeItem('skPlazaUser');location.reload()}
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   async function loginWithRetry(body){const delays=[0,1500,4000];let lastError;for(let attempt=0;attempt<delays.length;attempt++){if(delays[attempt]){const status=$('#loginStatus');status.classList.remove('status');status.textContent='Conexión inestable. Reintentando automáticamente…';await wait(delays[attempt])}try{return await post(body)}catch(error){lastError=error;if(!/servicio central no está disponible|no fue posible conectar/i.test(error.message))throw error}}throw lastError}
   $('#loginForm').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;const fields=new FormData(form);try{$('#loginStatus').classList.remove('status');$('#loginStatus').textContent='Verificando…';const document=String(fields.get('document')),pin=String(fields.get('pin')),cached=await deviceAccess.verify(document,pin);if(cached){await acceptLogin(cached,true);if(navigator.onLine)void renewLogin(document,pin,cached.token);}else{if(!navigator.onLine)throw new Error('El primer acceso de esta cuenta en este dispositivo requiere conexión.');const result=await loginWithRetry({action:'plazaLogin',document,pin});await acceptLogin(result,true);await deviceAccess.remember(document,pin,result)}}catch(error){$('#loginStatus').classList.add('status');$('#loginStatus').textContent=authMessage(error.message)}finally{button.disabled=false}});
   async function movement(form,store){let shift;try{shift=movementShift()}catch(error){return alert(error.message)}const fields=Object.fromEntries(new FormData(form)),item=findItem(fields.itemId),fixed=item&&isFixedItem(item),quantity=fixed?1:Number(fields.quantity),isIncome=store==='blendingIncomes';if(isIncome){if(!fields.broughtById)return alert('Busca y selecciona quién trae.');if(!validateIncomeCollaborator(fields.broughtById))return}if(!item)return alert(isIncome?'Selecciona el elemento a ingresar.':'Selecciona el elemento a entregar.');if(fixed&&!fields.assetId)return alert('Selecciona el activo específico.');if(!(quantity>0))return alert('Cantidad mínima no válida');if(store==='blendingDeliveries'){if(!fields.recipientId)return alert('Busca y selecciona el colaborador que recibe.');if(!fixed){const balance=new Map((data.inventoryStock||[]).map(row=>[row.itemId,Number(row.quantity)||0]));if(quantity>(balance.get(fields.itemId)||0))return alert('La cantidad ingresada supera la disponibilidad')}}const next=JSON.parse(JSON.stringify(data));const person=isIncome?(data.personal||[]).find(row=>row.id===fields.broughtById):null,asset=(next.assets||[]).find(row=>row.id===fields.assetId),rowId=uuid(),row={id:rowId,syncEventId:rowId,...fields,operatorId:user?.id||'',operatorDocument:user?.documento||'',operatorName:user?.nombre||'',...shift,...(isIncome?{}:recipientSnapshot(fields.recipientId)),...(store==='blendingDeliveries'&&item.isYtSpare===true?{destination:'Producción'}:{}),...(person?{broughtByName:person.nombre||'',broughtByDocument:person.documento||''}:{}),quantity,itemName:itemRecordName(item),assetLabel:asset?assetLabel(asset):'',createdAt:new Date().toISOString(),updatedAt:new Date().toISOString(),syncState:'pending'};(next[store]||(next[store]=[])).push(row);if(store==='blendingDeliveries'&&fixed&&asset){asset.ubicacion=fields.destination||'Operación';asset.updatedAt=row.updatedAt;asset.syncState='pending'}await persistLocalChange(next);form.reset();clearItemSearch(form);if(isIncome)window.SKPlaza?.clearIncomeCollaborator?.();updateDeliveryFields();updatePendingBadge();sync(false)}
-  function showView(view){navigationRoute=view;if(view==='recentDeliveries'){const allOption=$('#deliveryCategoryFilter input[value="all"]');if(allOption)allOption.checked=true}const returnsQuery=view==='loanHistory';if(returnsQuery||view==='assetReturns'){window.SKPlazaReturns?.setReadOnly(returnsQuery);view='assetReturns'}if(view==='loan'||view==='delivery'){openDeliveryMode(view==='loan'?'loan':'assignment');view='delivery'}currentView=view;const nav=$('nav'),queryViews=['contacts','recentDeliveries','recentIncomes','stockQuery','personHistory',...(returnsQuery?['assetReturns']:[])],homeButton=$('#plazaHeaderHome'),atHome=view==='home';renderShiftStatus();nav.hidden=atHome;if(homeButton){homeButton.disabled=atHome;homeButton.classList.toggle('isCurrent',atHome);homeButton.setAttribute('aria-label',atHome?'Ubicación actual: Inicio':'Volver a Inicio');homeButton.title=atHome?'':'Volver a Inicio'}document.querySelectorAll('nav button').forEach(button=>{const isHome=button.dataset.view==='home',isCurrent=button.dataset.view===view||(button.dataset.view==='contacts'&&queryViews.includes(view));button.style.display=view==='home'||isHome||isCurrent?'':'none';button.disabled=isCurrent&&!isHome;button.classList.toggle('active',isCurrent);button.classList.toggle('moduleIndicator',isCurrent&&!isHome)});document.querySelectorAll('.view').forEach(section=>section.classList.toggle('active',section.id===view));if(['home','contacts','personal','delivery','income'].includes(view))refreshSharedData();if(queryViews.includes(view))renderRecentQueries();if(view==='stockQuery'||view==='personHistory')renderInventoryQueries();if(view==='assetReturns')window.SKPlazaReturns?.refresh();refreshSyncedView();const scrollTop=$('#deliveryScrollTop');if(scrollTop)scrollTop.hidden=!(view==='recentDeliveries'&&window.scrollY>480);paintPlazaNavigation()}
+  function requireShiftAtHome(){
+    if(selectedShiftPerson())return true;
+    showView('home');
+    $('#plazaShiftStatus').textContent='Selecciona al bodeguero/a de turno para abrir los registros.';
+    $('#plazaShiftSearch').focus();
+    return false;
+  }
+  function showView(view){if(['income','delivery','loan','assetReturns'].includes(view)&&!requireShiftAtHome())return;if(view!==navigationRoute){$('#plazaShiftHelp').hidden=true;$('#plazaShiftInfo').setAttribute('aria-expanded','false')}navigationRoute=view;if(view==='recentDeliveries'){const allOption=$('#deliveryCategoryFilter input[value="all"]');if(allOption)allOption.checked=true}const returnsQuery=view==='loanHistory';if(returnsQuery||view==='assetReturns'){window.SKPlazaReturns?.setReadOnly(returnsQuery);view='assetReturns'}if(view==='loan'||view==='delivery'){openDeliveryMode(view==='loan'?'loan':'assignment');view='delivery'}currentView=view;const nav=$('nav'),queryViews=['contacts','recentDeliveries','recentIncomes','stockQuery','personHistory',...(returnsQuery?['assetReturns']:[])],homeButton=$('#plazaHeaderHome'),atHome=view==='home';renderShiftStatus();nav.hidden=atHome;if(homeButton){homeButton.disabled=atHome;homeButton.classList.toggle('isCurrent',atHome);homeButton.setAttribute('aria-label',atHome?'Ubicación actual: Inicio':'Volver a Inicio');homeButton.title=atHome?'':'Volver a Inicio'}document.querySelectorAll('nav button').forEach(button=>{const isHome=button.dataset.view==='home',isCurrent=button.dataset.view===view||(button.dataset.view==='contacts'&&queryViews.includes(view));button.style.display=view==='home'||isHome||isCurrent?'':'none';button.disabled=isCurrent&&!isHome;button.classList.toggle('active',isCurrent);button.classList.toggle('moduleIndicator',isCurrent&&!isHome)});document.querySelectorAll('.view').forEach(section=>section.classList.toggle('active',section.id===view));if(['home','contacts','personal','delivery','income'].includes(view))refreshSharedData();if(queryViews.includes(view))renderRecentQueries();if(view==='stockQuery'||view==='personHistory')renderInventoryQueries();if(view==='assetReturns')window.SKPlazaReturns?.refresh();refreshSyncedView();const scrollTop=$('#deliveryScrollTop');if(scrollTop)scrollTop.hidden=!(view==='recentDeliveries'&&window.scrollY>480);paintPlazaNavigation()}
   function hasUnsavedData(){if(currentView==='assetReturns')return window.SKPlazaReturns?.hasUnsaved()||false;if(currentView==='delivery'){const form=$('#deliveryForm');return Boolean(form.elements.recipientCompany.value||deliveryDraft.length||form.elements.itemId.closest('label')._hasItemSearchDraft?.()||form.elements.itemId.value||form.elements.recipientId.value||form.elements.destination.value||form.elements.notes.value||(String(form.elements.quantity.value||'').trim()&&!['0','1'].includes(String(form.elements.quantity.value))))}if(currentView==='income'){const form=$('#incomeForm');return Boolean(incomeDraft.length||form.elements.itemId.closest('label')._hasItemSearchDraft?.()||form.elements.itemId.value||form.elements.notes.value||$('#incomeCollaboratorSearch')?.value.trim()||(String(form.elements.quantity.value||'').trim()&&!['0','1'].includes(String(form.elements.quantity.value))))}return false}
   function discardDeliveryForm(){deliveryDraft=[];const form=$('#deliveryForm');form.reset();delete form.elements.destination.dataset.manualArea;clearItemSearch(form);$('#recipientSearch').value='';$('#recipientId').value='';const info=$('#recipientInfo');if(info)info.hidden=true;const results=$('#recipientResults');if(results)results.hidden=true;const noMatch=$('#recipientNoMatch');if(noMatch)noMatch.hidden=true;const register=$('#newRecipientBtn');if(register)register.hidden=true;const edit=$('#editRecipientBtn');if(edit){edit.hidden=true;edit.disabled=true}renderDeliveryDraft();updateDeliveryFields()}
   function discardIncomeForm(){incomeDraft=[];const form=$('#incomeForm');form.reset();clearItemSearch(form);window.SKPlaza?.clearIncomeCollaborator?.();renderIncomeDraft();form.elements.itemId.dispatchEvent(new Event('change',{bubbles:true}))}
@@ -551,7 +578,7 @@ function matchesItemSearch(text,number,query){
     if(parent==='register')window.openPlazaRegisterMenu();else if(parent==='query')window.openPlazaQueryMenu();else showView(parent);
   }
   function setupSessionHeader(){const welcome=document.querySelector('.welcome'),logout=$('#logoutBtn'),home=$('#home');if(welcome&&home&&!home.contains(welcome))home.append(welcome);if(welcome)welcome.style.display='flex';logout.textContent='Cerrar sesión';logout.hidden=true;$('#plazaHeaderHome').addEventListener('click',discardAndGoHome);const bar=document.createElement('div');bar.id='plazaNavigation';bar.hidden=true;bar.innerHTML='<button type="button" id="plazaBack" aria-label="Volver a la pantalla anterior" title="Volver"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 5 2 12l8 7v-5h3c4.2 0 7 1.8 9 5-.8-6.5-4-10-9-10h-3V5Z"/></svg></button><span id="plazaBreadcrumb"></span>';$('nav').after(bar);$('#plazaBack').addEventListener('click',goBackPlaza)}
-  function setupRegisterMenu(){const overlay=document.createElement('div');overlay.id='plazaRegisterMenu';overlay.className='registerMenuOverlay';overlay.hidden=true;overlay.innerHTML='<div class="registerMenu"><div class="registerMenuHead"><h2>HACER REGISTROS</h2><button type="button" data-close-register aria-label="Volver a Inicio">VOLVER</button></div><p>SELECCIONA EL MÓDULO.</p><div class="registerMenuGrid"><button type="button" data-register-view="income">REGISTRAR INGRESOS</button><button type="button" data-register-view="delivery">REGISTRAR ENTREGAS</button></div><section class="loanMenuSection" aria-labelledby="loanMenuTitle"><h3 id="loanMenuTitle">PRÉSTAMOS</h3><div class="loanMenuActions"><button type="button" data-register-view="loan">PRESTAR ELEMENTOS</button><button type="button" data-register-view="assetReturns">RETORNO DE ELEMENTOS</button></div></section></div>';document.body.append(overlay);const close=()=>{overlay.hidden=true};overlay.addEventListener('click',event=>{if(event.target===overlay||event.target.closest('[data-close-register]'))close();const button=event.target.closest('[data-register-view]');if(button){close();showView(button.dataset.registerView)}});window.openPlazaRegisterMenu=()=>{showView('home');overlay.hidden=false}}
+  function setupRegisterMenu(){const overlay=document.createElement('div');overlay.id='plazaRegisterMenu';overlay.className='registerMenuOverlay';overlay.hidden=true;overlay.innerHTML='<div class="registerMenu"><div class="registerMenuHead"><h2>HACER REGISTROS</h2><button type="button" data-close-register aria-label="Volver a Inicio">VOLVER</button></div><p>SELECCIONA EL MÓDULO.</p><div class="registerMenuGrid"><button type="button" data-register-view="income">REGISTRAR INGRESOS</button><button type="button" data-register-view="delivery">REGISTRAR ENTREGAS</button></div><section class="loanMenuSection" aria-labelledby="loanMenuTitle"><h3 id="loanMenuTitle">PRÉSTAMOS</h3><div class="loanMenuActions"><button type="button" data-register-view="loan">PRESTAR ELEMENTOS</button><button type="button" data-register-view="assetReturns">RETORNO DE ELEMENTOS</button></div></section></div>';document.body.append(overlay);const close=()=>{overlay.hidden=true};overlay.addEventListener('click',event=>{if(event.target===overlay||event.target.closest('[data-close-register]'))close();const button=event.target.closest('[data-register-view]');if(button){close();showView(button.dataset.registerView)}});window.openPlazaRegisterMenu=()=>{if(!requireShiftAtHome())return;showView('home');overlay.hidden=false}}
   function movementDate(row){const date=new Date(row.createdAt||row.updatedAt||0);return Number.isNaN(date.getTime())?null:date}
   function movementItem(row){return row.itemName||itemName(findItem(row.itemId))||'Elemento sin nombre'}
   function localDateValue(date){const pad=value=>String(value).padStart(2,'0');return `${date.getFullYear()}-${pad(date.getMonth()+1)}-${pad(date.getDate())}`}
@@ -954,7 +981,7 @@ function matchesItemSearch(text,number,query){
     const style=document.createElement('style');style.textContent='.recipientCompany{display:flex;gap:12px;border:1px solid #b9c8d3;border-radius:10px;padding:12px;grid-column:1/-1}.recipientCompany legend{font-weight:800}.recipientCompany label{flex:1;display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #c4cacf;border-radius:8px;cursor:pointer}.recipientCompany input{width:20px;height:20px;margin:0}.recipientCompany label:has(input:checked){background:#e1eff8;border-color:#173d59}.inventoryQuery form{display:block}.inventoryQuery .recentMovementList{margin:16px 0}.stockBalance{font-weight:800;padding:16px;background:#eaf1f6;border-radius:10px}.inventoryQuery h3{margin-top:20px}';document.head.append(style);renderInventoryQueries();
   }
 
-  injectItemSearchStyle();setupDeliveryForm();$('#app').addEventListener('reset',event=>{if(event.target.contains($('#plazaShift')))queueMicrotask(renderShiftStatus)});setupDeliveryAssetSearch();setupIncomeForm();setupItemSearch($('#deliveryForm'),'Buscar elemento a entregar');setupItemSearch($('#incomeForm'),'Buscar elemento a ingresar');renderDeliveryDraft();renderIncomeDraft();setupRegisterMenu();setupQueryMenu();setupInventoryQueries();setupSessionHeader();$('#sessionWelcomeStart').addEventListener('click',closeWelcomeMessage);$('#sessionWelcome').addEventListener('click',event=>{if(event.target.id==='sessionWelcome')closeWelcomeMessage()});
+  injectItemSearchStyle();setupDeliveryForm();setupDeliveryAssetSearch();setupIncomeForm();setupItemSearch($('#deliveryForm'),'Buscar elemento a entregar');setupItemSearch($('#incomeForm'),'Buscar elemento a ingresar');renderDeliveryDraft();renderIncomeDraft();setupRegisterMenu();setupQueryMenu();setupInventoryQueries();setupSessionHeader();$('#sessionWelcomeStart').addEventListener('click',closeWelcomeMessage);$('#sessionWelcome').addEventListener('click',event=>{if(event.target.id==='sessionWelcome')closeWelcomeMessage()});
   window.SKPlaza={openPersonHistory,recipientDestinationChanged,post,getData:()=>data,getUser:()=>user,movementShift,saveData:persistLocalChange,sync,renderRecentQueries,refreshDelivery:updateDeliveryFields,updatePendingBadge,renderRecipients:null,validateDeliveryRecipient,validateIncomeCollaborator,resumeDeliveryAfterCollaborator:async()=>{if(!pendingDeliveryAfterCollaborator)return false;pendingDeliveryAfterCollaborator=false;return saveDeliveryBatch($('#deliveryForm'))}};
   $('#incomeForm').addEventListener('submit',event=>{event.preventDefault();event.stopImmediatePropagation();saveIncomeBatch(event.currentTarget)});
   $('#incomeForm').addEventListener('submit',event=>{event.preventDefault();movement(event.currentTarget,'blendingIncomes')});$('#deliveryForm').addEventListener('submit',event=>{event.preventDefault();saveDeliveryBatch(event.currentTarget)});$('nav').addEventListener('click',event=>{const button=event.target.closest('[data-view]');if(!button)return;if(button.dataset.view==='home'){event.preventDefault();event.stopPropagation();discardAndGoHome()}else if(button.dataset.view==='contacts')window.openPlazaQueryMenu();else showView(button.dataset.view)});$('#home').addEventListener('click',event=>{const button=event.target.closest('[data-home-view]');if(!button)return;if(button.dataset.homeView==='income')window.openPlazaRegisterMenu();else if(button.dataset.homeView==='contacts')window.openPlazaQueryMenu();else showView(button.dataset.homeView)});$('#syncBtn').addEventListener('click',syncDataAndApp);$('#logoutBtn').addEventListener('click',logout);window.addEventListener('online',()=>sync(true));document.addEventListener('visibilitychange',refreshSharedData);window.addEventListener('focus',refreshSharedData);window.addEventListener('pageshow',refreshSharedData);setInterval(periodicSync,300000);setInterval(()=>{if(currentView==='income'||currentView==='delivery')refreshSharedData()},30000);showView('home');if(token&&user)void openApp().catch(error=>{$('#login').hidden=false;$('#app').hidden=true;$('#loginStatus').textContent=error.message});

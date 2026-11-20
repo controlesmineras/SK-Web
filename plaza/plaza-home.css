@@ -142,5 +142,9 @@ body:has(#plazaNavigation:not([hidden])) #deliveryScrollTop{bottom:calc(80px + e
   .recentTableScroll td>span+span{margin-top:3px}
 }
 
-#app form>#plazaShift{grid-column:1/-1;min-width:0;max-width:none;margin:0 0 4px;padding:10px 12px;border-left:3px solid #6591a6;border-radius:6px;background:#edf4f7}
-#plazaShift[hidden]{display:none!important}
+#home>#plazaShift{box-sizing:border-box;min-width:0;margin:10px 0 18px;padding:10px 12px;text-align:left;background:#edf4f7;border-left:3px solid #6591a6;border-radius:6px}
+#plazaShift[hidden],#plazaShiftSummary[hidden],#plazaShiftHelp[hidden]{display:none!important}
+#plazaShiftSummary{margin:4px 0 10px}
+#plazaShiftInfo{display:inline-flex;flex-wrap:wrap;align-items:baseline;gap:4px 9px;max-width:100%;padding:6px 10px;text-align:left;color:#173d59;background:#edf4f7;border:0;border-radius:6px;overflow-wrap:anywhere}
+#plazaShiftInfo span,#plazaShiftHelp{font-size:.85rem}
+#plazaShiftHelp{display:block;margin:4px 10px;color:#425a6b}

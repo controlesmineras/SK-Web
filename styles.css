@@ -131,3 +131,12 @@ body>main .homeAccessRegister{background:#214b63}
 #assetListClasses button{flex:1 0 auto;width:auto;min-height:36px;padding:4px 6px;border:1px solid #b7c9d4;border-radius:7px;background:#eff4f7;color:#173d59;font-size:.76rem;font-weight:700;line-height:1.2}
 #assetListClasses button[aria-pressed="true"]{background:#173d59;border-color:#173d59;color:white}
 #assetListClasses button:focus-visible{outline:2px solid #397696;outline-offset:2px}
+
+.assetPersonField{position:relative;min-width:0;align-self:start}
+.assetPersonField label{margin-bottom:6px}
+.assetPersonControl{position:relative}
+.assetPersonControl input{width:100%}
+.assetPersonControl input[readonly]{padding-right:2.8rem}
+.assetPersonControl .assetPersonClear{position:absolute;right:2px;top:2px;bottom:2px;width:2.6rem;padding:0;background:transparent;color:#173d59;font-size:1.35rem}
+.assetPersonField .accessPersonResults [aria-selected="true"]{background:#eaf1f6}
+.assetPersonField .noSuggestion{padding:8px;color:#52687a}
