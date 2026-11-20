@@ -139,11 +139,6 @@
       search.addEventListener('input',()=>requestAnimationFrame(update));
       search.addEventListener('search',()=>requestAnimationFrame(update));
       document.querySelector('#newInventoryItem')?.addEventListener('click',()=>{search.value='';update()});
-      list.addEventListener('click',event=>{
-        if(!event.target.closest('[data-inv-id]'))return;
-        search.value='';
-        update();
-      });
       update();
       return true;
     };
