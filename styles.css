@@ -127,3 +127,7 @@ body>main .homeAccessRegister{background:#214b63}
 #cqOrders .orderAction{display:inline-grid;place-items:center;box-sizing:border-box;width:34px;height:34px;min-width:0;min-height:0;padding:0;background:#fff;color:#173d59;border:2px solid #aeb8c1;border-radius:6px}
 #cqOrders .firstOrderIcon{display:inline-flex;transform:scaleX(-1)}
 #cqOrders button:focus-visible{outline:2px solid #245e80;outline-offset:1px}
+#assetListClasses{display:flex;flex-wrap:wrap;gap:4px;margin-top:8px}
+#assetListClasses button{flex:1 0 auto;width:auto;min-height:36px;padding:4px 6px;border:1px solid #b7c9d4;border-radius:7px;background:#eff4f7;color:#173d59;font-size:.76rem;font-weight:700;line-height:1.2}
+#assetListClasses button[aria-pressed="true"]{background:#173d59;border-color:#173d59;color:white}
+#assetListClasses button:focus-visible{outline:2px solid #397696;outline-offset:2px}
