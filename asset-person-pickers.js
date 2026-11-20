@@ -26,17 +26,18 @@
     }
   }
 
-  function picker(inputId, savedFields, eligible = () => true) {
+  function picker(inputId, savedFields, {eligible = () => true, showAssignment = false} = {}) {
     const input = document.getElementById(inputId);
     const host = input.closest('.assetPersonField');
     const clear = host.querySelector('.assetPersonClear');
+    const details = host.querySelector('.assetPersonDetails');
     const list = host.querySelector('[role="listbox"]');
     list.id = inputId + 'Results';
     input.setAttribute('role', 'combobox');
     input.setAttribute('aria-controls', list.id);
     input.setAttribute('aria-autocomplete', 'list');
     input.setAttribute('aria-expanded', 'false');
-    let matches = [], active = -1;
+    let selected = null, matches = [], active = -1;
 
     function close() {
       if (openPicker === api) openPicker = null;
@@ -45,11 +46,21 @@
       input.removeAttribute('aria-activedescendant');
       active = -1;
     }
-    function set(person) {
+    function writeSelection(person) {
+      selected = person;
       for (const [key, field] of Object.entries(savedFields)) field.value = person?.[key] ?? '';
-      input.value = person ? (person.nombre || person.documento || 'Colaborador histórico') : '';
-      input.readOnly = Boolean(person);
+      const description = [];
+      if (person?.nombre && person.documento) description.push('Documento ' + person.documento);
+      if (showAssignment && person?.area) description.push('Área: ' + person.area);
+      if (showAssignment && person?.cargo) description.push('Cargo: ' + person.cargo);
+      details.textContent = description.join(' · ');
+      details.hidden = !description.length;
       clear.hidden = !person;
+      host.classList.toggle('hasSelection', Boolean(person));
+    }
+    function set(person) {
+      writeSelection(person);
+      input.value = person ? (person.nombre || person.documento || 'Colaborador histórico') : '';
       input.setCustomValidity('');
       close();
     }
@@ -77,7 +88,7 @@
     }
     function draw(keepHighlight = false) {
       const previous = keepHighlight ? matches[active] : null;
-      const query = normalize(input.value);
+      const query = selected ? '' : normalize(input.value);
       matches = people.filter(person => eligible(person) && normalize(person.nombre + ' ' + person.documento).includes(query)).slice(0, 60);
       list.replaceChildren();
       if (!matches.length) message('Sin coincidencias');
@@ -97,7 +108,7 @@
       highlight(previous ? matches.findIndex(person => person.id === previous.id && person.documento === previous.documento) : -1);
     }
     function open() {
-      if (input.readOnly || input.disabled || openPicker === api) return;
+      if (input.disabled || openPicker === api) return;
       openPicker?.close();
       openPicker = api;
       list.hidden = false;
@@ -106,15 +117,22 @@
       refreshPeople();
     }
     const api = {close, draw, message, set};
-    input.addEventListener('focus', open);
-    input.addEventListener('click', open);
+    input.addEventListener('focus', () => {
+      if (selected) input.select();
+      open();
+    });
+    input.addEventListener('click', () => {
+      if (selected) input.select();
+      open();
+    });
     input.addEventListener('input', () => {
+      if (selected) writeSelection(null);
       input.setCustomValidity(input.value ? 'Selecciona una persona de la lista o borra la búsqueda.' : '');
       open();
       draw();
     });
     input.addEventListener('keydown', event => {
-      if (input.readOnly || input.disabled) return;
+      if (input.disabled) return;
       if (event.key === 'Escape') { close(); return; }
       if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
         event.preventDefault();
@@ -125,13 +143,22 @@
         list.children[next].scrollIntoView({block:'nearest'});
       } else if (event.key === 'Enter' && !list.hidden) {
         event.preventDefault();
-        const person = matches[active] || (input.value && matches.length === 1 && matches[0]);
+        const person = matches[active] || (!selected && input.value && matches.length === 1 && matches[0]);
         if (person) choose(person);
       }
     });
-    input.addEventListener('blur', close);
+    input.addEventListener('blur', () => {
+      const query = normalize(input.value);
+      if (!selected && query) {
+        const exact = people.filter(person => eligible(person) &&
+          (normalize(person.documento) === query || normalize(person.nombre) === query));
+        if (exact.length === 1) choose(exact[0]);
+      }
+      close();
+    });
     list.addEventListener('pointerdown', event => event.preventDefault());
     document.addEventListener('pointerdown', event => { if (!host.contains(event.target)) close(); });
+    details.addEventListener('click', () => { input.focus(); open(); });
     clear.addEventListener('click', () => {
       choose(null);
       input.focus();
@@ -142,9 +169,7 @@
 
   const responsible = picker('assetResponsibleSearch', {nombre: fields.nombreResponsable, documento: fields.documentoResponsable});
   const warehouse = picker('assetWarehouseSearch', {nombre: fields.nombreBodeguero, documento: fields.documentoBodeguero});
-  const assigned = picker('assetAssignedSearch', {
-    id: fields.asignadaId, documento: fields.assetAssignedDoc, area: fields.assetAssignedArea, cargo: fields.assetAssignedCargo
-  }, person => !!person.id);
+  const assigned = picker('assetAssignedSearch', {id: fields.asignadaId}, {eligible: person => !!person.id, showAssignment: true});
 
   function snapshot(nombre, documento) {
     return nombre || documento ? {nombre, documento} : null;

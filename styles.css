@@ -132,11 +132,16 @@ body>main .homeAccessRegister{background:#214b63}
 #assetListClasses button[aria-pressed="true"]{background:#173d59;border-color:#173d59;color:white}
 #assetListClasses button:focus-visible{outline:2px solid #397696;outline-offset:2px}
 
-.assetPersonField{position:relative;min-width:0;align-self:start}
+.assetPersonField{position:relative;min-width:0;align-self:start;grid-column:1/-1}
+@media(min-width:901px){.assetPersonField{grid-column:span 2}}
 .assetPersonField label{margin-bottom:6px}
-.assetPersonControl{position:relative}
-.assetPersonControl input{width:100%}
-.assetPersonControl input[readonly]{padding-right:2.8rem}
+.assetPersonControl{position:relative;border:1px solid #cbd3da;border-radius:8px;background:#fcfdfe}
+.assetPersonControl:focus-within{outline:2px solid #397497;outline-offset:1px}
+.assetPersonControl input{width:100%;border:0;background:transparent;outline:none}
+.assetPersonControl input::-webkit-search-cancel-button{display:none}
+.assetPersonField.hasSelection input{padding-right:2.8rem;font-weight:650}
+.assetPersonDetails{display:block;padding:0 2.8rem 8px 9px;color:#44576a;font-size:.86rem;line-height:1.4;overflow-wrap:anywhere}
+.assetPersonDetails[hidden]{display:none}
 .assetPersonControl .assetPersonClear{position:absolute;right:2px;top:2px;bottom:2px;width:2.6rem;padding:0;background:transparent;color:#173d59;font-size:1.35rem}
 .assetPersonField .accessPersonResults [aria-selected="true"]{background:#eaf1f6}
 .assetPersonField .noSuggestion{padding:8px;color:#52687a}
