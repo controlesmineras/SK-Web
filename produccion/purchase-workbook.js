@@ -48,15 +48,26 @@
    const type=nums?'num':'str';
    return `<c:${type}Ref><c:f>'${dashboard}'!$${col}$${firstData}:$${col}$${end}</c:f><c:${type}Cache>${nums?'<c:formatCode>General</c:formatCode>':''}<c:ptCount val="${values.length}"/>${values.map((v,i)=>`<c:pt idx="${i}"><c:v>${xml(v)}</c:v></c:pt>`).join('')}</c:${type}Cache></c:${type}Ref>`;
   }
-  const cat=reference('B',false,top.map(row=>row[1])),val=reference('D',true,top.map(row=>row[3]));
+  const items=top.map(row=>row[0]);
+  const cat=reference('A',items.every(value=>typeof value==='number'),items);
+  const val=reference('D',true,top.map(row=>row[3]));
+  const width=500,height=Math.max(170,100+30*top.length);
+  const emuPerPixel=9525;
+  const ink='142E3B';
+  const labelStyle=`<c:txPr><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1050" b="1"><a:solidFill><a:srgbClr val="${ink}"/></a:solidFill></a:defRPr></a:pPr><a:endParaRPr lang="es-CO"/></a:p></c:txPr>`;
+  // Reserva una franja de altura constante para el título, incluso con un solo repuesto.
+  const plotTop=46/height,plotHeight=1-plotTop-20/height;
+  const layout=`<c:layout><c:manualLayout><c:layoutTarget val="inner"/><c:xMode val="edge"/><c:yMode val="edge"/><c:wMode val="factor"/><c:hMode val="factor"/><c:x val="0.16"/><c:y val="${plotTop}"/><c:w val="0.79"/><c:h val="${plotHeight}"/></c:manualLayout></c:layout>`;
   const chart=`<c:chartSpace xmlns:c="${drawing}/chart" xmlns:a="${drawing}/main"><c:lang val="es-CO"/><c:chart>
-   <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:t>Mayor consumo del período</a:t></a:r></a:p></c:rich></c:tx></c:title>
-   <c:plotArea><c:layout/><c:barChart><c:barDir val="bar"/><c:grouping val="clustered"/><c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:v>Consumo</c:v></c:tx><c:spPr><a:solidFill><a:srgbClr val="217488"/></a:solidFill></c:spPr><c:cat>${cat}</c:cat><c:val>${val}</c:val></c:ser><c:axId val="1"/><c:axId val="2"/></c:barChart>
-   <c:catAx><c:axId val="1"/><c:scaling><c:orientation val="maxMin"/></c:scaling><c:axPos val="l"/><c:tickLblPos val="low"/><c:crossAx val="2"/><c:crosses val="autoZero"/></c:catAx>
-   <c:valAx><c:axId val="2"/><c:scaling><c:orientation val="minMax"/><c:min val="0"/></c:scaling><c:axPos val="b"/><c:majorGridlines/><c:crossAx val="1"/><c:crosses val="max"/><c:crossBetween val="between"/></c:valAx></c:plotArea><c:plotVisOnly val="1"/></c:chart></c:chartSpace>`;
-  const anchor=(tag,col,row)=>`<xdr:${tag}><xdr:col>${col}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${row}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:${tag}>`;
-  const graphic=`<xdr:wsDr xmlns:xdr="${drawing}/spreadsheetDrawing" xmlns:a="${drawing}/main"><xdr:twoCellAnchor>${anchor('from',6,4)}${anchor('to',18,Math.max(18,6+top.length*2))}
-  <xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="Consumo por repuesto"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="${drawing}/chart"><c:chart xmlns:c="${drawing}/chart" xmlns:r="${rel}" r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor></xdr:wsDr>`;
+   <c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:r><a:rPr lang="es-CO" sz="1400" b="1"><a:solidFill><a:srgbClr val="${ink}"/></a:solidFill></a:rPr><a:t>LOS 10 REPUESTOS MÁS USADOS</a:t></a:r></a:p></c:rich></c:tx><c:layout/><c:overlay val="0"/></c:title>
+   <c:plotArea>${layout}<c:barChart><c:barDir val="bar"/><c:grouping val="clustered"/>
+   <c:ser><c:idx val="0"/><c:order val="0"/><c:tx><c:v>Consumo</c:v></c:tx><c:spPr><a:solidFill><a:srgbClr val="79B6C2"/></a:solidFill></c:spPr><c:cat>${cat}</c:cat><c:val>${val}</c:val></c:ser>
+   <c:dLbls>${labelStyle}<c:dLblPos val="ctr"/><c:showLegendKey val="0"/><c:showVal val="1"/><c:showCatName val="0"/><c:showSerName val="0"/></c:dLbls>
+   <c:gapWidth val="55"/><c:axId val="1"/><c:axId val="2"/></c:barChart>
+   <c:catAx><c:axId val="1"/><c:scaling><c:orientation val="maxMin"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="low"/>${labelStyle}<c:crossAx val="2"/><c:crosses val="autoZero"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:tickLblSkip val="1"/></c:catAx>
+   <c:valAx><c:axId val="2"/><c:scaling><c:orientation val="minMax"/><c:min val="0"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:majorTickMark val="none"/><c:tickLblPos val="none"/><c:crossAx val="1"/><c:crosses val="max"/><c:crossBetween val="between"/></c:valAx></c:plotArea><c:plotVisOnly val="1"/></c:chart></c:chartSpace>`;
+  const graphic=`<xdr:wsDr xmlns:xdr="${drawing}/spreadsheetDrawing" xmlns:a="${drawing}/main"><xdr:oneCellAnchor><xdr:from><xdr:col>6</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>4</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:ext cx="${width*emuPerPixel}" cy="${height*emuPerPixel}"/>
+  <xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="2" name="Consumo por repuesto"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="${drawing}/chart"><c:chart xmlns:c="${drawing}/chart" xmlns:r="${rel}" r:id="rId1"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:oneCellAnchor></xdr:wsDr>`;
   return [['xl/worksheets/_rels/sheet2.xml.rels',relationships([[1,'drawing','../drawings/drawing1.xml']])],
    ['xl/drawings/drawing1.xml',graphic],['xl/drawings/_rels/drawing1.xml.rels',relationships([[1,'chart','../charts/chart1.xml']])],['xl/charts/chart1.xml',chart]];
  }
@@ -73,7 +84,7 @@
   }
   const detail=rows.map(r=>[item(r.item),r.name,r.application,r.partCode,r.qty,r.stock]);
   const ordered=rows.filter(r=>r.qty>0).sort((a,b)=>b.qty-a.qty||String(a.item).localeCompare(String(b.item),'es',{numeric:true}));
-  const ranking=ordered.map(r=>[item(r.item),r.name,r.application,r.qty,r.stock]);
+  const ranking=ordered.map(r=>[r.item==null||r.item===''||r.item==='—'?'Sin ítem':item(r.item),r.name,r.application,r.qty,r.stock]);
   const hasChart=ranking.length>0;
   const contents=[['workbook','sheet.main'],['styles','styles'],['worksheets/sheet1','worksheet'],['worksheets/sheet2','worksheet']].map(([path,type])=>
    `<Override PartName="/xl/${path}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.${type}+xml"/>`).join('');
