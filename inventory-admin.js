@@ -45,6 +45,15 @@ function injectStyle(){if(document.querySelector('#inventoryAdminStyle'))return;
 #inventoryItemList .invMissingCriterion{border-style:dashed}
 #inventoryItemList .invItem[aria-current="true"]{background:#d7eefb;color:#0d3a52;border:1px solid #17749b;box-shadow:inset 4px 0 #17749b}
 #inventoryItemList .invItem:focus-visible{outline:2px solid #104d6a;outline-offset:1px}
+#inventoryItems[data-catalog-kind="spare"] #inventoryItemList{gap:5px}
+#inventoryItems[data-catalog-kind="spare"] .invItem{padding-block:8px;min-height:44px}
+@media (min-width:761px){
+ #inventoryItems[data-catalog-kind="spare"] .invGrid{position:relative}
+ /* La ficha define la altura de la fila. Una lista corta ocupa solo su contenido. */
+ #inventoryItems[data-catalog-kind="spare"] #inventoryItemList{
+  position:absolute;grid-area:1 / 1 / 2 / 2;inset:0 0 auto;max-height:100%;overflow-y:auto
+ }
+}
 #inventoryItemForm{container-type:inline-size}
 #inventoryItems[data-catalog-kind="spare"] #inventoryItemForm{
  grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 10px;padding:12px
