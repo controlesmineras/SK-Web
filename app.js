@@ -31,7 +31,7 @@ async function all(name){
  if(name!=='assets'||!window.SKAssetHistory)return storedRows(name);
  const tx=db.transaction(assetProfileTables);
  const [rows,pending]=await Promise.all([idbResult(tx.objectStore('assets').getAll()),idbResult(tx.objectStore('novelties').index('syncState').getAll('pending'))]);
- const affected=new Set(pending.filter(row=>row.datedNovelty&&!row.historyOnly).map(row=>row.assetId));
+ const affected=new Set(pending.filter(row=>(row.datedNovelty&&!row.historyOnly)||row.noveltyAction?.status==='pending').map(row=>row.assetId));
  return Promise.all(rows.map(async asset=>affected.has(asset.id)?currentAssetProfile(tx,asset):asset));
 }
 function countStore(s){return new Promise((ok,no)=>{const r=db.transaction(s).objectStore(s).count();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}function put(s,o){if(s==='personal'&&!String(o?.id??'').trim())o={...o,id:uuid(),createdAt:o?.createdAt||now(),updatedAt:now(),syncState:'pending'};return new Promise((ok,no)=>{
@@ -50,7 +50,7 @@ function countStore(s){return new Promise((ok,no)=>{const r=db.transaction(s).ob
    if(duplicate){failure=new Error('El serial '+String(o.serial).trim()+' ya existe en: '+rules.label(duplicate)+'. Revisa el activo registrado.');tx.abort();return;}
    if(!old||!window.SKAssetHistory||o.syncState!=='pending'){table.put(o);return;}
    assetEventData(tx,o.id).then(data=>{
-    if(data.novelties.some(row=>row.datedNovelty&&row.syncState==='pending'&&!row.historyOnly)){
+    if(data.novelties.some(row=>row.syncState==='pending'&&(row.datedNovelty&&!row.historyOnly||row.noveltyAction?.status==='pending'))){
      const visible=window.SKAssetHistory.project(old,data).asset,edit={...o};
      for(const key of Object.keys(visible))if(JSON.stringify(o[key])===JSON.stringify(visible[key])&&JSON.stringify(visible[key])!==JSON.stringify(old[key])){
       if(key in old)edit[key]=old[key];else delete edit[key];
@@ -94,7 +94,13 @@ function countStore(s){return new Promise((ok,no)=>{const r=db.transaction(s).ob
     if(local.syncState!=='pending')continue;
     const original=sent.get(local.id),remote=merged.get(local.id);
     // Una respuesta anterior no confirma altas ni ediciones hechas durante el envío.
-    if(!original||JSON.stringify(original)!==JSON.stringify(local)||!remote)merged.set(local.id,local);
+    if(!original||JSON.stringify(original)!==JSON.stringify(local)||!remote){
+     if(s==='novelties'&&remote&&local.noveltyAction?.status==='pending'){
+      // Una reversión creada durante el envío conserva la copia confirmada del evento.
+      merged.set(local.id,{...local,assetBefore:remote.assetBefore,assetAfter:remote.assetAfter,
+       syncedAt:remote.syncedAt,noveltyAction:{...local.noveltyAction,localOnly:false}});
+     }else merged.set(local.id,local);
+    }
    }
    write([...merged.values()]);
   };

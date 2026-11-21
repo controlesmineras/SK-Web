@@ -59,7 +59,7 @@
       // Abort alone is insufficient if a browser/redirect/body reader never settles.
       // Racing the entire exchange also ignores late replies without confirming data.
       const exchange=(async()=>{
-        const r=await fetch(c.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:snapshot.novelties?.some(row=>row.datedNovelty)?'syncDatedNovelties':'sync',key:c.apiKey,token:window.SKAdminAuth?.token?.()||'',since:forceFull||collaboratorRevisionApi!==c.apiUrl?'':(localStorage.getItem('skWebServerUpdatedAt')||''),data:snapshot}),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
+        const r=await fetch(c.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:snapshot.novelties?.some(row=>row.noveltyAction?.status==='pending')?'syncNoveltyChanges':snapshot.novelties?.some(row=>row.datedNovelty)?'syncDatedNovelties':'sync',key:c.apiKey,token:window.SKAdminAuth?.token?.()||'',since:forceFull||collaboratorRevisionApi!==c.apiUrl?'':(localStorage.getItem('skWebServerUpdatedAt')||''),data:snapshot}),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
         if(!r.ok)throw new Error(`El servicio respondió ${r.status}`);
         let result;try{result=await r.json()}catch(error){if(controller.signal.aborted||error?.name==='AbortError')throw error;throw new Error('El servicio devolvió una respuesta incompleta. Pulsa la nube para reintentar.');}
         if(!result?.ok)throw new Error(result?.error||'El servicio rechazó la sincronización');return result;
@@ -94,7 +94,7 @@
     const pending=await pendingSnapshot(),adjustments=await readAdjustments(),status=document.querySelector('#syncStatus');
     const count=stores.reduce((total,store)=>total+pending[store].length,adjustments.length);
     const adjustmentError=adjustments.find(row=>row.syncError)?.syncError;
-    if(detail.waitingForServer&&pending.novelties?.some(row=>row.datedNovelty)){if(status)status.textContent='Novedades guardadas en este dispositivo. Falta actualizar Apps Script para sincronizarlas.';ui('idle');return false;}
+    if(detail.waitingForServer&&pending.novelties?.some(row=>row.datedNovelty||row.noveltyAction)){if(status)status.textContent='Novedades guardadas en este dispositivo. Falta actualizar Apps Script para sincronizarlas.';ui('idle');return false;}
     if(count){
       if(status)status.textContent=`Sincronización parcial · ${count} ${count===1?'registro pendiente':'registros pendientes'}; se conservan en este dispositivo.${adjustmentError?' · '+adjustmentError:''}`;
       ui('idle');if(pending.personal?.length)schedule(300);return false;
@@ -120,7 +120,8 @@
     try{
       running=true;ui('syncing');phase('Revisando los cambios guardados en este dispositivo…');
       const snapshot=await pendingSnapshot();
-      const dated=snapshot.novelties?.filter(row=>row.datedNovelty)||[];
+      const changed=snapshot.novelties?.filter(row=>row.noveltyAction?.status==='pending')||[];
+      const dated=snapshot.novelties?.filter(row=>row.datedNovelty&&!row.noveltyAction)||[];
       let waitingForServer=false;
       // A full response confirms each person and returns the canonical ID if the
       // document already exists centrally. A generic ACK cannot prove that.
@@ -128,11 +129,11 @@
       // Negotiate that guarantee before trusting an unchanged snapshot.
       forceFull=forceFull||!silent||Boolean(snapshot.personal?.length)||(snapshot.assets||[]).some(row=>row.markRequest==='existing-v1'&&row.markStatus==='pending');
       let result;
-      try{result=await send(snapshot,forceFull||dated.length>0,!silent);}
+      try{result=await send(snapshot,forceFull||dated.length>0||changed.length>0,!silent);}
       catch(error){
-        if(!dated.length||!/solicitud no v[aá]lida/i.test(error.message))throw error;
+        if(!(dated.length||changed.length)||!/solicitud no v[aá]lida/i.test(error.message))throw error;
         // El servicio anterior rechaza la acción antes de escribir. El resto de la cola puede avanzar.
-        snapshot.novelties=snapshot.novelties.filter(row=>!row.datedNovelty);
+        snapshot.novelties=snapshot.novelties.filter(row=>!row.datedNovelty&&!row.noveltyAction);
         waitingForServer=true;result=await send(snapshot,true,!silent);
       }
       const hasPending=stores.some(store=>snapshot[store]?.length);
@@ -142,6 +143,10 @@
       if(result.notModified&&hasPending)throw new Error('El servicio no confirmó los cambios pendientes');
       if(dated.length&&!waitingForServer&&dated.some(row=>!result.data?.novelties?.some(remote=>remote.id===row.id&&remote.datedNovelty&&typeof remote.historyOnly==='boolean')))
         throw new Error('La base central aún no confirmó las novedades fechadas. Se conservan pendientes.');
+      if(!waitingForServer&&changed.some(row=>!result.data?.novelties?.some(remote=>remote.id===row.id&&(
+        remote.deleted||remote.noveltyAction?.id===row.noveltyAction.id&&remote.noveltyAction.status==='applied'&&
+        (row.noveltyAction.kind==='delete'?remote.deleted:remote.reversed)))))
+        throw new Error('La base central aún no confirmó la reversión o eliminación. Se conserva pendiente en este dispositivo.');
       confirmPersonal(snapshot,result);
       confirmAssetMarkRequests(snapshot,result);
       collaboratorRevisionApi=result.capabilities?.collaboratorRevisionsV1===true?config().apiUrl:'';

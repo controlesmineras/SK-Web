@@ -58,20 +58,100 @@ function createAssetHistory(){
   const event=timeline(data,asset.id).find(entry=>entry.kind==='income'&&!entry.reversed&&!entry.raw.reversalOf&&norm(entry.raw.movementType)!=='reversion');
   return text(event?.raw.notes);
  }
+ const profileFields=['fechaNovedad','horaNovedad','descripcionNovedad','currentNoveltyId','estado','ubicacion',
+  'areaAsignada','areaAsignadaRevision','asignadaId','estadoVisor','nombreResponsable','documentoResponsable',
+  'nombreBodeguero','documentoBodeguero','disponibleEntrega'];
+ const noveltyFields={estado:'estado',ubicacion:'ubicacion',areaAsignada:'areaAsignada',estadoVisor:'estadoVisor',
+  responsableNombre:'nombreResponsable',documentoResponsable:'documentoResponsable',
+  bodegueroNombre:'nombreBodeguero',documentoBodeguero:'documentoBodeguero'};
+ function snapshot(asset){
+  return Object.fromEntries(profileFields.filter(key=>Object.prototype.hasOwnProperty.call(asset,key)).map(key=>[key,asset[key]]));
+ }
+ function eventPatch(entry){
+  const row=entry.raw,patch={fechaNovedad:entry.date,horaNovedad:entry.time,descripcionNovedad:entry.title,currentNoveltyId:row.id};
+  if(entry.kind==='novelty'){
+   for(const [source,target] of Object.entries(noveltyFields))if(text(row[source]))patch[target]=text(row[source]);
+   if(entry.responsible.name)patch.nombreResponsable=entry.responsible.name;
+   if(entry.responsible.document)patch.documentoResponsable=entry.responsible.document;
+   if(entry.warehouse.name)patch.nombreBodeguero=entry.warehouse.name;
+   if(entry.warehouse.document)patch.documentoBodeguero=entry.warehouse.document;
+   if(text(row.areaAsignada))patch.areaAsignadaRevision={value:text(row.areaAsignada),at:entry.at};
+  }else{
+   Object.assign(patch,{ubicacion:entry.kind==='assignment'?assignmentLocation(row,entry.responsible):entry.location,
+    nombreResponsable:entry.responsible.name,documentoResponsable:entry.responsible.document,
+    nombreBodeguero:entry.warehouse.name,documentoBodeguero:entry.warehouse.document});
+   if(entry.kind==='assignment')Object.assign(patch,{asignadaId:entry.responsible.id,areaAsignada:assignmentArea(row,entry.responsible)});
+   if(['income','return'].includes(entry.kind))Object.assign(patch,{asignadaId:'',areaAsignada:''});
+  }
+  return patch;
+ }
+ // Solo repone los campos afectados que no tienen otro cambio vigente posterior.
+ // Los registros antiguos se reconstruyen con los valores documentados del historial.
+ function restoreNovelty(asset,row,data={}){
+  if(row.historyOnly)return {...asset};
+  const complete={...data,novelties:(data.novelties||[]).map(item=>({...item,deleted:false}))};
+  const events=timeline(complete,asset.id).map(entry=>({...entry,patch:eventPatch(entry)}));
+  const index=events.findIndex(entry=>entry.kind==='novelty'&&entry.raw.id===row.id);
+  if(index<0)return {...asset};
+  const target=events[index],older=events.slice(index+1),later=events.slice(0,index);
+  const deletedIds=new Set((data.novelties||[]).filter(item=>item.deleted).map(item=>item.id));
+  const inactive=entry=>entry.reversed||entry.kind==='novelty'&&deletedIds.has(entry.raw.id);
+  const applied=entry=>!entry.raw.historyOnly;
+  const values=target.patch,before=row.assetBefore;
+  const result={...asset};
+  const metadata=['fechaNovedad','horaNovedad','descripcionNovedad','currentNoveltyId'];
+  const storedTarget=asset.currentNoveltyId===row.id||!asset.currentNoveltyId&&asset.fechaNovedad===target.date&&
+   text(asset.horaNovedad).slice(0,5)===target.time&&norm(asset.descripcionNovedad)===norm(target.title);
+  for(const key of Object.keys(values)){
+   const laterValue=later.some(entry=>applied(entry)&&!inactive(entry)&&Object.prototype.hasOwnProperty.call(entry.patch,key)&&
+    JSON.stringify(result[key])===JSON.stringify(entry.patch[key]));
+   if(laterValue&&!(storedTarget&&metadata.includes(key)))continue;
+   const expected=row.assetAfter&&Object.prototype.hasOwnProperty.call(row.assetAfter,key)?row.assetAfter[key]:values[key];
+   // Current metadata may still be the original snapshot in records created by older clients.
+   if(JSON.stringify(result[key])!==JSON.stringify(expected))continue;
+   let value=before?before[key]:undefined;
+   if(!before){
+    const known=older.find(entry=>applied(entry)&&!inactive(entry)&&Object.prototype.hasOwnProperty.call(entry.patch,key));
+    if(known)value=known.patch[key];
+    else if(key==='estadoVisor'&&row.estadoVisorAnterior)value=row.estadoVisorAnterior;
+   }else{
+    for(const entry of older){
+     if(!applied(entry)||!Object.prototype.hasOwnProperty.call(entry.patch,key))continue;
+     if(!inactive(entry))break;
+     const after=entry.raw.assetAfter||entry.patch;
+     if(JSON.stringify(value)!==JSON.stringify(after[key]))break;
+     if(entry.raw.assetBefore)value=entry.raw.assetBefore[key];
+     else{
+      const known=older.slice(older.indexOf(entry)+1).find(previous=>applied(previous)&&!inactive(previous)&&Object.prototype.hasOwnProperty.call(previous.patch,key));
+      value=known?known.patch[key]:undefined;
+     }
+    }
+   }
+   if(value===undefined)delete result[key];else result[key]=value;
+  }
+  result.disponibleEntrega=operationStatus(result);
+  return result;
+ }
  // La fecha de captura/sincronización nunca decide qué novedad ocupa la ficha.
  function applyDatedNovelty(asset,row){
   const day=text(row.fechaNovedad),time=text(row.horaNovedad),priorDay=text(asset.fechaNovedad);
   if(row.historyOnly||!day||day<priorDay||(day===priorDay&&time<=text(asset.horaNovedad||'00:00').slice(0,5)))return null;
   const result={...asset,fechaNovedad:day,horaNovedad:time,descripcionNovedad:row.descripcion,currentNoveltyId:row.id};
-  const fields={estado:'estado',ubicacion:'ubicacion',areaAsignada:'areaAsignada',estadoVisor:'estadoVisor',
-   responsableNombre:'nombreResponsable',documentoResponsable:'documentoResponsable',
-   bodegueroNombre:'nombreBodeguero',documentoBodeguero:'documentoBodeguero'};
-  for(const [source,target] of Object.entries(fields))if(text(row[source]))result[target]=text(row[source]);
+  for(const [source,target] of Object.entries(noveltyFields))if(text(row[source]))result[target]=text(row[source]);
   if(text(row.areaAsignada))result.areaAsignadaRevision={value:result.areaAsignada,at:eventTime(row)};
   result.disponibleEntrega=operationStatus(result);
   return result;
  }
- function project(asset,data){
+ function project(asset,data={}){
+  const actions=(data.novelties||[]).filter(row=>row.assetId===asset.id&&row.syncState==='pending'&&row.noveltyAction?.status==='pending')
+   .sort((a,b)=>millis(a.noveltyAction.requestedAt)-millis(b.noveltyAction.requestedAt));
+  const processed=new Set(asset.pendingNoveltyActions||[]);
+  for(const row of actions){
+   if(processed.has(row.noveltyAction.id))continue;
+   if(!row.noveltyAction.localOnly||asset.currentNoveltyId===row.id)asset=restoreNovelty(asset,row,data);
+   processed.add(row.noveltyAction.id);
+  }
+  if(processed.size)asset={...asset,pendingNoveltyActions:[...processed]};
   const events=timeline(data,asset.id);
   // Las novedades fechadas confirmadas ya se aplicaron a la ficha en el servidor.
   const active=events.filter(e=>!e.reversed&&!e.raw.datedNovelty&&!e.raw.historyOnly);
@@ -117,7 +197,7 @@ function createAssetHistory(){
   return {asset:result,events,latest,assigned};
  }
  function available(asset,data){const current=project(asset,data).asset;return !current.deleted&&!retired(current)&&norm(current.ubicacion)==='bodega de superficie';}
- return {timeline,project,applyDatedNovelty,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
+ return {timeline,project,applyDatedNovelty,snapshot,restoreNovelty,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
 }
 
 if(typeof module==='object'&&module.exports)module.exports=createAssetHistory();

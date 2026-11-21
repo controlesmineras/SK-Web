@@ -94,3 +94,129 @@ test('guardar desde el formulario sin conexión conserva los empates, los vacío
  const [rawEdit]=await a.ctx.storedRows('assets');assert.equal(rawEdit.estado,yt.estado);assert.equal(rawEdit.observaciones,'Edición independiente');
  assert.equal((await b.ctx.all('assets'))[0].estado,'En reparación');
 });
+
+function cancel(row,kind='revert',id='undo-'+row.id){
+ return {...copy(row),updatedAt:'2026-11-21T20:00:00Z',syncState:'pending',
+  noveltyAction:{id,kind,status:'pending',requestedAt:'2026-11-21T20:00:00Z'}};
+}
+for(const kind of ['revert','delete'])test(kind+' restaura todos los campos informados y el evento anterior en una sola sincronización',()=>{
+ const initial={...yt,estadoVisor:'Azul',documentoResponsable:'100',nombreBodeguero:'Ana',documentoBodeguero:'200'};
+ const s=service({assets:[initial]});
+ s.sync([event('wrong-date','2026-11-21','12:00',{estado:'Averiado/a',ubicacion:'Taller',areaAsignada:'Producción',responsableNombre:'Otro',documentoResponsable:'300',bodegueroNombre:'Otra',documentoBodeguero:'400'})]);
+ const row=s.get().novelties[0];assert.equal(row.assetBefore.estado,'Operativo/a');assert.equal(row.assetAfter.estado,'Averiado/a');
+ const action=cancel(row,kind);s.sync([action]);
+ for(const field of ['fechaNovedad','horaNovedad','descripcionNovedad','estado','ubicacion','areaAsignada','nombreResponsable','documentoResponsable','nombreBodeguero','documentoBodeguero','estadoVisor'])
+  assert.equal(s.get().assets[0][field],initial[field],field);
+ assert.equal(s.get().novelties[0][kind==='delete'?'deleted':'reversed'],true);
+ const restored=history.project(s.get().assets[0],s.get()).asset;assert.equal(restored.estado,'Operativo/a');assert.equal(restored.fechaNovedad,yt.fechaNovedad);
+ const after=copy(s.get().assets[0]);s.sync([action]);assert.deepEqual(s.get().assets[0],after);
+ s.sync([{...row,updatedAt:'2030-01-01T00:00:00Z',syncState:'pending'}]);
+ assert.equal(s.get().novelties[0][kind==='delete'?'deleted':'reversed'],true);
+});
+test('revertir una novedad anterior conserva los datos expresos de una posterior; al revertir ambas recupera la ficha original',()=>{
+ const s=service();
+ s.sync([event('a','2026-11-16','10:00',{estado:'Averiado/a',ubicacion:'Taller',areaAsignada:'Producción'})]);
+ s.sync([event('b','2026-11-17','10:00',{estado:'Averiado/a',responsableNombre:'Pedro'})]);
+ s.sync([cancel(s.get().novelties.find(r=>r.id==='a'))]);
+ assert.equal(s.get().assets[0].estado,'Averiado/a');assert.equal(s.get().assets[0].ubicacion,'Socavón');
+ assert.equal(s.get().assets[0].nombreResponsable,'Pedro');assert.equal(s.get().assets[0].fechaNovedad,'2026-11-17');
+ s.sync([cancel(s.get().novelties.find(r=>r.id==='b'))]);
+ const current=s.get().assets[0];assert.equal(current.estado,yt.estado);assert.equal(current.ubicacion,yt.ubicacion);
+ assert.equal(current.areaAsignada,yt.areaAsignada);assert.equal(current.nombreResponsable,yt.nombreResponsable);
+ assert.equal(current.fechaNovedad,yt.fechaNovedad);
+});
+test('eliminar después de revertir conserva la ficha restaurada y oculta el registro',()=>{
+ const s=service();s.sync([event('a','2026-11-16','10:00',{estado:'Averiado/a'})]);
+ s.sync([cancel(s.get().novelties[0])]);const restored=copy(s.get().assets[0]);
+ s.sync([cancel(s.get().novelties[0],'delete','delete-a')]);
+ assert.deepEqual(s.get().assets[0],restored);assert.equal(history.timeline(s.get(),yt.id).length,0);
+});
+test('una novedad histórica se puede eliminar sin mover la ficha y una posterior de Plaza conserva su ubicación',()=>{
+ const s=service();s.sync([event('old','2020-11-16','10:00',{estado:'Averiado/a'})]);
+ s.sync([cancel(s.get().novelties[0],'delete')]);assert.deepEqual(s.get().assets[0],yt);
+ s.sync([event('wrong','2026-11-16','10:00',{estado:'Averiado/a',ubicacion:'Taller'})]);
+ s.get().blendingIncomes=[{id:'income',assetId:yt.id,createdAt:'2026-11-17T12:00:00Z'}];
+ s.get().assets[0].ubicacion='Bodega de Superficie';
+ s.sync([cancel(s.get().novelties.find(r=>r.id==='wrong'))]);
+ const current=history.project(s.get().assets[0],s.get()).asset;
+ assert.equal(current.estado,yt.estado);assert.equal(current.ubicacion,'Bodega de Superficie');assert.equal(current.fechaNovedad,'2026-11-17');
+});
+test('los registros antiguos sin copia de la ficha recuperan los valores conocidos de la novedad anterior',()=>{
+ const previous={...event('before','2026-11-10','10:00',{estado:'Operativo/a',ubicacion:'Socavón',responsableNombre:'Luis'}),datedNovelty:false,syncState:'synced'};
+ const bad={...event('wrong','2026-11-21','10:00',{estado:'Averiado/a',ubicacion:'Taller',responsableNombre:'Pedro'}),datedNovelty:false,syncState:'synced'};
+ const s=service({novelties:[previous,bad],assets:[{...yt,estado:'Averiado/a',ubicacion:'Taller',nombreResponsable:'Pedro',fechaNovedad:'2026-11-21',horaNovedad:'10:00',descripcionNovedad:'Revista física'}]});
+ s.sync([cancel(bad)]);
+ const current=history.project(s.get().assets[0],s.get()).asset;
+ assert.equal(current.estado,'Operativo/a');assert.equal(current.ubicacion,'Socavón');assert.equal(current.nombreResponsable,'Luis');assert.equal(current.fechaNovedad,'2026-11-10');
+});
+test('un auxiliar no puede revertir ni eliminar y una acción cancelada aún sin enviar nunca modifica la ficha central',()=>{
+ const s=service(),row=event('offline','2026-11-21','12:00',{estado:'Averiado/a'});
+ assert.throws(()=>s.sync([cancel(row)],'assistant'),/Administrador/);assert.equal(s.get().novelties.length,0);
+ s.sync([cancel(row)]);assert.deepEqual(s.get().assets[0],yt);assert.equal(s.get().novelties[0].reversed,true);
+});
+async function localReversals(){
+ const {IDBFactory}=require('fake-indexeddb'),{webcrypto}=require('node:crypto'),status={};
+ const window={SKAssetHistory:history,SKAdminAuth:{isAdmin:()=>true,user:()=>({username:'test'})},addEventListener(){},dispatchEvent(){}};
+ const ctx=vm.createContext({window,indexedDB:new IDBFactory(),crypto:webcrypto,confirm:()=>true,alert:message=>{throw new Error(message)},
+  document:{querySelector:()=>status,addEventListener(){}},Event:class{},refresh:async()=>{}});
+ vm.runInContext(read('app.js').split('const PARTS=')[0],ctx);await ctx.openDB();
+ vm.runInContext(read('asset-history-ui.js'),ctx);
+ return {ctx,ui:window.SKAssetHistoryUI,status,db:vm.runInContext('db',ctx)};
+}
+test('revertir una novedad local y eliminarla después corrige la ficha visible sin enviar una copia de activo',async()=>{
+ const c=await localReversals();await c.ctx.put('assets',{...yt,syncState:'synced'});
+ const first=event('local','2026-11-21','12:00',{estado:'Averiado/a'});
+ await c.ctx.put('novelties',first);assert.equal((await c.ctx.all('assets'))[0].estado,'Averiado/a');
+ await c.ui.changeNovelty(first.id,'revert');assert.equal((await c.ctx.all('assets'))[0].estado,yt.estado);
+ assert.equal((await c.ctx.all('novelties'))[0].reversed,true);assert.equal((await c.ctx.storedRows('assets'))[0].syncState,'synced');
+ await c.ui.changeNovelty(first.id,'delete');assert.equal((await c.ctx.all('novelties'))[0].deleted,true);
+ assert.equal((await c.ctx.all('assets'))[0].estado,yt.estado);assert.match(c.status.textContent,/eliminada/);
+});
+test('reversión local de un registro confirmado restaura los campos y tolera la doble proyección de la consulta',async()=>{
+ const s=service();s.sync([event('saved','2026-11-21','12:00',{estado:'Averiado/a',ubicacion:'Taller'})]);
+ const c=await localReversals();await c.ctx.put('assets',s.get().assets[0]);await c.ctx.put('novelties',s.get().novelties[0]);
+ await c.ui.changeNovelty('saved','revert');
+ const [current]=await c.ctx.all('assets'),data={novelties:await c.ctx.all('novelties')};
+ assert.equal(current.estado,yt.estado);assert.equal(current.ubicacion,yt.ubicacion);
+ assert.equal(history.project(current,data).asset.estado,yt.estado);
+ s.sync(data.novelties);assert.equal(s.get().assets[0].estado,yt.estado);
+});
+test('una confirmación cancelada o una transacción fallida no altera el registro ni su efecto',async()=>{
+ const c=await localReversals();await c.ctx.put('assets',{...yt,syncState:'synced'});await c.ctx.put('novelties',event('a','2026-11-21','12:00',{estado:'Averiado/a'}));
+ c.ctx.confirm=()=>false;assert.equal(await c.ui.changeNovelty('a','delete'),false);assert.equal((await c.ctx.all('novelties'))[0].deleted,undefined);
+ c.ctx.confirm=()=>true;
+ const transaction=c.db.transaction.bind(c.db);
+ c.db.transaction=(...args)=>{
+  const tx=transaction(...args);if(args[1]==='readwrite'){const table=tx.objectStore('novelties'),put=table.put.bind(table);table.put=row=>{const result=put(row);tx.abort();return result;};}return tx;
+ };
+ await assert.rejects(c.ui.changeNovelty('a','revert'));c.db.transaction=transaction;
+ assert.equal((await c.ctx.all('novelties'))[0].reversed,undefined);assert.equal((await c.ctx.all('assets'))[0].estado,'Averiado/a');
+});
+test('la respuesta de un envío en curso mantiene la reversión local y usa la copia anterior confirmada',async()=>{
+ const s=service(),a=event('a','2026-11-16','12:00',{estado:'Averiado/a'}),b=event('b','2026-11-17','12:00',{ubicacion:'Taller'});
+ const c=await localReversals();await c.ctx.put('assets',{...yt,syncState:'synced'});await c.ctx.put('novelties',a);await c.ctx.put('novelties',b);
+ await c.ui.changeNovelty('a','revert');s.sync([a,b]);
+ await c.ctx.replaceStoreRows('assets',s.get().assets,[]);
+ await c.ctx.replaceStoreRows('novelties',s.get().novelties,[a,b]);
+ assert.equal((await c.ctx.all('novelties')).find(row=>row.id==='a').noveltyAction.localOnly,false);
+ assert.equal((await c.ctx.all('assets'))[0].estado,yt.estado);assert.equal((await c.ctx.all('assets'))[0].ubicacion,'Taller');
+});
+test('al revertir después un movimiento de Plaza tampoco reaparece la novedad anulada',()=>{
+ const s=service();s.sync([event('wrong','2026-11-16','10:00',{estado:'Averiado/a',ubicacion:'Taller',responsableNombre:'Pedro'})]);
+ s.get().blendingIncomes=[{id:'later',assetId:yt.id,createdAt:'2026-11-17T15:00:00Z',broughtByName:'Juan'}];
+ s.get().assets[0].ubicacion='Bodega de Superficie';
+ s.sync([cancel(s.get().novelties[0])]);
+ assert.equal(history.project(s.get().assets[0],s.get()).asset.nombreResponsable,'Juan');
+ s.get().blendingIncomes[0].reversed=true;
+ const result=history.project(s.get().assets[0],s.get()).asset;
+ assert.equal(result.fechaNovedad,yt.fechaNovedad);assert.equal(result.nombreResponsable,yt.nombreResponsable);
+});
+test('revertir la fecha equivocada y registrar la correcta en el mismo envío aplica la fecha corregida',()=>{
+ const s=service();s.sync([event('incorrecta','2026-11-21','12:00',{estado:'Averiado/a',ubicacion:'Taller'})]);
+ const revert=cancel(s.get().novelties[0]),correct=event('correcta','2026-11-16','08:00',{estado:'Averiado/a'});
+ s.sync([correct,revert]);
+ const current=s.get().assets[0];
+ assert.equal(current.fechaNovedad,'2026-11-16');assert.equal(current.horaNovedad,'08:00');
+ assert.equal(current.estado,'Averiado/a');assert.equal(current.ubicacion,yt.ubicacion);
+ assert.equal(s.get().novelties.find(row=>row.id==='correcta').historyOnly,false);
+});

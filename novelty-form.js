@@ -122,6 +122,7 @@ async function save(event){
       const current=await currentAssetProfile(tx,stored);
       const updated=window.SKAssetHistory.applyDatedNovelty(current,novelty);
       novelty.historyOnly=!updated;
+      if(updated){novelty.assetBefore=window.SKAssetHistory.snapshot(current);novelty.assetAfter=window.SKAssetHistory.snapshot(updated);}
       tx.objectStore(assetProfileStore).put(updated||current);
       if(visor&&!novelty.historyOnly&&current.estadoVisor)novelty.estadoVisorAnterior=current.estadoVisor;
       await idbResult(tx.objectStore('novelties').add(novelty));

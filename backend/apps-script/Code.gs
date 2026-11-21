@@ -14,7 +14,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Invitaciones de un solo uso: el enlace contiene un secreto aleatorio, nunca una contraseña.
 function invitationKey_(token){return 'SK_INVITE_'+hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token),Utilities.Charset.UTF_8))}
@@ -313,7 +313,7 @@ function prepareAdminNovelties_(incoming,cloud,auth){
  const pending=name=>(Array.isArray(incoming[name])?incoming[name]:[]).filter(row=>row&&row.id&&row.syncState==='pending');
  const novelties=pending('novelties'),assets=pending('assets'),limited=auth&&!isAdmin_(auth);
  // Los clientes anteriores adjuntaban una copia completa del activo en la misma escritura.
- const dated=novelties.filter(row=>row.datedNovelty||row.fechaNovedad&&row.horaNovedad);
+ const dated=novelties.filter(row=>row.datedNovelty||row.fechaNovedad&&row.horaNovedad||row.noveltyAction);
  const datedIds=new Set(dated.map(row=>row.assetId));
  const histories=new Map(),profiles=new Map(),rules=createAssetHistory();
  for(const name of ['novelties','blendingIncomes','blendingDeliveries']){
@@ -322,6 +322,12 @@ function prepareAdminNovelties_(incoming,cloud,auth){
    if(!histories.has(row.assetId))histories.set(row.assetId,{personal:cloud.personal||[]});
    const group=histories.get(row.assetId);(group[name]||(group[name]=[])).push(row);
   }
+ }
+ function remember(event){
+  accepted.push(event);historical.set(event.id,event);
+  if(!histories.has(event.assetId))histories.set(event.assetId,{personal:cloud.personal||[]});
+  const group=histories.get(event.assetId),rows=group.novelties||(group.novelties=[]),index=rows.findIndex(row=>row.id===event.id);
+  if(index<0)rows.push(event);else rows[index]=event;
  }
  const visorChange=value=>cargoNorm_(value)==='cambio de color del visor';
  const assetMap=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
@@ -344,6 +350,11 @@ function prepareAdminNovelties_(incoming,cloud,auth){
     }
    }
   }
+  if(old&&dated.some(event=>event.assetId===row.id&&event.noveltyAction)){
+   const current=rules.snapshot(old);
+   for(const key of Object.keys(rules.snapshot(row)))if(!(key in current))delete row[key];
+   Object.assign(row,current);
+  }
   if(!limited)patches.set(row.id,row);
  }
  if(limited)assets.forEach(row=>{
@@ -358,9 +369,39 @@ function prepareAdminNovelties_(incoming,cloud,auth){
   }
   patches.set(row.id,row);
  });
- novelties.slice().sort((a,b)=>stamp_(a)-stamp_(b)||String(a.occurredAt||'').localeCompare(String(b.occurredAt||''))).forEach(row=>{
+ novelties.slice().sort((a,b)=>Number(!!b.noveltyAction)-Number(!!a.noveltyAction)||stamp_(a)-stamp_(b)||String(a.occurredAt||'').localeCompare(String(b.occurredAt||''))).forEach(row=>{
   const asset=assetMap.get(row.assetId)||(!limited&&assets.find(item=>item.id===row.assetId));
   row.descripcion=String(row.descripcion||'').replace(/\s*\([^()]*\)\s*$/,'').trim();if(/^dad[oa](?:\/[oa])? de baja$/.test(cargoNorm_(row.estado)))row.ubicacion='Desechado/a';const visor=visorChange(row.descripcion),previous=historical.get(row.id);
+  if(row.noveltyAction){
+   requireAdmin_(auth);
+   const action=row.noveltyAction;
+   if(!action.id||!['revert','delete'].includes(action.kind))throw new Error('Selecciona una acción válida para la novedad.');
+   if(previous&&previous.assetId!==row.assetId)throw new Error('La novedad pertenece a otro activo.');
+   if(previous?.noveltyAction?.id===action.id&&previous.noveltyAction.status==='applied'){remember(Object.assign({},previous,{syncState:'pending'}));return;}
+   const original=previous||row,base=patches.get(row.assetId)||asset;
+   if(!base)throw new Error('El activo de la novedad no existe. Sincroniza la aplicación.');
+   const group=histories.get(row.assetId)||{};
+   const alreadyInactive=previous&&(previous.deleted||previous.reversed||previous.reversedAt);
+   if(!alreadyInactive&&previous){
+    const restored=rules.restoreNovelty(base,original,group);
+    if(JSON.stringify(rules.snapshot(restored))!==JSON.stringify(rules.snapshot(base))&&!base.deleted){
+     restored.updatedAt=nextRevision_(base.updatedAt||base.createdAt);restored.syncState='pending';
+     patches.set(base.id,restored);
+    }
+   }
+   profiles.delete(row.assetId);
+   const changedAt=nextRevision_(previous?.updatedAt||row.updatedAt);
+   const saved=Object.assign({},original,{syncState:'pending',updatedAt:changedAt,
+    noveltyAction:{id:action.id,kind:action.kind,status:'applied',requestedAt:action.requestedAt,
+     appliedAt:changedAt,by:auth.username,byName:auth.name||auth.username}});
+   if(action.kind==='delete')Object.assign(saved,{deleted:true,deletedAt:changedAt,deletedBy:auth.username});
+   else Object.assign(saved,{reversed:true,reversedAt:saved.reversedAt||changedAt,reversedBy:saved.reversedBy||auth.username});
+   remember(saved);return;
+  }
+  // Una copia retrasada nunca reactiva una novedad anulada en otro dispositivo.
+  if(previous&&(previous.deleted||previous.reversed||previous.reversedAt)){
+   remember(Object.assign({},previous,{syncState:'pending'}));return;
+  }
   if(limited&&previous){
    for(const key of ['assetId','descripcion','ubicacion','estado','estadoVisor','actaId'])if((key==='descripcion'?String(previous[key]||'').replace(/\s*\([^()]*\)\s*$/,'').trim():String(previous[key]||''))!==String(row[key]||''))throw new Error('No puedes modificar una novedad ya registrada');
    accepted.push(Object.assign({},previous,{syncState:'pending'}));return;
@@ -383,15 +424,17 @@ function prepareAdminNovelties_(incoming,cloud,auth){
    const base=choose_(patches.get(asset.id),asset);
    const current=profiles.get(asset.id)||rules.project(base,histories.get(asset.id)||{}).asset;
    const event=Object.assign({},row,{datedNovelty:true,occurredAt:occurred.toISOString()});
+   delete event.assetBefore;delete event.assetAfter;
    if(limited)Object.assign(event,{registeredBy:auth.username,registeredByName:auth.name||auth.username});
    const updated=rules.applyDatedNovelty(current,event);
    event.historyOnly=!updated;
+   if(updated){event.assetBefore=rules.snapshot(current);event.assetAfter=rules.snapshot(updated);}
    if(visor){delete event.estadoVisorAnterior;if(updated&&current.estadoVisor)event.estadoVisorAnterior=current.estadoVisor;}
    if(updated){
     updated.updatedAt=nextRevision_(base.updatedAt||base.createdAt);updated.syncState='pending';
     patches.set(asset.id,updated);profiles.set(asset.id,updated);
    }
-   accepted.push(event);historical.set(event.id,event);return;
+   remember(event);return;
   }
   if(!limited){accepted.push(row);return;}
   const novelty=Object.assign({},row,{registeredBy:auth.username,registeredByName:auth.name||auth.username});
@@ -778,7 +821,7 @@ function withFirstSync_(name,chosen,central){
  if(central?.createdAt)saved.createdAt=central.createdAt;
  return saved;
 }
-function merge_(cloud,local){const out={schema:6,updatedAt:nextRevision_(cloud.updatedAt)},names=new Set(Object.keys(cloud||{}).concat(Object.keys(local||{})));names.delete('schema');names.delete('updatedAt');names.forEach(name=>{const map=new Map(),remote=Array.isArray(cloud[name])?cloud[name]:[],device=Array.isArray(local[name])?local[name]:[];remote.forEach(x=>{if(x&&x.id)map.set(x.id,x)});device.forEach(x=>{if(!x||!x.id)return;const central=map.get(x.id),chosen=(name==='assets'&&central?.deleted||['blendingIncomes','blendingDeliveries'].includes(name)&&central&&(central.reversed===true||central.reversado===true||central.movementType==='REVERSIÓN'))?central:choose_(x,central);if(name==='personal'&&central){const merged=Object.assign({},central,chosen);for(const field of ['pinHash','plazaEnabled','plazaRole']){if(Object.prototype.hasOwnProperty.call(central,field))merged[field]=central[field];else delete merged[field]}map.set(x.id,merged)}else map.set(x.id,withFirstSync_(name,chosen,central))});out[name]=Array.from(map.values())});if(Array.isArray(out.personal)){out.personal=dedupePersonal_(out.personal);const centralByDocument=new Map();(Array.isArray(cloud.personal)?cloud.personal:[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()).forEach(x=>{const key=String(x.documento).trim(),old=centralByDocument.get(key);centralByDocument.set(key,choose_(x,old))});out.personal.forEach(x=>{const central=centralByDocument.get(String(x.documento||'').trim());if(central&&central.plazaEnabled===true&&central.pinHash){x.plazaEnabled=true;x.pinHash=central.pinHash;x.plazaRole=central.plazaRole||'operator'}else{delete x.pinHash;delete x.plazaEnabled;delete x.plazaRole}})}return out}
+function merge_(cloud,local){const out={schema:6,updatedAt:nextRevision_(cloud.updatedAt)},names=new Set(Object.keys(cloud||{}).concat(Object.keys(local||{})));names.delete('schema');names.delete('updatedAt');names.forEach(name=>{const map=new Map(),remote=Array.isArray(cloud[name])?cloud[name]:[],device=Array.isArray(local[name])?local[name]:[];remote.forEach(x=>{if(x&&x.id)map.set(x.id,x)});device.forEach(x=>{if(!x||!x.id)return;const central=map.get(x.id),chosen=(name==='assets'&&central?.deleted||name==='novelties'&&central&&(central.deleted||(central.reversed||central.reversedAt)&&x.noveltyAction?.status!=='applied')||['blendingIncomes','blendingDeliveries'].includes(name)&&central&&(central.reversed===true||central.reversado===true||central.movementType==='REVERSIÓN'))?central:choose_(x,central);if(name==='personal'&&central){const merged=Object.assign({},central,chosen);for(const field of ['pinHash','plazaEnabled','plazaRole']){if(Object.prototype.hasOwnProperty.call(central,field))merged[field]=central[field];else delete merged[field]}map.set(x.id,merged)}else map.set(x.id,withFirstSync_(name,chosen,central))});out[name]=Array.from(map.values())});if(Array.isArray(out.personal)){out.personal=dedupePersonal_(out.personal);const centralByDocument=new Map();(Array.isArray(cloud.personal)?cloud.personal:[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()).forEach(x=>{const key=String(x.documento).trim(),old=centralByDocument.get(key);centralByDocument.set(key,choose_(x,old))});out.personal.forEach(x=>{const central=centralByDocument.get(String(x.documento||'').trim());if(central&&central.plazaEnabled===true&&central.pinHash){x.plazaEnabled=true;x.pinHash=central.pinHash;x.plazaRole=central.plazaRole||'operator'}else{delete x.pinHash;delete x.plazaEnabled;delete x.plazaRole}})}return out}
 function dedupePersonal_(rows){const map=new Map();rows.forEach(x=>{if(!x||!x.id)return;const document=String(x.documento||'').trim(),key=document?'doc:'+document:'id:'+x.id,old=map.get(key);if(!old){map.set(key,x);return}const chosen=choose_(x,old);map.set(key,Object.assign({},old,chosen,{id:old.id||chosen.id}))});return Array.from(map.values())}
 function choose_(local,remote){if(!remote)return local;if(!local)return remote;const ls=local.syncState==='seed',rs=remote.syncState==='seed';if(ls!==rs)return ls?remote:local;return stamp_(local)>=stamp_(remote)?local:remote}
 function stamp_(x){const n=Date.parse(x.updatedAt||x.createdAt||'');return isNaN(n)?0:n}
@@ -1477,20 +1520,100 @@ function createAssetHistory(){
   const event=timeline(data,asset.id).find(entry=>entry.kind==='income'&&!entry.reversed&&!entry.raw.reversalOf&&norm(entry.raw.movementType)!=='reversion');
   return text(event?.raw.notes);
  }
+ const profileFields=['fechaNovedad','horaNovedad','descripcionNovedad','currentNoveltyId','estado','ubicacion',
+  'areaAsignada','areaAsignadaRevision','asignadaId','estadoVisor','nombreResponsable','documentoResponsable',
+  'nombreBodeguero','documentoBodeguero','disponibleEntrega'];
+ const noveltyFields={estado:'estado',ubicacion:'ubicacion',areaAsignada:'areaAsignada',estadoVisor:'estadoVisor',
+  responsableNombre:'nombreResponsable',documentoResponsable:'documentoResponsable',
+  bodegueroNombre:'nombreBodeguero',documentoBodeguero:'documentoBodeguero'};
+ function snapshot(asset){
+  return Object.fromEntries(profileFields.filter(key=>Object.prototype.hasOwnProperty.call(asset,key)).map(key=>[key,asset[key]]));
+ }
+ function eventPatch(entry){
+  const row=entry.raw,patch={fechaNovedad:entry.date,horaNovedad:entry.time,descripcionNovedad:entry.title,currentNoveltyId:row.id};
+  if(entry.kind==='novelty'){
+   for(const [source,target] of Object.entries(noveltyFields))if(text(row[source]))patch[target]=text(row[source]);
+   if(entry.responsible.name)patch.nombreResponsable=entry.responsible.name;
+   if(entry.responsible.document)patch.documentoResponsable=entry.responsible.document;
+   if(entry.warehouse.name)patch.nombreBodeguero=entry.warehouse.name;
+   if(entry.warehouse.document)patch.documentoBodeguero=entry.warehouse.document;
+   if(text(row.areaAsignada))patch.areaAsignadaRevision={value:text(row.areaAsignada),at:entry.at};
+  }else{
+   Object.assign(patch,{ubicacion:entry.kind==='assignment'?assignmentLocation(row,entry.responsible):entry.location,
+    nombreResponsable:entry.responsible.name,documentoResponsable:entry.responsible.document,
+    nombreBodeguero:entry.warehouse.name,documentoBodeguero:entry.warehouse.document});
+   if(entry.kind==='assignment')Object.assign(patch,{asignadaId:entry.responsible.id,areaAsignada:assignmentArea(row,entry.responsible)});
+   if(['income','return'].includes(entry.kind))Object.assign(patch,{asignadaId:'',areaAsignada:''});
+  }
+  return patch;
+ }
+ // Solo repone los campos afectados que no tienen otro cambio vigente posterior.
+ // Los registros antiguos se reconstruyen con los valores documentados del historial.
+ function restoreNovelty(asset,row,data={}){
+  if(row.historyOnly)return {...asset};
+  const complete={...data,novelties:(data.novelties||[]).map(item=>({...item,deleted:false}))};
+  const events=timeline(complete,asset.id).map(entry=>({...entry,patch:eventPatch(entry)}));
+  const index=events.findIndex(entry=>entry.kind==='novelty'&&entry.raw.id===row.id);
+  if(index<0)return {...asset};
+  const target=events[index],older=events.slice(index+1),later=events.slice(0,index);
+  const deletedIds=new Set((data.novelties||[]).filter(item=>item.deleted).map(item=>item.id));
+  const inactive=entry=>entry.reversed||entry.kind==='novelty'&&deletedIds.has(entry.raw.id);
+  const applied=entry=>!entry.raw.historyOnly;
+  const values=target.patch,before=row.assetBefore;
+  const result={...asset};
+  const metadata=['fechaNovedad','horaNovedad','descripcionNovedad','currentNoveltyId'];
+  const storedTarget=asset.currentNoveltyId===row.id||!asset.currentNoveltyId&&asset.fechaNovedad===target.date&&
+   text(asset.horaNovedad).slice(0,5)===target.time&&norm(asset.descripcionNovedad)===norm(target.title);
+  for(const key of Object.keys(values)){
+   const laterValue=later.some(entry=>applied(entry)&&!inactive(entry)&&Object.prototype.hasOwnProperty.call(entry.patch,key)&&
+    JSON.stringify(result[key])===JSON.stringify(entry.patch[key]));
+   if(laterValue&&!(storedTarget&&metadata.includes(key)))continue;
+   const expected=row.assetAfter&&Object.prototype.hasOwnProperty.call(row.assetAfter,key)?row.assetAfter[key]:values[key];
+   // Current metadata may still be the original snapshot in records created by older clients.
+   if(JSON.stringify(result[key])!==JSON.stringify(expected))continue;
+   let value=before?before[key]:undefined;
+   if(!before){
+    const known=older.find(entry=>applied(entry)&&!inactive(entry)&&Object.prototype.hasOwnProperty.call(entry.patch,key));
+    if(known)value=known.patch[key];
+    else if(key==='estadoVisor'&&row.estadoVisorAnterior)value=row.estadoVisorAnterior;
+   }else{
+    for(const entry of older){
+     if(!applied(entry)||!Object.prototype.hasOwnProperty.call(entry.patch,key))continue;
+     if(!inactive(entry))break;
+     const after=entry.raw.assetAfter||entry.patch;
+     if(JSON.stringify(value)!==JSON.stringify(after[key]))break;
+     if(entry.raw.assetBefore)value=entry.raw.assetBefore[key];
+     else{
+      const known=older.slice(older.indexOf(entry)+1).find(previous=>applied(previous)&&!inactive(previous)&&Object.prototype.hasOwnProperty.call(previous.patch,key));
+      value=known?known.patch[key]:undefined;
+     }
+    }
+   }
+   if(value===undefined)delete result[key];else result[key]=value;
+  }
+  result.disponibleEntrega=operationStatus(result);
+  return result;
+ }
  // La fecha de captura/sincronización nunca decide qué novedad ocupa la ficha.
  function applyDatedNovelty(asset,row){
   const day=text(row.fechaNovedad),time=text(row.horaNovedad),priorDay=text(asset.fechaNovedad);
   if(row.historyOnly||!day||day<priorDay||(day===priorDay&&time<=text(asset.horaNovedad||'00:00').slice(0,5)))return null;
   const result={...asset,fechaNovedad:day,horaNovedad:time,descripcionNovedad:row.descripcion,currentNoveltyId:row.id};
-  const fields={estado:'estado',ubicacion:'ubicacion',areaAsignada:'areaAsignada',estadoVisor:'estadoVisor',
-   responsableNombre:'nombreResponsable',documentoResponsable:'documentoResponsable',
-   bodegueroNombre:'nombreBodeguero',documentoBodeguero:'documentoBodeguero'};
-  for(const [source,target] of Object.entries(fields))if(text(row[source]))result[target]=text(row[source]);
+  for(const [source,target] of Object.entries(noveltyFields))if(text(row[source]))result[target]=text(row[source]);
   if(text(row.areaAsignada))result.areaAsignadaRevision={value:result.areaAsignada,at:eventTime(row)};
   result.disponibleEntrega=operationStatus(result);
   return result;
  }
- function project(asset,data){
+ function project(asset,data={}){
+  const actions=(data.novelties||[]).filter(row=>row.assetId===asset.id&&row.syncState==='pending'&&row.noveltyAction?.status==='pending')
+   .sort((a,b)=>millis(a.noveltyAction.requestedAt)-millis(b.noveltyAction.requestedAt));
+  const processed=new Set(asset.pendingNoveltyActions||[]);
+  for(const row of actions){
+   if(processed.has(row.noveltyAction.id))continue;
+   if(!row.noveltyAction.localOnly||asset.currentNoveltyId===row.id)asset=restoreNovelty(asset,row,data);
+   processed.add(row.noveltyAction.id);
+  }
+  if(processed.size)asset={...asset,pendingNoveltyActions:[...processed]};
   const events=timeline(data,asset.id);
   // Las novedades fechadas confirmadas ya se aplicaron a la ficha en el servidor.
   const active=events.filter(e=>!e.reversed&&!e.raw.datedNovelty&&!e.raw.historyOnly);
@@ -1536,5 +1659,5 @@ function createAssetHistory(){
   return {asset:result,events,latest,assigned};
  }
  function available(asset,data){const current=project(asset,data).asset;return !current.deleted&&!retired(current)&&norm(current.ubicacion)==='bodega de superficie';}
- return {timeline,project,applyDatedNovelty,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
+ return {timeline,project,applyDatedNovelty,snapshot,restoreNovelty,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
 }
