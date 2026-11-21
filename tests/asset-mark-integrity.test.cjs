@@ -77,7 +77,7 @@ function marker(rows,ids=[]){
  const element=()=>({hidden:false,style:{},setAttribute(){},append(...children){for(const child of children)if(child.id)nodes.set('#'+child.id,child)},replaceChildren(){},addEventListener(){},focus(){},showModal(){this.open=true},close(){this.open=false}});
  for(const id of ['home','assets'])nodes.set('#'+id,element());
  const document={head:element(),body:element(),querySelector:key=>nodes.get(key)||null,createElement(tag){const node=element();if(tag==='dialog'){const parts=new Map(['h2','#assetMarkMessage','#assetMarkCards','button'].map(key=>[key,element()]));node.querySelector=key=>parts.get(key)}return node}};
- const window={addEventListener:(key,fn)=>events.set(key,fn)},ctx=vm.createContext({window,document,location:{pathname:'/SK-Web/'},navigator:{onLine:true},localStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)},db:{},all:async()=>rows});vm.runInContext(read('asset-marking.js'),ctx);
+ const window={addEventListener:(key,fn)=>events.set(key,fn)},ctx=vm.createContext({window,document,location:{pathname:'/SK-Web/'},navigator:{onLine:true},localStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)},db:{},all:async()=>rows});vm.runInContext(read('asset-record-rules.js'),ctx);vm.runInContext(read('asset-marking.js'),ctx);
  return{api:window.SKAssetMarking,nodes,storage};
 }
 test('audita todos los campos actuales, excluye historia y no confunde PAA con P-AA',()=>{
@@ -99,4 +99,16 @@ test('la sincronización antigua delega al servicio central y no abre ni escribe
  await assert.rejects(ctx.uploadCloud(),/servicio de sincronización/);assert.equal(await ctx.syncDrive(),false);
  const latest=read('sync-latest.js');vm.runInContext(latest.slice(latest.indexOf('  async function syncLatest(){'),latest.indexOf("  window.addEventListener('load'")),ctx);assert.equal(await ctx.syncLatest(),false);let calls=0;ctx.window.skSyncApi={configured:()=>true,sync:async()=>{calls++;return true}};
  assert.equal(await ctx.syncDrive(),true);assert.equal(await ctx.syncLatest(),true);assert.equal(calls,2);assert.equal(messages.length,2);
+});
+
+test('los avisos y el formulario distinguen la YT XLV de la columna XLV',()=>{
+ const yt=legacy('yt',{clase:'YT',marcaActual:'XLV'}),column=legacy('col',{clase:'Columna',nuevaMarca:'XLV'});
+ const second=legacy('col2',{clase:'COLUMNAS',marcaInterna:' xlv '});
+ const {api}=marker([yt,column]);
+ assert.deepEqual(clone(api.markConflicts([yt,column])),[]);assert.equal(api.hasDuplicateMark([yt,column],column),false);
+ assert.deepEqual(clone(api.markConflicts([yt,column,second])),[{code:'XLV',assetIds:['col','col2']}]);
+ assert.equal(api.hasDuplicateMark([yt,column,second],column),true);
+ const ctx={window:{}};vm.runInNewContext(read('asset-record-rules.js'),ctx);
+ assert.equal(ctx.window.SKAssetRules.duplicateNewMark([yt],column),null);
+ assert.equal(ctx.window.SKAssetRules.duplicateNewMark([yt,second],column),second);
 });
