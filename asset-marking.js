@@ -83,7 +83,14 @@ function markConflicts(assets){
    if(!codes.has(code))codes.set(code,new Map());codes.get(code).set(asset.id,asset);
   }
  }
- return [...codes].filter(([,rows])=>rows.size>1&&[...rows.values()].some(row=>!row.deleted)).map(([code,rows])=>({code,assetIds:[...rows.keys()]}));
+ const conflicts=[];
+ for(const [code,owners] of codes){
+  if(owners.size<2)continue;
+  const rows=[...owners.values()];
+  const conflicting=rows.filter(asset=>rows.some(other=>asset.id!==other.id&&(!asset.deleted||!other.deleted)&&window.SKAssetRules.marksCanCollide(asset.clase,other.clase)));
+  if(conflicting.length)conflicts.push({code,assetIds:conflicting.map(asset=>asset.id)});
+ }
+ return conflicts;
 }
 function renderIntegrityNotice(conflicts){
  if(typeof document==='undefined')return;
@@ -97,7 +104,7 @@ function renderIntegrityNotice(conflicts){
 let requesting=false,requestViewVersion=0;
 function hasDuplicateMark(assets,asset){
  const code=value=>clean(value).toUpperCase(),mark=code(asset?.nuevaMarca);
- return /^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark)&&assets.some(row=>row.id!==asset.id&&['nuevaMarca','marcaActual','marcaInterna'].some(key=>code(row[key])===mark));
+ return /^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark)&&assets.some(row=>row.id!==asset.id&&window.SKAssetRules.marksCanCollide(asset.clase,row.clase)&&['nuevaMarca','marcaActual','marcaInterna'].some(key=>code(row[key])===mark));
 }
 async function refreshRequestButton(){
   const form=document.querySelector('#assetForm'),label=form?.elements.nuevaMarca?.closest('label');if(scope!=='admin'||!label)return;

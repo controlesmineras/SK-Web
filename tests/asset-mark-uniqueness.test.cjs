@@ -74,3 +74,33 @@ test('abrir una ficha sin nuevaMarca después de AAS limpia el campo antes de gu
  await ctx.editAsset('issued');assert.equal(fields.nuevaMarca.value,'AAS');
  await ctx.editAsset('legacy');assert.equal(fields.id.value,'legacy');assert.equal(fields.nuevaMarca.value,'');
 });
+
+test('la columna XLV sincroniza junto con una novedad y su reintento aunque la YT 45 tenga XLV',()=>{
+ const yt=legacy('yt45',{clase:'YT',numeroClase:'45',marcaActual:'XLV'}),column=legacy('col45',{clase:'Columna'});
+ const central=backend([yt,column],[]);
+ const change=edit(column,{marcaInterna:'XLV',marcaActual:'XLV'});
+ const novelty={id:'mov-col45',assetId:column.id,descripcion:'Revista física',estado:'Operativo/a',datedNovelty:true,fechaNovedad:'2026-11-21',horaNovedad:'16:40',updatedAt:later,syncState:'pending'};
+ const sync=()=>central.ctx.adminSyncAuthorized_({assets:[clone(change)],novelties:[clone(novelty)]},'',{role:'owner'});
+ sync();sync();
+ assert.deepEqual(central.cloud().assets.find(r=>r.id===yt.id),yt);
+ const saved=central.cloud().assets.find(r=>r.id===column.id);
+ assert.equal(saved.marcaActual,'XLV');assert.equal(saved.currentNoveltyId,novelty.id);
+ assert.equal(central.cloud().novelties.filter(r=>r.id===novelty.id).length,1);
+});
+
+test('XLV sigue reservada dentro de YT y de Columna, incluso para fichas dadas de baja y reservas antiguas',()=>{
+ for(const [source,peer,opposite] of [['YT','YT29','Columna'],['Columna','Columnas','YT']]){
+  const owner=legacy('old',{clase:source,marcaActual:'XLV',deleted:true});
+  const archived={id:'reserva',reservedForAssetId:owner.id,code:'XLV'};
+  const pair=[legacy('peer',{clase:peer}),legacy('other',{clase:opposite})];
+  const s=backend([owner,...pair],[archived]);
+  s.sync([edit(pair[1],{marcaActual:' xlv '})]);
+  assert.throws(()=>s.sync([edit(pair[0],{marcaActual:' xlv '})]),/marca XLV ya pertenece/);
+  const attributed=backend(pair,[{...archived,assetClass:source}]);attributed.sync([edit(pair[1],{marcaActual:'XLV'})]);
+  const unknown=backend(pair,[archived]);assert.throws(()=>unknown.sync([edit(pair[1],{marcaActual:'XLV'})]),/marca XLV/);
+ }
+});
+test('si una ficha cambia de clase se comprueba su marca contra la nueva clase',()=>{
+ const yt=legacy('yt',{clase:'YT',marcaActual:'XLV'}),column=legacy('col',{clase:'Columna',marcaActual:'XLV'});
+ assert.throws(()=>backend([yt,column],[]).sync([edit(column,{clase:'YT'})]),/marca XLV ya pertenece/);
+});

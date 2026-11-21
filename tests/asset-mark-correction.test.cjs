@@ -74,7 +74,7 @@ function client({ownerAccess=true,online=true,dirty=false,duplicate=true,confirm
  const document={head:element(),body:element(),querySelector:key=>nodes.get(key)||null,createElement(tag){const node=element();if(tag==='dialog'){const parts=new Map(['h2','#assetMarkMessage','#assetMarkCards','button'].map(key=>[key,element()]));node.querySelector=key=>parts.get(key)}return node}};
  const window={SKAdminAuth:{canManageAssets:()=>ownerAccess,request:async(action,q)=>{calls.push({action,q});if(oldBackend)throw Error('Solicitud no válida');if(lostResponse)throw Error('Tiempo de espera');const correction={from:'AAS',to:'AAU',at:date,by:'test'};const asset={...rows[1],id:'makita-120800',nuevaMarca:'AAU',marcaActual:'AAU',marcaInterna:'AAU',markCorrections:[correction]};rows=rows.map(row=>row.id===asset.id?asset:row);return {ok:true,asset,correction}}},skSyncApi:{configured:()=>true,sync:async()=>{syncs++;return !(failRefresh&&syncs===2)},schedule(){}},addEventListener(){}};
  const ctx={window,document,location:{pathname:'/SK-Web/'},navigator:{onLine:online},localStorage:{getItem:()=>null,setItem(){}},all:async()=>clone(rows),put:async()=>{throw Error('La corrección no debe escribir copias locales parciales')},alert:message=>alerts.push(message),confirm:message=>{confirmations.push(message);return confirmed},console:{error(){}}};
- vm.runInNewContext(read('asset-marking.js'),ctx);
+ vm.runInNewContext(read('asset-record-rules.js'),ctx);vm.runInNewContext(read('asset-marking.js'),ctx);
  return{api:window.SKAssetMarking,button:()=>nodes.get('#assetRequestMarkBtn'),note:()=>nodes.get('#assetMarkCorrectionNote'),calls,alerts,confirmations,get syncs(){return syncs}};
 }
 test('el dueño ve Corregir marca duplicada con el campo protegido y la corrección muestra el comprobante',async()=>{
@@ -94,4 +94,12 @@ test('un servicio antiguo explica cómo habilitar la corrección y un timeout pe
 });
 test('si falla la descarga posterior informa la marca confirmada sin reemplazar datos locales',async()=>{
  const c=client({failRefresh:true});assert.equal(await c.api.correctDuplicate('makita-120800'),true);assert.match(c.alerts.at(-1),/confirmó la marca AAU/);
+});
+
+test('compartir XLV entre YT y Columna no autoriza una remarcación',()=>{
+ const yt={...target(),id:'yt',clase:'YT',nuevaMarca:'XLV',marcaActual:'XLV',marcaInterna:'XLV',incomeMarking:true,mina:'Sandra K'};
+ const column={...yt,id:'col',clase:'Columna'};
+ const s=backend({assets:[yt,column],assetMarkRegistry:[mark('col','XLV',1),mark('yt','XLV',1)]});
+ assert.throws(()=>s.correct({assetId:'col',expectedMark:'XLV'}),/no encontró otra asignación/);
+ assert.equal(s.writes,0);
 });
