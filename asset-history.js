@@ -1,5 +1,5 @@
 // Read-only projection: source movements remain the audit record; consultation never writes copies.
-(function(root,factory){const api=factory();if(typeof module==='object'&&module.exports)module.exports=api;else root.SKAssetHistory=api})(typeof window==='object'?window:globalThis,()=>{
+function createAssetHistory(){
  'use strict';
  const text=value=>String(value??'').trim();
  const norm=value=>text(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
@@ -58,22 +58,40 @@
   const event=timeline(data,asset.id).find(entry=>entry.kind==='income'&&!entry.reversed&&!entry.raw.reversalOf&&norm(entry.raw.movementType)!=='reversion');
   return text(event?.raw.notes);
  }
+ // La fecha de captura/sincronización nunca decide qué novedad ocupa la ficha.
+ function applyDatedNovelty(asset,row){
+  const day=text(row.fechaNovedad),time=text(row.horaNovedad),priorDay=text(asset.fechaNovedad);
+  if(row.historyOnly||!day||day<priorDay||(day===priorDay&&time<=text(asset.horaNovedad||'00:00').slice(0,5)))return null;
+  const result={...asset,fechaNovedad:day,horaNovedad:time,descripcionNovedad:row.descripcion,currentNoveltyId:row.id};
+  const fields={estado:'estado',ubicacion:'ubicacion',areaAsignada:'areaAsignada',estadoVisor:'estadoVisor',
+   responsableNombre:'nombreResponsable',documentoResponsable:'documentoResponsable',
+   bodegueroNombre:'nombreBodeguero',documentoBodeguero:'documentoBodeguero'};
+  for(const [source,target] of Object.entries(fields))if(text(row[source]))result[target]=text(row[source]);
+  if(text(row.areaAsignada))result.areaAsignadaRevision={value:result.areaAsignada,at:eventTime(row)};
+  result.disponibleEntrega=operationStatus(result);
+  return result;
+ }
  function project(asset,data){
-  const events=timeline(data,asset.id),active=events.filter(e=>!e.reversed),latest=active[0],result={...asset};
+  const events=timeline(data,asset.id);
+  // Las novedades fechadas confirmadas ya se aplicaron a la ficha en el servidor.
+  const active=events.filter(e=>!e.reversed&&!e.raw.datedNovelty&&!e.raw.historyOnly);
+  let latest=active[0],result={...asset};
   // A previously displayed source event is not an independent manual snapshot.
   // This also lets a reversal fall back to the preceding valid event after an owner saved the form.
-  const linkedSnapshot=events.some(e=>e.date===asset.fechaNovedad&&e.time===asset.horaNovedad&&norm(e.title)===norm(asset.descripcionNovedad));
+  const linkedSnapshot=!asset.currentNoveltyId&&events.some(e=>!e.raw.datedNovelty&&!e.raw.historyOnly&&e.date===asset.fechaNovedad&&e.time===asset.horaNovedad&&norm(e.title)===norm(asset.descripcionNovedad));
   const snapshotTime=!linkedSnapshot&&asset.fechaNovedad?millis(eventTime(asset)):0;
-  if(latest&&latest.epoch&&latest.epoch>=snapshotTime){
+  const coversSnapshot=epoch=>asset.currentNoveltyId?Math.floor(epoch/60000)>Math.floor(snapshotTime/60000):epoch>=snapshotTime;
+  if(latest&&latest.epoch&&coversSnapshot(latest.epoch)){
    Object.assign(result,{fechaNovedad:latest.date,horaNovedad:latest.time,descripcionNovedad:latest.title,documentoResponsable:latest.responsible.document,nombreResponsable:latest.responsible.name,documentoBodeguero:latest.warehouse.document,nombreBodeguero:latest.warehouse.name});
    if(!retired(asset)&&latest.location)result.ubicacion=latest.kind==='assignment'?assignmentLocation(latest.raw,latest.responsible):latest.location;
 
+   if(asset.currentNoveltyId)delete result.currentNoveltyId;
    // Keep the stored physical state: an assignment by itself does not certify operability.
   }
   if(!latest&&linkedSnapshot)Object.assign(result,{fechaNovedad:'',horaNovedad:'',descripcionNovedad:'',documentoResponsable:'',nombreResponsable:'',documentoBodeguero:'',nombreBodeguero:''});
   const movement=active.find(e=>e.kind!=='novelty');
   let assigned=null;
-  if(movement&&movement.epoch>=snapshotTime){
+  if(movement&&coversSnapshot(movement.epoch)){
    const backInWarehouse=norm(result.ubicacion)==='bodega de superficie';
    if(movement.kind==='assignment'&&!retired(asset)&&!backInWarehouse){assigned={...movement.responsible,area:assignmentArea(movement.raw,movement.responsible)};result.asignadaId=assigned.id;result.areaAsignada=assigned.area||asset.areaAsignada||'';}
    else if(['income','return'].includes(movement.kind)||retired(asset)||backInWarehouse){assigned={id:'',document:'',name:'',area:'',cargo:''};result.asignadaId='';result.areaAsignada='';}
@@ -81,15 +99,26 @@
   // La asignación explícita de una novedad prevalece hasta el siguiente movimiento.
   // Se deriva del historial también cuando un auxiliar sincroniza con un servidor anterior.
   const areaEvent=active.find(event=>['assignment','income','return'].includes(event.kind)||(event.kind==='novelty'&&text(event.raw.areaAsignada)));
-  if(areaEvent?.kind==='novelty'&&areaEvent.epoch>=snapshotTime&&!retired(result)){
+  if(areaEvent?.kind==='novelty'&&coversSnapshot(areaEvent.epoch)&&!retired(result)){
    result.areaAsignada=text(areaEvent.raw.areaAsignada);
   }
   // Guardar una edición de la ficha no debe recuperar después un área histórica.
   const areaRevision=asset.areaAsignadaRevision;
   if(areaRevision&&millis(areaRevision.at)>0&&millis(areaRevision.at)>=(areaEvent?.epoch||0)&&!retired(result))result.areaAsignada=text(areaRevision.value);
+  if(asset.currentNoveltyId&&(!latest||!coversSnapshot(latest.epoch)))
+   latest=events.find(event=>event.raw.id===asset.currentNoveltyId);
+  const pending=events.filter(e=>e.raw.datedNovelty&&e.pending&&!e.raw.historyOnly&&!e.reversed)
+   .sort((a,b)=>millis(a.raw.createdAt)-millis(b.raw.createdAt)||a.epoch-b.epoch||a.order-b.order);
+  for(const entry of pending){
+   const updated=applyDatedNovelty(result,entry.raw);
+   if(updated){result=updated;latest=entry;}
+  }
   result.disponibleEntrega=operationStatus(result);
   return {asset:result,events,latest,assigned};
  }
  function available(asset,data){const current=project(asset,data).asset;return !current.deleted&&!retired(current)&&norm(current.ubicacion)==='bodega de superficie';}
- return {timeline,project,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
-});
+ return {timeline,project,applyDatedNovelty,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
+}
+
+if(typeof module==='object'&&module.exports)module.exports=createAssetHistory();
+else window.SKAssetHistory=createAssetHistory();

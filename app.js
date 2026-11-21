@@ -1,8 +1,43 @@
-const DB='sk-web-local',VER=5,stores=['personal','assets','novelties','parts','consumptions','incomes','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries','actas'];const quantityAdjustments='inventoryQuantityAdjustments',localStores=[...stores,quantityAdjustments];let db;const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],uuid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,now=()=>new Date().toISOString();
+const DB='sk-web-local',VER=6,stores=['personal','assets','novelties','parts','consumptions','incomes','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries','actas'];const quantityAdjustments='inventoryQuantityAdjustments',localStores=[...stores,quantityAdjustments];let db;const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],uuid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,now=()=>new Date().toISOString();
 const GOOGLE_CLIENT_ID='102740984387-di4t4r2djjc9t4l84b8ttl7cf49ef20g.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata',CLOUD_FILE='sk-web-central.json';let tokenClient,accessToken='';
-function openDB(){return new Promise((ok,no)=>{const r=indexedDB.open(DB,VER);r.onupgradeneeded=()=>{for(const s of localStores)if(!r.result.objectStoreNames.contains(s))r.result.createObjectStore(s,{keyPath:'id'})};r.onsuccess=()=>{db=r.result;db.onversionchange=()=>db.close();ok(db)};r.onerror=()=>no(r.error);r.onblocked=()=>no(new Error('Base local bloqueada'))})}function all(s){return new Promise((ok,no)=>{const r=db.transaction(s).objectStore(s).getAll();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}function countStore(s){return new Promise((ok,no)=>{const r=db.transaction(s).objectStore(s).count();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}function put(s,o){if(s==='personal'&&!String(o?.id??'').trim())o={...o,id:uuid(),createdAt:o?.createdAt||now(),updatedAt:now(),syncState:'pending'};return new Promise((ok,no)=>{
- const tx=db.transaction(s,'readwrite'),table=tx.objectStore(s);let failure=null;
+const assetProfileStore='assetNoveltyProfiles';
+const assetEventStores=['novelties','blendingIncomes','blendingDeliveries'];
+const assetProfileTables=['assets','personal',...assetEventStores,assetProfileStore];
+function openDB(){return new Promise((ok,no)=>{
+ const r=indexedDB.open(DB,VER);
+ r.onupgradeneeded=()=>{
+  for(const name of [...localStores,assetProfileStore])if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id'});
+  for(const name of assetEventStores){const table=r.transaction.objectStore(name);if(!table.indexNames.contains('assetId'))table.createIndex('assetId','assetId');}
+  const table=r.transaction.objectStore('novelties');if(!table.indexNames.contains('syncState'))table.createIndex('syncState','syncState');
+ };
+ r.onsuccess=()=>{db=r.result;db.onversionchange=()=>db.close();ok(db)};r.onerror=()=>no(r.error);r.onblocked=()=>no(new Error('Cierra las otras pestañas de SK Web Admin para actualizar la base local.'));
+})}
+function idbResult(request){return new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)})}
+function storedRows(name){return idbResult(db.transaction(name).objectStore(name).getAll())}
+async function assetEventData(tx,id){
+ const entries=await Promise.all(assetEventStores.map(async name=>[name,await idbResult(tx.objectStore(name).index('assetId').getAll(id))]));
+ return Object.fromEntries(entries);
+}
+async function currentAssetProfile(tx,asset){
+ const cached=await idbResult(tx.objectStore(assetProfileStore).get(asset.id));
+ if(cached)return cached;
+ // Las fichas anteriores a esta regla pueden tener su última fecha solo en un movimiento.
+ const [history,personal]=await Promise.all([assetEventData(tx,asset.id),idbResult(tx.objectStore('personal').getAll())]);
+ history.personal=personal;
+ return window.SKAssetHistory.project(asset,history).asset;
+}
+async function all(name){
+ if(name!=='assets'||!window.SKAssetHistory)return storedRows(name);
+ const tx=db.transaction(assetProfileTables);
+ const [rows,pending]=await Promise.all([idbResult(tx.objectStore('assets').getAll()),idbResult(tx.objectStore('novelties').index('syncState').getAll('pending'))]);
+ const affected=new Set(pending.filter(row=>row.datedNovelty&&!row.historyOnly).map(row=>row.assetId));
+ return Promise.all(rows.map(async asset=>affected.has(asset.id)?currentAssetProfile(tx,asset):asset));
+}
+function countStore(s){return new Promise((ok,no)=>{const r=db.transaction(s).objectStore(s).count();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}function put(s,o){if(s==='personal'&&!String(o?.id??'').trim())o={...o,id:uuid(),createdAt:o?.createdAt||now(),updatedAt:now(),syncState:'pending'};return new Promise((ok,no)=>{
+ const affectsProfile=s==='assets'||assetEventStores.includes(s);
+ const tx=db.transaction(s==='assets'?assetProfileTables:affectsProfile?[s,assetProfileStore]:s,'readwrite'),table=tx.objectStore(s);let failure=null;
+ if(affectsProfile&&(s==='assets'||o.assetId))tx.objectStore(assetProfileStore).delete(s==='assets'?o.id:o.assetId);
  if(s==='assets'){
   const read=table.getAll();read.onsuccess=()=>{
    const rows=read.result,old=rows.find(row=>row.id===o.id),rules=window.SKAssetRules;
@@ -13,12 +48,22 @@ function openDB(){return new Promise((ok,no)=>{const r=indexedDB.open(DB,VER);r.
    const changed=rules&&(!old||old.deleted||rules.serialKey(old.serial)!==rules.serialKey(o.serial));
    const duplicate=changed&&rules.duplicateSerial(rows,o);
    if(duplicate){failure=new Error('El serial '+String(o.serial).trim()+' ya existe en: '+rules.label(duplicate)+'. Revisa el activo registrado.');tx.abort();return;}
-   table.put(o);
+   if(!old||!window.SKAssetHistory||o.syncState!=='pending'){table.put(o);return;}
+   assetEventData(tx,o.id).then(data=>{
+    if(data.novelties.some(row=>row.datedNovelty&&row.syncState==='pending'&&!row.historyOnly)){
+     const visible=window.SKAssetHistory.project(old,data).asset,edit={...o};
+     for(const key of Object.keys(visible))if(JSON.stringify(o[key])===JSON.stringify(visible[key])&&JSON.stringify(visible[key])!==JSON.stringify(old[key])){
+      if(key in old)edit[key]=old[key];else delete edit[key];
+     }
+     table.put(edit);
+    }else table.put(o);
+   }).catch(error=>{failure=error;tx.abort()});
   };
  }else table.put(o);
  tx.oncomplete=()=>{ok(o);if(o?.syncState==='pending')window.dispatchEvent(new Event('skweb-local-change'))};tx.onerror=()=>no(failure||tx.error);tx.onabort=()=>no(failure||tx.error||new Error('La escritura local fue cancelada'));
-})}function clearStore(s){return new Promise((ok,no)=>{const r=db.transaction(s,'readwrite').objectStore(s).clear();r.onsuccess=()=>ok();r.onerror=()=>no(r.error)})}function replaceStoreRows(s,rows,sentRows){return new Promise((ok,no)=>{
- const tx=db.transaction(s,'readwrite'),store=tx.objectStore(s);
+})}function clearStore(s){return new Promise((ok,no)=>{const related=s==='assets'||assetEventStores.includes(s),tx=db.transaction(related?[s,assetProfileStore]:s,'readwrite');if(related)tx.objectStore(assetProfileStore).clear();const r=tx.objectStore(s).clear();r.onsuccess=()=>ok();r.onerror=()=>no(r.error)})}function replaceStoreRows(s,rows,sentRows){return new Promise((ok,no)=>{
+ const related=s==='assets'||assetEventStores.includes(s),tx=db.transaction(related?[s,assetProfileStore]:s,'readwrite'),store=tx.objectStore(s);
+ if(related)tx.objectStore(assetProfileStore).clear();
  const write=values=>{store.clear();for(const row of values)if(row?.id)store.put(row)};
  if(s==='assets'){
   const read=store.getAll();read.onsuccess=()=>{

@@ -5,13 +5,13 @@
   const ui=state=>window.SKAdminSyncUI?.setState?.(state);const buttonText=value=>{const button=document.querySelector('#updateAppBtn');if(button){button.setAttribute('aria-label',value);button.title=value}};
   function buttonStart(){const b=document.querySelector('#updateAppBtn');if(!b||b.dataset.busy==='true')return null;b.disabled=true;b.dataset.autoSync='true';b.classList.add('isSyncing');buttonText('Sincronizando datos');return b}
   function buttonStop(b){if(!b||b.dataset.busy==='true')return;delete b.dataset.autoSync;b.disabled=false;b.classList.remove('isSyncing');buttonText('Sincronizar datos')}
-  async function pendingSnapshot(){if(typeof repairPersonalIds==='function')await repairPersonalIds();const snapshot={schema:6,updatedAt:new Date().toISOString()};const rows=await Promise.all(stores.map(all));stores.forEach((store,index)=>{snapshot[store]=rows[index].filter(row=>row?.syncState==='pending')});return snapshot}
+  async function pendingSnapshot(){if(typeof repairPersonalIds==='function')await repairPersonalIds();const snapshot={schema:6,updatedAt:new Date().toISOString()};const rows=await Promise.all(stores.map(typeof storedRows==='function'?storedRows:all));stores.forEach((store,index)=>{snapshot[store]=rows[index].filter(row=>row?.syncState==='pending')});return snapshot}
   const pendingStores=typeof localStores==='undefined'?stores:localStores;
   const readAdjustments=()=>typeof quantityAdjustments==='undefined'?Promise.resolve([]):all(quantityAdjustments);
   async function pendingRecords(){
     if(!window.SKAdminAuth?.ready?.())throw new Error('Ingresa a SK Web Admin para consultar los pendientes.');
     if(typeof db==='undefined'||!db)throw new Error('El almacenamiento local todavía está iniciando. Intenta nuevamente.');
-    const rows=await Promise.all(pendingStores.map(all));
+    const rows=await Promise.all(pendingStores.map(typeof storedRows==='function'?storedRows:all));
     return pendingStores.flatMap((store,index)=>rows[index].filter(row=>row?.syncState==='pending').map(row=>({store,row})));
   }
   async function discardPending(store,row){
@@ -25,13 +25,14 @@
       if(activePromise)await activePromise;
       if(!window.SKAdminAuth?.ready?.())throw new Error('Tu sesión cambió. Vuelve a ingresar para revisar los pendientes.');
       await new Promise((resolve,reject)=>{
-        const tx=db.transaction(store,'readwrite'),table=tx.objectStore(store),read=table.get(row.id);let failure;
+        const related=store==='assets'||assetEventStores.includes(store),tx=db.transaction(related?[store,assetProfileStore]:store,'readwrite'),table=tx.objectStore(store),read=table.get(row.id);let failure;
         read.onsuccess=()=>{
           const current=read.result;
           if(current?.syncState!=='pending'||JSON.stringify(current)!==JSON.stringify(row)){
             failure=new Error('El registro cambió o ya se sincronizó. Revisa la lista actualizada antes de descartarlo.');tx.abort();return;
           }
           // Local discard only: never send a deletion to the central database.
+          if(related)tx.objectStore(assetProfileStore).clear();
           table.delete(row.id);
         };
         tx.oncomplete=resolve;tx.onerror=()=>reject(failure||tx.error);tx.onabort=()=>reject(failure||tx.error||new Error('No se pudo descartar el registro.'));
@@ -58,7 +59,7 @@
       // Abort alone is insufficient if a browser/redirect/body reader never settles.
       // Racing the entire exchange also ignores late replies without confirming data.
       const exchange=(async()=>{
-        const r=await fetch(c.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:'sync',key:c.apiKey,token:window.SKAdminAuth?.token?.()||'',since:forceFull||collaboratorRevisionApi!==c.apiUrl?'':(localStorage.getItem('skWebServerUpdatedAt')||''),data:snapshot}),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
+        const r=await fetch(c.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:snapshot.novelties?.some(row=>row.datedNovelty)?'syncDatedNovelties':'sync',key:c.apiKey,token:window.SKAdminAuth?.token?.()||'',since:forceFull||collaboratorRevisionApi!==c.apiUrl?'':(localStorage.getItem('skWebServerUpdatedAt')||''),data:snapshot}),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
         if(!r.ok)throw new Error(`El servicio respondió ${r.status}`);
         let result;try{result=await r.json()}catch(error){if(controller.signal.aborted||error?.name==='AbortError')throw error;throw new Error('El servicio devolvió una respuesta incompleta. Pulsa la nube para reintentar.');}
         if(!result?.ok)throw new Error(result?.error||'El servicio rechazó la sincronización');return result;
@@ -93,6 +94,7 @@
     const pending=await pendingSnapshot(),adjustments=await readAdjustments(),status=document.querySelector('#syncStatus');
     const count=stores.reduce((total,store)=>total+pending[store].length,adjustments.length);
     const adjustmentError=adjustments.find(row=>row.syncError)?.syncError;
+    if(detail.waitingForServer&&pending.novelties?.some(row=>row.datedNovelty)){if(status)status.textContent='Novedades guardadas en este dispositivo. Falta actualizar Apps Script para sincronizarlas.';ui('idle');return false;}
     if(count){
       if(status)status.textContent=`Sincronización parcial · ${count} ${count===1?'registro pendiente':'registros pendientes'}; se conservan en este dispositivo.${adjustmentError?' · '+adjustmentError:''}`;
       ui('idle');if(pending.personal?.length)schedule(300);return false;
@@ -117,30 +119,42 @@
     const b=buttonStart(),s=document.querySelector('#syncStatus');
     try{
       running=true;ui('syncing');phase('Revisando los cambios guardados en este dispositivo…');
-      const snapshot=await pendingSnapshot(),hasPending=stores.some(store=>snapshot[store]?.length);
+      const snapshot=await pendingSnapshot();
+      const dated=snapshot.novelties?.filter(row=>row.datedNovelty)||[];
+      let waitingForServer=false;
       // A full response confirms each person and returns the canonical ID if the
       // document already exists centrally. A generic ACK cannot prove that.
       // Older servers do not change their shared revision after a Plaza person edit.
       // Negotiate that guarantee before trusting an unchanged snapshot.
       forceFull=forceFull||!silent||Boolean(snapshot.personal?.length)||(snapshot.assets||[]).some(row=>row.markRequest==='existing-v1'&&row.markStatus==='pending');
-      let result=await send(snapshot,forceFull,!silent);
+      let result;
+      try{result=await send(snapshot,forceFull||dated.length>0,!silent);}
+      catch(error){
+        if(!dated.length||!/solicitud no v[aá]lida/i.test(error.message))throw error;
+        // El servicio anterior rechaza la acción antes de escribir. El resto de la cola puede avanzar.
+        snapshot.novelties=snapshot.novelties.filter(row=>!row.datedNovelty);
+        waitingForServer=true;result=await send(snapshot,true,!silent);
+      }
+      const hasPending=stores.some(store=>snapshot[store]?.length);
       const valid=result=>result&&(result.notModified||result.acknowledged||(result.data&&typeof result.data==='object'&&!Array.isArray(result.data)));
       if(!valid(result)||(result.notModified&&hasPending)){localStorage.removeItem('skWebServerUpdatedAt');result=await send(snapshot,true,!silent)}
       if(!valid(result))throw new Error('El servicio no devolvió la confirmación de sincronización');
       if(result.notModified&&hasPending)throw new Error('El servicio no confirmó los cambios pendientes');
+      if(dated.length&&!waitingForServer&&dated.some(row=>!result.data?.novelties?.some(remote=>remote.id===row.id&&remote.datedNovelty&&typeof remote.historyOnly==='boolean')))
+        throw new Error('La base central aún no confirmó las novedades fechadas. Se conservan pendientes.');
       confirmPersonal(snapshot,result);
       confirmAssetMarkRequests(snapshot,result);
       collaboratorRevisionApi=result.capabilities?.collaboratorRevisionsV1===true?config().apiUrl:'';
       const serverUpdatedAt=result.updatedAt||result.data?.updatedAt||'';
       if(result.notModified){
         if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
-        return await finishSync('Sincronizado · sin cambios',{notModified:true});
+        return await finishSync('Sincronizado · sin cambios',{notModified:true,waitingForServer});
       }
       if(result.acknowledged){
         phase('Confirmando los registros guardados…');await markSnapshotSynced(snapshot);phase('Actualizando las listas…');await refresh();window.SKInventoryAdmin?.render?.();
         if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
         window.dispatchEvent(new Event('skweb-inventory-refresh'));
-        return await finishSync('Sincronizado rápidamente',{acknowledged:true});
+        return await finishSync('Sincronizado rápidamente',{acknowledged:true,waitingForServer});
       }
       const merged=result.data,localAssetIds=new Set((await all('assets')).map(x=>x.id).filter(Boolean)),mergedAssetIds=new Set((merged.assets||[]).map(x=>x.id));
       for(const [store,rows] of Object.entries(merged))if(Array.isArray(rows))merged[store]=rows.map(row=>row?.syncState==='pending'?{...row,syncState:'synced'}:row);
@@ -149,7 +163,7 @@
       phase('Aplicando la respuesta en este dispositivo…');await window.writeSyncedSnapshot(merged,snapshot);await seedParts();phase('Actualizando las listas…');await refresh();window.SKInventoryAdmin?.render?.();
       if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
       window.dispatchEvent(new Event('skweb-inventory-refresh'));
-      return await finishSync('Sincronizado automáticamente',{});
+      return await finishSync('Sincronizado automáticamente',{waitingForServer});
     }catch(e){
       retryAfter=Date.now()+60000;console.error('SK Web automatic sync:',e);ui('error');
       if(s)s.textContent=navigator.onLine?'Sincronización pendiente · '+(e?.message||e):'Sin conexión · cambios seguros en este dispositivo';

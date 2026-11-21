@@ -69,3 +69,12 @@ test('exige sesión iniciada y valida la tabla antes de modificar datos',async()
   const c=await client(),row=pending('safe');await c.raw('actas',row);await assert.rejects(c.api.discardPending('unknown',row),/válido/);
   c.logout();await assert.rejects(c.api.pendingRecords(),/Ingresa/);await assert.rejects(c.api.discardPending('actas',row),/Ingresa/);assert.deepEqual(await c.rows('actas'),[row]);
 });
+test('un servidor anterior conserva novedades fechadas en cola y confirma los demás registros',async()=>{
+ const c=await client({online:true,respond:request=>request.action==='syncDatedNovelties'
+  ?{ok:false,error:'Solicitud no válida'}:{ok:true,data:{assets:[],novelties:[],actas:[{id:'acta',syncState:'synced'}]}}});
+ await c.raw('novelties',pending('historia',{assetId:'yt',datedNovelty:true}));await c.raw('actas',pending('acta'));
+ assert.equal(await c.api.sync({silent:true}),false);
+ assert.deepEqual(c.requests.map(r=>r.action),['syncDatedNovelties','sync']);
+ assert.equal(c.requests[1].data.novelties.length,0);assert.equal((await c.rows('novelties'))[0].syncState,'pending');
+ assert.equal((await c.rows('actas'))[0].syncState,'synced');assert.match(c.status.textContent,/Apps Script/);
+});
