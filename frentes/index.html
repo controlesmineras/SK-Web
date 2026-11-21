@@ -6,7 +6,7 @@
 <link rel="stylesheet" href="app.css"><link rel="stylesheet" href="../date-calendar.css">
 <script defer src="../sync-config.js"></script><script defer src="../date-calendar.js"></script><script defer data-options-only src="../form-option-catalog.js"></script><script defer src="store.js"></script><script defer src="app.js"></script>
 </head><body>
-<header><div class="bar"><div class="brand"><img src="./labor.svg" alt="" width="48" height="48"><span>ASOCIACIÓN MINERA<strong>SK 3.7</strong></span></div><div id="sessionActions" hidden><button id="sync" type="button">Sincronizar</button><button type="button" id="logout">Salir</button></div></div></header>
+<header><div class="bar"><div class="brand"><img src="./labor.svg" alt="" width="48" height="48"><span>ASOCIACIÓN MINERA<strong>SK 3.7</strong></span></div><div id="sessionActions" hidden><button type="button" id="logout">Salir</button></div></div></header>
 <main>
 <section id="login" class="login card">
 <p class="sectionLabel">Registro operativo</p><h1>Labor</h1>
@@ -15,7 +15,8 @@
 <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
 <button class="primary">Ingresar</button><p id="loginMessage" role="status"></p></form></section>
 <section id="workspace" hidden>
-<div class="pageTitle"><div><p class="sectionLabel" id="account"></p><h1>Labor</h1></div><span id="connection" class="pill"></span></div>
+<div class="accountBar"><p class="sectionLabel" id="account"></p><button id="sync" type="button">Sincronizar</button></div>
+<div class="pageTitle"><h1>Labor</h1><span id="connection" class="pill"></span></div>
 <nav aria-label="Reportes"><button id="newTab" aria-current="page">Nuevo reporte</button><button id="historyTab">Mis reportes <span id="badge"></span></button></nav>
 <p id="syncMessage" role="status"></p><p id="notice" role="status"></p>
 <section id="editor" class="card"><h2 id="editorTitle">Nuevo reporte</h2>
