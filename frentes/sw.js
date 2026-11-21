@@ -1,5 +1,5 @@
-const CACHE='sk-frentes-1';
-const shell=['./','./index.html','./app.js','./store.js','./app.css','./manifest.webmanifest','../sync-config.js','../date-calendar.js','../date-calendar.css','../form-option-catalog.js','../icons/icon-180.png','../icons/icon-192.png','../icons/icon-512.png'];
+const CACHE='sk-frentes-2-labor';
+const shell=['./','./index.html','./app.js','./store.js','./app.css','./manifest.webmanifest','../sync-config.js','../date-calendar.js','../date-calendar.css','../form-option-catalog.js','./labor.svg','./labor-180.png','./labor-192.png','./labor-512.png'];
 const urls=new Set(shell.map(path=>new URL(path,self.registration.scope).href));
 self.addEventListener('install',event=>event.waitUntil(caches.open(CACHE).then(cache=>cache.addAll(shell.map(path=>new Request(path,{cache:'reload'})))).then(()=>self.skipWaiting())));
 self.addEventListener('activate',event=>event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(key=>key.startsWith('sk-frentes-')&&key!==CACHE).map(key=>caches.delete(key)))).then(()=>self.clients.claim())));

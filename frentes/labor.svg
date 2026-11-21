@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <title>Labor · casco minero con linterna</title>
+  <rect width="128" height="128" rx="24" fill="#10283a"/>
+  <path d="M22 81c1-23 12-41 31-47l2 29h6l-2-34h12l-1 34h6l2-29c18 7 28 23 29 47z" fill="#fff"/>
+  <path d="M23 76q41-8 82 0l2 8H21z" fill="#b4c9d5"/>
+  <path d="M16 86q47-9 96 0v7q-45 10-96 0z" fill="#fff"/>
+  <rect x="47" y="48" width="34" height="31" rx="9" fill="#173d59"/>
+  <circle cx="64" cy="63" r="13" fill="#f6c344"/>
+  <circle cx="64" cy="63" r="8" fill="#fff3c6"/>
+  <path d="M59 62q1-4 5-5" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round"/>
+</svg>
