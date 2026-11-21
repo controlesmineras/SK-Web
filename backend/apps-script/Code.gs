@@ -14,7 +14,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(q.action!=='sync'||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Invitaciones de un solo uso: el enlace contiene un secreto aleatorio, nunca una contraseña.
 function invitationKey_(token){return 'SK_INVITE_'+hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token),Utilities.Charset.UTF_8))}
@@ -312,11 +312,40 @@ function prepareAssistantAsset_(row,cloud,known,auth){
 function prepareAdminNovelties_(incoming,cloud,auth){
  const pending=name=>(Array.isArray(incoming[name])?incoming[name]:[]).filter(row=>row&&row.id&&row.syncState==='pending');
  const novelties=pending('novelties'),assets=pending('assets'),limited=auth&&!isAdmin_(auth);
+ // Los clientes anteriores adjuntaban una copia completa del activo en la misma escritura.
+ const dated=novelties.filter(row=>row.datedNovelty||row.fechaNovedad&&row.horaNovedad);
+ const datedIds=new Set(dated.map(row=>row.assetId));
+ const histories=new Map(),profiles=new Map(),rules=createAssetHistory();
+ for(const name of ['novelties','blendingIncomes','blendingDeliveries']){
+  for(const row of dated.length&&cloud[name]||[]){
+   if(!row||!datedIds.has(row.assetId))continue;
+   if(!histories.has(row.assetId))histories.set(row.assetId,{personal:cloud.personal||[]});
+   const group=histories.get(row.assetId);(group[name]||(group[name]=[])).push(row);
+  }
+ }
  const visorChange=value=>cargoNorm_(value)==='cambio de color del visor';
  const assetMap=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
  const historical=new Map((cloud.novelties||[]).filter(Boolean).map(row=>[row.id,row]));
  const documents=new Map((cloud.actas||[]).filter(row=>row&&!row.deleted).map(row=>[row.id,row]));pending('actas').forEach(row=>{if(!row.deleted)documents.set(row.id,row)});
  const patches=new Map(),accepted=[],assetIds=new Set();
+ for(const row of assets){
+  const old=assetMap.get(row.id);
+  if(old&&dated.some(event=>!event.datedNovelty&&event.assetId===row.id&&event.updatedAt===row.updatedAt)){
+   for(const key of ['estado','ubicacion','areaAsignada','estadoVisor']){
+    if(key in old)row[key]=old[key];else delete row[key];
+   }
+  }
+  if(old?.currentNoveltyId&&datedIds.has(row.id)&&row.currentNoveltyId!==old.currentNoveltyId){
+   const incomingDate=(row.fechaNovedad||'')+' '+(row.horaNovedad||'00:00');
+   const currentDate=(old.fechaNovedad||'')+' '+(old.horaNovedad||'00:00');
+   if(incomingDate<=currentDate){
+    for(const key of ['currentNoveltyId','fechaNovedad','horaNovedad','descripcionNovedad','estado','ubicacion','areaAsignada','areaAsignadaRevision','estadoVisor','nombreResponsable','documentoResponsable','nombreBodeguero','documentoBodeguero','asignadaId','disponibleEntrega']){
+     if(key in old)row[key]=old[key];else delete row[key];
+    }
+   }
+  }
+  if(!limited)patches.set(row.id,row);
+ }
  if(limited)assets.forEach(row=>{
   if(assetIds.has(row.id))throw new Error('El lote contiene un activo repetido');
   assetIds.add(row.id);
@@ -329,7 +358,7 @@ function prepareAdminNovelties_(incoming,cloud,auth){
   }
   patches.set(row.id,row);
  });
- novelties.slice().sort((a,b)=>stamp_(a)-stamp_(b)).forEach(row=>{
+ novelties.slice().sort((a,b)=>stamp_(a)-stamp_(b)||String(a.occurredAt||'').localeCompare(String(b.occurredAt||''))).forEach(row=>{
   const asset=assetMap.get(row.assetId)||(!limited&&assets.find(item=>item.id===row.assetId));
   row.descripcion=String(row.descripcion||'').replace(/\s*\([^()]*\)\s*$/,'').trim();if(/^dad[oa](?:\/[oa])? de baja$/.test(cargoNorm_(row.estado)))row.ubicacion='Desechado/a';const visor=visorChange(row.descripcion),previous=historical.get(row.id);
   if(limited&&previous){
@@ -343,7 +372,28 @@ function prepareAdminNovelties_(incoming,cloud,auth){
    if(!String(row.estadoVisor||'').trim())throw new Error('Selecciona el color del visor');
   }else if(row.estadoVisor)throw new Error('El color del visor requiere la novedad Cambio de color del visor');
   if(/^(?:dada|dado) de baja mediante acta$/.test(cargoNorm_(row.descripcion))&&!previous){const document=documents.get(row.actaId);if(!document||document.tipo==='OFICIO'||!String(document.consecutivo||'').trim())throw new Error('Selecciona un acta registrada para dar de baja el activo');row.actaNumero=document.consecutivo;row.actaEnlace=/^https?:\/\//i.test(String(document.enlace||''))?document.enlace:'';}else if(!/^(?:dada|dado) de baja mediante acta$/.test(cargoNorm_(row.descripcion))){delete row.actaId;delete row.actaNumero;delete row.actaEnlace;}
-  if(!limited)return;
+  if(row.datedNovelty||row.fechaNovedad&&row.horaNovedad){
+   if(previous){accepted.push(Object.assign({},previous,{syncState:'pending'}));return;}
+   const day=String(row.fechaNovedad||''),time=String(row.horaNovedad||'');
+   const occurred=new Date(day+'T'+time+':00-05:00');
+   if(!/^\d{4}-\d{2}-\d{2}$/.test(day)||!/^\d{2}:\d{2}$/.test(time)||!Number.isFinite(occurred.getTime()))throw new Error('Fecha u hora de novedad inválida.');
+   const local=rules.localTime(occurred.toISOString());
+   if(local.date!==day||local.time!==time)throw new Error('Fecha u hora de novedad inválida.');
+   if(!asset||asset.deleted||patches.get(asset.id)?.deleted)throw new Error('El activo de la novedad ya no está disponible.');
+   const base=choose_(patches.get(asset.id),asset);
+   const current=profiles.get(asset.id)||rules.project(base,histories.get(asset.id)||{}).asset;
+   const event=Object.assign({},row,{datedNovelty:true,occurredAt:occurred.toISOString()});
+   if(limited)Object.assign(event,{registeredBy:auth.username,registeredByName:auth.name||auth.username});
+   const updated=rules.applyDatedNovelty(current,event);
+   event.historyOnly=!updated;
+   if(visor){delete event.estadoVisorAnterior;if(updated&&current.estadoVisor)event.estadoVisorAnterior=current.estadoVisor;}
+   if(updated){
+    updated.updatedAt=nextRevision_(base.updatedAt||base.createdAt);updated.syncState='pending';
+    patches.set(asset.id,updated);profiles.set(asset.id,updated);
+   }
+   accepted.push(event);historical.set(event.id,event);return;
+  }
+  if(!limited){accepted.push(row);return;}
   const novelty=Object.assign({},row,{registeredBy:auth.username,registeredByName:auth.name||auth.username});
   accepted.push(novelty);
   const current=patches.get(asset.id)||asset;
@@ -353,7 +403,7 @@ function prepareAdminNovelties_(incoming,cloud,auth){
    patches.set(asset.id,patch);
   }
  });
- if(!limited)return incoming;
+ if(!limited&&!dated.length)return incoming;
  return Object.assign({},incoming,{novelties:accepted,assets:Array.from(patches.values())});
 }
 
@@ -453,6 +503,7 @@ function adminSync_(incoming,since,auth){
   const id=findFile_(),cloud=id?readFile_(id,lock):{},baseUpdatedAt=cloud.updatedAt||'',changes={},recovered=completePendingAssetMarks_(cloud);
   validateLastActaDeletion_(incoming||{},cloud,auth);
   validateActaStatus_(incoming||{},cloud,auth);
+  const editedAssets=new Set((incoming.assets||[]).filter(row=>row?.syncState==='pending').map(row=>row.id));
   incoming=prepareAdminNovelties_(incoming,cloud,auth);
   const hasPending=Object.keys(incoming||{}).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.id&&x.syncState==='pending'));
   if(!hasPending){
@@ -472,7 +523,8 @@ function adminSync_(incoming,since,auth){
   const numberingRows=(cloud.assets||[]).slice();for(const row of changes.assets||[]){if(row.classNumberPolicy==='auto-v1'&&automaticClassNumberEligible_(row.clase)&&!row.deleted){row.numeroClase=automaticClassNumber_(numberingRows,row);row.numeroYT=row.numeroClase;const index=numberingRows.findIndex(old=>old.id===row.id);if(index>=0)numberingRows[index]=row;else numberingRows.push(row)}}
   const criterionRows=new Map((cloud.inventoryCriteria||[]).map(row=>[row.id,row]));
   for(const row of changes.inventoryCriteria||[])criterionRows.set(row.id,choose_(row,criterionRows.get(row.id)));
-  validateAssetSerials_(cloud.assets||[],changes.assets||[],Array.from(criterionRows.values()));
+  // Una novedad por sí sola no modifica el serial de una ficha histórica.
+  validateAssetSerials_(cloud.assets||[],(changes.assets||[]).filter(row=>editedAssets.has(row.id)),Array.from(criterionRows.values()));
   const marking=assignAssetMarks_(cloud,changes.assets||[],auth);if(changes.assets)changes.assets=marking.assets;delete changes.assetMarkRegistry;
   const merged=merge_(cloud,changes);if(marking.registry.length)merged.assetMarkRegistry=marking.registry;writeFile_(id,merged);
   if(!recovered&&since&&baseUpdatedAt===since&&!marking.changed&&!marking.assets.some(asset=>asset.markingPolicy==='letters-v1'))return json_({ok:true,capabilities:collaboratorSyncCapabilities_(),acknowledged:true,updatedAt:merged.updatedAt});
@@ -1363,4 +1415,126 @@ function productionWarehouseSync_(q){
   const catalogChanged=q.catalogRevision!==catalogRevision;
   return json_({ok:true,protocol:'production-warehouse-v1',shiftKeeperV1:true,reset,cursor:revision,rows,receipts,balances,settings:productionWarehouseSettings_(),roles:productionRoles_(user),catalogRevision,...(catalogChanged?{catalog:{criteria,personal:(central.personal||[]).filter(row=>!row.deleted&&row.active!==false).map(row=>({id:row.id,nombre:row.nombre,documento:row.documento,empresa:row.empresa})),assets}}:{}),syncedAt:new Date().toISOString()});
  }finally{lock.releaseLock()}
+}
+
+// Copia para Apps Script de asset-history.js. La prueba de paridad comprueba el módulo completo.
+function createAssetHistory(){
+ 'use strict';
+ const text=value=>String(value??'').trim();
+ const norm=value=>text(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
+ const millis=value=>Date.parse(value)||0;
+ const reversed=row=>!!(row.reversed||row.reversado||row.reversedAt);
+ const retired=asset=>/dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`);
+ const inventoryLocation=area=>text(area)?'Inventario de '+text(area):'Inventario de área por confirmar';
+ function assignmentArea(row,receiver){return text(row.destinationArea)||(/^Inventario de (.+)$/i.exec(text(row.destination))?.[1]||'')||receiver?.area||'';}
+ function assignmentLocation(row,receiver){
+  if(row.destinationArea)return inventoryLocation(row.destinationArea);
+  const destination=text(row.destination);
+  return !destination||['operacion','bodega de superficie'].includes(norm(destination))?inventoryLocation(assignmentArea(row,receiver)):destination;
+ }
+ function localTime(value){
+  if(!millis(value))return {date:'',time:''};
+  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value)).map(p=>[p.type,p.value]));
+  return {date:`${parts.year}-${parts.month}-${parts.day}`,time:`${parts.hour}:${parts.minute}`};
+ }
+ function eventTime(row){
+  if(millis(row.occurredAt))return row.occurredAt;
+  if(/^\d{4}-\d{2}-\d{2}$/.test(text(row.fechaNovedad))){const value=row.fechaNovedad+'T'+(row.horaNovedad||'00:00')+'-05:00';if(millis(value))return value;}
+  return row.createdAt||''; // updatedAt is a synchronization/edit time, not the event time.
+ }
+ function person(people,id,document,name,area='',cargo=''){
+  document=text(document);name=text(name);
+  // Older manual novelties snapshot the option label as "document - name".
+  const match=name.match(/^([\d. -]+?)\s+-\s+(.+)$/);
+  if(match){document=document||match[1].trim();name=match[2].trim();}
+  const found=(document&&people.find(p=>text(p.documento)===document))||people.find(p=>id&&text(p.id)===text(id)&&(!document||text(p.documento)===document));
+  return {id:text(id||found?.id),document:document||text(found?.documento),name:name||text(found?.nombre),area:text(area||found?.area),cargo:text(cargo||found?.cargo)};
+ }
+ function warehouse(row,people,manual=false){
+  if(manual)return person(people,row.bodegueroId,row.documentoBodeguero,row.bodegueroNombre||row.nombreBodeguero);
+  const doc=text(row.actorDocument||row.operatorDocument),mismatch=row.actorDocument&&row.operatorDocument&&text(row.actorDocument)!==text(row.operatorDocument);
+  return person(people,mismatch?'':row.operatorId,doc,mismatch?'':row.operatorName);
+ }
+ function timeline(data={},assetId){
+  const people=data.personal||[],entries=new Map();let order=0;
+  for(const source of ['novelties','blendingIncomes','blendingDeliveries'])for(const row of data[source]||[]){
+   if(!row||row.deleted||!row.assetId||(assetId&&text(row.assetId)!==text(assetId)))continue;
+   const manual=source==='novelties',income=source==='blendingIncomes',back=norm(row.movementType)==='devolucion';
+   const kind=manual?'novelty':income?'income':back?'return':norm(row.deliveryType)==='prestamo'?'loan':'assignment';
+   const at=back?(row.returnedAt||row.createdAt||''):manual?eventTime(row):row.createdAt||'';
+   const responsible=manual?person(people,row.responsableId,row.documentoResponsable,row.responsableNombre||row.nombreResponsable):income?person(people,row.broughtById,row.broughtByDocument,row.broughtByName):back?person(people,row.returnedById,row.returnedByDocument,row.returnedByName):person(people,row.recipientId,row.recipientDocument,row.recipientName,row.recipientArea,row.recipientCargo);
+   const title=manual?(row.descripcion||'Novedad'):income?'Ingreso a bodega':back?'Devolución de préstamo':kind==='loan'?'Préstamo':'Asignación';
+   const key=source+':'+(row.id||[row.assetId,at,row.recipientId,row.broughtById,row.descripcion].join('|'));
+   const entry={key,order:++order,assetId:row.assetId,source,kind,title,at,epoch:millis(at),...localTime(at),responsible,warehouse:warehouse(row,people,manual),location:manual?row.ubicacion||'':income||back?'Bodega de Superficie':row.destination||'Operación',state:manual?row.estado||'':'',reversed:reversed(row),pending:row.syncState==='pending',raw:row};
+   const previous=entries.get(key);
+   if(!previous||millis(row.updatedAt)>=millis(previous.raw.updatedAt))entries.set(key,entry);
+  }
+  return [...entries.values()].sort((a,b)=>b.epoch-a.epoch||b.order-a.order);
+ }
+ function damaged(asset){return /^(?:averiado|averiada|averiado\/a)$/.test(norm(asset?.estado));}
+ function operationStatus(asset){return damaged(asset)?'No':'Sí';}
+ function latestIncomeNote(asset,data){
+  const event=timeline(data,asset.id).find(entry=>entry.kind==='income'&&!entry.reversed&&!entry.raw.reversalOf&&norm(entry.raw.movementType)!=='reversion');
+  return text(event?.raw.notes);
+ }
+ // La fecha de captura/sincronización nunca decide qué novedad ocupa la ficha.
+ function applyDatedNovelty(asset,row){
+  const day=text(row.fechaNovedad),time=text(row.horaNovedad),priorDay=text(asset.fechaNovedad);
+  if(row.historyOnly||!day||day<priorDay||(day===priorDay&&time<=text(asset.horaNovedad||'00:00').slice(0,5)))return null;
+  const result={...asset,fechaNovedad:day,horaNovedad:time,descripcionNovedad:row.descripcion,currentNoveltyId:row.id};
+  const fields={estado:'estado',ubicacion:'ubicacion',areaAsignada:'areaAsignada',estadoVisor:'estadoVisor',
+   responsableNombre:'nombreResponsable',documentoResponsable:'documentoResponsable',
+   bodegueroNombre:'nombreBodeguero',documentoBodeguero:'documentoBodeguero'};
+  for(const [source,target] of Object.entries(fields))if(text(row[source]))result[target]=text(row[source]);
+  if(text(row.areaAsignada))result.areaAsignadaRevision={value:result.areaAsignada,at:eventTime(row)};
+  result.disponibleEntrega=operationStatus(result);
+  return result;
+ }
+ function project(asset,data){
+  const events=timeline(data,asset.id);
+  // Las novedades fechadas confirmadas ya se aplicaron a la ficha en el servidor.
+  const active=events.filter(e=>!e.reversed&&!e.raw.datedNovelty&&!e.raw.historyOnly);
+  let latest=active[0],result={...asset};
+  // A previously displayed source event is not an independent manual snapshot.
+  // This also lets a reversal fall back to the preceding valid event after an owner saved the form.
+  const linkedSnapshot=!asset.currentNoveltyId&&events.some(e=>!e.raw.datedNovelty&&!e.raw.historyOnly&&e.date===asset.fechaNovedad&&e.time===asset.horaNovedad&&norm(e.title)===norm(asset.descripcionNovedad));
+  const snapshotTime=!linkedSnapshot&&asset.fechaNovedad?millis(eventTime(asset)):0;
+  const coversSnapshot=epoch=>asset.currentNoveltyId?Math.floor(epoch/60000)>Math.floor(snapshotTime/60000):epoch>=snapshotTime;
+  if(latest&&latest.epoch&&coversSnapshot(latest.epoch)){
+   Object.assign(result,{fechaNovedad:latest.date,horaNovedad:latest.time,descripcionNovedad:latest.title,documentoResponsable:latest.responsible.document,nombreResponsable:latest.responsible.name,documentoBodeguero:latest.warehouse.document,nombreBodeguero:latest.warehouse.name});
+   if(!retired(asset)&&latest.location)result.ubicacion=latest.kind==='assignment'?assignmentLocation(latest.raw,latest.responsible):latest.location;
+
+   if(asset.currentNoveltyId)delete result.currentNoveltyId;
+   // Keep the stored physical state: an assignment by itself does not certify operability.
+  }
+  if(!latest&&linkedSnapshot)Object.assign(result,{fechaNovedad:'',horaNovedad:'',descripcionNovedad:'',documentoResponsable:'',nombreResponsable:'',documentoBodeguero:'',nombreBodeguero:''});
+  const movement=active.find(e=>e.kind!=='novelty');
+  let assigned=null;
+  if(movement&&coversSnapshot(movement.epoch)){
+   const backInWarehouse=norm(result.ubicacion)==='bodega de superficie';
+   if(movement.kind==='assignment'&&!retired(asset)&&!backInWarehouse){assigned={...movement.responsible,area:assignmentArea(movement.raw,movement.responsible)};result.asignadaId=assigned.id;result.areaAsignada=assigned.area||asset.areaAsignada||'';}
+   else if(['income','return'].includes(movement.kind)||retired(asset)||backInWarehouse){assigned={id:'',document:'',name:'',area:'',cargo:''};result.asignadaId='';result.areaAsignada='';}
+  }
+  // La asignación explícita de una novedad prevalece hasta el siguiente movimiento.
+  // Se deriva del historial también cuando un auxiliar sincroniza con un servidor anterior.
+  const areaEvent=active.find(event=>['assignment','income','return'].includes(event.kind)||(event.kind==='novelty'&&text(event.raw.areaAsignada)));
+  if(areaEvent?.kind==='novelty'&&coversSnapshot(areaEvent.epoch)&&!retired(result)){
+   result.areaAsignada=text(areaEvent.raw.areaAsignada);
+  }
+  // Guardar una edición de la ficha no debe recuperar después un área histórica.
+  const areaRevision=asset.areaAsignadaRevision;
+  if(areaRevision&&millis(areaRevision.at)>0&&millis(areaRevision.at)>=(areaEvent?.epoch||0)&&!retired(result))result.areaAsignada=text(areaRevision.value);
+  if(asset.currentNoveltyId&&(!latest||!coversSnapshot(latest.epoch)))
+   latest=events.find(event=>event.raw.id===asset.currentNoveltyId);
+  const pending=events.filter(e=>e.raw.datedNovelty&&e.pending&&!e.raw.historyOnly&&!e.reversed)
+   .sort((a,b)=>millis(a.raw.createdAt)-millis(b.raw.createdAt)||a.epoch-b.epoch||a.order-b.order);
+  for(const entry of pending){
+   const updated=applyDatedNovelty(result,entry.raw);
+   if(updated){result=updated;latest=entry;}
+  }
+  result.disponibleEntrega=operationStatus(result);
+  return {asset:result,events,latest,assigned};
+ }
+ function available(asset,data){const current=project(asset,data).asset;return !current.deleted&&!retired(current)&&norm(current.ubicacion)==='bodega de superficie';}
+ return {timeline,project,applyDatedNovelty,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
 }

@@ -25,7 +25,13 @@ function mountActaField(){
 function updateActaField(form){
  mountActaField();const active=isRetirement(form.elements.descripcion.value),select=form.elements.actaId,label=document.querySelector('#novActaField'),preview=document.querySelector('#novActaPreview');if(!select)return;
  label.hidden=!active;label.style.display=active?'':'none';preview.hidden=!active;select.disabled=!active;select.required=active;
- if(!active){select.value='';preview.replaceChildren();return}
+ const state=form.elements.estado;
+ if(!active){
+  select.value='';preview.replaceChildren();
+  if(state.dataset.beforeActa!==undefined){state.value=state.dataset.beforeActa;delete state.dataset.beforeActa;}
+  return;
+ }
+ if(state.dataset.beforeActa===undefined)state.dataset.beforeActa=state.value;
  const current=select.value;select.replaceChildren(new Option('Seleccionar acta registrada…',''),...actaRows.map(row=>new Option('Acta N.º '+row.consecutivo+' · '+(row.fecha||'Sin fecha')+' · '+(row.motivo||row.area||''),row.id)));select.value=current;
  select.dispatchEvent(new Event('change'));
  form.elements.estado.value=isRescuer(selectedAsset)?'Dado de baja':'Dado/a de baja';
@@ -67,23 +73,25 @@ async function update(){
   if(ticket!==generation||assetId!==form.elements.assetId.value)return;
   const asset=assets.find(row=>row.id===assetId&&!row.deleted),changed=selectedAsset?.id!==asset?.id;
   selectedAsset=asset||null;
-  const assigned=form.elements.areaAsignada,currentArea=changed?(asset?window.SKAssetHistory.project(asset,historyData).asset.areaAsignada||'':''):assigned.value;
+  const visible=asset&&window.SKAssetHistory.project(asset,historyData).asset;
+  const assigned=form.elements.areaAsignada,currentArea=changed?'':assigned.value;
   const areas=window.SKAssetRules.assignmentAreas(window.SKFormOptions?.values?.('personal.area'));
   if(currentArea&&!areas.includes(currentArea))areas.push(currentArea);
-  fill(assigned,areas,currentArea,'Conservar asignación actual');
+  fill(assigned,areas,currentArea,visible?.areaAsignada?'Sin cambio · '+visible.areaAsignada:'Sin cambio');
   const catalog=window.SKFormOptions?.values('novelty.description')||['Revista física','Encontrada abandonada','Dada de baja mediante acta'];
   const descriptions=catalog.filter(value=>!isVisorChange(value));
   if(isRescuer(asset))descriptions.push(VISOR_CHANGE);
   fill(form.elements.descripcion,descriptions,form.elements.descripcion.value,'Seleccionar novedad…');
   fill(form.elements.estadoVisor,colors(),changed?'':form.elements.estadoVisor.value,'Seleccionar color…');
   const states=window.SKFormOptions?.values(isRescuer(asset)?'asset.state.autorrescatador':'asset.state.standard')||[];
-  const current=changed?asset?.estado||'':form.elements.estado.value;
+  const current=changed?'':form.elements.estado.value;
   // Conservar el estado histórico aunque haya sido retirado del catálogo.
   if(current&&!states.includes(current))states.push(current);
-  fill(form.elements.estado,states,current,'Seleccionar estado…');
+  fill(form.elements.estado,states,current,visible?.estado?'Sin cambio · '+visible.estado:'Sin cambio');
   const locations=document.querySelector('#novLocationOptions');
   if(locations){const values=window.SKFormOptions?.values('asset.location')||['Bodega de Superficie','Bodega de Producción-N. 4','Socavón','Extraviado'];const choices=[...new Set([...values,asset?.ubicacion].filter(Boolean))];locations.replaceChildren(...choices.map(value=>new Option(value,value)));}
-  if(changed){form.elements.ubicacion.readOnly=false;delete form.elements.ubicacion.dataset.beforeRetirement;form.elements.ubicacion.value=asset?.ubicacion||'';}
+  if(changed){delete form.elements.estado.dataset.beforeActa;form.elements.ubicacion.readOnly=false;delete form.elements.ubicacion.dataset.beforeRetirement;form.elements.ubicacion.value='';}
+  form.elements.ubicacion.placeholder=visible?.ubicacion?'Sin cambio · '+visible.ubicacion:'Sin cambio';
   updateFields();
   window.SKAssetHistoryUI?.select('novelty',assetId).catch(console.error);
 }
@@ -92,8 +100,8 @@ async function save(event){
   const form=event.target;if(!window.SKAdminAuth?.canView?.('novelties'))return;
   saving=true;const button=form.querySelector('button[type="submit"],button:not([type])');if(button)button.disabled=true;
   try{
-    const data=fd(form);data.descripcion=noveltyText(data.descripcion);if(!data.descripcion)throw new Error('Selecciona la novedad.');const asset=(await all('assets')).find(row=>row.id===data.assetId&&!row.deleted);
-    if(!asset)throw new Error('Selecciona un activo.');
+    const data=fd(form);data.descripcion=noveltyText(data.descripcion);if(!data.descripcion)throw new Error('Selecciona la novedad.');const asset=data.assetId&&await idbResult(db.transaction('assets').objectStore('assets').get(data.assetId));
+    if(!asset||asset.deleted)throw new Error('Selecciona un activo.');
     if(isRetirement(data.descripcion)){const acta=(await all('actas')).find(row=>row.id===data.actaId&&validActa(row));if(!acta)throw new Error('Selecciona un acta de Registro de documentos.');data.actaNumero=acta.consecutivo;data.actaEnlace=safeActaUrl(acta.enlace);data.estado=isRescuer(asset)?'Dado de baja':'Dado/a de baja'}else{delete data.actaId;delete data.actaNumero;delete data.actaEnlace}
     if(isRetiredState(data.estado))data.ubicacion='Desechado/a';
     const visor=isVisorChange(data.descripcion);
@@ -103,18 +111,25 @@ async function save(event){
     const date=new Date(data.fechaNovedad+'T'+data.horaNovedad+':00-05:00'),meta=mark();
     if(!/^\d{4}-\d{2}-\d{2}$/.test(data.fechaNovedad)||!/^\d{2}:\d{2}$/.test(data.horaNovedad)||!Number.isFinite(date.getTime()))throw new Error('Selecciona la fecha y hora de la novedad.');
     const novelty={...meta,...data,occurredAt:date.toISOString(),fechaLocal:date.toLocaleDateString('es-CO',{timeZone:'America/Bogota'}),horaLocal:date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota'})};
-    if(visor)novelty.estadoVisorAnterior=asset.estadoVisor||'';
-    const updated={...asset,ubicacion:data.ubicacion,estado:data.estado,updatedAt:meta.updatedAt,syncState:'pending'};
-    if(data.areaAsignada)updated.areaAsignada=data.areaAsignada;
-    else delete novelty.areaAsignada; // Una novedad antigua o sin selección conserva su asignación.
-    if(visor)updated.estadoVisor=data.estadoVisor;
-    await new Promise((resolve,reject)=>{
-      const tx=db.transaction(['novelties','assets'],'readwrite');
-      tx.objectStore('novelties').put(novelty);tx.objectStore('assets').put(updated);
-      tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('No se pudo guardar la novedad.'));
-    });
+    novelty.datedNovelty=true;
+    for(const field of Object.keys(data))if(!String(data[field]??'').trim())delete novelty[field];
+    // Solo la novedad entra en la cola. El servidor compara con su propia ficha.
+    const tx=db.transaction(assetProfileTables,'readwrite');
+    const committed=new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||new Error('No se pudo guardar la novedad.'));});
+    const saveRow=async()=>{
+      const stored=await idbResult(tx.objectStore('assets').get(asset.id));
+      if(!stored||stored.deleted)throw new Error('El activo ya no está disponible.');
+      const current=await currentAssetProfile(tx,stored);
+      const updated=window.SKAssetHistory.applyDatedNovelty(current,novelty);
+      novelty.historyOnly=!updated;
+      tx.objectStore(assetProfileStore).put(updated||current);
+      if(visor&&!novelty.historyOnly&&current.estadoVisor)novelty.estadoVisorAnterior=current.estadoVisor;
+      await idbResult(tx.objectStore('novelties').add(novelty));
+    };
+    await Promise.all([committed,saveRow().catch(error=>{try{tx.abort()}catch{} throw error;})]);
     form.reset();selectedAsset=null;await refresh();await update();
-    const status=document.querySelector('#noveltySaveStatus');status.hidden=false;status.textContent='✓ Novedad guardada correctamente.';
+    const status=document.querySelector('#noveltySaveStatus');status.hidden=false;
+    status.textContent=novelty.historyOnly?'✓ Novedad guardada solo en el historial.':'✓ Novedad guardada. Ficha actualizada en este dispositivo.';
     window.skSyncApi?.schedule?.(300);
   }catch(error){alert(error.message||'No se pudo guardar la novedad.');}
   finally{saving=false;if(button)button.disabled=false;}
@@ -172,7 +187,7 @@ function installNoveltyMenu(){
 }
 installNoveltyMenu();
 
-const noveltyForm=document.querySelector('#noveltyForm');if(noveltyForm){noveltyForm.elements.ubicacion.closest('label').before(noveltyForm.elements.estado.closest('label'));noveltyForm.elements.estado.addEventListener('change',updateRetiredLocation);noveltyForm.addEventListener('reset',()=>{noveltyForm.elements.ubicacion.readOnly=false;delete noveltyForm.elements.ubicacion.dataset.beforeRetirement;});}
+const noveltyForm=document.querySelector('#noveltyForm');if(noveltyForm){noveltyForm.elements.ubicacion.closest('label').before(noveltyForm.elements.estado.closest('label'));noveltyForm.elements.estado.addEventListener('change',updateRetiredLocation);noveltyForm.addEventListener('reset',()=>{delete noveltyForm.elements.estado.dataset.beforeActa;noveltyForm.elements.ubicacion.readOnly=false;delete noveltyForm.elements.ubicacion.dataset.beforeRetirement;});}
 mountActaField();window.SKNoveltyForm={update,updateFields,save,actaHTML};window.addEventListener('skweb-synced',update);
 document.querySelector('#novDesc')?.addEventListener('change',updateFields);
 document.querySelector('#noveltyForm')?.addEventListener('reset',()=>setTimeout(update,0));

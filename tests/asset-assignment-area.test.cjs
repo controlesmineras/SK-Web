@@ -19,7 +19,7 @@ test('los selectores de ficha y alta de Plaza usan las mismas opciones y conserv
  assert.deepEqual(clone(ctx.window.areas),['Área especial',warehouse]);
 });
 for(const role of ['owner','assistant'])test(role+': guardar una novedad persiste y sincroniza la asignación sin cambiar identidad ni duplicar historial',async()=>{
- const form={querySelector:()=>({disabled:false}),reset(){}},status={},localWindow={SKAssetRules:rules,SKAdminAuth:{canView:()=>true},dispatchEvent(){}},alerts=[];
+ const form={querySelector:()=>({disabled:false}),reset(){}},status={},localWindow={SKAssetHistory:history,SKAssetRules:rules,SKAdminAuth:{canView:()=>true},dispatchEvent(){}},alerts=[];
  const ctx=vm.createContext({window:localWindow,indexedDB:new IDBFactory(),document:{querySelector:()=>status},Event:class{},console,alert:m=>alerts.push(m)});
  vm.runInContext(read('app.js').split('const PARTS=')[0],ctx);await ctx.openDB();await ctx.put('assets',clone(asset));
  const values={assetId:asset.id,descripcion:'Revista física',areaAsignada:warehouse,ubicacion:asset.ubicacion,estado:asset.estado,fechaNovedad:'2026-10-22',horaNovedad:'14:00'};
@@ -27,8 +27,8 @@ for(const role of ['owner','assistant'])test(role+': guardar una novedad persist
  Object.assign(ctx,{fd:()=>({...values}),mark:()=>({id:'novelty',createdAt:'2026-10-22T19:00:00Z',updatedAt:'2026-10-22T19:00:00Z',syncState:'pending'}),refresh:async()=>{},update:async()=>{},saving:false,selectedAsset:null,noveltyText:x=>x,isRetirement:()=>false,isRetiredState:()=>false,isVisorChange:()=>false});
  const source=read('novelty-form.js'),start=source.indexOf('async function save(event)'),end=source.indexOf('\nfunction installAssetPicker',start);vm.runInContext(source.slice(start,end),ctx);
  await ctx.save({target:form,preventDefault(){}});assert.deepEqual(alerts,[]);
- const incoming={assets:clone(await ctx.all('assets')),novelties:clone(await ctx.all('novelties'))};
- assert.equal(incoming.assets[0].areaAsignada,warehouse);assert.equal(incoming.novelties[0].areaAsignada,warehouse);assert.equal(incoming.assets[0].serial,asset.serial);
+ const incoming={assets:clone(await ctx.storedRows('assets')).filter(row=>row.syncState==='pending'),novelties:clone(await ctx.all('novelties'))};
+ const [visible]=await ctx.all('assets');assert.equal(visible.areaAsignada,warehouse);assert.equal(incoming.assets.length,0);assert.equal(incoming.novelties[0].areaAsignada,warehouse);assert.equal(visible.serial,asset.serial);
  let cloud={assets:[clone(asset)],novelties:[],inventoryCriteria:[{id:'drill',name:'Taladro',isFixedAsset:true,usesSerial:true}]};
  const server=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}});vm.runInContext(read('backend/apps-script/Code.gs'),server);
  Object.assign(server,{findFile_:()=> 'file',readFile_:()=>clone(cloud),writeFile_:(_,data)=>cloud=clone(data),json_:clone});
