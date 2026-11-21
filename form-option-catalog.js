@@ -123,6 +123,7 @@ function mountAdmin(){
   window.SKFormOptions.render=draw;window.addEventListener('skadmin-permissions',draw);draw();
 }
 window.SKFormOptions={values,allowedPersonalAreas,validPersonalArea,load,apply,mountAdmin,labels,defaults};
+if(document.currentScript?.hasAttribute?.('data-options-only'))return;
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{mountAdmin();load().then(()=>window.SKFormOptions.render?.())},{once:true});else{mountAdmin();load().then(()=>window.SKFormOptions.render?.())}
 window.addEventListener('load',()=>setTimeout(()=>load().then(()=>window.SKFormOptions.render?.()),500),{once:true});
 window.addEventListener('skweb-db-ready',load);

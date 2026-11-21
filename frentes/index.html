@@ -1,0 +1,41 @@
+<!doctype html>
+<html lang="es-CO"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Frentes de trabajo · SK 3.7</title><meta name="theme-color" content="#103648">
+<link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="../icons/icon-192.png"><link rel="apple-touch-icon" href="../icons/icon-180.png">
+<link rel="stylesheet" href="app.css"><link rel="stylesheet" href="../date-calendar.css">
+<script defer src="../sync-config.js"></script><script defer src="../date-calendar.js"></script><script defer data-options-only src="../form-option-catalog.js"></script><script defer src="store.js"></script><script defer src="app.js"></script>
+</head><body>
+<header><div class="bar"><div class="brand"><img src="../icons/icon-192.png" alt="" width="48" height="48"><span>ASOCIACIÓN MINERA<strong>SK 3.7</strong></span></div><div id="sessionActions" hidden><button id="sync" type="button">Sincronizar</button><button type="button" id="logout">Salir</button></div></div></header>
+<main>
+<section id="login" class="login card">
+<p class="sectionLabel">Registro operativo</p><h1>Frentes de trabajo</h1>
+<form id="accessForm"><label>Ingresar con<select name="access"><option value="plaza">Plaza Blending</option><option value="admin">SK Web Admin</option></select></label>
+<label><span id="identityLabel">Documento</span><input name="identity" autocomplete="username" required></label>
+<label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
+<button class="primary">Ingresar</button><p id="loginMessage" role="status"></p></form></section>
+<section id="workspace" hidden>
+<div class="pageTitle"><div><p class="sectionLabel" id="account"></p><h1>Frentes de trabajo</h1></div><span id="connection" class="pill"></span></div>
+<nav aria-label="Reportes"><button id="newTab" aria-current="page">Nuevo reporte</button><button id="historyTab">Mis reportes <span id="badge"></span></button></nav>
+<p id="syncMessage" role="status"></p><p id="notice" role="status"></p>
+<section id="editor" class="card"><h2 id="editorTitle">Nuevo reporte</h2>
+<form id="reportForm"><div class="pair"><label>Fecha<input type="date" name="fecha" required aria-label="Fecha del reporte"></label>
+<fieldset class="shift"><legend>Turno</legend><div class="segments">
+<label><input type="radio" name="turno" value="D" required><span>Día</span></label>
+<label><input type="radio" name="turno" value="T"><span>Tarde</span></label>
+<label><input type="radio" name="turno" value="S"><span>Serena</span></label></div></fieldset></div>
+<fieldset class="group"><legend>Frente de trabajo</legend><div class="pair front"><label>Nivel<select name="nivel" required><option value="">Seleccionar nivel</option></select></label><label>Corte<input name="corte" placeholder="Ej. 850" maxlength="120" required disabled></label></div></fieldset>
+<fieldset class="group"><legend>Funcionario</legend>
+<div id="lookup"><label>Buscar funcionario<input type="search" id="search" placeholder="Nombre o documento" autocomplete="off"></label><div id="matches" class="matches" aria-live="polite"></div><button type="button" id="add" class="secondary" hidden>Registrar funcionario</button></div>
+<div id="chosen" class="chosen" hidden><div><strong id="chosenName"></strong><div class="meta" id="chosenInfo"></div></div><button type="button" id="clearPerson" class="small" aria-label="Quitar funcionario">×</button></div>
+<fieldset id="personFields" hidden disabled><legend>Registrar funcionario</legend>
+<label>Documento<input name="documento" inputmode="numeric" maxlength="42" autocomplete="off" required></label><div id="docMatches" class="matches" aria-live="polite"></div>
+<fieldset id="details" disabled><div class="pair">
+<label>Primer nombre<input name="primerNombre" maxlength="160" required></label><label>Segundo nombre <small>(opcional)</small><input name="segundoNombre" maxlength="160"></label>
+<label>Primer apellido<input name="primerApellido" maxlength="160" required></label><label>Segundo apellido <small>(opcional)</small><input name="segundoApellido" maxlength="160"></label>
+<label>Empresa<select name="empresa" required></select></label><label>Área<select name="area" required></select></label>
+<label>Cargo<input name="cargo" list="cargos" maxlength="160" required><datalist id="cargos"></datalist></label><label>Teléfono <small>(opcional)</small><input type="tel" name="telefono" maxlength="40"></label>
+</div></fieldset><button type="button" class="textButton" id="cancelPerson">Volver al buscador</button></fieldset>
+</fieldset><div class="formActions"><button class="primary" id="save">Guardar reporte</button><button type="button" class="secondary" id="cancelReview" hidden>Cancelar revisión</button></div></form></section>
+<section id="history" class="card" hidden><h2>Mis reportes en este dispositivo</h2><div id="rows"></div></section>
+</section></main></body></html>
