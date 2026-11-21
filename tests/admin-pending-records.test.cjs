@@ -78,3 +78,19 @@ test('un servidor anterior conserva novedades fechadas en cola y confirma los de
  assert.equal(c.requests[1].data.novelties.length,0);assert.equal((await c.rows('novelties'))[0].syncState,'pending');
  assert.equal((await c.rows('actas'))[0].syncState,'synced');assert.match(c.status.textContent,/Apps Script/);
 });
+test('la reversión espera su confirmación específica y permanece pendiente frente al servidor anterior',async()=>{
+ const c=await client({online:true,respond:request=>request.action==='syncNoveltyChanges'
+  ?{ok:false,error:'Solicitud no válida'}:{ok:true,data:{novelties:[],assets:[],actas:[{id:'acta',syncState:'synced'}]}}});
+ const row=pending('undo',{assetId:'yt',reversed:true,noveltyAction:{id:'action',kind:'revert',status:'pending'}});
+ await c.raw('novelties',row);await c.raw('actas',pending('acta'));assert.equal(await c.api.sync({silent:true}),false);
+ assert.equal(c.requests[0].action,'syncNoveltyChanges');assert.equal(c.requests[1].data.novelties.length,0);
+ assert.equal((await c.rows('novelties'))[0].syncState,'pending');assert.equal((await c.rows('actas'))[0].syncState,'synced');
+});
+test('una respuesta genérica nunca confirma una reversión y una respuesta con la acción aplicada sí',async()=>{
+ let applied=false;
+ const c=await client({online:true,respond:()=>({ok:true,data:{assets:[],novelties:[{id:'undo',syncState:'synced',reversed:applied,
+  noveltyAction:{id:'action',kind:'revert',status:applied?'applied':'pending'}}]}})});
+ await c.raw('novelties',pending('undo',{assetId:'yt',noveltyAction:{id:'action',kind:'revert',status:'pending'}}));
+ assert.equal(await c.api.sync({silent:true}),false);assert.equal((await c.rows('novelties'))[0].syncState,'pending');
+ applied=true;assert.equal(await c.api.sync({silent:true}),true);assert.equal((await c.rows('novelties'))[0].syncState,'synced');
+});
