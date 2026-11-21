@@ -27,6 +27,23 @@ const itemTertiary=x=>x?.tertiaryName||x?.nombreTerciario||x?.CI_NOMBRE_TERCIARI
 const itemUnit=x=>x?.unit||x?.unidadMedida||x?.CI_UNIDAD_MEDIDA||x?.ciUnidadMedida||'';
 function injectStyle(){if(document.querySelector('#inventoryAdminStyle'))return;const s=document.createElement('style');s.id='inventoryAdminStyle';s.textContent=`#inventoryItems .invToolbar{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}#inventoryItems .invToolbar.invCatalogTabs{display:grid;grid-template-columns:minmax(0,max-content) minmax(0,max-content) auto;align-items:center;justify-content:center;gap:6px;text-align:center}
 #inventoryItems .invCatalogTabs [data-catalog-kind]{min-width:0;white-space:normal}
+#inventoryItems{container:inventory-catalog / inline-size}
+#inventoryItems .invCatalogHeader{
+ display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title add" "tabs tabs";gap:0 10px
+}
+#inventoryCatalogTitle{grid-area:title}
+#newInventoryItem{grid-area:add;justify-self:end}
+#inventoryItems .invCatalogHeader .invCatalogTabs{grid-area:tabs;margin-bottom:0}
+@container inventory-catalog (min-width:62rem){
+ #inventoryItems .invCatalogHeader{
+  grid-template-columns:minmax(0,1fr) max-content minmax(0,1fr);grid-template-areas:"title tabs add"
+ }
+ #inventoryCatalogTitle{margin:0}
+ #inventoryItems .invCatalogHeader .invCatalogTabs{
+  position:relative;grid-template-columns:repeat(2,max-content);margin:0
+ }
+ #inventoryItems .invCatalogTabs .invCatalogInfo{position:absolute;inset-inline-start:calc(100% + 6px)}
+}
 #inventoryItems .invCatalogTabs .invCatalogInfo{width:38px;height:38px;padding:0;border:1px solid #9cc7dc;border-radius:50%;background:#edf6fb;color:#165775;font:bold 1.35rem Georgia,serif;text-transform:none}
 #inventoryItems .invCatalogInfo[aria-expanded="true"]{background:#cce7f5}
 #inventoryCatalogHelp[hidden]{display:none}
@@ -158,7 +175,10 @@ function bindValidation(f){
  const update=()=>{if(f.dataset.validationAttempted)validateInventory(f)};
  f.addEventListener('input',update);f.addEventListener('change',update);
 }
-function mount(){if(document.querySelector('#inventoryItems'))return;injectStyle();const main=document.querySelector('main');if(!main)return;const sec=document.createElement('section');sec.id='inventoryItems';sec.className='view';sec.innerHTML=`<div class="sectionHead"><h2 id="inventoryCatalogTitle">Elementos de inventario</h2><button type="button" id="newInventoryItem">+ Agregar elemento</button></div><div class="invToolbar invCatalogTabs" role="group" aria-label="Tipo de criterio de inventario"><button type="button" data-catalog-kind="common" aria-pressed="true">ELEMENTOS COMUNES</button><button type="button" data-catalog-kind="spare" aria-pressed="false">CRITERIOS YT/COLUMNA</button><button type="button" id="inventoryHelpToggle" class="invCatalogInfo" aria-label="Información sobre los criterios de inventario" aria-expanded="false" aria-controls="inventoryCatalogHelp">i</button></div><p id="inventoryCatalogHelp" class="hint" hidden>Elige primero Elemento común o Repuesto YT o Columna. Los repuestos quedan disponibles en Plaza Blending y en Consumo de Producción según su tipo. En Plaza Blending se agrupan automáticamente; cada ítem conserva su existencia.</p><div id="spareCatalogFilter" class="invSpareFilters" role="group" aria-label="Tipo de repuesto" hidden><button type="button" data-spare-filter="YT 29" aria-pressed="false">YT29</button><button type="button" data-spare-filter="YT 28" aria-pressed="false">YT28</button><button type="button" data-spare-filter="Columna 29" aria-pressed="false">COLUMNA 29</button><button type="button" data-spare-filter="Columna 28" aria-pressed="false">COLUMNA 28</button></div><div class="invToolbar"><input id="inventoryItemSearch" type="search" aria-label="Buscar elemento" placeholder="Buscar elemento…" autocomplete="off"><span id="inventoryItemCount" class="invBadge"></span></div><div class="invGrid"><div id="inventoryItemList" class="invList"></div><form id="inventoryItemForm" novalidate><input type="hidden" name="id"><h3 id="inventoryFormTitle">Datos del elemento</h3><p id="inventoryValidationSummary" class="invValidationSummary" role="alert" hidden></p><input name="itemKind" type="hidden" value="common"><input name="isYtSpare" type="checkbox" hidden><input type="hidden" name="spareEquipment" value="YT 29" disabled>
+function mount(){if(document.querySelector('#inventoryItems'))return;injectStyle();const main=document.querySelector('main');if(!main)return;const sec=document.createElement('section');sec.id='inventoryItems';sec.className='view';sec.innerHTML=`<div class="sectionHead invCatalogHeader"><h2 id="inventoryCatalogTitle">Elementos de inventario</h2>
+<div class="invToolbar invCatalogTabs" role="group" aria-label="Tipo de criterio de inventario"><button type="button" data-catalog-kind="common" aria-pressed="true">ELEMENTOS COMUNES</button><button type="button" data-catalog-kind="spare" aria-pressed="false">CRITERIOS YT/COLUMNA</button><button type="button" id="inventoryHelpToggle" class="invCatalogInfo" aria-label="Información sobre los criterios de inventario" aria-expanded="false" aria-controls="inventoryCatalogHelp">i</button></div>
+<button type="button" id="newInventoryItem">+ Agregar elemento</button></div>
+<p id="inventoryCatalogHelp" class="hint" hidden>Elige primero Elemento común o Repuesto YT o Columna. Los repuestos quedan disponibles en Plaza Blending y en Consumo de Producción según su tipo. En Plaza Blending se agrupan automáticamente; cada ítem conserva su existencia.</p><div id="spareCatalogFilter" class="invSpareFilters" role="group" aria-label="Tipo de repuesto" hidden><button type="button" data-spare-filter="YT 29" aria-pressed="false">YT29</button><button type="button" data-spare-filter="YT 28" aria-pressed="false">YT28</button><button type="button" data-spare-filter="Columna 29" aria-pressed="false">COLUMNA 29</button><button type="button" data-spare-filter="Columna 28" aria-pressed="false">COLUMNA 28</button></div><div class="invToolbar"><input id="inventoryItemSearch" type="search" aria-label="Buscar elemento" placeholder="Buscar elemento…" autocomplete="off"><span id="inventoryItemCount" class="invBadge"></span></div><div class="invGrid"><div id="inventoryItemList" class="invList"></div><form id="inventoryItemForm" novalidate><input type="hidden" name="id"><h3 id="inventoryFormTitle">Datos del elemento</h3><p id="inventoryValidationSummary" class="invValidationSummary" role="alert" hidden></p><input name="itemKind" type="hidden" value="common"><input name="isYtSpare" type="checkbox" hidden><input type="hidden" name="spareEquipment" value="YT 29" disabled>
 <label class="invCompactField" hidden># DE ÍTEM<input name="spareItemNumber" disabled autocomplete="off"></label>
 <label class="invCompactField" hidden>CÓDIGO DE ELEMENTO<input name="sparePartCode" disabled autocomplete="off"></label>
 <label class="invPartName" hidden>NOMBRE DEL ÍTEM<input name="spareItemName" disabled autocomplete="off"></label>
