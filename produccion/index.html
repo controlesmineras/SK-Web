@@ -108,9 +108,8 @@ main:not(:has([hidden] #queries,#queries[hidden]))>#status{margin-top:0}
 #cqHead [data-sort]{display:flex;align-items:center;gap:.4em;width:100%;min-height:44px;padding:8px 12px;background:transparent;color:inherit;font:inherit;letter-spacing:inherit;text-transform:inherit;text-align:left;cursor:pointer}
 #cqHead [data-sort]:hover{background:#dfe9ef}
 #cqHead [data-sort]:focus-visible{outline:2px solid #26729e;outline-offset:-3px}
-#cqHead [data-sort] span::before{content:'↕';color:#576e7f}
-#cqHead [aria-sort="ascending"] span::before{content:'↑';color:#173d59}
-#cqHead [aria-sort="descending"] span::before{content:'↓';color:#173d59}
+#cqHead .cqSortArrow{white-space:nowrap;color:#405e73}
+#cqHead th:has(button+button) button{min-height:30px;padding-block:3px}
 #cqRows .consumptionExternal td:first-child>b{color:inherit}
 #cqRows .consumptionExternal td:first-child>.externalMachine{color:#a3480b}
 #queries .queryForm{grid-template-columns:repeat(2,minmax(0,1fr))}
@@ -118,9 +117,11 @@ main:not(:has([hidden] #queries,#queries[hidden]))>#status{margin-top:0}
 #queries .cqCriteriaRow:has(.cqAllParts[hidden]){grid-template-columns:minmax(0,1fr)}
 #queries .cqAllParts{display:inline-flex;justify-self:end;flex-direction:row;align-items:center;gap:.4em;min-height:45px;white-space:nowrap;cursor:pointer}
 #queries #cqAllParts{width:1em;height:1em;min-height:0;margin:0;padding:0;accent-color:#173d59;cursor:pointer}
-#queries #cqOrders{grid-column:1/-1;margin:0}
-#queries #cqOrders:empty{display:none}
-#queries .orderCard>button{grid-column:auto}
+#queries #cqOrders{grid-column:1/-1;display:flex;flex-wrap:wrap;align-items:center;gap:2px .5rem;margin:0;color:#334e62}
+#cqOrders .cqOrderEntry{display:inline-flex;align-items:center;gap:2px}
+#cqOrders .cqOrderEntry+.cqOrderEntry{border-inline-start:1px solid #cfdae1;padding-inline-start:.5rem}
+#cqOrders .cqOrderEntry button{width:auto;min-width:28px;min-height:32px;padding:2px 5px;border:0;border-radius:3px;background:transparent;color:#173d59;font:inherit;box-shadow:none;text-transform:none}
+#cqOrders .cqOrderEntry button:hover{background:#e3edf2}
 #queries .consumptionExports{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;margin-top:8px}
 #queries .consumptionExports button{min-width:0;min-height:44px;white-space:normal;text-transform:uppercase}
 #workspace :is(#cqExport,#sheetPurchasesExcel,#countExcel,[data-excel]){
@@ -214,7 +215,7 @@ body>main:has(#access:not([hidden])),#access{
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=17-turno"><script defer src="../movement-time.js?v=1"></script><script defer src="warehouse-store.js?v=2"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="../spare-groups.js?v=20261120-existencias-repuestos"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=4-cabecera"><script defer src="purchase-workbook.js?v=20261120-codigo-elemento"></script><script defer src="consumption-reports.js?v=20261120-compras-1"></script><script defer src="../asset-search.js?v=20261120-coincidencias-activos-1"></script><script defer src="app.js?v=20261120-existencias-repuestos"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=20261120-compras-1"></script>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="../spare-groups.js?v=20261120-existencias-repuestos"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=4-cabecera"><script defer src="purchase-workbook.js?v=20261120-codigo-elemento"></script><script defer src="consumption-reports.js?v=20261120-compras-1"></script><script defer src="../asset-search.js?v=20261120-coincidencias-activos-1"></script><script defer src="app.js?v=20261120-existencias-repuestos"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=20261121-orden-en-linea"></script>
 <script defer src="install-ui.js?v=1"></script><script defer src="../plaza/spare-picker.js?v=20261120-existencias-repuestos"></script><script defer src="warehouse.js?v=20261120-existencias-repuestos"></script>
 <link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
 <body>
