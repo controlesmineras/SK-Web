@@ -55,9 +55,10 @@ function inventoryCell(r){return `<td${r.inventoryMismatch?' style="background:#
 function val(r,k){if(k==='stock')return r.stock??null;if(k==='date')return r.date||'';if(k==='time')return timeKey(r);if(k==='item')return r.item&&r.item!=='—'?r.item:null;return r[k]??''}
 function cmpVal(a,b,k){const x=val(a,k),y=val(b,k);if(k==='item'){const ax=x!==null,by=y!==null;if(ax!==by)return ax?-1:1;if(!ax)return String(a.name||'').localeCompare(String(b.name||''),'es',{sensitivity:'base'});const an=Number(x),bn=Number(y);if(Number.isFinite(an)&&Number.isFinite(bn)&&an!==bn)return an-bn}if(k==='qty'||k==='stock')return(Number(x)||0)-(Number(y)||0);return String(x??'').localeCompare(String(y??''),'es',{numeric:true,sensitivity:'base'})}
 function sortRows(rows){
- const byPart=mode==='part'&&productionQuery();
+ const production=productionQuery(),byPart=production&&mode==='part';
+ const effectiveOrder=production&&!orders.length?productionDefaultOrder():orders;
  return rows.sort((a,b)=>{
-  for(const order of orders){
+  for(const order of effectiveOrder){
    if(byPart&&(order.field==='item'||order.field==='stock')){
     const missing=Number(val(a,order.field)===null)-Number(val(b,order.field)===null);
     if(missing)return missing;
@@ -68,39 +69,47 @@ function sortRows(rows){
   return 0;
  });
 }
-function drawPartHead(production){
- const head=document.querySelector('#cqHead');
- if(!production){
-  head.innerHTML='<tr><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad total</th></tr>';
-  return;
- }
- if(!head.querySelector('[data-sort]')){
-  const row=document.createElement('tr');
-  head.replaceChildren(row);
-  for(const field of partOrderFields){
-   const cell=document.createElement('th'),button=document.createElement('button');
-   cell.scope='col';button.type='button';button.dataset.sort=field;
-   button.textContent=field==='qty'?'Cantidad total':fields[field];
-   const icon=document.createElement('span');
-   icon.setAttribute('aria-hidden','true');
-   button.append(icon);cell.append(button);row.append(cell);
-   button.onclick=()=>{
-    if(mode!=='part')return;
-    const primary=orders[0];
-    const dir=primary?.field===field&&primary.dir==='asc'?'desc':'asc';
-    orders=[{field,dir},...orders.filter(order=>order.field!==field)];
-    drawOrders();render();
-   };
-  }
- }
- for(const button of head.querySelectorAll('[data-sort]')){
-  const field=button.dataset.sort,cell=button.parentElement;
-  const dir=orders[0]?.field===field?orders[0].dir:null;
-  if(dir)cell.setAttribute('aria-sort',dir==='asc'?'ascending':'descending');
-  else cell.removeAttribute('aria-sort');
-  button.title='Ordenar '+(dir==='asc'?'de mayor a menor':'de menor a mayor');
-  if(field==='name')button.title=dir==='asc'?'Ordenar de Z a A':'Ordenar de A a Z';
- }
+function productionDefaultOrder(){
+ return mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:
+  [{field:'date',dir:'desc'},...(mode==='detail'?[{field:'time',dir:'desc'}]:[])];
+}
+function drawProductionHead(){
+ const head=document.querySelector('#cqHead'),compact=compactDetail();
+ const sortButton=(field,label)=>{
+  const index=orders.findIndex(order=>order.field===field);
+  const dir=orders[index]?.dir;
+  const hint=index<0?'Agregar '+fields[field]+' al orden':
+   fields[field]+', prioridad '+(index+1)+'. Cambiar a '+(dir==='asc'?'descendente':'ascendente');
+  const arrow=dir==='asc'?'↑':dir==='desc'?'↓':'↕';
+  return `<button type="button" data-sort="${field}" title="${hint}" aria-label="${hint}"><span>${label}</span><span class="cqSortArrow" aria-hidden="true">${arrow}${index<0?'':'<sup>'+(index+1)+'</sup>'}</span></button>`;
+ };
+ const column=(field,label,extra='')=>{
+  const primary=orders[0]?.field===field?orders[0]:null;
+  const aria=primary?' aria-sort="'+(primary.dir==='asc'?'ascending':'descending')+'"':'';
+  return `<th scope="col"${aria}>${sortButton(field,label)}${extra}</th>`;
+ };
+ const qty=mode==='detail'?(compact?'Cant.':'Cantidad'):'Cantidad total';
+ const columns=mode==='part'?partOrderFields.map(field=>column(field,field==='qty'?qty:fields[field])):[
+  column('machine',(compact?'Equipo':'Máquina')+'<br><small>No. marca actual</small>'),column('inv','Inventario'),
+  column('date','Fecha',compact?sortButton('time','Hora registro'):''),
+  ...(mode==='detail'&&!compact?[column('time','Hora registro')]:[]),
+  column('item',fields.item),column('name',compact||mode==='daily'?'Nombre del repuesto':'Repuesto'),column('qty',qty)
+ ];
+ const markup='<tr>'+columns.join('')+'</tr>';
+ if(head.dataset.layout===markup)return;
+ const focused=head.contains(document.activeElement)?document.activeElement.dataset.sort:null;
+ head.innerHTML=markup;
+ head.dataset.layout=markup;
+ if(focused)head.querySelector(`[data-sort="${focused}"]`)?.focus();
+}
+function orderLineEntry(order,index){
+ const name=fields[order.field],ascending=order.dir==='asc';
+ const action=(key,symbol,label)=>`<button type="button" data-${key}="${index}" title="${label}" aria-label="${label}">${symbol}</button>`;
+ return '<span class="cqOrderEntry">'+
+  action('dir',`${index+1}. ${name} ${ascending?'↑':'↓'}`,`${name}, prioridad ${index+1}. Cambiar a ${ascending?'descendente':'ascendente'}`)+
+  (index>0?action('before','←','Subir prioridad de '+name):'')+
+  (index+1<orders.length?action('after','→','Bajar prioridad de '+name):'')+
+  action('remove','×','Quitar '+name+' del orden')+'</span>';
 }
 function moveOrder(index,target){
  if(index<0||index>=orders.length||target<0||target>=orders.length||index===target)return;
@@ -111,7 +120,11 @@ function moveOrder(index,target){
 const lastOrderIcon='<svg width="16" height="16" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path d="M1 3l8 7-8 7zm7 0 8 7-8 7zM16 3h3v14h-3z"/></svg>';
 function drawOrders(){
  const host=document.querySelector('#cqOrders');
- host.innerHTML=orders.map((order,index)=>{
+ const production=productionQuery();
+ if(production){
+  const entries=orders.map(orderLineEntry).join('');
+  host.innerHTML='<strong>Orden</strong>'+(entries||'<span>'+(mode==='part'?'Por número de ítem':'Más recientes primero')+'</span>');
+ }else host.innerHTML=orders.map((order,index)=>{
   const name=fields[order.field],ascending=order.dir==='asc';
   const direction=ascending?'Ascendente':'Descendente';
   return `<div class="orderCard">
@@ -128,26 +141,29 @@ function drawOrders(){
    </div>
   </div>`;
  }).join('');
- host.querySelectorAll('.orderCard').forEach(card=>{
+ host.querySelectorAll('[data-dir]').forEach(button=>{
+  const card=button.closest('.orderCard')||button;
   card.onclick=event=>{
    const action=event.target.closest('button');
-   if(action&&!action.hasAttribute('data-dir'))return;
-   const index=Number(card.querySelector('[data-dir]').dataset.dir);
+   if(action&&action!==button)return;
+   const index=Number(button.dataset.dir);
    orders[index].dir=orders[index].dir==='asc'?'desc':'asc';
-   drawOrders();
+   drawOrders();render();
    host.querySelector(`[data-dir="${index}"]`).focus();
-   render();
   };
  });
  host.querySelectorAll('[data-first]').forEach(b=>b.onclick=()=>moveOrder(+b.dataset.first,0));
  host.querySelectorAll('[data-last]').forEach(b=>b.onclick=()=>moveOrder(+b.dataset.last,orders.length-1));
  host.querySelectorAll('[data-before]').forEach(b=>b.onclick=()=>moveOrder(+b.dataset.before,+b.dataset.before-1));
  host.querySelectorAll('[data-after]').forEach(b=>b.onclick=()=>moveOrder(+b.dataset.after,+b.dataset.after+1));
- host.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{orders.splice(+b.dataset.remove,1);drawOrders();render()});
- const production=productionQuery();
+ host.querySelectorAll('[data-remove]').forEach(b=>b.onclick=()=>{
+  const index=Number(b.dataset.remove);
+  orders.splice(index,1);drawOrders();render();
+  (host.querySelector(`[data-dir="${Math.min(index,orders.length-1)}"]`)||document.querySelector('#cqAddField')).focus();
+ });
  const byPart=production&&mode==='part';
  const available=Object.entries(fields).filter(([key])=>
-  (byPart?partOrderFields.includes(key):key!=='stock')&&!orders.some(order=>order.field===key));
+  (byPart?partOrderFields.includes(key):key!=='stock')&&!(production&&mode==='daily'&&key==='time')&&!orders.some(order=>order.field===key));
  const sortOptions=available.map(([key,label])=>`<option value="${key}">${label}</option>`).join('');
  const grouping=production&&!byPart?'<optgroup label="Agrupar resultados"><option value="totalByPart">Total por repuesto</option></optgroup>':'';
  document.querySelector('#cqAddField').innerHTML='<option value="">Agregar criterio…</option>'+grouping+
@@ -241,8 +257,18 @@ function controls(){
   </p>`:'<p class="hint" id="cqInfo"></p>'}
   <div class="tableWrap"><table><thead id="cqHead"></thead><tbody id="cqRows"></tbody></table></div>
  </div>`;
- const today=new Date(),from=new Date(today.getFullYear(),today.getMonth()-3,today.getDate());const display=productionDates()?.displayDate||((value)=>value);document.querySelector('#cqFrom').value=display(localISO(from));document.querySelector('#cqTo').value=display(localISO(today));orders=defaultOrder();drawOrders();document.querySelector('#cqExport').onclick=()=>exportConsumption('xlsx');
- if(production)document.querySelector('#cqPdf').onclick=()=>exportConsumption('pdf');
+ const today=new Date(),from=new Date(today.getFullYear(),today.getMonth()-3,today.getDate());const display=productionDates()?.displayDate||((value)=>value);document.querySelector('#cqFrom').value=display(localISO(from));document.querySelector('#cqTo').value=display(localISO(today));orders=production?[]:defaultOrder();drawOrders();document.querySelector('#cqExport').onclick=()=>exportConsumption('xlsx');
+ if(production){
+  document.querySelector('#cqPdf').onclick=()=>exportConsumption('pdf');
+  document.querySelector('#cqHead').onclick=event=>{
+   const button=event.target.closest('[data-sort]');
+   if(!button)return;
+   const field=button.dataset.sort,existing=orders.find(order=>order.field===field);
+   if(existing)existing.dir=existing.dir==='asc'?'desc':'asc';
+   else orders.push({field,dir:'asc'});
+   drawOrders();render();
+  };
+ }
  const allParts=sec.querySelector('#cqAllParts');
  if(allParts)allParts.onchange=render;
  const buttons=sec.querySelectorAll('[data-mode]');
@@ -250,7 +276,7 @@ function controls(){
   mode=button.dataset.mode;
   if(allParts)allParts.closest('label').hidden=mode!=='part';
   const retained=keepOrder?orders.filter(order=>partOrderFields.includes(order.field)):[];
-  orders=retained.length?retained:mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();
+  orders=production?retained:mode==='part'?[{field:'item',dir:'asc'},{field:'name',dir:'asc'}]:defaultOrder();
   for(const tab of buttons){
    tab.classList.toggle('active',tab===button);
    tab.setAttribute('aria-pressed',String(tab===button));
@@ -360,7 +386,7 @@ async function render(){if(!db||!document.querySelector('#cqv2'))return;const se
    equipment:production?[...group.equipmentByName.values()].sort((a,b)=>compare(machineText(a),machineText(b))):null
   })));
   lastRows=rows;
-  document.querySelector('#cqHead').innerHTML=`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cantidad total</th></tr>`;
+  if(!production)document.querySelector('#cqHead').innerHTML=`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cantidad total</th></tr>`;
   document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${fmt(x.date)}</td><td>${esc(x.item)}</td><td>${esc(x.name)}</td><td><b>${x.qty}</b></td></tr>`).join('')||`<tr><td colspan="${production?6:7}">No hay consumos para este período.</td></tr>`;
  }else if(mode==='part'){
   const parts=origin?window.SKSpareCatalog.filter(catalog,origin.replace(/\d+$/,''),origin):[];
@@ -368,11 +394,14 @@ async function render(){if(!db||!document.querySelector('#cqv2'))return;const se
   const includeAll=production&&document.querySelector('#cqAllParts').checked;
   rows=sortRows(totalsByPart(rows,parts,production,readStock,includeAll));
   lastRows=rows;
-  drawPartHead(production);
+  if(!production)document.querySelector('#cqHead').innerHTML='<tr><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad total</th></tr>';
   document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr><td>${esc(x.item)}</td><td>${production?`<strong class="spareName">${esc(x.name)}</strong>${x.application?` <span class="spareUse">${esc(x.application)}</span>`:''}`:esc(x.name)}</td><td><b>${x.qty}</b></td>${production?`<td>${esc(x.stock??'—')}</td>`:''}</tr>`).join('')||`<tr><td colspan="${production?4:3}">No hay consumos para este período.</td></tr>`;
  }else{rows=sortRows(rows);lastRows=rows;const compact=compactDetail();
-  document.querySelector('#cqHead').innerHTML=compact?'<tr><th>Equipo<br><small>No. marca actual</small></th><th>Inventario</th><th>Fecha<br><small>Hora registro</small></th><th># DE ÍTEM</th><th>Nombre del repuesto</th><th>Cant.</th></tr>':`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th>Hora registro</th><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad</th></tr>`;
-  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${compact?fmt(x.date).replace(/\b0(?=\d)/g,'')+'<br><small>'+esc(x.time||'—')+'</small>':fmt(x.date)}</td>${compact?'':`<td>${esc(x.time||'—')}</td>`}<td>${esc(x.item)}</td><td>${esc(x.name)}</td><td>${x.qty}</td></tr>`).join('')||`<tr><td colspan="${compact?6:production?7:8}">No hay movimientos para este período.</td></tr>`}document.querySelector('#cqInfo').textContent=`${rows.length} resultado${rows.length===1?'':'s'} · orden: ${orders.length?orders.map((o,i)=>`${i+1}. ${fields[o.field]} ${o.dir==='asc'?'↑':'↓'}`).join(' → '):'sin filtros de orden'}.`;
+  if(!production)document.querySelector('#cqHead').innerHTML=`<tr><th>Máquina<br><small>No. marca actual</small></th>${modelHeading}<th>Inventario</th><th>Fecha</th><th>Hora registro</th><th># DE ÍTEM</th><th>Repuesto</th><th>Cantidad</th></tr>`;
+  document.querySelector('#cqRows').innerHTML=rows.map(x=>`<tr class="${x.external?'consumptionExternal':''}" title="${x.external?`Equipo externo · ${esc(x.mine)}`:''}">${machineCell(x)}${production?'':`<td>${esc(x.model||'—')}</td>`}${inventoryCell(x)}<td>${compact?fmt(x.date).replace(/\b0(?=\d)/g,'')+'<br><small>'+esc(x.time||'—')+'</small>':fmt(x.date)}</td>${compact?'':`<td>${esc(x.time||'—')}</td>`}<td>${esc(x.item)}</td><td>${esc(x.name)}</td><td>${x.qty}</td></tr>`).join('')||`<tr><td colspan="${compact?6:production?7:8}">No hay movimientos para este período.</td></tr>`}
+ if(production)drawProductionHead();
+ const count=`${rows.length} resultado${rows.length===1?'':'s'}`;
+ document.querySelector('#cqInfo').textContent=production?count:`${count} · orden: ${orders.length?orders.map((o,i)=>`${i+1}. ${fields[o.field]} ${o.dir==='asc'?'↑':'↓'}`).join(' → '):'sin filtros de orden'}.`;
  if(production&&mode==='part')return {rows,origin,from,to,period:(from?fmt(from):'Inicio')+' al '+(to?fmt(to):'último registro')};
 }
 function openQueries(){
