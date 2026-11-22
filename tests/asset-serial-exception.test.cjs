@@ -76,7 +76,7 @@ test('los dos textos se guardan offline y sincronizan sin duplicar registros',as
 
 test('el formulario exige serial según criterio y conserva ayuda, columnas y permisos',async()=>{
  let hidden,focused=0,writes=0;const hint={},alerts=[],serial={value:'',focus(){focused++},closest:()=>({classList:{toggle:(name,value)=>hidden=value}})},form={elements:{id:{value:''},clase:{value:'Taladro'},serial},querySelector:()=>hint};
- const localWindow={SKAssetRules:rules,SKAdminAuth:{canView:()=>true,canManageAssets:()=>true},addEventListener(){}};
+ const localWindow={SKAssetRules:rules,SKAssetHistory:{operationStatus:()=>'Sí'},SKAdminAuth:{canView:()=>true,canManageAssets:()=>true},addEventListener(){}};
  const context=vm.createContext({window:localWindow,document:{querySelector:()=>null,querySelectorAll:()=>[{value:'Taladro'}]},all:async()=>[],fd:()=>({id:'',clase:'Taladro',serial:'   ',marcaPrevia:'PREVIA'}),put:async()=>{writes++},alert:m=>alerts.push(m),console});
  vm.runInContext(read('asset-admin-ui.js').replace('window.SKAssetAdminUI={hydrateEdit};',"window.SKAssetAdminUI={hydrateEdit,updateSerialFields,saveAsset};criteriaByClass.set('taladro',{usesSerial:true});"),context);
  const ui=localWindow.SKAssetAdminUI;ui.updateSerialFields(form,{usesSerial:true},false);assert.equal(serial.required,true);assert.equal(serial.disabled,false);assert.equal(hidden,false);assert.match(hint.textContent,/No trae.*No visible/);
@@ -84,4 +84,23 @@ test('el formulario exige serial según criterio y conserva ayuda, columnas y pe
  ui.updateSerialFields(form,{usesSerial:false},false);assert.equal(serial.required,false);
  ui.updateSerialFields(form,{usesSerial:true},true);assert.equal(serial.disabled,true);
  form.elements.clase.value='Columna';ui.updateSerialFields(form,{usesSerial:true},false);assert.equal(serial.required,false);assert.equal(hidden,true);assert.equal(serial.disabled,true);
+});
+
+test('Plaza valida los datos de la clase local al crear activos y respeta la marcación automática',()=>{
+ const c=vm.createContext({window:{addEventListener(){}},location:{pathname:'/plaza/'}});
+ for(const file of ['asset-record-rules.js','asset-marking.js'])vm.runInContext(read(file),c);
+ const page=read('plaza/asset-not-found.js').replace(/\}\)\(\);\s*$/,'window.issue=newAssetIssue;})();');
+ vm.runInContext(page,c);
+ const issue=c.window.issue,criterion={name:'Taladro',isFixedAsset:true,CI_USA_MODELO:'Sí',usesSerial:true,usesManufacturer:true,usesLength:true,requiresInternalMark:true};
+ const valid={clase:'Taladro',numeroYT:'1',modelo:'A1',serial:'No trae',fabricante:'Marca A',largo:'2'};
+ assert.equal(issue(criterion,valid),undefined);
+ for(const field of ['modelo','serial','fabricante','largo'])assert.equal(issue(criterion,{...valid,[field]:'  '}).name,field);
+ assert.equal(issue({...criterion,usesSerial:false},{...valid,serial:''}),undefined);
+ const column={...criterion,name:'Columna'};
+ const manual={...valid,clase:'Columna',serial:''};
+ assert.equal(issue(column,manual).name,'marcaInterna');
+ assert.equal(issue(column,{...manual,marcaInterna:'C40'}),undefined);
+ assert.equal(issue(column,{...manual,incomeMarking:true,minaOrigen:'Sandra K'}),undefined);
+ assert.match(issue({...criterion,active:false},valid).message,/clase activa/);
+ assert.match(issue(undefined,valid).message,/clase activa/);
 });
