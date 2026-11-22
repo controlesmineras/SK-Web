@@ -1,10 +1,10 @@
 .productionModules{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:18px 0}
 .productionModules button{min-height:86px;white-space:normal;font-weight:750;font-size:1.05rem;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3}
 #productionModuleHome>p{text-align:center}
-/* Este encuadre presenta la perforadora y las iniciales SK del icono original. */
+/* La perforadora completa se reconoce sin texto ni recortes. */
 #productionModuleHome::after{
- content:"";display:block;width:clamp(7rem,15vw,9rem);max-width:100%;aspect-ratio:7/8;margin:20px auto 0;
- background:url("./produccion-yt-512.png") 24% 20% / 148% auto no-repeat;
+ content:"";display:block;width:clamp(7rem,15vw,9rem);max-width:100%;aspect-ratio:1;margin:20px auto 0;
+ background:url("./produccion-perforadora-512.png") center / contain no-repeat;
  mix-blend-mode:lighten;
 }
 @media(min-width:901px){
