@@ -249,7 +249,7 @@ function selectSpareType(type){
 function openKind(kind){catalogKind=kind==='spare'?'spare':'common';mount();const spare=catalogKind==='spare',sec=document.querySelector('#inventoryItems');sec.dataset.catalogKind=catalogKind;document.querySelector('#inventoryCatalogTitle').textContent=spare?'CRITERIOS YT/COLUMNA':'Elementos de inventario';document.querySelector('#inventoryFormTitle').textContent=spare?'Datos del repuesto':'Datos del elemento';document.querySelector('#newInventoryItem').textContent=spare?'+ Agregar repuesto':'+ Agregar elemento';document.querySelector('#spareCatalogFilter').hidden=!spare;syncSpareFilterButtons();document.querySelector('#inventoryItemSearch').value='';sec.querySelectorAll('[data-catalog-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.catalogKind===catalogKind)));reset();render();window.dispatchEvent(new Event('skweb-inventory-kind'));}
 let editVersion=0,lastSavedItemId='';
 function reset(){lastSavedItemId='';editVersion++;const f=document.querySelector('#inventoryItemForm'),type=currentSpareType();clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;f.reset();f.elements.spareEquipment.value=type;f.elements.id.value='';delete f.dataset.sourceClass;syncResultSelection(f);f.elements.isYtSpare.checked=catalogKind==='spare';if(catalogKind==='spare')f.elements.unit.value='Unidad';f.elements.allowAssignment.checked=true;f.elements.allowLoan.checked=false;f.elements.allowTransfer.checked=true;f.elements.allowRemission.checked=true;syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);document.querySelector('#inventoryItemSave').textContent='Guardar elemento';document.querySelector('#inventoryItemDeactivate').hidden=true;document.querySelector('#inventoryItemStatus').hidden=true}
-async function edit(id){const version=++editVersion;const criteria=await all('inventoryCriteria'),x=criteria.find(r=>r.id===id);if(!x||version!==editVersion)return;const f=document.querySelector('#inventoryItemForm');clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;for(const [n,v] of Object.entries({id:x.id,name:itemName(x),unit:itemUnit(x),secondaryName:itemSecondary(x),tertiaryName:itemTertiary(x),spareEquipment:x.spareEquipment||"YT 29",spareItemNumber:x.spareItemNumber||"",spareItemName:x.spareItemName||"",sparePartCode:x.sparePartCode||"",spareApplication:x.spareApplication||""}))if(f.elements[n])f.elements[n].value=v;delete f.dataset.sourceClass;syncResultSelection(f);boolFields.forEach(n=>f.elements[n].checked=defaultEnabledOperations.has(n)?x[n]!==false:x[n]===true);syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);if(f.elements.fractionable.checked)f.elements.containerUnit.value=x.containerUnit||'';document.querySelector('#inventoryItemSave').textContent='Guardar cambios';document.querySelector('#inventoryItemDeactivate').hidden=false;document.querySelector('#inventoryItemDeactivate').textContent=x.isYtSpare?'Eliminar repuesto':'Retirar elemento';await render();if(version===editVersion)f.scrollIntoView({behavior:'smooth',block:'start'})}
+async function edit(id){const version=++editVersion;const criteria=await all('inventoryCriteria'),x=criteria.find(r=>r.id===id);if(!x||version!==editVersion)return;const f=document.querySelector('#inventoryItemForm');clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;for(const [n,v] of Object.entries({id:x.id,name:itemName(x),unit:itemUnit(x),secondaryName:itemSecondary(x),tertiaryName:itemTertiary(x),spareEquipment:x.spareEquipment||"YT 29",spareItemNumber:x.spareItemNumber||"",spareItemName:x.spareItemName||"",sparePartCode:x.sparePartCode||"",spareApplication:x.spareApplication||""}))if(f.elements[n])f.elements[n].value=v;delete f.dataset.sourceClass;syncResultSelection(f);boolFields.forEach(n=>f.elements[n].checked=n==='isFixedAsset'?fixedCriterion(x):defaultEnabledOperations.has(n)?x[n]!==false:x[n]===true);syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);if(f.elements.fractionable.checked)f.elements.containerUnit.value=x.containerUnit||'';document.querySelector('#inventoryItemSave').textContent='Guardar cambios';document.querySelector('#inventoryItemDeactivate').hidden=false;document.querySelector('#inventoryItemDeactivate').textContent=x.isYtSpare?'Eliminar repuesto':'Retirar elemento';await render();if(version===editVersion)f.scrollIntoView({behavior:'smooth',block:'start'})}
 let saving=false;
 async function save(e){
  e.preventDefault();if(saving)return;
@@ -327,26 +327,49 @@ function bind(){
  });
  document.querySelectorAll('[data-catalog-kind]').forEach(b=>b.addEventListener('click',()=>openKind(b.dataset.catalogKind)));document.querySelector('#spareCatalogFilter').addEventListener('click',event=>{const button=event.target.closest('[data-spare-filter]');if(!button)return;selectSpareType(button.dataset.spareFilter)});const search=document.querySelector('#inventoryItemSearch');function searchCatalog(){lastSavedItemId='';return render()}search.addEventListener('input',searchCatalog);search.addEventListener('search',searchCatalog);document.querySelector('#inventoryItemList').addEventListener('click',e=>{const b=e.target.closest('[data-inv-id]');if(b)edit(b.dataset.invId);else{const missing=e.target.closest('[data-inv-class]');if(missing)createClassCriterion(missing.dataset.invClass)}});document.querySelector('#newInventoryItem').addEventListener('click',reset);document.querySelector('#inventoryItemCancel').addEventListener('click',reset);document.querySelector('#inventoryItemForm').addEventListener('change',e=>{if(e.target.name==='itemKind'){openKind(e.target.value);return}if(e.target.matches('.invSwitchRow input'))syncSwitchText(e.target.parentElement);if(e.target.name==='fractionable')syncFractionableField(e.currentTarget);if(e.target.name==='isFixedAsset')syncFixedAssetFields(e.currentTarget);if(['isYtSpare','spareItemNumber','spareItemName'].includes(e.target.name))syncSpareFields(e.currentTarget)});document.querySelector('#inventoryItemForm').addEventListener('input',e=>{if(['spareItemNumber','spareItemName'].includes(e.target.name))syncSpareFields(e.currentTarget)});document.querySelector('#inventoryItemForm').addEventListener('submit',save);document.querySelector('#inventoryItemDeactivate').addEventListener('click',deactivate);window.addEventListener('skweb-inventory-refresh',render);window.addEventListener('skweb-synced',render);window.addEventListener('skweb-options-applied',()=>syncFixedAssetFields());bindValidation(document.querySelector('#inventoryItemForm'))}
 const quantityFlag=value=>value===true||['true','si','1','yes'].includes(norm(value));
+const fixedCriterion=item=>quantityFlag(item?.isFixedAsset??item?.esActivoFijo??item?.fixedAsset??item?.CI_ES_A_FIJO);
 const stockRevision=stock=>stock?.updatedAt||stock?.createdAt||'';
 function isQuantityCriterion(item){
  return item?.id&&!item.deleted&&item.active!==false&&item.recordType!=='formOptions'&&
   item.id!=='SYSTEM-FORM-OPTIONS-V1'&&itemName(item)&&(!quantityFlag(item.isYtSpare)||window.SKAdminAuth.isAdmin());
 }
 function quantityRestriction(item,stock,warehouse){
- if(quantityFlag(item.isFixedAsset??item.esActivoFijo??item.CI_ES_A_FIJO))return 'Activo fijo · La cantidad se cuenta por fichas.';
  if(warehouse==='production'&&quantityFlag(item.isEpp))return 'EPP · Se maneja en Plaza Blending.';
- if(stock?.deleted||stock?.active===false)return 'Existencia retirada de esta bodega.';
+ if(!fixedCriterion(item)&&(stock?.deleted||stock?.active===false))return 'Existencia retirada de esta bodega.';
  return '';
 }
 function canAdjustQuantity(item,stock,warehouse){
- return isQuantityCriterion(item)&&!quantityRestriction(item,stock,warehouse);
+ return isQuantityCriterion(item)&&!fixedCriterion(item)&&!quantityRestriction(item,stock,warehouse);
 }
 // La apertura se envía con la revisión inicial. El servidor rechaza el ajuste si otra
 // persona ya registró existencias. Un repuesto vinculado puede tener saldo en Mecánica.
 function canOpenProductionQuantity(item,meta){
- if(!item||meta?.enabled===false)return false;
+ if(!item||fixedCriterion(item)||meta?.enabled===false)return false;
  if(!quantityFlag(item.isYtSpare))return true;
  return !item.productionPartId&&window.SKSpareGroups.types.some(type=>norm(type).replace(/ /g,'')===norm(item.spareEquipment).replace(/ /g,''));
+}
+async function availableFixedQuantity(item,warehouse){
+ const names=new Set([itemName(item),itemSecondary(item),itemTertiary(item)].map(norm).filter(Boolean));
+ const members=(await all('assets')).filter(asset=>!asset.deleted&&asset.active!==false&&
+  (asset.criteriaId?String(asset.criteriaId)===String(item.id):names.has(norm(asset.clase))));
+ if(!members.length)return 0;
+ const tx=db.transaction([...assetEventStores,'personal']);
+ const histories=await Promise.all(members.map(asset=>asset.productionMovementRevision?null:assetEventData(tx,asset.id)));
+ const people=histories.some(data=>data?.blendingDeliveries.length)?await all('personal'):[];
+ let count=0;
+ for(const [i,asset] of members.entries()){
+  const history=histories[i];
+  // El traslado de Producción ya actualizó la ficha central. Su libro de movimientos
+  // es independiente del historial de Plaza, que puede contener una entrega anterior.
+  const profile=history?window.SKAssetHistory.project(asset,{...history,personal:people}).asset:asset;
+  const location=norm(profile.ubicacion),state=norm(profile.estado);
+  const inWarehouse=warehouse==='plaza'?location==='bodega de superficie':
+   ['produccion','inventario de produccion','bodega de produccion'].includes(location)||
+   /^bodega de produccion\s*[-–—]?\s*(?:n\.?|nivel)\s*4$/.test(location);
+  if(inWarehouse&&!['no','false','0'].includes(norm(String(asset.disponibleEntrega??'')))&&
+   (!state||/^operativ[oa](?:\/[oa])?$/.test(state)||state==='apto segun inspeccion'))count++;
+ }
+ return count;
 }
 function adjustmentTransaction(tables,write){
  return new Promise((resolve,reject)=>{
@@ -403,10 +426,16 @@ function settleQuantity(adjustment,confirmed,conflict){
 async function syncQuantities(){
  const adjustments=(await all(quantityAdjustments)).filter(row=>!row.syncError);
  if(!adjustments.length)return;
- const pendingCriteria=new Set((await all('inventoryCriteria')).filter(item=>item.syncState==='pending').map(item=>item.id));
+ const criteria=new Map((await all('inventoryCriteria')).map(item=>[item.id,item]));
  for(const row of adjustments){
   // El criterio pudo haberse creado mientras ya se enviaba la sincronización anterior.
-  if(pendingCriteria.has(row.itemId))continue;
+  const item=criteria.get(row.itemId);
+  if(item?.syncState==='pending')continue;
+  if(fixedCriterion(item)){
+   await settleQuantity(row,null,'La cantidad de un activo fijo se calcula por fichas.');
+   window.dispatchEvent(new Event('skweb-inventory-refresh'));
+   continue;
+  }
   let result;
   try{
    result=row.warehouse?await window.SKAdminAuth.request('adminWarehouseQuantityV1',{
@@ -448,6 +477,8 @@ async function openQuantities(options={}){
    #quantityItems button:is(:hover,:focus){background:#eaf1f6}
    #quantityItems small{font-weight:500}
    #quantityItems button:disabled{color:#475569;opacity:1;cursor:default}
+   #inventoryQuantities [hidden]{display:none!important}
+   #inventoryQuantities output{font-size:1.35rem;font-weight:700}
    #inventoryQuantities .status:empty{margin:0;padding:0;border:0;min-height:0}
    #inventoryQuantities .quantityWarehouseLogo{display:block;width:clamp(8rem,40vw,12rem);max-width:100%;height:auto;object-fit:contain;margin:clamp(1rem,4vw,2rem) auto .25rem}
   </style><div class="sectionHead"><h2>Editar cantidades</h2></div>
@@ -457,7 +488,8 @@ async function openQuantities(options={}){
      <input id="quantityItemSearch" type="search" autocomplete="off" placeholder="Escribe o elige un elemento…" aria-controls="quantityItems">
      <div id="quantityItems" role="group" aria-label="Elementos disponibles" hidden></div>
     </div>
-    <label>Cantidad<input name="quantity" type="number" min="0" step="any" required disabled></label>
+    <label data-fixed-count for="availableAssetCount" hidden>Activos disponibles<output id="availableAssetCount" aria-live="polite"></output></label>
+    <label data-manual-quantity>Cantidad<input name="quantity" type="number" min="0" step="any" required disabled></label>
     <div class="formActions"><button type="submit" disabled>Guardar cantidad</button>
      <button type="button" id="backFromQuantities" class="adminFormCancel">Volver</button></div>
    </form><p class="status" role="status" aria-live="polite"></p>
@@ -475,6 +507,14 @@ async function openQuantities(options={}){
  const form=section.querySelector('form'),search=section.querySelector('#quantityItemSearch'),
   menu=section.querySelector('#quantityItems'),quantity=form.elements.quantity,
   button=form.querySelector('[type=submit]'),status=section.querySelector('.status');
+ const countField=form.querySelector('[data-fixed-count]'),countOutput=form.querySelector('#availableAssetCount');
+ function showFixedCount(fixed){
+  form.querySelector('[data-manual-quantity]').hidden=button.hidden=fixed;
+  countField.hidden=!fixed;
+  if(fixed){quantity.value='';quantity.disabled=button.disabled=true}
+  else countOutput.textContent='';
+ }
+ showFixedCount(false);
  const view=++quantityViewVersion;
  section.querySelector('h2').textContent='Cantidades · '+warehouseName;
  const logo=section.querySelector('.quantityWarehouseLogo');
@@ -520,6 +560,7 @@ async function openQuantities(options={}){
    const aliases=[itemSecondary(row),itemTertiary(row)].filter(Boolean);
    const reason=restrictions.get(row.id);
    if(reason){option.disabled=true;aliases.push(reason)}
+   else if(fixedCriterion(row))aliases.push('Activo fijo · Consultar disponibles');
    else if(production&&!registeredIds.has(row.id)&&meta?.enabled!==false)
     aliases.push(canOpenProductionQuantity(row,meta)?'Ingresar saldo inicial':'Saldo por sincronizar');
    if(aliases.length){const detail=document.createElement('small');detail.textContent=aliases.join(' · ');option.append(detail)}
@@ -538,6 +579,14 @@ async function openQuantities(options={}){
   pending=adjustments.find(row=>row.itemId===id&&(row.warehouse||'plaza')===warehouse);
   const item=currentItems.find(row=>row.id===id);
   const restriction=isQuantityCriterion(item)?quantityRestriction(item,current,warehouse):'El criterio ya no permite editar la cantidad.';
+  if(fixedCriterion(item)){
+   opening=false;stock=pending=null;showFixedCount(true);countOutput.textContent='';status.textContent=restriction;
+   if(restriction)return;
+   const count=await availableFixedQuantity(item,warehouse);
+   if(view===quantityViewVersion&&version===selectionVersion)countOutput.textContent=String(count);
+   return;
+  }
+  showFixedCount(false);
   const eligible=!restriction;
   const currentMeta=production&&currentStocks.find(row=>!row.itemId);
   opening=production&&!current&&eligible&&canOpenProductionQuantity(item,currentMeta);
@@ -561,7 +610,7 @@ async function openQuantities(options={}){
  search.disabled=false;
  search.onfocus=search.onclick=drawItems;
  search.oninput=()=>{
-  selected=stock=pending=null;selectionVersion++;
+  selected=stock=pending=null;selectionVersion++;showFixedCount(false);
   quantity.value='';quantity.disabled=button.disabled=true;status.textContent='';
   drawItems();
  };
@@ -578,6 +627,7 @@ async function openQuantities(options={}){
  async function selectItem(item){
   if(!item)return;
   selected=item;search.value=itemName(item);menu.hidden=true;
+  showFixedCount(fixedCriterion(item));countOutput.textContent='';status.textContent='';
   stock=pending=null;quantity.value='';quantity.disabled=button.disabled=true;
   quantity.step=quantityFlag(item.isYtSpare)||production&&!quantityFlag(item.fractionable)?'1':'any';
   await readSelected();
@@ -594,7 +644,7 @@ async function openQuantities(options={}){
  };
  form.onsubmit=async event=>{
   event.preventDefault();
-  if(button.disabled||!window.SKAdminAuth?.canView?.('inventoryQuantities')||!form.reportValidity())return;
+  if(button.disabled||!countField.hidden||!window.SKAdminAuth?.canView?.('inventoryQuantities')||!form.reportValidity())return;
   const id=selected?.id,value=quantity.valueAsNumber;
   if(!id||!Number.isFinite(value)||value<0)return;
   button.dataset.saving='1';search.disabled=quantity.disabled=button.disabled=true;menu.hidden=true;
@@ -609,7 +659,7 @@ async function openQuantities(options={}){
   if(failure)report(failure);
  };
  const item=options.itemId&&criteria.find(row=>String(row.id)===String(options.itemId));
- if(item&&matchesCatalogItem(item,options.query))selectItem(item).catch(report);
+ if(item&&matchesCatalogItem(item,options.query))await selectItem(item).catch(report);
  else if(production&&options.query){
   const matches=criteria.filter(row=>matchesCatalogItem(row,options.query));
   if(matches.length===1)await selectItem(matches[0]);

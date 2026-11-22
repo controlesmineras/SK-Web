@@ -234,15 +234,15 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  for(const record of [fixed,epp,{id:'cal-retirado',name:'Calibrador retirado',active:false}])await h.ctx.put('inventoryCriteria',record);
  await h.api.openQuantities(opened);
  assert.equal(search.value,'Cali');assert.equal(menu.hidden,false);
- assert.deepEqual(Array.from(menu.rows,row=>row.dataset.itemId),[item.id,fixed.id,epp.id]);
- assert.equal(menu.rows[0].textContent,'Calibrador Vernier');assert.match(menu.rows[0].detail,/Ingresar saldo inicial/);
- assert.ok(menu.rows[1].disabled);assert.match(menu.rows[1].detail,/por fichas/);
+ assert.deepEqual(Array.from(menu.rows,row=>row.dataset.itemId),[fixed.id,item.id,epp.id]);
+ assert.equal(menu.rows[1].textContent,'Calibrador Vernier');assert.match(menu.rows[1].detail,/Ingresar saldo inicial/);
+ assert.ok(!menu.rows[0].disabled);assert.match(menu.rows[0].detail,/Consultar disponibles/);
  assert.ok(menu.rows[2].disabled);assert.match(menu.rows[2].detail,/Plaza Blending/);
  assert.equal(type('no existe').length,0);
  await h.api.openQuantities({warehouse:'production'});
  const unfiltered=type('');
- assert.deepEqual(Array.from(unfiltered,row=>row.dataset.itemId),[item.id],'la primera apertura está disponible al desplegar el campo vacío');
- assert.match(unfiltered[0].detail,/Ingresar saldo inicial/);
+ assert.deepEqual(Array.from(unfiltered,row=>row.dataset.itemId),[fixed.id,item.id],'la primera apertura está disponible al desplegar el campo vacío');
+ assert.match(unfiltered[1].detail,/Ingresar saldo inicial/);
  await h.api.openQuantities({warehouse:'production',query:'Cali Ver'});
  assert.equal(search.value,'Calibrador Vernier');assert.equal(field.disabled,false);assert.equal(field.value,'');
  const [choice]=type('pie de rey');
@@ -264,7 +264,7 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  await h.ctx.put('inventoryCriteria',{...item,syncState:'synced'});
  await h.api.syncQuantities();assert.equal(sends,1);
  await h.api.openQuantities({warehouse:'production'});
- assert.deepEqual(Array.from(type(''),row=>row.dataset.itemId),[item.id]);
+ assert.deepEqual(Array.from(type(''),row=>row.dataset.itemId),[fixed.id,item.id]);
  assert.equal((await h.ctx.all('productionQuantityCache'))[0].quantity,0);
  assert.equal((await h.ctx.all('inventoryQuantityAdjustments')).length,0);
  // Nombres y alias que también reconoce el selector de ingresos y salidas de Producción.
@@ -275,4 +275,44 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
   assert.equal(w.SKSpareGroups.matches(legacy,query),true);
   assert.deepEqual(Array.from(type(query),row=>[row.dataset.itemId,row.textContent]),[[legacy.id,legacy.itemName]]);
  }
+});
+
+test('ambas bodegas cuentan fichas disponibles y bloquean ajustes manuales de activos fijos',async()=>{
+ const h=await harness(),w=h.ctx.window;
+ vm.runInContext(fs.readFileSync('asset-history.js','utf8'),h.ctx);
+ w.SKAdminAuth={isAdmin:()=>true,canView:()=>true,request:()=>assert.fail('No debe enviar un ajuste de un activo fijo')};
+ const fixed={id:'cal',name:'Calibrador',fixedAsset:'Sí'},common={id:'repuesto',name:'Arandela'};
+ for(const row of [fixed,common])await h.ctx.put('inventoryCriteria',row);
+ const surface='Bodega de Superficie',production='Bodega de Producción-N. 4';
+ for(const [id,ubicacion,extra] of [
+  ['plaza',surface,{}],['plaza2',surface,{clase:'Nombre anterior',criteriaId:fixed.id}],
+  ['prod',production,{estado:'Apto según inspección'}],['prod2','Producción',{productionMovementRevision:3}],
+  ['prestado',surface,{}],['entregado','Producción · Nivel 4',{}],['retirado',production,{estado:'Dado/a de baja'}],
+  ['danado',production,{estado:'Averiado/a'}],['taller',surface,{estado:'En reparación'}],['no',surface,{disponibleEntrega:false}],
+  ['borrado',surface,{deleted:true}],['otro',surface,{criteriaId:'otra-clase'}]
+ ])await h.ctx.put('assets',{id,clase:'Calibrador',estado:'Operativo/a',ubicacion,...extra});
+ await h.ctx.put('blendingDeliveries',{id:'prestamo',assetId:'prestado',deliveryType:'PRÉSTAMO',destination:'Socavón',createdAt:'2026-11-20T12:30:00Z'});
+ await h.ctx.put('blendingIncomes',{id:'anterior',assetId:'prod2',createdAt:'2026-11-19T12:30:00Z'});
+ for(const table of ['inventoryStock','productionQuantityCache'])await h.ctx.put(table,{id:'obsoleto',itemId:fixed.id,quantity:91});
+ const section=h.node('#inventoryQuantities'),form=h.node('form'),button=h.node('[type=submit]');
+ section.querySelector=form.querySelector=h.node;section.classList={contains:()=>true};
+ form.reset=()=>{};form.reportValidity=()=>true;form.elements={quantity:{value:'',focus(){}}};
+ const output=h.node('#availableAssetCount'),manual=h.node('[data-manual-quantity]');
+ for(const warehouse of ['production','plaza']){
+  await h.api.openQuantities({warehouse,itemId:fixed.id});
+  assert.equal(output.textContent,'2');assert.equal(h.node('[data-fixed-count]').hidden,false);
+  assert.ok(manual.hidden&&button.hidden&&button.disabled&&form.elements.quantity.disabled);
+  await form.onsubmit({preventDefault(){}});
+  assert.equal((await h.ctx.all('inventoryQuantityAdjustments')).length,0);
+ }
+ await h.ctx.put('assets',{id:'plaza',clase:'Calibrador',ubicacion:surface,estado:'Averiado/a'});
+ await h.api.openQuantities({warehouse:'plaza',itemId:fixed.id});assert.equal(output.textContent,'1');
+ await h.ctx.put('assets',{id:'plaza2',criteriaId:fixed.id,ubicacion:'Socavón'});
+ await h.api.openQuantities({warehouse:'plaza',itemId:fixed.id});assert.equal(output.textContent,'0');
+ await h.api.openQuantities({warehouse:'plaza',itemId:common.id});
+ assert.ok(h.node('[data-fixed-count]').hidden);assert.ok(!manual.hidden&&!button.hidden&&!button.disabled);
+ await h.ctx.put('inventoryQuantityAdjustments',{id:fixed.id,itemId:fixed.id,warehouse:'plaza',quantity:99,operationId:'ajuste-anterior'});
+ await h.api.syncQuantities();
+ assert.match((await h.ctx.all('inventoryQuantityAdjustments'))[0].syncError,/activo fijo/);
+ assert.equal((await h.ctx.all('inventoryStock'))[0].quantity,91);
 });
