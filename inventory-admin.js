@@ -424,6 +424,8 @@ async function openQuantities(options={}){
    #quantityItems button{display:grid;width:100%;padding:10px 12px;text-align:left;background:#fff;color:#173d59}
    #quantityItems button:is(:hover,:focus){background:#eaf1f6}
    #quantityItems small{font-weight:500}
+   #inventoryQuantities .status:empty{margin:0;padding:0;border:0;min-height:0}
+   #inventoryQuantities .quantityWarehouseLogo{display:block;width:clamp(8rem,40vw,12rem);max-width:100%;height:auto;object-fit:contain;margin:clamp(1rem,4vw,2rem) auto .25rem}
   </style><div class="sectionHead"><h2>Editar cantidades</h2></div>
 
    <form><div class="quantityPicker">
@@ -434,7 +436,8 @@ async function openQuantities(options={}){
     <label>Cantidad<input name="quantity" type="number" min="0" step="any" required disabled></label>
     <div class="formActions"><button type="submit" disabled>Guardar cantidad</button>
      <button type="button" id="backFromQuantities" class="adminFormCancel">Volver</button></div>
-   </form><p class="status" role="status" aria-live="polite"></p>`;
+   </form><p class="status" role="status" aria-live="polite"></p>
+   <img class="quantityWarehouseLogo" width="192" height="192" alt="">`;
   document.querySelector('main').append(section);
   section.querySelector('#backFromQuantities').onclick=()=>window.SKAdminNav?.back();
   const picker=section.querySelector('.quantityPicker'),choices=section.querySelector('#quantityItems');
@@ -450,6 +453,9 @@ async function openQuantities(options={}){
   button=form.querySelector('[type=submit]'),status=section.querySelector('.status');
  const view=++quantityViewVersion;
  section.querySelector('h2').textContent='Cantidades · '+warehouseName;
+ const logo=section.querySelector('.quantityWarehouseLogo');
+ logo.alt='Logo de '+warehouseName;
+ logo.src=production?'./produccion/produccion-perforadora-512.png':'./plaza/icon-volqueta.svg';
  form.reset();search.disabled=true;menu.hidden=true;quantity.disabled=button.disabled=true;
  status.textContent='';section._refreshQuantity=null;form.onsubmit=null;
  if(typeof db==='undefined'||!db){status.textContent='El almacenamiento local todavía está cargando. Vuelve a abrir el módulo.';return}
