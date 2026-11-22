@@ -145,3 +145,19 @@ body>main .homeAccessRegister{background:#214b63}
 .assetPersonControl .assetPersonClear{position:absolute;right:2px;top:2px;bottom:2px;width:2.6rem;padding:0;background:transparent;color:#173d59;font-size:1.35rem}
 .assetPersonField .accessPersonResults [aria-selected="true"]{background:#eaf1f6}
 .assetPersonField .noSuggestion{padding:8px;color:#52687a}
+
+.adminBackButton:not([hidden]){
+  position:fixed;right:max(16px,env(safe-area-inset-right));bottom:max(16px,env(safe-area-inset-bottom));z-index:60;
+  display:grid;place-items:center;width:52px;height:52px;min-height:52px;margin:0;padding:0;
+  border-radius:50%;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3;box-shadow:0 4px 18px #102d4140;
+}
+.adminBackButton svg{display:block;width:28px;height:28px}
+.adminBackButton:hover{background:#173d59;color:white}
+.adminBackButton:focus-visible{outline:3px solid #427b94;outline-offset:3px}
+body:has(#adminBack:not([hidden])){padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
+@media(max-width:760px){
+  .adminHomeMenuOverlay:has(.adminBackButton){padding-bottom:calc(80px + env(safe-area-inset-bottom))}
+  .adminHomeMenuOverlay:has(.adminBackButton) .adminHomeMenu{max-height:100%}
+}
+@media print{.adminBackButton:not([hidden]){display:none}}
