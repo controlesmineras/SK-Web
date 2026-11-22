@@ -32,6 +32,11 @@
 .warehouseHint{padding:12px;border-left:4px solid #427b94;background:#eef5f8;border-radius:4px}
 #warehousePending p{padding:12px;border:1px solid #d1b06c;background:#fff8e8;border-radius:8px;white-space:normal}
 #warehousePending button{display:block;margin-top:8px}#warehouseStatus{white-space:pre-line}
+#warehouseHistoryNav{display:grid;gap:8px;margin:0 0 16px}
+#warehouseHistoryNav [role=group]{display:flex;flex-wrap:wrap;gap:5px}
+#warehouseHistoryNav [data-history-options] button{flex-basis:0}
+#warehouseHistoryNav button{flex:1 0 auto;min-height:44px;padding:5px 1px;border:1px solid #b5c8d3;background:#edf3f7;color:#173d59;font-size:clamp(.84rem,3.4vw,.96rem);line-height:1.15;white-space:normal}
+#warehouseHistoryNav button[aria-pressed=true]{background:#20566f;color:white;border-color:#a2d9e9;box-shadow:inset 0 -3px #a2d9e9}
 #warehouseFilters{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}#warehouseFilters input{flex:1;min-width:160px}
 #warehouseTable td,#warehouseTable th{padding:10px;white-space:normal}#warehouseExports{display:flex;gap:8px;margin:12px 0}
 @media(max-width:520px){#warehouseForm{grid-template-columns:1fr}#warehouseForm .wide{grid-column:auto}.productionModules button{font-size:.95rem}}

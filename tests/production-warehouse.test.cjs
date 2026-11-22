@@ -219,11 +219,14 @@ test('Reintegros lists open internal loans by original borrower, including offli
  const records=[closed,partial,savedReturn,back('r2','closed',0.1),{id:'plaza',kind:'transfer_in',sourceLoan:true}];
  const pending=[back('r3','closed',0.7),savedReturn,partial,loan('local',1,{assetId:'fixed'}),
   {...back('r4','partial',2),syncRejected:true},loan('invalid',1,{syncRejected:true})];
- const open=()=>Array.from(c.warehouseLoans({catalog,records,pending})).filter(row=>row.left>0);
+ const loans=()=>Array.from(c.warehouseLoans({catalog,records,pending}));
+ const open=()=>loans().filter(row=>row.left>0);
+ const completed=()=>loans().filter(row=>row.left===0).map(row=>row.id).sort();
+ assert.deepEqual(completed(),['closed']);
  assert.deepEqual(open().map(row=>[row.id,row.left,row.borrower,row.document,row.label]),[
   ['local',1,'Quien retiró','123','Llave · S-42'],['partial',2,'Nombre del préstamo','123','Llave']]);
  pending.push(back('r5','local',1),back('r6','partial',2));
- assert.deepEqual(open(),[]);
+ assert.deepEqual(open(),[]);assert.deepEqual(completed(),['closed','local','partial']);
 });
 
 test('offline transfer keeps device registration and first server receipt across apps and retries',()=>{
@@ -367,6 +370,7 @@ test('Bodega distingue las aperturas nativas y de Admin de los ingresos y los aj
  const app=fs.readFileSync('produccion/warehouse.js','utf8');
  const items=new Map([['tool',item],['spare',spare]]);
  const ui=vm.createContext({criteriaById:()=>items,view:'home'});
+ vm.runInContext(app.slice(app.indexOf(' const historySections='),app.indexOf(' const historyNav=')),ui);
  vm.runInContext(app.slice(app.indexOf(' function movementKind('),app.indexOf(' function renderTable(')),ui);
  const adminRow=(id,revision,part='tool')=>({id,kind:'quantity_adjustment',itemId:part,balanceBefore:0,balanceAfter:2,
   requestSignature:JSON.stringify(['production',part,2,revision,0])});
@@ -377,5 +381,8 @@ test('Bodega distingue las aperturas nativas y de Admin de los ingresos y los aj
  assert.deepEqual(ids('income'),['receipt','from-plaza']);
  assert.deepEqual(ids('openingHistory'),['native','local','previous','opening-new']);
  assert.deepEqual(ids('opening'),ids('openingHistory'));
- assert.deepEqual(ids('delivery'),['out']);assert.deepEqual(ids('history'),rows.map(row=>row.id));
+ assert.deepEqual(ids('delivery'),['out']);assert.deepEqual(ids('history'),[]);
+ assert.deepEqual(ids('ownIncomeHistory'),['receipt']);assert.deepEqual(ids('plazaIncomeHistory'),['from-plaza']);
+ assert.deepEqual(ids('deliveryHistory'),['out']);
+ assert.deepEqual(ids('pendingLoanHistory'),[]);assert.deepEqual(ids('completedLoanHistory'),[]);
 });

@@ -48,6 +48,53 @@
  const openingHistoryButton=button(openingHistoryLabel,()=>setView('openingHistory'));
  openingHistoryButton.hidden=true;form.after(openingHistoryButton);
  form.addEventListener('input',()=>{warehouseDirty=true});form.addEventListener('change',()=>{warehouseDirty=true});
+ const historySections=[
+  ['INGRESOS',[
+   {view:'ownIncomeHistory',label:'PROPIOS',kind:'income'},
+   {view:'plazaIncomeHistory',label:'↓ DESDE PLAZA B.',kind:'transfer_in'}
+  ]],
+  ['ENTREGAS',[{view:'deliveryHistory',kind:'delivery'}]],
+  ['PRÉSTAMOS',[
+   {view:'pendingLoanHistory',label:'PENDIENTES',loanFilter:'pending'},
+   {view:'completedLoanHistory',label:'COMPLETADOS',loanFilter:'returned'}
+  ]]
+ ];
+ const historyQueries=new Map();
+ for(const [section,queries] of historySections){
+  for(const query of queries)historyQueries.set(query.view,{...query,section});
+ }
+ const historyNav=el('nav'),historyTypes=el('div');
+ historyNav.id='warehouseHistoryNav';
+ historyNav.setAttribute('aria-label','Consultar movimientos');
+ historyTypes.setAttribute('role','group');
+ historyTypes.setAttribute('aria-label','Tipo de movimiento');
+ historyNav.append(historyTypes);
+ find('#warehouseFilters').before(historyNav);
+ for(const [section,queries] of historySections){
+  const category=button(section,()=>setView(queries[0].view));
+  historyTypes.append(category);
+  category.dataset.historySection=section;
+  if(queries.length===1)continue;
+  const options=el('div');
+  options.dataset.historyOptions=section;
+  options.setAttribute('role','group');
+  options.setAttribute('aria-label',section==='INGRESOS'?'Origen del ingreso':'Estado del préstamo');
+  historyNav.append(options);
+  for(const query of queries){
+   const choice=button(query.label,()=>setView(query.view));
+   choice.dataset.historyView=query.view;
+   options.append(choice);
+  }
+ }
+ function paintHistoryNav(query){
+  historyNav.hidden=view!=='history'&&!query;
+  if(historyNav.hidden)return;
+  for(const category of historyTypes.children)category.setAttribute('aria-pressed',String(category.dataset.historySection===query?.section));
+  for(const options of historyNav.querySelectorAll('[data-history-options]')){
+   options.hidden=options.dataset.historyOptions!==query?.section;
+   for(const choice of options.children)choice.setAttribute('aria-pressed',String(choice.dataset.historyView===view));
+  }
+ }
  const isEpp=row=>row.isEpp===true||['true','si','sí','1','yes'].includes(String(row.isEpp||'').trim().toLowerCase());
  const criteria=()=>(snapshot.catalog?.criteria||[]).filter(row=>!row.deleted&&row.active!==false&&!isEpp(row)),people=()=>snapshot.catalog?.personal||[];
  const pending=()=>snapshot.pending||[],records=()=>[...(snapshot.records||[])].sort((a,b)=>a.revision-b.revision);
@@ -310,10 +357,12 @@
    find('#warehouseSearch').value='';
   }
   stockExpanded.clear();view=next;warehouseDirty=false;selectedReturnId='';
-  const returning=view==='return',queryView=['stock','history','openingHistory','loans'].includes(view);
-  form.hidden=view==='home'||queryView;
+  const historyQuery=historyQueries.get(view),historyMenu=view==='history';
+  const returning=view==='return',queryView=Boolean(historyQuery)||['stock','openingHistory','loans'].includes(view);
+  paintHistoryNav(historyQuery);
+  form.hidden=view==='home'||historyMenu||queryView;
   openingHistoryButton.hidden=view!=='income'&&view!=='opening';
-  find('.warehouseActions').hidden=view!=='home';find('.tableWrap').hidden=view==='home'||returning;
+  find('.warehouseActions').hidden=view!=='home';find('.tableWrap').hidden=view==='home'||historyMenu||returning;
   find('#warehouseLoanFilter').hidden=view!=='loans';find('#warehouseFilters').hidden=!queryView;find('#warehouseExports').hidden=!queryView;
   find('#warehousePending').hidden=returning;
   find('#warehouseReturnSearch').value='';find('#warehouseReturnPicker').hidden=!returning;
@@ -398,6 +447,9 @@
   return row.kind;
  }
  function movementInView(kind){
+  if(view==='history')return false;
+  const query=historyQueries.get(view);
+  if(query)return kind===query.kind;
   if(view==='income')return kind==='income'||kind==='transfer_in';
   if(view==='openingHistory'||view==='opening')return kind==='opening';
   if(view==='delivery'||view==='loan'||view==='transfer_out'||view==='return')return kind===view;
@@ -406,13 +458,17 @@
  function renderTable(){
   renderRejected();
   if(view==='return'||view==='home')return;
+  if(view==='history'){
+   exportRows=[];find('thead').replaceChildren();find('tbody').replaceChildren();return;
+  }
+  const historyQuery=historyQueries.get(view);
   const query=find('#warehouseFilters').hidden?'':norm(find('#warehouseSearch').value).trim();let headers,rows,display,truncated;
   if(view==='stock'){
    headers=['ELEMENTO','UNIDAD','DISPONIBLE EN PRODUCCIÓN'];
    ({rows,display,truncated}=stockRows(query));
-  }else if(view==='loans'){
+  }else if(view==='loans'||historyQuery?.loanFilter){
    headers=['FECHA','HORA REGISTRO','ELEMENTO / ACTIVO','QUIÉN RECIBIÓ','PRESTADO','PENDIENTE','ESTADO'];
-   const filter=find('#warehouseLoanFilter').value;
+   const filter=historyQuery?.loanFilter||find('#warehouseLoanFilter').value;
    rows=loans().filter(row=>filter==='all'||(filter==='pending'?row.left>0:row.left<=0)).flatMap(row=>{
     const cells=[displayDate(row.fechaISO),registrationHour(row),row.label,row.borrower,row.quantity,row.left,row.left>0?'PENDIENTE':'DEVUELTO'];
     return matchesQuery(cells,row.itemId,query)?[cells]:[];
@@ -442,8 +498,10 @@
    const icon=el('span',entry.expanded?'📂':'📁');icon.setAttribute('aria-hidden','true');toggle.prepend(icon);
    cell.colSpan=headers.length;cell.append(toggle);tr.append(cell);return tr;
   }));
-  if(view==='openingHistory'&&!rows.length){
-   const tr=el('tr'),td=el('td',query?'No hay saldos de apertura que coincidan.':'Aún no hay saldos de apertura registrados.');
+  if(!rows.length&&(view==='openingHistory'||historyQuery)){
+   const message=view==='openingHistory'?(query?'No hay saldos de apertura que coincidan.':'Aún no hay saldos de apertura registrados.')
+    :query?'No hay registros que coincidan con la búsqueda.':'Aún no hay registros en esta consulta.';
+   const tr=el('tr'),td=el('td',message);
    td.colSpan=headers.length;tr.append(td);body.append(tr);
   }
   if(truncated||(!display&&rows.length>250)){const tr=el('tr'),td=el('td','Hay más resultados. Filtra la consulta o exporta el listado completo.');td.colSpan=headers.length;tr.append(td);body.append(tr);}
@@ -495,7 +553,8 @@
   mechanicTitle.hidden=module!=='mechanic';
   breadcrumb.hidden=module!=='warehouse';
   if(!breadcrumb.hidden){
-   const label=view==='home'?'':actions.find(([,key])=>key===view)?.[0]||view;
+   const query=historyQueries.get(view);
+   const label=query?['Consultas',query.section,query.label].filter(Boolean).join(' / '):view==='home'?'':actions.find(([,key])=>key===view)?.[0]||view;
    breadcrumb.textContent=label?'Bodega / '+label:'Bodega';
   }
   byId('productionHome').disabled=!module||!both&&!child;
@@ -519,7 +578,14 @@
  }
  function goBack(){
   if(!session)return;
-  if(module==='warehouse'&&view!=='home'){setView(view==='openingHistory'?openingHistoryFrom:'home');return;}
+  if(module==='warehouse'&&view!=='home'){
+   const query=historyQueries.get(view);
+   if(query){
+    setView('history');
+    Array.from(historyTypes.children).find(node=>node.dataset.historySection===query.section)?.focus();
+   }else setView(view==='openingHistory'?openingHistoryFrom:'home');
+   return;
+  }
   if(module==='mechanic'&&mechanicMenu.hidden){
    if(!leaveCurrent())return;
    const previous=mechanicMenu.querySelector('[aria-pressed="true"]');
