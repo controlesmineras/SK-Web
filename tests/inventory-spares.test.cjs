@@ -224,6 +224,21 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  });
  await h.api.openQuantities(opened);await selected();
  assert.equal(search.value,item.name);
+ // El usuario vuelve al catálogo, busca por nombre y abre la bodega sin tocar la ficha.
+ const catalogSearch=h.node('#inventoryItemSearch');
+ catalogSearch.value='Cali';await catalogSearch.handlers.input();
+ productionButton.handlers.click();
+ assert.equal(opened.itemId,'');assert.equal(opened.query,'Cali');
+ const fixed={id:'cal-fijo',name:'Calibrador de precisión',CI_ES_A_FIJO:'Sí'};
+ const epp={id:'cal-epp',name:'Calibrador de prueba EPP',isEpp:true};
+ for(const record of [fixed,epp,{id:'cal-retirado',name:'Calibrador retirado',active:false}])await h.ctx.put('inventoryCriteria',record);
+ await h.api.openQuantities(opened);
+ assert.equal(search.value,'Cali');assert.equal(menu.hidden,false);
+ assert.deepEqual(Array.from(menu.rows,row=>row.dataset.itemId),[item.id,fixed.id,epp.id]);
+ assert.equal(menu.rows[0].textContent,'Calibrador Vernier');assert.match(menu.rows[0].detail,/Ingresar saldo inicial/);
+ assert.ok(menu.rows[1].disabled);assert.match(menu.rows[1].detail,/por fichas/);
+ assert.ok(menu.rows[2].disabled);assert.match(menu.rows[2].detail,/Plaza Blending/);
+ assert.equal(type('no existe').length,0);
  await h.api.openQuantities({warehouse:'production'});
  assert.equal(type('').some(row=>row.dataset.itemId===item.id),false);
  const [choice]=type('pie de rey');

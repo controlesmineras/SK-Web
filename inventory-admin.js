@@ -148,6 +148,13 @@ function syncSpareFields(f){
  }
 }
 const spareUse=item=>item.spareApplication||item.application||item.ubicacionAplicacion||'';
+function matchesCatalogItem(item,query){
+ if(!query)return true;
+ const spare=quantityFlag(item.isYtSpare);
+ const text=[itemName(item),spare&&window.SKSpareGroups.recordName(item),itemSecondary(item),itemTertiary(item),
+  itemUnit(item),spare&&spareUse(item),item.id].filter(Boolean).join(' ');
+ return matchesItemSearch(text,item.spareItemNumber,query,spare?item.sparePartCode:'');
+}
 const validationLabels={name:'Nombre del elemento',unit:'Unidad de medida',spareEquipment:'Tipo de repuesto',spareItemName:'Nombre del ítem',containerUnit:'Unidad contenedora'};
 function clearValidation(f){
  delete f.dataset.validationAttempted;
@@ -203,7 +210,7 @@ async function render(){
   if(!classes.has(key))classes.set(key,name);
  }
  const ordered=catalogKind==='spare'?window.SKSpareGroups.parts(active,currentSpareType()):active;
- const rows=ordered.filter(x=>matchesItemSearch([itemName(x),x.isYtSpare?window.SKSpareGroups.recordName(x):'',itemSecondary(x),itemTertiary(x),itemUnit(x),x.isYtSpare&&spareUse(x),x.id].filter(Boolean).join(' '),x.spareItemNumber,q,x.isYtSpare?x.sparePartCode:'')).map(item=>({name:item.isYtSpare?window.SKSpareGroups.recordName(item):itemName(item),item}));
+ const rows=ordered.filter(item=>matchesCatalogItem(item,q)).map(item=>({name:item.isYtSpare?window.SKSpareGroups.recordName(item):itemName(item),item}));
  for(const name of classes.values())rows.push({name});
  if(catalogKind==='common')rows.sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true,sensitivity:'base'}));
  const count=document.querySelector('#inventoryItemCount'),list=document.querySelector('#inventoryItemList');
@@ -309,7 +316,8 @@ function bind(){
   button.addEventListener('click',()=>{
    const warehouse=button.dataset.quantityWarehouse;
    const itemId=criterionForm.elements.id.value||(warehouse==='production'?lastSavedItemId:'');
-   window.SKAdminNav.go('inventoryQuantities',{warehouse,itemId});
+   const query=warehouse==='production'&&!lastSavedItemId?document.querySelector('#inventoryItemSearch').value.trim():'';
+   window.SKAdminNav.go('inventoryQuantities',{warehouse,itemId,query});
   });
  });
  const helpButton=document.querySelector('#inventoryHelpToggle'),help=document.querySelector('#inventoryCatalogHelp');
@@ -317,15 +325,21 @@ function bind(){
   help.hidden=!help.hidden;
   helpButton.setAttribute('aria-expanded',String(!help.hidden));
  });
- document.querySelectorAll('[data-catalog-kind]').forEach(b=>b.addEventListener('click',()=>openKind(b.dataset.catalogKind)));document.querySelector('#spareCatalogFilter').addEventListener('click',event=>{const button=event.target.closest('[data-spare-filter]');if(!button)return;selectSpareType(button.dataset.spareFilter)});const search=document.querySelector('#inventoryItemSearch');search.addEventListener('input',render);search.addEventListener('search',render);document.querySelector('#inventoryItemList').addEventListener('click',e=>{const b=e.target.closest('[data-inv-id]');if(b)edit(b.dataset.invId);else{const missing=e.target.closest('[data-inv-class]');if(missing)createClassCriterion(missing.dataset.invClass)}});document.querySelector('#newInventoryItem').addEventListener('click',reset);document.querySelector('#inventoryItemCancel').addEventListener('click',reset);document.querySelector('#inventoryItemForm').addEventListener('change',e=>{if(e.target.name==='itemKind'){openKind(e.target.value);return}if(e.target.matches('.invSwitchRow input'))syncSwitchText(e.target.parentElement);if(e.target.name==='fractionable')syncFractionableField(e.currentTarget);if(e.target.name==='isFixedAsset')syncFixedAssetFields(e.currentTarget);if(['isYtSpare','spareItemNumber','spareItemName'].includes(e.target.name))syncSpareFields(e.currentTarget)});document.querySelector('#inventoryItemForm').addEventListener('input',e=>{if(['spareItemNumber','spareItemName'].includes(e.target.name))syncSpareFields(e.currentTarget)});document.querySelector('#inventoryItemForm').addEventListener('submit',save);document.querySelector('#inventoryItemDeactivate').addEventListener('click',deactivate);window.addEventListener('skweb-inventory-refresh',render);window.addEventListener('skweb-synced',render);window.addEventListener('skweb-options-applied',()=>syncFixedAssetFields());bindValidation(document.querySelector('#inventoryItemForm'))}
+ document.querySelectorAll('[data-catalog-kind]').forEach(b=>b.addEventListener('click',()=>openKind(b.dataset.catalogKind)));document.querySelector('#spareCatalogFilter').addEventListener('click',event=>{const button=event.target.closest('[data-spare-filter]');if(!button)return;selectSpareType(button.dataset.spareFilter)});const search=document.querySelector('#inventoryItemSearch');function searchCatalog(){lastSavedItemId='';return render()}search.addEventListener('input',searchCatalog);search.addEventListener('search',searchCatalog);document.querySelector('#inventoryItemList').addEventListener('click',e=>{const b=e.target.closest('[data-inv-id]');if(b)edit(b.dataset.invId);else{const missing=e.target.closest('[data-inv-class]');if(missing)createClassCriterion(missing.dataset.invClass)}});document.querySelector('#newInventoryItem').addEventListener('click',reset);document.querySelector('#inventoryItemCancel').addEventListener('click',reset);document.querySelector('#inventoryItemForm').addEventListener('change',e=>{if(e.target.name==='itemKind'){openKind(e.target.value);return}if(e.target.matches('.invSwitchRow input'))syncSwitchText(e.target.parentElement);if(e.target.name==='fractionable')syncFractionableField(e.currentTarget);if(e.target.name==='isFixedAsset')syncFixedAssetFields(e.currentTarget);if(['isYtSpare','spareItemNumber','spareItemName'].includes(e.target.name))syncSpareFields(e.currentTarget)});document.querySelector('#inventoryItemForm').addEventListener('input',e=>{if(['spareItemNumber','spareItemName'].includes(e.target.name))syncSpareFields(e.currentTarget)});document.querySelector('#inventoryItemForm').addEventListener('submit',save);document.querySelector('#inventoryItemDeactivate').addEventListener('click',deactivate);window.addEventListener('skweb-inventory-refresh',render);window.addEventListener('skweb-synced',render);window.addEventListener('skweb-options-applied',()=>syncFixedAssetFields());bindValidation(document.querySelector('#inventoryItemForm'))}
 const quantityFlag=value=>value===true||['true','si','1','yes'].includes(norm(value));
 const stockRevision=stock=>stock?.updatedAt||stock?.createdAt||'';
-function canAdjustQuantity(item,stock,warehouse){
+function isQuantityCriterion(item){
  return item?.id&&!item.deleted&&item.active!==false&&item.recordType!=='formOptions'&&
-  item.id!=='SYSTEM-FORM-OPTIONS-V1'&&(!quantityFlag(item.isYtSpare)||window.SKAdminAuth.isAdmin())&&
-  (warehouse!=='production'||!quantityFlag(item.isEpp))&&
-  !quantityFlag(item.isFixedAsset??item.esActivoFijo??item.CI_ES_A_FIJO)&&itemName(item)&&
-  !stock?.deleted&&stock?.active!==false;
+  item.id!=='SYSTEM-FORM-OPTIONS-V1'&&itemName(item)&&(!quantityFlag(item.isYtSpare)||window.SKAdminAuth.isAdmin());
+}
+function quantityRestriction(item,stock,warehouse){
+ if(quantityFlag(item.isFixedAsset??item.esActivoFijo??item.CI_ES_A_FIJO))return 'Activo fijo · La cantidad se cuenta por fichas.';
+ if(warehouse==='production'&&quantityFlag(item.isEpp))return 'EPP · Se maneja en Plaza Blending.';
+ if(stock?.deleted||stock?.active===false)return 'Existencia retirada de esta bodega.';
+ return '';
+}
+function canAdjustQuantity(item,stock,warehouse){
+ return isQuantityCriterion(item)&&!quantityRestriction(item,stock,warehouse);
 }
 // La apertura se envía con la revisión inicial. El servidor rechaza el ajuste si otra
 // persona ya registró existencias. Un repuesto vinculado puede tener saldo en Mecánica.
@@ -433,6 +447,7 @@ async function openQuantities(options={}){
    #quantityItems button{display:grid;width:100%;padding:10px 12px;text-align:left;background:#fff;color:#173d59}
    #quantityItems button:is(:hover,:focus){background:#eaf1f6}
    #quantityItems small{font-weight:500}
+   #quantityItems button:disabled{color:#475569;opacity:1;cursor:default}
    #inventoryQuantities .status:empty{margin:0;padding:0;border:0;min-height:0}
    #inventoryQuantities .quantityWarehouseLogo{display:block;width:clamp(8rem,40vw,12rem);max-width:100%;height:auto;object-fit:contain;margin:clamp(1rem,4vw,2rem) auto .25rem}
   </style><div class="sectionHead"><h2>Editar cantidades</h2></div>
@@ -468,7 +483,7 @@ async function openQuantities(options={}){
  form.reset();search.disabled=true;menu.hidden=true;quantity.disabled=button.disabled=true;
  status.textContent='';section._refreshQuantity=null;form.onsubmit=null;
  if(typeof db==='undefined'||!db){status.textContent='El almacenamiento local todavía está cargando. Vuelve a abrir el módulo.';return}
- let criteria=[],registeredIds=new Set(),meta,selected,stock,pending,opening=false,selectionVersion=0,listVersion=0;
+ let criteria=[],restrictions=new Map(),registeredIds=new Set(),meta,selected,stock,pending,opening=false,selectionVersion=0,listVersion=0;
  async function loadList(){
   const version=++listVersion;
   const [catalog,stocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),production?all(quantityAdjustments):[]]);
@@ -476,8 +491,15 @@ async function openQuantities(options={}){
   const balances=new Map(stocks.filter(row=>row.itemId).map(row=>[row.itemId,row]));
   meta=production&&stocks.find(row=>!row.itemId);
   registeredIds=new Set([...balances.keys(),...adjustments.filter(row=>row.warehouse==='production').map(row=>row.itemId)]);
-  criteria=catalog.filter(row=>canAdjustQuantity(row,balances.get(row.id),warehouse));
+  restrictions=new Map();
+  criteria=catalog.filter(row=>{
+   if(!isQuantityCriterion(row))return false;
+   const reason=quantityRestriction(row,balances.get(row.id),warehouse);
+   if(reason)restrictions.set(row.id,reason);
+   return production||!reason;
+  });
   criteria.sort((a,b)=>{
+   if(restrictions.has(a.id)!==restrictions.has(b.id))return restrictions.has(a.id)?1:-1;
    if(production&&registeredIds.has(a.id)!==registeredIds.has(b.id))return registeredIds.has(a.id)?-1:1;
    return itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'});
   });
@@ -493,13 +515,15 @@ async function openQuantities(options={}){
  function drawItems(){
   const query=selected?'':search.value.trim();
   const matches=criteria.filter(row=>
-   (!production||registeredIds.has(row.id)||quantityFlag(row.isYtSpare)||query)&&
-   matchesItemSearch([itemName(row),itemSecondary(row),itemTertiary(row),row.spareApplication].join(' '),row.spareItemNumber,query,row.sparePartCode));
+   (query||!restrictions.has(row.id)&&(!production||registeredIds.has(row.id)||quantityFlag(row.isYtSpare)))&&
+   matchesCatalogItem(row,query));
   menu.replaceChildren(...matches.map(row=>{
    const option=document.createElement('button');
    option.type='button';option.dataset.itemId=row.id;option.textContent=itemName(row);
    const aliases=[itemSecondary(row),itemTertiary(row)].filter(Boolean);
-   if(production&&!registeredIds.has(row.id)&&meta?.enabled!==false)
+   const reason=restrictions.get(row.id);
+   if(reason){option.disabled=true;aliases.push(reason)}
+   else if(production&&!registeredIds.has(row.id)&&meta?.enabled!==false)
     aliases.push(canOpenProductionQuantity(row,meta)?'Ingresar saldo inicial':'Saldo por sincronizar');
    if(aliases.length){const detail=document.createElement('small');detail.textContent=aliases.join(' · ');option.append(detail)}
    return option;
@@ -516,7 +540,8 @@ async function openQuantities(options={}){
   const dirty=!quantity.disabled&&quantity.value!==(stock?String(stock.quantity):production?'':'0');
   pending=adjustments.find(row=>row.itemId===id&&(row.warehouse||'plaza')===warehouse);
   const item=currentItems.find(row=>row.id===id);
-  const eligible=canAdjustQuantity(item,current,warehouse);
+  const restriction=isQuantityCriterion(item)?quantityRestriction(item,current,warehouse):'El criterio ya no permite editar la cantidad.';
+  const eligible=!restriction;
   const currentMeta=production&&currentStocks.find(row=>!row.itemId);
   opening=production&&!current&&eligible&&canOpenProductionQuantity(item,currentMeta);
 
@@ -527,7 +552,7 @@ async function openQuantities(options={}){
   quantity.disabled=button.disabled=Boolean(pending||!eligible||currentMeta?.enabled===false||production&&!current&&!opening||current?.syncState==='pending');
   if(pending?.syncError)status.textContent=pending.syncError+' Puedes descartar el ajuste desde Inicio y volver a registrarlo con el saldo actualizado.';
   else if(pending)status.textContent='Guardado en este equipo · pendiente de sincronizar con '+warehouseName+'.';
-  else if(!eligible)status.textContent='El criterio ya no permite editar la cantidad.';
+  else if(!eligible)status.textContent=restriction;
   else if(current?.syncState==='pending')status.textContent='Primero sincroniza los cambios del criterio de este elemento.';
   else if(currentMeta?.enabled===false)status.textContent='La Bodega de Producción aún no está activada.';
   else if(wasPending&&current)status.textContent='Ajuste procesado. Saldo en la base sincronizada: '+quantity.value+'.';
@@ -545,12 +570,12 @@ async function openQuantities(options={}){
  };
  form.onkeydown=event=>{
   if(event.key==='Escape'&&!menu.hidden){event.preventDefault();if(event.target!==search)search.focus();menu.hidden=true}
-  if(event.key==='ArrowDown'&&event.target===search){event.preventDefault();if(menu.hidden)drawItems();menu.querySelector('button')?.focus()}
+  if(event.key==='ArrowDown'&&event.target===search){event.preventDefault();if(menu.hidden)drawItems();menu.querySelector('button:not(:disabled)')?.focus()}
   if(event.key==='Enter'&&event.target===search){
    event.preventDefault();
    if(selected){menu.hidden=true;if(!quantity.disabled)quantity.focus()}
    else if(menu.hidden)drawItems();
-   else menu.querySelector('button')?.click();
+   else menu.querySelector('button:not(:disabled)')?.click();
   }
  };
  async function selectItem(item){
@@ -564,7 +589,7 @@ async function openQuantities(options={}){
  }
  menu.onclick=event=>{
   const option=event.target.closest('[data-item-id]');
-  if(option)selectItem(criteria.find(row=>row.id===option.dataset.itemId)).catch(report);
+  if(option&&!option.disabled)selectItem(criteria.find(row=>String(row.id)===option.dataset.itemId)).catch(report);
  };
  section._refreshQuantity=()=>{
   if(!section.classList.contains('active')||button.dataset.saving==='1')return;
@@ -586,11 +611,11 @@ async function openQuantities(options={}){
   catch(error){report(failure||error);return}
   if(failure)report(failure);
  };
- if(options.itemId){
-  const item=criteria.find(row=>row.id===options.itemId);
-  if(item)selectItem(item).catch(report);
-  else status.textContent='Este elemento se controla por ficha o no admite ajuste de cantidad en '+warehouseName+'.';
- }
+ const item=options.itemId&&criteria.find(row=>String(row.id)===String(options.itemId));
+ if(item&&matchesCatalogItem(item,options.query))selectItem(item).catch(report);
+ else if(production&&options.query){
+  search.value=options.query;drawItems();
+ }else if(options.itemId)status.textContent='Este elemento se controla por ficha o no admite ajuste de cantidad en '+warehouseName+'.';
 }
 window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities};window.addEventListener('load',()=>setTimeout(mount,120));
 })();
