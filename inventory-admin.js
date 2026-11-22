@@ -485,9 +485,15 @@ async function openQuantities(options={}){
   section.innerHTML=`<style>
    .quantityPicker{position:relative;display:grid;align-content:start;gap:6px}
    #quantityItems{position:absolute;z-index:30;top:100%;left:0;right:0;max-height:300px;overflow:auto;margin-top:4px;padding:5px;background:#fff;color:#173d59;border:1px solid #b9c6d1;border-radius:9px;box-shadow:0 12px 28px #173d5930}
-   #quantityItems button{display:grid;width:100%;padding:10px 12px;text-align:left;background:#fff;color:#173d59}
+   #inventoryQuantities :is(#quantityItemSearch,input[name="quantity"]){background:#edf4f8;border:1px solid #899fac;color:#173d59}
+   #inventoryQuantities input[name="quantity"]:disabled{background:#e9eff2;color:#4d6472}
+   #inventoryQuantities :is(#quantityItemSearch,input[name="quantity"]):focus-visible{outline:2px solid #286181;outline-offset:1px}
+   #quantityItems button{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:2px 12px;width:100%;padding:8px 10px;text-align:left;background:#fff;color:#173d59}
+   #inventoryQuantities #quantityItems button{font-family:inherit;font-size:.9375rem;font-weight:500!important;line-height:1.3;text-transform:none!important;letter-spacing:normal}
+   #quantityItems .quantityName{grid-column:1;overflow-wrap:anywhere}
+   #quantityItems .quantityBalance{grid-column:2;grid-row:1;justify-self:end;font-variant-numeric:tabular-nums;font-weight:600;color:#244d62}
    #quantityItems button:is(:hover,:focus){background:#eaf1f6}
-   #quantityItems small{font-weight:500}
+   #quantityItems small{grid-column:1 / -1;color:#516677;font-weight:400;overflow-wrap:anywhere}
    #quantityItems button:disabled{color:#475569;opacity:1;cursor:default}
    #inventoryQuantities [hidden]{display:none!important}
    #inventoryQuantities output{font-size:1.35rem;font-weight:700}
@@ -535,15 +541,16 @@ async function openQuantities(options={}){
  form.reset();delete button.dataset.saving;search.disabled=true;menu.hidden=true;quantity.disabled=button.disabled=true;
  status.textContent='';section._refreshQuantity=null;form.onsubmit=null;
  if(typeof db==='undefined'||!db){status.textContent='El almacenamiento local todavía está cargando. Vuelve a abrir el módulo.';return}
- let criteria=[],restrictions=new Map(),registeredIds=new Set(),meta,selected,stock,pending,opening=false,selectionVersion=0,listVersion=0;
+ let criteria=[],restrictions=new Map(),balances=new Map(),adjustmentsByItem=new Map(),meta,selected,stock,pending,opening=false,selectionVersion=0,listVersion=0;
+ const quantityFormat=new Intl.NumberFormat('es-CO',{maximumSignificantDigits:17});
  let lastSavedItem=null;
  async function loadList(){
   const version=++listVersion,saved=lastSavedItem;
-  const [catalog,stocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),production||saved?all(quantityAdjustments):[]]);
+  const [catalog,stocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),all(quantityAdjustments)]);
   if(view!==quantityViewVersion||version!==listVersion)return;
-  const balances=new Map(stocks.filter(row=>row.itemId).map(row=>[row.itemId,row]));
+  balances=new Map(stocks.filter(row=>row.itemId).map(row=>[row.itemId,row]));
   meta=production&&stocks.find(row=>!row.itemId);
-  registeredIds=new Set([...balances.keys(),...adjustments.filter(row=>row.warehouse==='production').map(row=>row.itemId)]);
+  adjustmentsByItem=new Map(adjustments.filter(row=>(row.warehouse||'plaza')===warehouse).map(row=>[row.itemId,row]));
   restrictions=new Map();
   criteria=catalog.filter(row=>{
    if(!isQuantityCriterion(row))return false;
@@ -559,7 +566,7 @@ async function openQuantities(options={}){
   });
   if(!menu.hidden)drawItems();
   if(saved&&saved===lastSavedItem){
-   const queued=adjustments.find(row=>row.itemId===saved.id&&(row.warehouse||'plaza')===warehouse);
+   const queued=adjustmentsByItem.get(saved.id);
    if(queued?.syncError)status.textContent=itemName(saved)+' · '+queued.syncError;
    else if(!queued){
     const balance=balances.get(saved.id);
@@ -568,7 +575,7 @@ async function openQuantities(options={}){
   }else if(!selected&&!lastSavedItem&&production){
    if(!meta)status.textContent='Puedes registrar un saldo inicial. Al sincronizar se comprobarán las existencias de Producción.';
    else if(!meta.enabled)status.textContent='La Bodega de Producción aún no está activada.';
-   else status.textContent=registeredIds.size?'':'Elige un elemento del catálogo para ingresar su saldo inicial.';
+   else status.textContent=balances.size||adjustmentsByItem.size?'':'Elige un elemento del catálogo para ingresar su saldo inicial.';
   }
  }
  try{await loadList()}catch(error){status.textContent='No se pudo leer el inventario local: '+error.message;return}
@@ -578,13 +585,27 @@ async function openQuantities(options={}){
   const matches=criteria.filter(row=>(query||!restrictions.has(row.id))&&matchesCatalogItem(row,query));
   menu.replaceChildren(...matches.map(row=>{
    const option=document.createElement('button');
-   option.type='button';option.dataset.itemId=row.id;option.textContent=itemName(row);
+   option.type='button';option.dataset.itemId=row.id;
+   const name=document.createElement('span');name.className='quantityName';name.textContent=itemName(row);option.append(name);
    const aliases=[itemSecondary(row),itemTertiary(row)].filter(Boolean);
    const reason=restrictions.get(row.id);
    if(reason){option.disabled=true;aliases.push(reason)}
    else if(fixedCriterion(row))aliases.push('Activo fijo · Consultar disponibles');
-   else if(production&&!registeredIds.has(row.id)&&meta?.enabled!==false)
-    aliases.push(canOpenProductionQuantity(row,meta)?'Ingresar saldo inicial':'Saldo por sincronizar');
+   if(!fixedCriterion(row)){
+    const balance=balances.get(row.id),adjustment=adjustmentsByItem.get(row.id);
+    let value=null;
+    if(!reason){
+     value=balance?.quantity??(production?null:0);
+     if(adjustment?.syncError)aliases.push('Ajuste por revisar');
+     else if(adjustment){value=adjustment.quantity;aliases.push('Pendiente de sincronizar')}
+     else if(production&&!balance&&meta?.enabled!==false)
+      aliases.push(canOpenProductionQuantity(row,meta)?'Ingresar saldo inicial':'Saldo por sincronizar');
+    }
+    const amount=document.createElement('span');amount.className='quantityBalance';
+    amount.textContent=value==null?'—':quantityFormat.format(value);
+    amount.title=value==null?'Sin saldo disponible':'Cantidad en '+warehouseName;
+    option.append(amount);
+   }
    if(aliases.length){const detail=document.createElement('small');detail.textContent=aliases.join(' · ');option.append(detail)}
    return option;
   }));

@@ -217,7 +217,7 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  const field={value:'',focus(){},get valueAsNumber(){return Number(this.value)}};
  form.elements={quantity:field};
  menu.replaceChildren=(...rows)=>{menu.rows=rows};
- doc.createElement=()=>({dataset:{},append(detail){this.detail=detail.textContent}});
+ doc.createElement=()=>({dataset:{},append(child){this[child.className||'detail']=child.textContent}});
  const search=h.node('#quantityItemSearch'),type=query=>{search.value=query;search.oninput();return menu.rows};
  const selected=()=>new Promise((resolve,reject)=>{
   let tries=0;function check(){if(!field.disabled)return resolve();if(++tries>1000)return reject(Error('Cantidad deshabilitada'));setImmediate(check)}check();
@@ -235,7 +235,7 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  await h.api.openQuantities(opened);
  assert.equal(search.value,'Cali');assert.equal(menu.hidden,false);
  assert.deepEqual(Array.from(menu.rows,row=>row.dataset.itemId),[fixed.id,item.id,epp.id]);
- assert.equal(menu.rows[1].textContent,'Calibrador Vernier');assert.match(menu.rows[1].detail,/Ingresar saldo inicial/);
+ assert.equal(menu.rows[1].quantityName,'Calibrador Vernier');assert.equal(menu.rows[1].quantityBalance,'—');assert.equal(menu.rows[0].quantityBalance,undefined);assert.match(menu.rows[1].detail,/Ingresar saldo inicial/);
  assert.ok(!menu.rows[0].disabled);assert.match(menu.rows[0].detail,/Consultar disponibles/);
  assert.ok(menu.rows[2].disabled);assert.match(menu.rows[2].detail,/Plaza Blending/);
  assert.equal(type('no existe').length,0);
@@ -267,6 +267,7 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  await h.api.syncQuantities();assert.equal(sends,1);
  await h.api.openQuantities({warehouse:'production'});
  assert.deepEqual(Array.from(type(''),row=>row.dataset.itemId),[fixed.id,item.id]);
+ assert.equal(menu.rows[1].quantityBalance,'0');
  assert.equal((await h.ctx.all('productionQuantityCache'))[0].quantity,0);
  assert.equal((await h.ctx.all('inventoryQuantityAdjustments')).length,0);
  // Nombres y alias que también reconoce el selector de ingresos y salidas de Producción.
@@ -282,7 +283,7 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  await h.api.openQuantities({warehouse:'production'});
  for(const query of ['Cali prof','medidor hondo']){
   assert.equal(w.SKSpareGroups.matches(legacy,query),true);
-  assert.deepEqual(Array.from(type(query),row=>[row.dataset.itemId,row.textContent]),[[legacy.id,legacy.itemName]]);
+  assert.deepEqual(Array.from(type(query),row=>[row.dataset.itemId,row.quantityName]),[[legacy.id,legacy.itemName]]);
  }
 });
 
