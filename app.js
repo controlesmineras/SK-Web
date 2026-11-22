@@ -1,13 +1,14 @@
-const DB='sk-web-local',VER=6,stores=['personal','assets','novelties','parts','consumptions','incomes','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries','actas'];const quantityAdjustments='inventoryQuantityAdjustments',localStores=[...stores,quantityAdjustments];let db;const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],uuid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,now=()=>new Date().toISOString();
+const DB='sk-web-local',VER=7,stores=['personal','assets','novelties','parts','consumptions','incomes','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries','actas'];const quantityAdjustments='inventoryQuantityAdjustments',localStores=[...stores,quantityAdjustments];let db;const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],uuid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,now=()=>new Date().toISOString();
 const GOOGLE_CLIENT_ID='102740984387-di4t4r2djjc9t4l84b8ttl7cf49ef20g.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata',CLOUD_FILE='sk-web-central.json';let tokenClient,accessToken='';
+const productionQuantityCache='productionQuantityCache';
 const assetProfileStore='assetNoveltyProfiles';
 const assetEventStores=['novelties','blendingIncomes','blendingDeliveries'];
 const assetProfileTables=['assets','personal',...assetEventStores,assetProfileStore];
 function openDB(){return new Promise((ok,no)=>{
  const r=indexedDB.open(DB,VER);
  r.onupgradeneeded=()=>{
-  for(const name of [...localStores,assetProfileStore])if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id'});
+  for(const name of [...localStores,assetProfileStore,productionQuantityCache])if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id'});
   for(const name of assetEventStores){const table=r.transaction.objectStore(name);if(!table.indexNames.contains('assetId'))table.createIndex('assetId','assetId');}
   const table=r.transaction.objectStore('novelties');if(!table.indexNames.contains('syncState'))table.createIndex('syncState','syncState');
  };

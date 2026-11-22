@@ -27,6 +27,8 @@ const itemTertiary=x=>x?.tertiaryName||x?.nombreTerciario||x?.CI_NOMBRE_TERCIARI
 const itemUnit=x=>x?.unit||x?.unidadMedida||x?.CI_UNIDAD_MEDIDA||x?.ciUnidadMedida||'';
 function injectStyle(){if(document.querySelector('#inventoryAdminStyle'))return;const s=document.createElement('style');s.id='inventoryAdminStyle';s.textContent=`#inventoryItems .invToolbar{display:flex;gap:10px;flex-wrap:wrap;margin:12px 0}#inventoryItems .invToolbar.invCatalogTabs{display:grid;grid-template-columns:minmax(0,max-content) minmax(0,max-content) auto;align-items:center;justify-content:center;gap:6px;text-align:center}
 #inventoryItems .invCatalogTabs [data-catalog-kind]{min-width:0;white-space:normal}
+#inventoryItems .invWarehouseButtons{display:flex;flex-wrap:wrap;justify-content:center;gap:8px;margin:12px 0}
+#inventoryItems .invWarehouseButtons button{min-height:44px;padding:8px 18px}
 #inventoryItems{container:inventory-catalog / inline-size}
 #inventoryItems .invCatalogHeader{
  display:grid;grid-template-columns:minmax(0,1fr) auto;grid-template-areas:"title add" "tabs tabs";gap:0 10px
@@ -117,7 +119,7 @@ function syncSwitchText(root=document){root.querySelectorAll('.invSwitchRow inpu
 function syncFractionableField(root=document){const f=root.closest?.('form')||root.querySelector?.('#inventoryItemForm')||document.querySelector('#inventoryItemForm');if(!f)return;const on=!!f.elements.fractionable?.checked,wrap=f.querySelector('.invContainerUnit'),input=f.elements.containerUnit;if(wrap)wrap.hidden=!on;if(input){input.disabled=!on;input.required=on;if(!on)input.value=''}}
 function syncFixedAssetFields(root=document){
  const f=root.closest?.('form')||root.querySelector?.('#inventoryItemForm')||document.querySelector('#inventoryItemForm');if(!f)return;
- const fixed=!!f.elements.isFixedAsset?.checked,qty=f.elements.initialQuantity,unit=f.elements.unit;
+ const fixed=!!f.elements.isFixedAsset?.checked,unit=f.elements.unit;
  if(unit){
   if(fixed){
    if(unit.dataset.fixedUnit!=='1')unit.dataset.nonFixedUnit=unit.value;
@@ -128,9 +130,7 @@ function syncFixedAssetFields(root=document){
   }
   unit.disabled=fixed;unit.required=!fixed;unit.closest('label').hidden=fixed;
  }
- if(qty){qty.disabled=fixed;qty.required=!fixed;qty.closest('label').hidden=fixed;if(fixed)qty.value=''}
  const accessories=f.elements.allowAccessories;if(accessories){accessories.disabled=!fixed;accessories.closest('label').hidden=!fixed;}
- const note=f.querySelector('.invInitialNote');if(note)note.textContent=fixed?'Cada activo se registra individualmente. Toca las opciones que quieras activar.':'La cantidad inicial solo se define al crear el elemento.';
 }
 function syncSpareFields(f){
  const on=!!f.elements.isYtSpare.checked;
@@ -148,7 +148,7 @@ function syncSpareFields(f){
  }
 }
 const spareUse=item=>item.spareApplication||item.application||item.ubicacionAplicacion||'';
-const validationLabels={name:'Nombre del elemento',unit:'Unidad de medida',initialQuantity:'Cantidad inicial',spareEquipment:'Tipo de repuesto',spareItemName:'Nombre del ítem',containerUnit:'Unidad contenedora'};
+const validationLabels={name:'Nombre del elemento',unit:'Unidad de medida',spareEquipment:'Tipo de repuesto',spareItemName:'Nombre del ítem',containerUnit:'Unidad contenedora'};
 function clearValidation(f){
  delete f.dataset.validationAttempted;
  f.querySelectorAll('[aria-invalid]').forEach(field=>{field.removeAttribute('aria-invalid');field.removeAttribute('aria-errormessage')});
@@ -163,7 +163,7 @@ function validateInventory(f,focus=false){
   if(!missing&&field.validity.valid)continue;
   invalid.push(field);field.setAttribute('aria-invalid','true');
   const error=document.createElement('span');error.className='invFieldError';error.id='inv-error-'+field.name;
-  error.textContent=missing?'Completa este campo obligatorio.':field.name==='initialQuantity'?'Escribe una cantidad válida, cero o mayor.':'Revisa el valor de este campo.';
+  error.textContent=missing?'Completa este campo obligatorio.':'Revisa el valor de este campo.';
   field.setAttribute('aria-errormessage',error.id);field.closest('label')?.append(error);
  }
  const summary=f.querySelector('#inventoryValidationSummary');
@@ -178,6 +178,7 @@ function bindValidation(f){
 function mount(){if(document.querySelector('#inventoryItems'))return;injectStyle();const main=document.querySelector('main');if(!main)return;const sec=document.createElement('section');sec.id='inventoryItems';sec.className='view';sec.innerHTML=`<div class="sectionHead invCatalogHeader"><h2 id="inventoryCatalogTitle">Elementos de inventario</h2>
 <div class="invToolbar invCatalogTabs" role="group" aria-label="Tipo de criterio de inventario"><button type="button" data-catalog-kind="common" aria-pressed="true">ELEMENTOS COMUNES</button><button type="button" data-catalog-kind="spare" aria-pressed="false">CRITERIOS YT/COLUMNA</button><button type="button" id="inventoryHelpToggle" class="invCatalogInfo" aria-label="Información sobre los criterios de inventario" aria-expanded="false" aria-controls="inventoryCatalogHelp">i</button></div>
 <button type="button" id="newInventoryItem">+ Agregar elemento</button></div>
+<div class="invWarehouseButtons" role="group" aria-label="Editar cantidades por bodega"><button type="button" data-quantity-warehouse="plaza">PLAZA B.</button><button type="button" data-quantity-warehouse="production">PRODUCCIÓN</button></div>
 <p id="inventoryCatalogHelp" class="hint" hidden>Elige primero Elemento común o Repuesto YT o Columna. Los repuestos quedan disponibles en Plaza Blending y en Consumo de Producción según su tipo. En Plaza Blending se agrupan automáticamente; cada ítem conserva su existencia.</p><div id="spareCatalogFilter" class="invSpareFilters" role="group" aria-label="Tipo de repuesto" hidden><button type="button" data-spare-filter="YT 29" aria-pressed="false">YT29</button><button type="button" data-spare-filter="YT 28" aria-pressed="false">YT28</button><button type="button" data-spare-filter="Columna 29" aria-pressed="false">COLUMNA 29</button><button type="button" data-spare-filter="Columna 28" aria-pressed="false">COLUMNA 28</button></div><div class="invToolbar"><input id="inventoryItemSearch" type="search" aria-label="Buscar elemento" placeholder="Buscar elemento…" autocomplete="off"><span id="inventoryItemCount" class="invBadge"></span></div><div class="invGrid"><div id="inventoryItemList" class="invList"></div><form id="inventoryItemForm" novalidate><input type="hidden" name="id"><h3 id="inventoryFormTitle">Datos del elemento</h3><p id="inventoryValidationSummary" class="invValidationSummary" role="alert" hidden></p><input name="itemKind" type="hidden" value="common"><input name="isYtSpare" type="checkbox" hidden><input type="hidden" name="spareEquipment" value="YT 29" disabled>
 <label class="invCompactField" hidden># DE ÍTEM<input name="spareItemNumber" disabled autocomplete="off"></label>
 <label class="invCompactField" hidden>CÓDIGO DE ELEMENTO<input name="sparePartCode" disabled autocomplete="off"></label>
@@ -186,15 +187,14 @@ function mount(){if(document.querySelector('#inventoryItems'))return;injectStyle
 <label class="invAliasField">NOMBRE SECUNDARIO<input name="secondaryName"></label>
 <label class="invAliasField">NOMBRE TERCIARIO<input name="tertiaryName"></label>
 <label class="invCompactField">UNIDAD DE MEDIDA<select name="unit" required><option value="">Seleccionar…</option>${INVENTORY_UNITS.map(x=>`<option value="${x}">${x}</option>`).join('')}</select></label>
-<label class="invCompactField">CANTIDAD INICIAL<input name="initialQuantity" type="number" min="0" step="any" placeholder="0" required></label>
 <label class="invSpareApplication" hidden>UBICACIÓN O APLICACIÓN<textarea name="spareApplication" rows="1" placeholder="Opcional. Ej.: Va con el pin de ajuste del cabezal" disabled></textarea></label>
-<p class="invInitialNote">La cantidad inicial solo se define al crear el elemento.</p><h3>¿Qué información utiliza?</h3><div class="invPerms">${sw('isFixedAsset','Es activo fijo')}${sw('allowAccessories','Permite registrar accesorios')}${sw('usesSerial','Usa serial')}${sw('usesLength','Usa largo (ft)')}${sw('usesModel','Usa modelo')}${sw('usesManufacturer','Usa fabricante / marca comercial')}${sw('requiresInternalMark','Requiere marca interna')}${sw('isEpp','Es EPP')}</div><h3>¿Qué operaciones permite?</h3><div class="invPerms">${sw('allowAssignment','Asignaciones','checked')}${sw('allowLoan','Préstamos')}${sw('allowTransfer','Traslados','checked')}${sw('allowRemission','Remisiones','checked')}${sw('fractionable','Permite entrega fraccionada')}<label class="invContainerUnit" hidden>UNIDAD CONTENEDORA<input name="containerUnit" placeholder="Rollo, carrete, galón…" disabled></label></div><div class="invActions"><button type="submit" id="inventoryItemSave">Guardar elemento</button><button type="button" id="inventoryItemDeactivate" class="invDanger" hidden>Retirar elemento</button><button type="button" id="inventoryItemCancel" class="adminFormCancel">CANCELAR</button></div><p id="inventoryItemStatus" class="status" hidden></p></form></div>`;main.append(sec);bind();syncSwitchText(sec);syncFractionableField(sec);syncFixedAssetFields(sec);syncSpareFields(sec.querySelector("form"));render()}
+<h3>¿Qué información utiliza?</h3><div class="invPerms">${sw('isFixedAsset','Es activo fijo')}${sw('allowAccessories','Permite registrar accesorios')}${sw('usesSerial','Usa serial')}${sw('usesLength','Usa largo (ft)')}${sw('usesModel','Usa modelo')}${sw('usesManufacturer','Usa fabricante / marca comercial')}${sw('requiresInternalMark','Requiere marca interna')}${sw('isEpp','Es EPP')}</div><h3>¿Qué operaciones permite?</h3><div class="invPerms">${sw('allowAssignment','Asignaciones','checked')}${sw('allowLoan','Préstamos')}${sw('allowTransfer','Traslados','checked')}${sw('allowRemission','Remisiones','checked')}${sw('fractionable','Permite entrega fraccionada')}<label class="invContainerUnit" hidden>UNIDAD CONTENEDORA<input name="containerUnit" placeholder="Rollo, carrete, galón…" disabled></label></div><div class="invActions"><button type="submit" id="inventoryItemSave">Guardar elemento</button><button type="button" id="inventoryItemDeactivate" class="invDanger" hidden>Retirar elemento</button><button type="button" id="inventoryItemCancel" class="adminFormCancel">CANCELAR</button></div><p id="inventoryItemStatus" class="status" hidden></p></form></div>`;main.append(sec);bind();syncSwitchText(sec);syncFractionableField(sec);syncFixedAssetFields(sec);syncSpareFields(sec.querySelector("form"));render()}
 let renderVersion=0;
 async function render(){
  const form=document.querySelector('#inventoryItemForm');
  if(!form||typeof all!=='function'||typeof db==='undefined'||!db)return;
- const version=++renderVersion,[criteria,stock,assets]=await Promise.all([all('inventoryCriteria'),all('inventoryStock'),all('assets')]);if(version!==renderVersion)return;
- const sm=new Map(stock.map(x=>[x.itemId,x])),q=norm(document.querySelector('#inventoryItemSearch')?.value),active=criteria.filter(x=>!x.deleted&&x.active!==false&&(catalogKind==='spare'?x.isYtSpare:!x.isYtSpare)&&(catalogKind!=='spare'||x.spareEquipment===currentSpareType()));
+ const version=++renderVersion,[criteria,assets]=await Promise.all([all('inventoryCriteria'),all('assets')]);if(version!==renderVersion)return;
+ const q=norm(document.querySelector('#inventoryItemSearch')?.value),active=criteria.filter(x=>!x.deleted&&x.active!==false&&(catalogKind==='spare'?x.isYtSpare:!x.isYtSpare)&&(catalogKind!=='spare'||x.spareEquipment===currentSpareType()));
  const registeredNames=new Set(active.flatMap(x=>[itemName(x),itemSecondary(x),itemTertiary(x)].map(norm).filter(Boolean))),registeredIds=new Set(active.map(x=>x.id)),classes=new Map();
  for(const asset of catalogKind==='spare'?[]:assets){
   if(asset.deleted)continue;
@@ -210,9 +210,9 @@ async function render(){
  if(count)count.textContent=(q?`${rows.length} coincidencia${rows.length===1?'':'s'}`:`${rows.length} elementos`)+(classes.size?` · ${classes.size} sin criterio`:'');
  if(list)list.innerHTML=rows.map(({name,item})=>{
   if(!item)return `<button type="button" class="invItem invMissingCriterion" data-inv-class="${esc(name)}"><span><b>${esc(name)}</b><small>Solo en Activos fijos · Sin criterio de inventario</small></span><span class="invMissingAction">Crear criterio</span></button>`;
-  const qty=Number(sm.get(item.id)?.quantity)||0,unit=itemUnit(item);
+  const unit=itemUnit(item);
   const application=item.isYtSpare&&spareUse(item);
-  return `<button type="button" class="invItem" data-inv-id="${esc(item.id)}"><span><b>${esc(name||'Sin nombre')}</b>${application?` <span class="invPartUse">${esc(application)}</span>`:''}<small>${item.isYtSpare&&item.sparePartCode?esc(item.sparePartCode)+' · ':''}${esc(unit)} · ${qty===0?'Sin existencias':'Disponible'}</small></span><span class="invQty">${qty}</span></button>`;
+  return `<button type="button" class="invItem" data-inv-id="${esc(item.id)}"><span><b>${esc(name||'Sin nombre')}</b>${application?` <span class="invPartUse">${esc(application)}</span>`:''}<small>${item.isYtSpare&&item.sparePartCode?esc(item.sparePartCode)+' · ':''}${esc(unit)}</small></span></button>`;
  }).join('')||'<p class="hint">No hay elementos que coincidan.</p>';
  syncResultSelection(form);
 }
@@ -241,26 +241,8 @@ function selectSpareType(type){
 }
 function openKind(kind){catalogKind=kind==='spare'?'spare':'common';mount();const spare=catalogKind==='spare',sec=document.querySelector('#inventoryItems');sec.dataset.catalogKind=catalogKind;document.querySelector('#inventoryCatalogTitle').textContent=spare?'CRITERIOS YT/COLUMNA':'Elementos de inventario';document.querySelector('#inventoryFormTitle').textContent=spare?'Datos del repuesto':'Datos del elemento';document.querySelector('#newInventoryItem').textContent=spare?'+ Agregar repuesto':'+ Agregar elemento';document.querySelector('#spareCatalogFilter').hidden=!spare;syncSpareFilterButtons();document.querySelector('#inventoryItemSearch').value='';sec.querySelectorAll('[data-catalog-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.catalogKind===catalogKind)));reset();render();window.dispatchEvent(new Event('skweb-inventory-kind'));}
 let editVersion=0;
-function reset(){editVersion++;const f=document.querySelector('#inventoryItemForm'),type=currentSpareType();clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;f.reset();f.elements.spareEquipment.value=type;f.elements.id.value='';delete f.dataset.sourceClass;syncResultSelection(f);f.elements.isYtSpare.checked=catalogKind==='spare';if(catalogKind==='spare')f.elements.unit.value='Unidad';f.elements.initialQuantity.disabled=false;f.elements.initialQuantity.value='';f.elements.allowAssignment.checked=true;f.elements.allowLoan.checked=false;f.elements.allowTransfer.checked=true;f.elements.allowRemission.checked=true;syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);document.querySelector('#inventoryItemSave').textContent='Guardar elemento';document.querySelector('#inventoryItemDeactivate').hidden=true;document.querySelector('#inventoryItemStatus').hidden=true}
-async function edit(id){const version=++editVersion;const [criteria,stock]=await Promise.all([all('inventoryCriteria'),all('inventoryStock')]),x=criteria.find(r=>r.id===id);if(!x||version!==editVersion)return;const f=document.querySelector('#inventoryItemForm'),st=stock.find(r=>r.itemId===id);clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;for(const [n,v] of Object.entries({id:x.id,name:itemName(x),unit:itemUnit(x),secondaryName:itemSecondary(x),tertiaryName:itemTertiary(x),spareEquipment:x.spareEquipment||"YT 29",spareItemNumber:x.spareItemNumber||"",spareItemName:x.spareItemName||"",sparePartCode:x.sparePartCode||"",spareApplication:x.spareApplication||""}))if(f.elements[n])f.elements[n].value=v;delete f.dataset.sourceClass;syncResultSelection(f);f.elements.initialQuantity.value=Number(st?.quantity)||0;f.elements.initialQuantity.disabled=false;boolFields.forEach(n=>f.elements[n].checked=defaultEnabledOperations.has(n)?x[n]!==false:x[n]===true);syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);if(f.elements.fractionable.checked)f.elements.containerUnit.value=x.containerUnit||'';document.querySelector('#inventoryItemSave').textContent='Guardar cambios';document.querySelector('#inventoryItemDeactivate').hidden=false;document.querySelector('#inventoryItemDeactivate').textContent=x.isYtSpare?'Eliminar repuesto':'Retirar elemento';await render();if(version===editVersion)f.scrollIntoView({behavior:'smooth',block:'start'})}
-// El criterio, su saldo y el ingreso inicial se confirman en una sola transacción.
-function persistInventory(item,quantity,isNew){return new Promise((resolve,reject)=>{
- const tx=db.transaction(['inventoryCriteria','inventoryStock','incomes'],'readwrite');
- const stocks=tx.objectStore('inventoryStock'),read=stocks.getAll();
- tx.objectStore('inventoryCriteria').put(item);
- read.onsuccess=()=>{
-  const current=read.result.find(row=>row.itemId===item.id),t=item.updatedAt;
-  if(isNew||!current){
-   stocks.put({id:'stock-'+item.id,itemId:item.id,quantity,initialQuantity:quantity,active:true,initialRecordedAt:t,createdAt:t,updatedAt:t,syncState:'pending'});
-  }else if(quantity!==Number(current.quantity||0)){
-   stocks.put({...current,quantity,updatedAt:t,syncState:'pending'});
-  }
-  if(isNew&&quantity>0)tx.objectStore('incomes').put({id:uuid(),itemId:item.id,nombre:item.name,cantidad:quantity,unidad:item.unit,tipo:'Existencia inicial',fechaLocal:new Date().toLocaleString('es-CO'),createdAt:t,updatedAt:t,syncState:'pending',source:'inventory-admin'});
- };
- tx.oncomplete=()=>{resolve();window.dispatchEvent(new Event('skweb-local-change'))};
- tx.onerror=()=>reject(tx.error||new Error('No se pudo guardar el elemento en este dispositivo.'));
- tx.onabort=()=>reject(tx.error||new Error('Se canceló el guardado local. No se guardó ningún cambio.'));
-})}
+function reset(){editVersion++;const f=document.querySelector('#inventoryItemForm'),type=currentSpareType();clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;f.reset();f.elements.spareEquipment.value=type;f.elements.id.value='';delete f.dataset.sourceClass;syncResultSelection(f);f.elements.isYtSpare.checked=catalogKind==='spare';if(catalogKind==='spare')f.elements.unit.value='Unidad';f.elements.allowAssignment.checked=true;f.elements.allowLoan.checked=false;f.elements.allowTransfer.checked=true;f.elements.allowRemission.checked=true;syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);document.querySelector('#inventoryItemSave').textContent='Guardar elemento';document.querySelector('#inventoryItemDeactivate').hidden=true;document.querySelector('#inventoryItemStatus').hidden=true}
+async function edit(id){const version=++editVersion;const criteria=await all('inventoryCriteria'),x=criteria.find(r=>r.id===id);if(!x||version!==editVersion)return;const f=document.querySelector('#inventoryItemForm');clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;for(const [n,v] of Object.entries({id:x.id,name:itemName(x),unit:itemUnit(x),secondaryName:itemSecondary(x),tertiaryName:itemTertiary(x),spareEquipment:x.spareEquipment||"YT 29",spareItemNumber:x.spareItemNumber||"",spareItemName:x.spareItemName||"",sparePartCode:x.sparePartCode||"",spareApplication:x.spareApplication||""}))if(f.elements[n])f.elements[n].value=v;delete f.dataset.sourceClass;syncResultSelection(f);boolFields.forEach(n=>f.elements[n].checked=defaultEnabledOperations.has(n)?x[n]!==false:x[n]===true);syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);if(f.elements.fractionable.checked)f.elements.containerUnit.value=x.containerUnit||'';document.querySelector('#inventoryItemSave').textContent='Guardar cambios';document.querySelector('#inventoryItemDeactivate').hidden=false;document.querySelector('#inventoryItemDeactivate').textContent=x.isYtSpare?'Eliminar repuesto':'Retirar elemento';await render();if(version===editVersion)f.scrollIntoView({behavior:'smooth',block:'start'})}
 let saving=false;
 async function save(e){
  e.preventDefault();if(saving)return;
@@ -290,10 +272,8 @@ async function save(e){
  if(!item)throw new Error('No se encontró el criterio que estás editando. Vuelve a seleccionarlo.');
  Object.assign(item,{allowAccessories:f.elements.isFixedAsset.checked&&f.elements.allowAccessories.checked,deliveryWarehouse:f.elements.isYtSpare.checked?'Producción':'',isYtSpare:f.elements.isYtSpare.checked,spareEquipment:f.elements.isYtSpare.checked?f.elements.spareEquipment.value:"",spareItemNumber:f.elements.isYtSpare.checked?f.elements.spareItemNumber.value.trim():"",spareItemName:f.elements.isYtSpare.checked?f.elements.spareItemName.value.trim():"",sparePartCode:f.elements.isYtSpare.checked?f.elements.sparePartCode.value.trim():"",spareApplication:f.elements.isYtSpare.checked?f.elements.spareApplication.value.trim():"",name,unit,secondaryName,tertiaryName,containerUnit:f.elements.fractionable.checked?f.elements.containerUnit.value.trim():'',isFixedAsset:f.elements.isFixedAsset.checked,usesSerial:f.elements.usesSerial.checked,usesLength:f.elements.usesLength.checked,usesModel:f.elements.usesModel.checked,usesManufacturer:f.elements.usesManufacturer.checked,requiresInternalMark:f.elements.requiresInternalMark.checked,isEpp:f.elements.isEpp.checked,allowAssignment:f.elements.allowAssignment.checked,allowLoan:f.elements.allowLoan.checked,allowTransfer:f.elements.allowTransfer.checked,allowRemission:f.elements.allowRemission.checked,fractionable:f.elements.fractionable.checked,active:true,deleted:false,updatedAt:t,syncState:'pending'});
 
- const quantity=f.elements.isFixedAsset.checked?0:Number(f.elements.initialQuantity.value);
  if(!name)throw new Error('Escribe el nombre del elemento.');
- if(!Number.isFinite(quantity)||quantity<0)throw new Error('La cantidad debe ser cero o mayor.');
- await persistInventory(item,quantity,!id);committed=true;
+ await put('inventoryCriteria',item);committed=true;
  reset();status.hidden=false;
  status.textContent=(id?'Cambios guardados en este dispositivo.':'Elemento guardado en este dispositivo.')+' Pendiente de sincronizar; se enviará al tener conexión.';
  window.dispatchEvent(new Event('skweb-inventory-refresh'));
@@ -322,6 +302,11 @@ async function deactivate(){
 }
 
 function bind(){
+ document.querySelectorAll('[data-quantity-warehouse]').forEach(button=>{
+  button.addEventListener('click',()=>window.SKAdminNav.go('inventoryQuantities',{
+   warehouse:button.dataset.quantityWarehouse,itemId:document.querySelector('#inventoryItemForm').elements.id.value
+  }));
+ });
  const helpButton=document.querySelector('#inventoryHelpToggle'),help=document.querySelector('#inventoryCatalogHelp');
  helpButton.addEventListener('click',()=>{
   help.hidden=!help.hidden;
@@ -330,9 +315,10 @@ function bind(){
  document.querySelectorAll('[data-catalog-kind]').forEach(b=>b.addEventListener('click',()=>openKind(b.dataset.catalogKind)));document.querySelector('#spareCatalogFilter').addEventListener('click',event=>{const button=event.target.closest('[data-spare-filter]');if(!button)return;selectSpareType(button.dataset.spareFilter)});const search=document.querySelector('#inventoryItemSearch');search.addEventListener('input',render);search.addEventListener('search',render);document.querySelector('#inventoryItemList').addEventListener('click',e=>{const b=e.target.closest('[data-inv-id]');if(b)edit(b.dataset.invId);else{const missing=e.target.closest('[data-inv-class]');if(missing)createClassCriterion(missing.dataset.invClass)}});document.querySelector('#newInventoryItem').addEventListener('click',reset);document.querySelector('#inventoryItemCancel').addEventListener('click',reset);document.querySelector('#inventoryItemForm').addEventListener('change',e=>{if(e.target.name==='itemKind'){openKind(e.target.value);return}if(e.target.matches('.invSwitchRow input'))syncSwitchText(e.target.parentElement);if(e.target.name==='fractionable')syncFractionableField(e.currentTarget);if(e.target.name==='isFixedAsset')syncFixedAssetFields(e.currentTarget);if(['isYtSpare','spareItemNumber','spareItemName'].includes(e.target.name))syncSpareFields(e.currentTarget)});document.querySelector('#inventoryItemForm').addEventListener('input',e=>{if(['spareItemNumber','spareItemName'].includes(e.target.name))syncSpareFields(e.currentTarget)});document.querySelector('#inventoryItemForm').addEventListener('submit',save);document.querySelector('#inventoryItemDeactivate').addEventListener('click',deactivate);window.addEventListener('skweb-inventory-refresh',render);window.addEventListener('skweb-synced',render);window.addEventListener('skweb-options-applied',()=>syncFixedAssetFields());bindValidation(document.querySelector('#inventoryItemForm'))}
 const quantityFlag=value=>value===true||['true','si','1','yes'].includes(norm(value));
 const stockRevision=stock=>stock?.updatedAt||stock?.createdAt||'';
-function canAdjustQuantity(item,stock){
+function canAdjustQuantity(item,stock,warehouse){
  return item?.id&&!item.deleted&&item.active!==false&&item.recordType!=='formOptions'&&
-  item.id!=='SYSTEM-FORM-OPTIONS-V1'&&!quantityFlag(item.isYtSpare)&&
+  item.id!=='SYSTEM-FORM-OPTIONS-V1'&&(!quantityFlag(item.isYtSpare)||window.SKAdminAuth.isAdmin())&&
+  (warehouse!=='production'||!quantityFlag(item.isEpp))&&
   !quantityFlag(item.isFixedAsset??item.esActivoFijo??item.CI_ES_A_FIJO)&&itemName(item)&&
   !stock?.deleted&&stock?.active!==false;
 }
@@ -345,33 +331,41 @@ function adjustmentTransaction(tables,write){
   tx.onabort=()=>reject(failure||tx.error||new Error('No se pudo guardar el ajuste local.'));
  });
 }
-function queueQuantity(itemId,quantity,observed){
- return adjustmentTransaction(['inventoryCriteria','inventoryStock',quantityAdjustments],(tx,abort)=>{
+const stockTable=warehouse=>warehouse==='production'?productionQuantityCache:'inventoryStock';
+// Las claves anteriores de Plaza siguen siendo válidas después de actualizar la app.
+const queueKey=(warehouse,itemId)=>warehouse==='production'?['production',itemId]:itemId;
+function queueQuantity(warehouse,itemId,quantity,observed){
+ const table=stockTable(warehouse),id=queueKey(warehouse,itemId);
+ return adjustmentTransaction(['inventoryCriteria',table,quantityAdjustments],(tx,abort)=>{
   const queue=tx.objectStore(quantityAdjustments);
   const item=tx.objectStore('inventoryCriteria').get(itemId);
-  const stocks=tx.objectStore('inventoryStock').getAll();
-  const existing=queue.get(itemId);
+  const stocks=tx.objectStore(table).getAll();
+  const existing=queue.get(id);
   existing.onsuccess=()=>{
    const current=stocks.result.find(row=>row.itemId===itemId);
-   if(!canAdjustQuantity(item.result,current))return abort('El criterio ya no permite editar la cantidad.');
-   if(existing.result)return abort('Este elemento ya tiene un ajuste pendiente.');
+   if(!canAdjustQuantity(item.result,current,warehouse))return abort('El criterio ya no permite editar la cantidad.');
+   if(existing.result)return abort('Este elemento ya tiene un ajuste pendiente en esta bodega.');
    if(current?.syncState==='pending')return abort('Primero sincroniza los cambios del criterio de este elemento.');
+   if(warehouse==='production'&&!current)return abort('Consulta primero la cantidad de Producción con conexión.');
    if(stockRevision(current)!==stockRevision(observed)||current?.quantity!==observed?.quantity)
     return abort('La existencia cambió. Revisa el saldo actualizado y vuelve a guardar.');
-   queue.put({...mark(),id:itemId,operationId:uuid(),itemId,quantity,stockRevision:stockRevision(current)});
+   const change=mark();
+   queue.put({...change,id,operationId:change.id,warehouse,itemId,quantity,observedQuantity:Number(current?.quantity||0),stockRevision:stockRevision(current)});
   };
  });
 }
 function settleQuantity(adjustment,confirmed,conflict){
- return adjustmentTransaction([quantityAdjustments,'inventoryStock'],tx=>{
+ const table=stockTable(adjustment.warehouse);
+ return adjustmentTransaction([quantityAdjustments,table],tx=>{
   const queue=tx.objectStore(quantityAdjustments),saved=queue.get(adjustment.id);
   saved.onsuccess=()=>{
    if(saved.result?.operationId!==adjustment.operationId)return;
    if(conflict){queue.put({...saved.result,syncError:conflict});return}
-   const stocks=tx.objectStore('inventoryStock'),current=stocks.get(confirmed.id);
+   const stocks=tx.objectStore(table),current=stocks.get(confirmed.id);
    current.onsuccess=()=>{
     const stock=current.result;
-    if(stock?.syncState!=='pending'&&(!stock||stockRevision(stock)<=stockRevision(confirmed)))stocks.put(confirmed);
+    const isNewer=adjustment.warehouse==='production'?stock?.sampledAt<=confirmed.sampledAt:stockRevision(stock)<=stockRevision(confirmed);
+    if(!stock||stock.syncState!=='pending'&&isNewer)stocks.put(confirmed);
     queue.delete(adjustment.id);
    };
   };
@@ -382,11 +376,13 @@ async function syncQuantities(){
  for(const row of adjustments){
   let result;
   try{
-   result=await window.SKAdminAuth.request('adminSetInventoryQuantity',{
+   result=row.warehouse?await window.SKAdminAuth.request('adminWarehouseQuantityV1',{
+    mode:'set',warehouse:row.warehouse,itemId:row.itemId,quantity:row.quantity,operationId:row.operationId,observedQuantity:row.observedQuantity,stockRevision:row.stockRevision
+   }):await window.SKAdminAuth.request('adminSetInventoryQuantity',{
     itemId:row.itemId,quantity:row.quantity,stockRevision:row.stockRevision
    });
   }catch(error){
-   if(/cantidad cambió en la base central|criterio no permite editar|existencia fue retirada/i.test(error.message)){
+   if(/cantidad cambió en la base central|criterio no permite editar|existencia fue retirada|requiere una cantidad entera|identificador ya corresponde/i.test(error.message)){
     await settleQuantity(row,null,error.message);
     window.dispatchEvent(new Event('skweb-inventory-refresh'));
     continue;
@@ -396,13 +392,29 @@ async function syncQuantities(){
    throw error;
   }
   const stock=result.stock;
-  if(!stock?.id||stock.itemId!==row.itemId||Number(stock.quantity)!==row.quantity)
+  const acknowledged=row.warehouse?result.operationId===row.operationId&&result.warehouse===row.warehouse&&['accepted','already-applied'].includes(result.status):Number(stock?.quantity)===row.quantity;
+  if(!stock?.id||stock.itemId!==row.itemId||!Number.isFinite(stock.quantity)||!acknowledged)
    throw new Error('La base central aún no confirmó el ajuste de cantidad.');
   await settleQuantity(row,{...stock,syncState:'synced'});
   window.dispatchEvent(new Event('skweb-inventory-refresh'));
  }
 }
-async function openQuantities(){
+async function refreshProductionQuantity(itemId){
+ const result=await window.SKAdminAuth.request('adminWarehouseQuantityV1',{mode:'get',warehouse:'production',itemId});
+ const stock=result.stock;
+ if(result.warehouse!=='production'||stock?.id!==itemId||stock?.itemId!==itemId||!stock.sampledAt||!Number.isFinite(stock.quantity))
+  throw new Error('El servicio central aún no confirmó el saldo de Producción.');
+ await adjustmentTransaction([productionQuantityCache],tx=>{
+  const table=tx.objectStore(productionQuantityCache),request=table.get(itemId);
+  request.onsuccess=()=>{if(!request.result||request.result.sampledAt<=stock.sampledAt)table.put(stock)};
+ });
+}
+let quantityViewVersion=0;
+async function openQuantities(options={}){
+ const warehouse=options.warehouse==='production'?'production':'plaza',production=warehouse==='production';
+ if(production&&!window.SKAdminAuth.isAdmin())throw new Error('Tu rol no permite editar cantidades de Producción.');
+ const warehouseName=production?'Producción':'Plaza Blending',table=stockTable(warehouse);
+
  let section=document.querySelector('#inventoryQuantities');
  if(!section){
   section=document.createElement('section');section.id='inventoryQuantities';section.className='view';
@@ -413,15 +425,15 @@ async function openQuantities(){
    #quantityItems button:is(:hover,:focus){background:#eaf1f6}
    #quantityItems small{font-weight:500}
   </style><div class="sectionHead"><h2>Editar cantidades</h2></div>
-   <p class="hint">Ajusta la cantidad del elemento. Puedes guardar sin internet. Plaza Blending verá el cambio después de sincronizar.</p>
+
    <form><div class="quantityPicker">
      <label for="quantityItemSearch">Elemento</label>
      <input id="quantityItemSearch" type="search" autocomplete="off" placeholder="Escribe o elige un elemento…" aria-controls="quantityItems">
      <div id="quantityItems" role="group" aria-label="Elementos disponibles" hidden></div>
     </div>
-    <label>Cantidad inicial<input name="quantity" type="number" min="0" step="any" required disabled></label>
+    <label>Cantidad<input name="quantity" type="number" min="0" step="any" required disabled></label>
     <div class="formActions"><button type="submit" disabled>Guardar cantidad</button>
-     <button type="button" id="backFromQuantities">Volver</button></div>
+     <button type="button" id="backFromQuantities" class="adminFormCancel">Volver</button></div>
    </form><p class="status" role="status" aria-live="polite"></p>`;
   document.querySelector('main').append(section);
   section.querySelector('#backFromQuantities').onclick=()=>window.SKAdminNav?.back();
@@ -436,20 +448,22 @@ async function openQuantities(){
  const form=section.querySelector('form'),search=section.querySelector('#quantityItemSearch'),
   menu=section.querySelector('#quantityItems'),quantity=form.elements.quantity,
   button=form.querySelector('[type=submit]'),status=section.querySelector('.status');
- if(button.dataset.saving==='1')return;
+ const view=++quantityViewVersion;
+ section.querySelector('h2').textContent='Cantidades · '+warehouseName;
  form.reset();search.disabled=true;menu.hidden=true;quantity.disabled=button.disabled=true;
  status.textContent='';section._refreshQuantity=null;form.onsubmit=null;
  if(typeof db==='undefined'||!db){status.textContent='El almacenamiento local todavía está cargando. Vuelve a abrir el módulo.';return}
  let criteria,stocks;
- try{[criteria,stocks]=await Promise.all([all('inventoryCriteria'),all('inventoryStock')])}
+ try{[criteria,stocks]=await Promise.all([all('inventoryCriteria'),all(table)])}
  catch(error){status.textContent='No se pudo leer el inventario local: '+error.message;return}
+ if(view!==quantityViewVersion)return;
  const balances=new Map(stocks.map(row=>[row.itemId,row]));
- const items=criteria.filter(row=>canAdjustQuantity(row,balances.get(row.id)))
+ const items=criteria.filter(row=>canAdjustQuantity(row,balances.get(row.id),warehouse))
   .sort((a,b)=>itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'}));
  let selected,stock,pending,selectionVersion=0;
  function drawItems(){
   const query=selected?'':search.value;
-  const matches=items.filter(row=>matchesItemSearch([itemName(row),itemSecondary(row),itemTertiary(row)].join(' '),'',query));
+  const matches=items.filter(row=>matchesItemSearch([itemName(row),itemSecondary(row),itemTertiary(row),row.spareApplication].join(' '),row.spareItemNumber,query,row.sparePartCode));
   menu.replaceChildren(...matches.map(row=>{
    const option=document.createElement('button');
    option.type='button';option.dataset.itemId=row.id;option.textContent=itemName(row);
@@ -463,22 +477,23 @@ async function openQuantities(){
  async function readSelected(keepInput=false){
   const id=selected?.id,version=++selectionVersion;
   if(!id)return;
-  const [currentItems,currentStocks,adjustments]=await Promise.all([all('inventoryCriteria'),all('inventoryStock'),all(quantityAdjustments)]);
-  if(version!==selectionVersion)return;
+  const [currentItems,currentStocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),all(quantityAdjustments)]);
+  if(view!==quantityViewVersion||version!==selectionVersion)return;
   const wasPending=pending,current=currentStocks.find(row=>row.itemId===id);
   const dirty=!quantity.disabled&&quantity.value!==String(stock?.quantity??0);
-  pending=adjustments.find(row=>row.itemId===id);
-  const eligible=canAdjustQuantity(currentItems.find(row=>row.id===id),current);
+  pending=adjustments.find(row=>row.itemId===id&&(row.warehouse||'plaza')===warehouse);
+  const eligible=canAdjustQuantity(currentItems.find(row=>row.id===id),current,warehouse);
   if(!keepInput||!dirty||pending||!eligible){
    stock=current;
-   quantity.value=pending?.quantity??current?.quantity??0;
+   quantity.value=pending?.quantity??current?.quantity??(production?'':0);
   }
-  quantity.disabled=button.disabled=Boolean(pending||!eligible||current?.syncState==='pending');
+  quantity.disabled=button.disabled=Boolean(pending||!eligible||production&&!current||current?.syncState==='pending');
   if(pending?.syncError)status.textContent=pending.syncError+' Puedes descartar el ajuste desde Inicio y volver a registrarlo con el saldo actualizado.';
-  else if(pending)status.textContent='Guardado en este equipo · pendiente de sincronizar con Plaza Blending.';
+  else if(pending)status.textContent='Guardado en este equipo · pendiente de sincronizar con '+warehouseName+'.';
   else if(!eligible)status.textContent='El criterio ya no permite editar la cantidad.';
   else if(current?.syncState==='pending')status.textContent='Primero sincroniza los cambios del criterio de este elemento.';
   else if(wasPending)status.textContent='Ajuste procesado. Saldo en la base sincronizada: '+quantity.value+'.';
+  else if(production&&!current)status.textContent='Conéctate para consultar por primera vez el saldo de este elemento en Producción.';
   else if(!keepInput)status.textContent='';
  }
  function report(error){status.textContent=error.message}
@@ -499,13 +514,30 @@ async function openQuantities(){
    else menu.querySelector('button')?.click();
   }
  };
+ async function selectItem(item){
+  if(!item)return;
+  selected=item;search.value=itemName(item);menu.hidden=true;
+  stock=pending=null;quantity.value='';quantity.disabled=button.disabled=true;
+  quantity.step=quantityFlag(item.isYtSpare)||production&&!quantityFlag(item.fractionable)?'1':'any';
+  await readSelected();
+  if(view!==quantityViewVersion||selected!==item)return;
+  if(!quantity.disabled&&section.classList.contains('active'))quantity.focus();
+  if(!production||navigator.onLine===false||pending)return;
+  if(!stock)status.textContent='Consultando la cantidad de Producción…';
+  try{
+   await refreshProductionQuantity(item.id);
+   if(view!==quantityViewVersion||selected!==item)return;
+   if(!pending)status.textContent='';
+   await readSelected(true);
+  }catch(error){
+   if(view!==quantityViewVersion||selected!==item)return;
+   const reason=/solicitud no válida/i.test(error.message)?'Actualiza la implementación de Apps Script para consultar Producción.':error.message;
+   status.textContent=(stock?'Último saldo sincronizado. ':'')+reason;
+  }
+ }
  menu.onclick=event=>{
   const option=event.target.closest('[data-item-id]');
-  if(!option)return;
-  selected=items.find(row=>row.id===option.dataset.itemId);
-  search.value=itemName(selected);menu.hidden=true;
-  stock=pending=null;quantity.value='';quantity.disabled=button.disabled=true;
-  readSelected().then(()=>{if(selected?.id===option.dataset.itemId&&!quantity.disabled&&section.classList.contains('active'))quantity.focus()}).catch(report);
+  if(option)selectItem(items.find(row=>row.id===option.dataset.itemId)).catch(report);
  };
  section._refreshQuantity=()=>{
   if(section.classList.contains('active')&&button.dataset.saving!=='1')readSelected(true).catch(report);
@@ -517,14 +549,20 @@ async function openQuantities(){
   if(!id||!Number.isFinite(value)||value<0)return;
   button.dataset.saving='1';search.disabled=quantity.disabled=button.disabled=true;menu.hidden=true;
   let failure;
-  try{await queueQuantity(id,value,stock)}
+  try{await queueQuantity(warehouse,id,value,stock)}
   catch(error){failure=error}
   finally{delete button.dataset.saving;search.disabled=false}
   if(!failure)window.dispatchEvent(new Event('skweb-local-change'));
+  if(view!==quantityViewVersion)return;
   try{await readSelected()}
   catch(error){report(failure||error);return}
   if(failure)report(failure);
  };
+ if(options.itemId){
+  const item=items.find(row=>row.id===options.itemId);
+  if(item)selectItem(item).catch(report);
+  else status.textContent='Este elemento se controla por ficha o no admite ajuste de cantidad en '+warehouseName+'.';
+ }
 }
 window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities};window.addEventListener('load',()=>setTimeout(mount,120));
 })();

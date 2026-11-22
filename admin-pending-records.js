@@ -10,6 +10,7 @@
     if(store==='personal')return [row.nombre||[row.primerNombre,row.primerApellido].filter(Boolean).join(' '),row.documento].filter(Boolean).join(' · ');
     if(store==='assets')return typeof assetLabel==='function'?assetLabel(row):[row.clase,row.nuevaMarca,row.marcaInterna,row.marcaAnterior,row.serial].filter(Boolean).join(' · ');
     if(store==='actas')return [row.tipo||'ACTA',row.consecutivo,row.asunto||row.motivo].filter(Boolean).join(' · ');
+    if(store==='inventoryQuantityAdjustments')return [row.warehouse==='production'?'Producción':'Plaza Blending',name(lookup.inventoryCriteria.get(row.itemId))||row.itemId,'Cantidad: '+row.quantity].join(' · ');
     const asset=lookup.assets.get(row.assetId),item=lookup.inventoryCriteria.get(row.itemId),part=lookup.parts.get(row.partId);
     return [row.descripcion,name(row)||name(item)||row.nombreRepuesto||name(part),asset&&(typeof assetLabel==='function'?assetLabel(asset):asset.clase),row.numero||row.noItem,row.cantidad!=null?`Cantidad: ${row.cantidad}`:row.quantity!=null?`Cantidad: ${row.quantity}`:''].filter(Boolean).join(' · ')||text(row.id)||'Registro sin descripción';
   }

@@ -5,7 +5,7 @@
  const spareGroups=window.SKSpareGroups;
  const stockExpanded=new Map();
  let selectedReturnId='';
- const kinds={income:'Ingreso externo',opening:'Saldo de apertura',delivery:'Entrega',loan:'Préstamo',return:'Reintegro',transfer_in:'Ingreso desde Plaza',transfer_out:'Traslado a Plaza'};
+ const kinds={quantity_adjustment:'Ajuste de cantidad',income:'Ingreso externo',opening:'Saldo de apertura',delivery:'Entrega',loan:'Préstamo',return:'Reintegro',transfer_in:'Ingreso desde Plaza',transfer_out:'Traslado a Plaza'};
  const roles=user=>Array.isArray(user?.roles)?user.roles:[user?.role||'assistant'];
  const permits=(user,scope)=>roles(user).some(role=>role==='admin'||role==='assistant'||role===scope);
  const el=(tag,text)=>{const node=document.createElement(tag);if(text!==undefined)node.textContent=text;return node};
@@ -380,7 +380,7 @@
   }else{
    headers=['FECHA','HORA REGISTRO','MOVIMIENTO','ELEMENTO / ACTIVO','CANTIDAD','FUNCIONARIO','BODEGUERO/A DE TURNO','REGISTRADO POR','DESTINO','ESTADO'];
    rows=[...records(),...pending().map(row=>({...row,itemName:item(row.itemId)?.name,personName:people().find(p=>p.id===row.personId)?.nombre,pending:true}))].reverse().flatMap(row=>{
-    const cells=[displayDate(row.fechaISO),registrationHour(row),kinds[row.kind]||row.kind,row.assetLabel||row.itemName,row.quantity,row.personName||'—',row.shiftKeeperName||'—',row.recordedByName||row.recordedBy||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO'];
+    const cells=[displayDate(row.fechaISO),registrationHour(row),kinds[row.kind]||row.kind,row.assetLabel||row.itemName,row.kind==='quantity_adjustment'?row.balanceBefore+' → '+row.balanceAfter:row.quantity,row.personName||'—',row.shiftKeeperName||'—',row.recordedByName||row.recordedBy||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO'];
     return matchesQuery(cells,row.itemId,query)?[cells]:[];
    });
   }

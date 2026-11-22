@@ -293,3 +293,44 @@ test('Bodega separa la sesión, el turno y el receptor, y valida el turno de cad
  const old=r.sync([op('income')],{token:'admin'});assert.equal(old.receipts[0].status,'accepted');assert.equal(old.rows.at(-1).shiftKeeperName,'');
  assert.equal(submit('assistant',{...entry,id:randomUUID(),kind:'opening'}).receipts[0].status,'rejected');
 });
+
+test('Admin ajusta cada bodega por separado y confirma un reenvío aun después de otro movimiento',()=>{
+ const r=runtime(),admin={role:'admin',username:'prueba'};
+ const query=(warehouse,itemId='tool')=>({warehouse,itemId,mode:'get'});
+ const apply=q=>r.c.adminWarehouseQuantity_(q,admin);
+ const request=(q,quantity)=>{const stock=apply(q).stock;return {...q,mode:'set',quantity,observedQuantity:stock.quantity,stockRevision:stock.updatedAt||'',operationId:randomUUID()};};
+ const plaza=request(query('plaza'),0),prod=request(query('production'),6);
+ assert.equal(apply(plaza).stock.quantity,0);
+ assert.equal(apply(prod).stock.quantity,6);
+ r.sync([op('delivery',2)]);
+ assert.equal(apply(prod).status,'already-applied');assert.equal(apply(prod).stock.quantity,4);
+ assert.equal(r.production.warehouseMovements.filter(row=>row.kind==='quantity_adjustment').length,1);
+ assert.equal(r.central.warehouseQuantityHistory.length,1);
+ assert.equal(apply(query('plaza')).stock.quantity,0);
+ const delayed=request(query('production'),3);
+ r.sync([op('income',2)]);
+ assert.throws(()=>apply(delayed),/cantidad cambió/);
+ assert.throws(()=>apply({...plaza,quantity:80}),/identificador/);
+ assert.equal(apply(query('production')).stock.quantity,6);
+ assert.equal(r.central.inventoryCriteria[0].name,'Llave');
+});
+test('los repuestos ajustados comparten el saldo de Mecánica y el recibo solo se confirma tras escribir',()=>{
+ const r=runtime(),admin={role:'owner',username:'prueba'};
+ const call=(q,auth=admin)=>r.c.adminWarehouseQuantity_(q,auth);
+ const query={warehouse:'production',mode:'get',itemId:'spare'};
+ const request=quantity=>{const stock=call(query).stock;return {...query,mode:'set',operationId:randomUUID(),quantity,observedQuantity:stock.quantity,stockRevision:stock.updatedAt};};
+ const first=request(8);
+ r.fail('production');assert.throws(()=>call(first),/Drive/);
+ assert.equal(call(query).stock.quantity,0);assert.equal(call(first).stock.quantity,8);
+ const second=request(2);assert.equal(call(second).stock.quantity,2);assert.equal(call(second).status,'already-applied');
+ assert.deepEqual(r.production.incomes.map(row=>[row.kind,row.cantidad]),[['warehouse-return',8],['warehouse-out',6]]);
+ assert.equal(r.sync().balances.find(row=>row.itemId==='spare').quantity,2);
+ assert.equal(r.c.productionSync_({token:'admin',pending:[],warehouseV1:true}).incomes.length,2);
+ assert.throws(()=>call(request(1.5)),/entera/);
+ assert.throws(()=>call(query,{role:'assistant'}),/rol/);
+ assert.throws(()=>call({...query,warehouse:'otra'}),/no válida/);
+ for(const criterion of [{id:'fixed',isFixedAsset:true},{id:'epp',isEpp:true}]){
+  r.central.inventoryCriteria.push(criterion);
+  assert.throws(()=>call({...query,itemId:criterion.id}),/criterio no permite/);
+ }
+});

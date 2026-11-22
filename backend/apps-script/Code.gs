@@ -14,7 +14,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Frentes de trabajo: la ficha nueva y su reporte se confirman en la misma escritura.
 function frontDocument_(value){
@@ -704,6 +704,72 @@ function adminSetInventoryQuantity_(q,auth){
   cloud.updatedAt=nextRevision_(cloud.updatedAt);
   writeFile_(id,cloud);
   return json_({ok:true,stock});
+ }finally{lock.releaseLock()}
+}
+
+// Los dos botones de Admin conservan los libros de cada bodega y sus propios recibos.
+function adminWarehouseQuantity_(q,auth){
+ const production=q.warehouse==='production',write=q.mode==='set';
+ if(!['plaza','production'].includes(q.warehouse)||!['get','set'].includes(q.mode))throw new Error('Solicitud de cantidad no válida.');
+ if(!isAdmin_(auth)&&(production||auth.role!=='assistant'))throw new Error('Tu rol no permite editar cantidades de esta bodega.');
+ if(write&&(!Number.isFinite(q.quantity)||q.quantity<0||typeof q.stockRevision!=='string'||!Number.isFinite(q.observedQuantity)||
+   !/^[-.a-zA-Z0-9]{12,110}$/.test(q.operationId||'')))throw new Error('El ajuste de cantidad no es válido.');
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const centralId=findFile_(),central=centralId?readFile_(centralId,lock):{};
+  const item=(central.inventoryCriteria||[]).find(row=>row.id===q.itemId);
+  if(!item||item.deleted||item.active===false||item.recordType==='formOptions'||item.id==='SYSTEM-FORM-OPTIONS-V1'||
+    truthy_(item.isFixedAsset??item.esActivoFijo??item.CI_ES_A_FIJO)||(!isAdmin_(auth)&&truthy_(item.isYtSpare))||
+    (production&&productionWarehouseEpp_(item)))throw new Error('Este criterio no permite editar la cantidad en esta bodega.');
+  if(production&&!productionWarehouseSettings_().enabled)throw new Error('La Bodega de Producción aún no está activada.');
+  if(write&&(truthy_(item.isYtSpare)||production&&!truthy_(item.fractionable))&&!Number.isSafeInteger(q.quantity))
+   throw new Error('El criterio requiere una cantidad entera.');
+  let file,book=central,changed=false;
+  if(production){
+   file=productionDataFile_();book=productionReadData_(file);
+   changed=productionImportPlaza_(book,central);
+  }
+  const stocks=central.inventoryStock||(central.inventoryStock=[]);
+  const plazaStock=production?null:stocks.find(row=>row.itemId===item.id);
+  if(plazaStock&&(plazaStock.deleted||plazaStock.active===false))throw new Error('La existencia fue retirada.');
+  const ledger=production?(book.warehouseMovements||[]):(central.warehouseQuantityHistory||[]);
+  const before=production?productionWarehouseBalance_(book,item,central):Number(plazaStock?.quantity||0);
+  const last=production?ledger.filter(row=>row.itemId===item.id).at(-1):null;
+  const revision=production?String(last?.revision||0)+'|'+before:(plazaStock?.updatedAt||plazaStock?.createdAt||'');
+  let stock=production?{id:item.id,itemId:item.id,quantity:before,updatedAt:revision}:plazaStock||{id:'stock-'+item.id,itemId:item.id,quantity:0,updatedAt:''};
+  const now=new Date().toISOString(),signature=JSON.stringify([q.warehouse,item.id,q.quantity,q.stockRevision,q.observedQuantity]);
+  const previous=write&&ledger.find(row=>row.id===q.operationId);
+  if(previous&&previous.requestSignature!==signature)throw new Error('El identificador ya corresponde a otro ajuste.');
+  if(write&&!previous){
+   if(revision!==q.stockRevision||before!==q.observedQuantity)throw new Error('La cantidad cambió en la base central. Revisa el saldo de esta bodega antes de volver a guardar.');
+   const delta=q.quantity-before,date=Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd');
+   const event={id:q.operationId,kind:'quantity_adjustment',itemId:item.id,itemName:item.name||item.CI_ELEMENTO,unit:item.unit,
+    quantity:Math.abs(delta),delta,balanceBefore:before,balanceAfter:q.quantity,recordedBy:auth.username,recordedByName:auth.name||auth.username,
+    recordedAt:now,createdAt:now,fechaISO:date,status:'synced',requestSignature:signature};
+   if(production){
+    const spare=productionSpare_(item,central);
+    const saved=productionWarehouseAppend_(book,event);
+    if(spare&&delta){
+     // Usa los mismos movimientos inmutables de entrada/salida que entienden los clientes de Mecánica instalados.
+     (book.incomes||(book.incomes=[])).push({id:'warehouse-'+event.id,...spare,kind:delta>0?'warehouse-return':'warehouse-out',
+      cantidad:Math.abs(delta),fechaISO:date,createdAt:now,recordedAt:now,sourceCreatedAt:now,sourceWarehouseMovementId:event.id,
+      source:'admin-quantity',registradoPor:auth.username,registradoPorNombre:event.recordedByName});
+    }
+    const actual=productionWarehouseBalance_(book,item,central);
+    if(Math.abs(actual-q.quantity)>1e-9)
+     throw new Error('El ajuste no coincide con el saldo vigente de Producción.');
+    stock={...stock,quantity:actual,updatedAt:saved.revision+'|'+actual};
+   }else{
+    stock=Object.assign(plazaStock||{id:stock.id,itemId:item.id,createdAt:now,initialQuantity:q.quantity,initialRecordedAt:now,active:true},
+     {quantity:q.quantity,updatedAt:nextRevision_(revision),syncState:'synced'});
+    if(!plazaStock)stocks.push(stock);
+    (central.warehouseQuantityHistory||(central.warehouseQuantityHistory=[])).push(event);
+    central.updatedAt=nextRevision_(central.updatedAt);
+   }
+   changed=true;
+  }
+  if(changed){if(production)productionSaveData_(file,book);else writeFile_(centralId,central);}
+  return json_({ok:true,warehouse:q.warehouse,stock:{...stock,sampledAt:now},...(write?{operationId:q.operationId,status:previous?'already-applied':'accepted'}:{})});
  }finally{lock.releaseLock()}
 }
 

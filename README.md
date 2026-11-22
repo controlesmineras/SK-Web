@@ -49,11 +49,11 @@ Validación: pruebas automatizadas con bases sintéticas, ediciones desde dos Pl
 
 ## Guardado offline de criterios de inventario
 
-Al guardar un criterio, Admin confirma en una sola transacción local el criterio, su saldo y, si corresponde, el ingreso inicial. Después limpia el formulario tanto al crear como al editar. El doble toque no genera dos altas. Si falla la escritura, conserva el formulario, revierte la operación completa y muestra el error.
+El formulario general guarda en IndexedDB únicamente la ficha del elemento. Los botones **PLAZA B.** y **PRODUCCIÓN**, debajo de la cabecera de criterios, abren el editor de cantidad de la bodega elegida. Si hay un criterio seleccionado, el editor lo conserva. Los activos fijos se cuentan por ficha, y los EPP se manejan en Plaza. El acceso anterior del auxiliar a las cantidades de Plaza se conserva.
 
-El contador se actualiza después de confirmar el guardado, incluye nuevos registros y modificaciones y conserva el número visible sin conexión, durante el envío o ante un error de sincronización. Cuenta registros pendientes: un elemento con cantidad inicial puede producir tres pendientes (criterio, saldo e ingreso inicial).
+Los ajustes pendientes guardan su bodega, el saldo observado y un identificador de operación. El servidor valida la revisión y conserva el movimiento y su recibo en el mismo archivo de la bodega. Una respuesta perdida se puede reintentar sin repetir el ajuste. En Producción, la primera consulta de un elemento requiere conexión. Después se puede editar con el último saldo consultado en ese equipo. Un registro rechazado queda disponible en los pendientes de Inicio. Los repuestos de Producción comparten el saldo de Mecánica.
 
-Los datos locales incluyen lo recibido en la última sincronización y lo registrado en ese dispositivo. Los cambios de otros dispositivos se reciben al sincronizar. Las altas y ediciones realizadas durante un envío se conservan pendientes; una respuesta anterior no las sobrescribe ni las da por enviadas. La reconexión inicia el envío automático con la sesión autorizada habitual. Esta corrección es del cliente y no requiere actualizar Code.gs.
+Para activar la sincronización de estos botones, actualizar `backend/apps-script/Code.gs` y publicar una nueva versión de la implementación existente de Apps Script, conservando su URL. Luego usar **Actualizar app** en Admin.
 
 ## Activos cuyo criterio no usa serial
 

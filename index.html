@@ -46,7 +46,7 @@ body:not([data-admin-role="owner"]):not([data-admin-role="admin"]) #adminUserMan
 <script src="admin-auth.js?v=20261121-actualizar-inicio"></script>
 
 <script src="asset-search.js?v=20261120-coincidencias-activos-1"></script><script src="asset-record-rules.js?v=20261121-marcas-yt-columna"></script>
-<script src="movement-time.js?v=1"></script><script src="cargo-search.js?v=20260927-2"></script><script src="spare-catalog.js?v=20261116-admin-role-1"></script><script src="asset-history.js?v=20261121-revertir-novedades"></script><script src="asset-history-ui.js?v=20261121-revertir-novedades"></script><script src="app.js?v=20261121-revertir-novedades"></script><script src="admin-install-ui.js?v=20261121-actualizar-inicio"></script>
+<script src="movement-time.js?v=1"></script><script src="cargo-search.js?v=20260927-2"></script><script src="spare-catalog.js?v=20261116-admin-role-1"></script><script src="asset-history.js?v=20261121-revertir-novedades"></script><script src="asset-history-ui.js?v=20261121-revertir-novedades"></script><script src="app.js?v=20261122-cantidades-por-bodega"></script><script src="admin-install-ui.js?v=20261121-actualizar-inicio"></script>
 <script src="duplicate-person-guard.js?v=20261106-person-document-acta-edit-1"></script>
 <script src="active-asset-count.js?v=20260913-1"></script>
 
@@ -66,7 +66,7 @@ body:not([data-admin-role="owner"]):not([data-admin-role="admin"]) #adminUserMan
 <script src="offline-navigation.js?v=20261116-admin-role-1"></script>
 <script src="sync-latest.js?v=20261022-mark-integrity-1"></script>
 <script src="sync-api.js?v=20261121-revertir-novedades"></script>
-<script src="admin-pending-records.js?v=20261104-offline-quantities-2"></script>
+<script src="admin-pending-records.js?v=20261122-cantidades-por-bodega"></script>
 <script src="consumption-manual-date.js?v=20261108-production-1"></script>
 <script src="consumption-query-v2.js?v=20261120-compras-1"></script>
 <script src="collaborator-contact-query.js?v=20260913-1"></script>
@@ -78,10 +78,10 @@ body:not([data-admin-role="owner"]):not([data-admin-role="admin"]) #adminUserMan
 <script src="asset-seed-3.js?v=20260908-3"></script>
 <script src="asset-seed.js?v=20261009-assets-1"></script>
 <script src="spare-groups.js?v=20261120-existencias-repuestos"></script>
-<script src="inventory-admin.js?v=20261120-cabecera-criterios"></script>
+<script src="inventory-admin.js?v=20261122-cantidades-por-bodega"></script>
 <script src="production-spares.js?v=20261116-admin-role-1"></script>
 <script src="inventory-stock-query.js?v=20260914-1"></script>
-<script src="actas-admin.js?v=20261121-catalogos-por-aplicacion"></script><script src="document-query.js?v=20261106-acta-not-created-4"></script><script src="admin-home-navigation.js?v=20261121-catalogos-por-aplicacion"></script>
+<script src="actas-admin.js?v=20261121-catalogos-por-aplicacion"></script><script src="document-query.js?v=20261106-acta-not-created-4"></script><script src="admin-home-navigation.js?v=20261122-cantidades-por-bodega"></script>
 <script src="form-option-catalog.js?v=20261121-catalogos-por-aplicacion"></script>
 <script>{const button=document.querySelector('#adminHomeInfoToggle'),dialog=document.querySelector('#adminHomeInfoDialog'),close=document.querySelector('#adminHomeInfoClose');const dismiss=()=>{dialog.hidden=true;button.focus()};button?.addEventListener('click',()=>{dialog.hidden=false;close.focus()});dialog?.addEventListener('click',dismiss);document.addEventListener('keydown',event=>{if(event.key==='Escape'&&!dialog.hidden)dismiss()})}window.addEventListener('load',()=>{let tries=0;const t=setInterval(async()=>{tries++;if(typeof db!=='undefined'&&db){clearInterval(t);try{await seedPersonal();await seedAssets();await refresh();document.querySelector('#syncStatus').textContent=window.skSyncApi?.configured()?'Base local lista · sincronización automática activa.':'Base local lista. Personal y activos cargados.'}catch(e){console.error(e)}}else if(tries>40)clearInterval(t)},250)})</script>
 <script src="admin-language.js?v=20261119-numero-item"></script><script src="production-access-admin.js?v=20261118-consulta-bodega-1"></script><dialog id="skLinksDialog" aria-labelledby="skLinksTitle" style="width:min(480px,90vw);box-sizing:border-box;border:0;border-radius:14px;padding:18px;color:#102f45;background:#fff">
