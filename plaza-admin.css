@@ -23,6 +23,13 @@
 .laborAccessDialog > .plazaAccessPeople{padding:10px 12px;border-radius:10px}
 .laborAccessDialog > .plazaAccessPeople + .plazaAccessPeople{margin-top:8px}
 .laborAccessDialog .plazaAccessPeople h3{margin:0 0 6px;font-size:1rem}
+.laborAccessDialog > .plazaAccessPeople:has(> .accessPersonField),
+.laborAccessDialog > .plazaAccessPeople:has(> [data-active]){
+  background:#e4edf2;border-color:#adbfca;
+}
+.laborAccessDialog > .plazaAccessPeople:has(> .accessPersonField) > h3,
+.laborAccessDialog > .plazaAccessPeople:has(> [data-active]) > h3{text-transform:uppercase}
+.laborAccessDialog > .plazaAccessPeople:has(> [data-active]) > h3{font-size:.9375rem}
 .laborAccessDialog [role="status"]{margin:6px 0;font-size:.9rem}
 .laborAccessDialog [role="status"]:empty,.laborAccessDialog [data-copy]:empty{margin:0;height:0}
 .laborAccessDialog > section:last-child{margin-top:8px}
