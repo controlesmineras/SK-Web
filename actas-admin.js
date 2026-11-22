@@ -2,7 +2,7 @@
 (()=>{
 'use strict';
 const ACTA_BASE=0,OFICIO_BASE=0;
-let documentType='ACTA';
+let documentType='ACTA',originalMotive='';
 const typeOf=row=>row.tipo==='OFICIO'?'OFICIO':'ACTA';
 const isPreviousActa=form=>documentType==='ACTA'&&!form.elements.id.value&&form.elements.modoRegistro.value==='anterior';
 const esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
@@ -34,6 +34,15 @@ async function updateNumber(number){
   if(box)box.innerHTML=`TU NÚMERO DE ${documentType} ES: <strong>${esc(value)}</strong>`;
   const form=document.getElementById('actaForm');
   if(form)form.elements.consecutivo.value=String(value);
+}
+function refreshMotives(form,selected=form.elements.motivo.value){
+  const motives=window.SKFormOptions?.values('acta.motive');
+  if(!motives)return;
+  const select=form.elements.motivo,special=select.querySelector('[data-not-created-motive]');
+  const choices=motives.filter(value=>value!==special.value);
+  if(originalMotive&&originalMotive!==special.value&&!choices.includes(originalMotive))choices.push(originalMotive);
+  select.replaceChildren(select.options[0],special,...choices.map(value=>new Option(value,value)));
+  select.value=selected===special.value||choices.includes(selected)?selected:'';
 }
 function updateNotCreated(){
  const form=document.getElementById('actaForm');if(!form)return;
@@ -126,13 +135,13 @@ async function render(){
 async function reset({keepRegistrationMode=false}={}){
   const form=document.getElementById('actaForm');if(!form)return;
   const mode=keepRegistrationMode?form.elements.modoRegistro.value:'nuevo';
-  delete form._notCreatedDraft;form.reset();form.elements.modoRegistro.value=mode;form.elements.id.value='';form.elements.fecha.value=displayDate(today());form.elements.fecha.setCustomValidity('');document.getElementById('actaStatus').hidden=true;updateMode();await updateNumber();
+  originalMotive='';delete form._notCreatedDraft;form.reset();refreshMotives(form,'');form.elements.modoRegistro.value=mode;form.elements.id.value='';form.elements.fecha.value=displayDate(today());form.elements.fecha.setCustomValidity('');document.getElementById('actaStatus').hidden=true;updateMode();await updateNumber();
 }
 async function selectMode(type){if(type===documentType)return;documentType=type;await reset();await render()}
 async function edit(id){
   const acta=(await rows()).find(x=>x.id===id);if(!acta)return;documentType=typeOf(acta);
   const form=document.getElementById('actaForm');
-  delete form._notCreatedDraft;form.reset();for(const field of ['id','consecutivo','fecha','area','motivo','asunto','dirigidoA','enlace'])if(form.elements[field])form.elements[field].value=acta[field]||'';
+  originalMotive=acta.motivo||'';delete form._notCreatedDraft;form.reset();refreshMotives(form,originalMotive);for(const field of ['id','consecutivo','fecha','area','motivo','asunto','dirigidoA','enlace'])if(form.elements[field])form.elements[field].value=acta[field]||'';
   form.elements.fecha.value=displayDate(acta.fecha);form.elements.fecha.setCustomValidity('');
   form.elements.numeroAnterior.value=String(acta.consecutivo||'');
   form.elements.noElaborada.checked=acta.documentStatus==='not_created';
@@ -207,6 +216,10 @@ function mount(){
   reset();render();
 }
 window.SKActasAdmin={render,reset,edit};
+window.addEventListener('skweb-options-applied',()=>{
+  const form=document.getElementById('actaForm');
+  if(form)refreshMotives(form);
+});
 window.addEventListener('skadmin-permissions',()=>{updateDeleteLast();updateNotCreated()});
 window.addEventListener('skweb-synced',()=>{if(document.getElementById('actas')?.classList.contains('active'))render()});
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',mount,{once:true});else mount();

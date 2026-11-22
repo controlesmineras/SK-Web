@@ -64,3 +64,15 @@ test('catálogo ausente: conserva los cargos predeterminados y agrega el nuevo',
  const saved=add(s,search(s,'Mecánico').searchToken);assert.equal(saved.ok,true);assert.equal(saved.record.options['personal.role'].length,7);assert.equal(s.cloud().inventoryCriteria.length,2);
 });
 
+
+test('sincronizar motivos personalizados conserva los demás campos y el motivo del acta histórica',()=>{
+ const seed=initial();
+ seed.actas=[{id:'a1',tipo:'ACTA',consecutivo:1,motivo:'Visita'}];
+ const s=service(seed),row=s.cloud().inventoryCriteria[1];
+ row.options['acta.motive']=['Inspección'];row.syncState='pending';row.updatedAt=new Date().toISOString();
+ const edit={action:'sync',data:{inventoryCriteria:[row]}};
+ assert.equal(s.post(edit).ok,false);
+ assert.equal(s.post(edit,s.token('admin')).ok,true);
+ assert.deepEqual(s.cloud().inventoryCriteria[1].options,row.options);
+ assert.equal(s.cloud().actas[0].motivo,'Visita');
+});

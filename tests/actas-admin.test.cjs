@@ -7,7 +7,7 @@ const vm=require('node:vm');
 const source=fs.readFileSync(path.join(__dirname,'../actas-admin.js'),'utf8');
 const clone=value=>JSON.parse(JSON.stringify(value));
 
-function app(seed=[]){
+function app(seed=[],motives){
   let records=clone(seed),sequence=0;
   const writes=[],timers=[];
   const elements=Object.fromEntries(['id','consecutivo','modoRegistro','numeroAnterior','fecha','area','motivo','asunto','dirigidoA','enlace','noElaborada','justificacionNoElaborada'].map(name=>[name,{value:name==='modoRegistro'?'nuevo':'',disabled:false,required:false,checked:false,setCustomValidity(message){this.validationMessage=message}}]));
@@ -18,7 +18,13 @@ function app(seed=[]){
   const nodes={actaForm:form,actaNumber:{},actaSave:{},actaStatus:{},newActa:{},actaList:{}};
   const document={readyState:'loading',addEventListener(){},getElementById:id=>nodes[id],querySelectorAll:()=>[]};
   const window={dispatchEvent(){},addEventListener(){}};
-  const context=vm.createContext({document,window,Event:class{},db:{},all:async()=>clone(records),uuid:()=>`new-${++sequence}`,setTimeout:fn=>timers.push(fn),put:async(store,row)=>{
+  class Option{constructor(label,value){this.textContent=label;this.value=value}}
+  if(motives){
+    window.SKFormOptions={values:key=>key==='acta.motive'?motives:[]};
+    const placeholder=new Option('Seleccionar…',''),special=new Option('Acta no elaborada','NO SE REGISTRÓ');
+    Object.assign(elements.motivo,{options:[placeholder,special],querySelector:()=>special,replaceChildren(...options){this.options=options}});
+  }
+  const context=vm.createContext({document,window,Option,Event:class{},db:{},all:async()=>clone(records),uuid:()=>`new-${++sequence}`,setTimeout:fn=>timers.push(fn),put:async(store,row)=>{
     assert.equal(store,'actas');const saved=clone(row),index=records.findIndex(x=>x.id===saved.id);if(index===-1)records.push(saved);else records[index]=saved;writes.push(saved);
   }});
   vm.runInContext(source.replace('window.SKActasAdmin={render,reset,edit};','window.SKActasAdmin={render,reset,save,edit,selectMode,updateMode,nextNumber};'),context);
@@ -108,3 +114,16 @@ test('rechaza fechas imposibles, incompletas o en formato norteamericano sin mod
   }
 });
 
+
+test('el catálogo de motivos conserva el valor retirado al editar y ofrece solo motivos activos en actas nuevas',async()=>{
+  const motives=['Inspección'],s=app([{id:'a1',tipo:'ACTA',consecutivo:1,fecha:'2026-11-21',area:'ADMINISTRATIVA',motivo:'Visita'}],motives);
+  const select=s.elements.motivo,options=()=>select.options.map(option=>option.value);
+  await s.api.edit('a1');
+  assert.equal(select.value,'Visita');
+  assert.deepEqual(options(),['','NO SE REGISTRÓ','Inspección','Visita']);
+  await s.save();assert.equal(s.records()[0].motivo,'Visita');
+  await s.api.reset();
+  assert.deepEqual(options(),['','NO SE REGISTRÓ','Inspección']);
+  motives.length=0;await s.api.reset();
+  assert.deepEqual(options(),['','NO SE REGISTRÓ']);
+});

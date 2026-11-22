@@ -1,4 +1,4 @@
-// Catálogos cerrados compartidos por SK Admin y Plaza Blending.
+// Catálogos de opciones editables desde SK Web Admin.
 (()=>{
 'use strict';
 const RECORD_ID='SYSTEM-FORM-OPTIONS-V1';
@@ -6,6 +6,7 @@ const defaults={
   'personal.company':['SK 3.7','DESMIN'],
   'personal.area':['Seguridad física','Desmin - Obras civiles','Producción','Producción - Selectivo (Corteros)','Administrativa'],
   'personal.role':['Operador minero','Operador de seguridad','Escolta','Machinero','Supervisor','No informado'],
+  'acta.motive':['DE COMPROMISO','DAR DE BAJA HERRAMIENTAS','INVENTARIO GENERAL','ENTREGA DE ELEMENTOS'],
   'inventory.unit':['Unidad','Par','Rollo'],
   'asset.model.yt':['28','29'],
   'asset.model.autorrescatador':['Oxypro 50'],
@@ -23,8 +24,26 @@ const defaults={
   'delivery.destination':['Operación','Traslado','Reparación','A cargo de ARIS MINING']
 };
 const labels={
+  'acta.motive':'Registro de documentos · Motivo del acta',
   'personal.company':'Personal · Empresa','personal.area':'Personal · Área','personal.role':'Personal · Cargo','inventory.unit':'Inventario · Unidad de medida',
   'asset.model.yt':'Activos · Modelos de YT','asset.model.autorrescatador':'Activos · Modelos de autorrescatador','asset.manufacturer.yt':'Activos · Marca comercial de YT','asset.manufacturer.autorrescatador':'Activos · Marca comercial de autorrescatador','asset.manufacturer.motosierra':'Activos · Marca comercial de motosierra','asset.viewerColor':'Activos · Color del visor','asset.owner':'Activos · Mina propietaria','asset.location':'Activos · Ubicación','asset.state.standard':'Activos · Estados generales','asset.state.autorrescatador':'Activos · Estados de autorrescatador','asset.physicallyMarked':'Activos · Marcación física','asset.deliveryAvailable':'Activos · Disponible para entrega','novelty.description':'Novedades de activos · Tipo de novedad','delivery.destination':'Entregas · Destino'
+};
+const personalFields=['personal.company','personal.area','personal.role'];
+const catalogIndex={
+  'SK Web Admin':{
+    'Registro de documentos':['acta.motive'],
+    'Personal':personalFields,
+    'Activos fijos':[...Object.keys(defaults).filter(key=>key.startsWith('asset.')),'personal.area'],
+    'Novedades de activos':['novelty.description','asset.location','asset.state.standard','asset.state.autorrescatador','asset.viewerColor','personal.area'],
+    'Criterios de inventario':['inventory.unit']
+  },
+  'Plaza Blending':{
+    'Entregas':['delivery.destination','personal.area'],
+    'Ingresos':['asset.owner','asset.manufacturer.motosierra','personal.area'],
+    'Registro de personal':personalFields
+  },
+  'Producción':{'Bodega':'common','Mecánica':'spare'},
+  'Labor':{'Nuevo reporte':personalFields}
 };
 const clean=value=>String(value||'').trim(),norm=value=>clean(value).toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' '),esc=value=>String(value??'').replace(/[&<>"']/g,char=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[char]));
 let config=null;
@@ -58,29 +77,106 @@ function apply(){
   window.dispatchEvent(new CustomEvent('skweb-options-applied'));
 }
 async function load(){const raw=window.SKPlaza?plazaRecord():await adminRecord();config=normalized(raw);apply();return config}
-async function saveOptions(next){if(!window.SKAdminAuth?.isAdmin())throw new Error('Solo el administrador puede modificar los catálogos.');const old=await adminRecord(),time=new Date().toISOString(),record={...(old||{}),id:RECORD_ID,recordType:'formOptions',options:next,deleted:true,active:false,createdAt:old?.createdAt||time,updatedAt:time,syncState:'pending'};await put('inventoryCriteria',record);config=normalized(record);apply();window.skSyncApi?.schedule?.(300);return record}
+async function changeOption(key,previous,value){
+  if(!window.SKAdminAuth?.isAdmin()||!Object.hasOwn(defaults,key))throw new Error('Solo el administrador puede modificar los catálogos.');
+  if(key==='acta.motive'&&norm(value)==='no se registro')throw new Error('Este motivo está reservado para actas no elaboradas.');
+  const record=await new Promise((resolve,reject)=>{
+    const tx=db.transaction('inventoryCriteria','readwrite'),table=tx.objectStore('inventoryCriteria');
+    let saved,failure;
+    const read=table.getAll();
+    read.onsuccess=()=>{
+      const old=read.result.find(row=>row.id===RECORD_ID||row.recordType==='formOptions');
+      const options={...old?.options,...normalized(old)},current=options[key],index=current.indexOf(previous);
+      if(previous!==null&&index<0)failure=new Error('La opción cambió. Vuelve a abrir el catálogo.');
+      else if(value!==null&&current.some((item,i)=>i!==index&&norm(item)===norm(value)))failure=new Error('Esa opción ya existe en este campo.');
+      if(failure){tx.abort();return}
+      if(previous===null)current.push(value);
+      else if(value===null)current.splice(index,1);
+      else current[index]=value;
+      const time=new Date().toISOString();
+      saved={...old,id:RECORD_ID,recordType:'formOptions',options,deleted:true,active:false,createdAt:old?.createdAt||time,updatedAt:time,syncState:'pending'};
+      table.put(saved);
+    };
+    tx.oncomplete=()=>resolve(saved);
+    tx.onabort=()=>reject(failure||tx.error||new Error('No se pudo guardar el catálogo.'));
+  });
+  config=normalized(record);apply();window.dispatchEvent(new Event('skweb-local-change'));window.skSyncApi?.schedule?.(300);
+}
 function mountAdmin(){
   if(window.SKPlaza||document.querySelector('#optionCatalog'))return;
   const main=document.querySelector('main');if(!main)return;
   const section=document.createElement('section');section.id='optionCatalog';section.className='view';
-  section.innerHTML=`<div class="sectionHead"><h2>Catálogos de opciones</h2></div><p id="catalogHint" class="hint"></p><div class="catalogLayout"><label>CAMPO<select id="catalogGroup"></select></label><form id="catalogAdd" hidden><label>NUEVA OPCIÓN<input name="value" autocomplete="off" required></label><button type="submit">AGREGAR OPCIÓN</button></form><form id="catalogCargoSearch" hidden><label>BUSCAR CARGO<input name="query" type="search" autocomplete="off" maxlength="120" placeholder="Escribe el cargo que necesitas" required></label><button type="submit">BUSCAR</button></form><p id="catalogStatus" class="hint" role="status" aria-live="polite"></p><button id="catalogCargoAdd" type="button" hidden></button><div id="catalogList" class="catalogList"></div></div>`;
+  section.innerHTML=`<div class="sectionHead"><h2>Catálogos de opciones</h2></div><p id="catalogHint" class="hint"></p><div class="catalogLayout">
+    <div id="catalogNavigation" hidden>
+      <fieldset><legend>Aplicación</legend><div id="catalogApps" class="catalogChoices"></div></fieldset>
+      <fieldset id="catalogModuleBox" hidden><legend>Módulo</legend><div id="catalogModules" class="catalogChoices"></div></fieldset>
+    </div><label id="catalogField" hidden>CAMPO<select id="catalogGroup"></select></label><form id="catalogAdd" hidden><label>NUEVA OPCIÓN<input name="value" autocomplete="off" required></label><button type="submit">AGREGAR OPCIÓN</button></form><form id="catalogCargoSearch" hidden><label>BUSCAR CARGO<input name="query" type="search" autocomplete="off" maxlength="120" placeholder="Escribe el cargo que necesitas" required></label><button type="submit">BUSCAR</button></form><p id="catalogStatus" class="hint" role="status" aria-live="polite"></p><button id="catalogCargoAdd" type="button" hidden></button><div id="catalogList" class="catalogList"></div></div>`;
   main.append(section);
-  const style=document.createElement('style');style.textContent='.catalogLayout{display:grid;gap:14px}.catalogLayout [hidden]{display:none!important}.catalogLayout>label{max-width:620px}.catalogLayout form{grid-template-columns:minmax(0,1fr) auto;align-items:end}.catalogLayout form button{grid-column:auto}.catalogList{display:grid;gap:8px}.catalogOption{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;background:#fff;border:1px solid #dbe2e8;border-radius:9px;overflow-wrap:anywhere}.catalogOption button{background:#fff;color:#922;border:1px solid #c99}#catalogCargoAdd{justify-self:start;max-width:100%;min-height:48px;padding:12px 18px;background:#173d59;color:#fff;border:0;border-radius:9px;font:inherit;font-weight:800;white-space:normal;overflow-wrap:anywhere}@media(max-width:720px){.catalogLayout form{grid-template-columns:1fr}.catalogLayout form button{grid-column:1}}';document.head.append(style);
+  const style=document.createElement('style');style.textContent='.catalogLayout{display:grid;gap:14px}.catalogLayout [hidden]{display:none!important}.catalogLayout>label{max-width:620px}.catalogLayout form{grid-template-columns:minmax(0,1fr) auto;align-items:end}.catalogLayout form button{grid-column:auto}.catalogList{display:grid;gap:8px}.catalogOption{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 13px;background:#fff;border:1px solid #dbe2e8;border-radius:9px;overflow-wrap:anywhere}.catalogOption button{background:#fff;color:#922;border:1px solid #c99}#catalogCargoAdd{justify-self:start;max-width:100%;min-height:48px;padding:12px 18px;background:#173d59;color:#fff;border:0;border-radius:9px;font:inherit;font-weight:800;white-space:normal;overflow-wrap:anywhere}@media(max-width:720px){.catalogLayout form{grid-template-columns:1fr}.catalogLayout form button{grid-column:1}}';
+  style.textContent+=`
+    #catalogNavigation{display:grid;gap:12px}
+    #catalogNavigation fieldset{margin:0;padding:0;min-width:0;border:0}
+    #catalogNavigation legend{margin-bottom:6px;font-weight:750}
+    .catalogChoices{display:flex;flex-wrap:wrap;gap:8px}
+    .catalogChoices button{min-height:44px;padding:8px 16px;border:1px solid #a8bcc9;background:white;color:#173d59}
+    .catalogChoices button[aria-pressed="true"]{background:#173d59;color:white;border-color:#173d59}
+    .catalogOption>span{flex:1;min-width:0}.catalogOptionActions{display:flex;gap:6px;flex-wrap:wrap}
+    .catalogOption button[data-edit-option]{color:#173d59;border-color:#a8bcc9}
+    @media(max-width:480px){.catalogChoices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr))}.catalogChoices button{padding:8px}.catalogOption{flex-wrap:wrap}}
+  `;document.head.append(style);
   const group=section.querySelector('#catalogGroup'),list=section.querySelector('#catalogList'),addForm=section.querySelector('#catalogAdd'),searchForm=section.querySelector('#catalogCargoSearch'),query=searchForm.elements.query,addCargo=section.querySelector('#catalogCargoAdd'),status=section.querySelector('#catalogStatus');
+  const navigation=section.querySelector('#catalogNavigation'),apps=section.querySelector('#catalogApps'),modules=section.querySelector('#catalogModules');
+  const choiceButtons=names=>names.map(name=>`<button type="button" data-choice="${esc(name)}" aria-pressed="false">${esc(name)}</button>`).join('');
+  apps.innerHTML=choiceButtons(Object.keys(catalogIndex));
+  let appName='';
+  function setFields(keys){
+    group.replaceChildren(...keys.map(key=>new Option(labels[key].split(' · ').at(-1),key)));
+    group.value=keys[0]||'';
+    addForm.reset();
+  }
+  function selectApp(name){
+    appName=name;
+    for(const button of apps.children)button.setAttribute('aria-pressed',String(button.dataset.choice===name));
+    modules.innerHTML=choiceButtons(Object.keys(catalogIndex[name]||{}));
+    section.querySelector('#catalogModuleBox').hidden=!name;
+    setFields([]);
+  }
+  apps.addEventListener('click',event=>{
+    const button=event.target.closest('[data-choice]');
+    if(!button||!window.SKAdminAuth?.isAdmin())return;
+    selectApp(button.dataset.choice);draw();
+  });
+  modules.addEventListener('click',event=>{
+    const button=event.target.closest('[data-choice]');
+    if(!button||!window.SKAdminAuth?.isAdmin())return;
+    const fields=catalogIndex[appName][button.dataset.choice];
+    for(const item of modules.children)item.setAttribute('aria-pressed',String(item===button));
+    if(typeof fields==='string'){
+      window.SKInventoryAdmin.openKind(fields);window.SKAdminNav.go('inventoryItems');return;
+    }
+    setFields(fields);draw();
+  });
   let searchToken='',searchedValue='',matches=[],busy=false,role='';
   const assistant=()=>window.SKAdminAuth?.ready()&&!window.SKAdminAuth.isAdmin();
   const invalidateSearch=()=>{searchToken='';searchedValue='';matches=[];addCargo.hidden=true;list.replaceChildren();status.textContent='Busca el cargo antes de agregarlo.'};
   const setBusy=value=>{busy=value;query.disabled=value;searchForm.querySelector('button').disabled=value;addCargo.disabled=value};
   const draw=()=>{
     const owner=window.SKAdminAuth?.isAdmin(),nextRole=owner?'owner':assistant()?'assistant':'';
-    if(role!==nextRole){role=nextRole;invalidateSearch();group.innerHTML=(owner?Object.keys(defaults):['personal.role']).map(key=>`<option value="${esc(key)}">${esc(labels[key])}</option>`).join('');query.value=''}
-    group.disabled=!owner;addForm.hidden=!owner;searchForm.hidden=!assistant();
+    if(role!==nextRole){role=nextRole;invalidateSearch();query.value='';selectApp('');if(assistant())setFields(['personal.role'])}
+    const fieldSelected=Boolean(group.value);
+    navigation.hidden=!owner;section.querySelector('#catalogField').hidden=!fieldSelected;
+    group.disabled=!owner;addForm.hidden=!owner||!fieldSelected;searchForm.hidden=!assistant();
     section.querySelector('h2').textContent=owner?'Catálogos de opciones':'Catálogo de cargos';
-    section.querySelector('#catalogHint').textContent=owner?'Administra las opciones cerradas de ambas aplicaciones. Retirar una opción no modifica los registros históricos.':'Puedes agregar cargos después de buscarlos, si no hay coincidencias. La búsqueda requiere conexión. Los cargos existentes solo los puede modificar el administrador.';
-    if(owner){addCargo.hidden=true;status.textContent='';list.innerHTML=values(group.value).map((value,index)=>`<div class="catalogOption"><span>${esc(value)}</span><button type="button" data-remove-option="${index}">RETIRAR</button></div>`).join('')||'<p class="hint">Este campo no tiene opciones activas.</p>'}
+    const hint=section.querySelector('#catalogHint');
+    hint.hidden=owner&&!fieldSelected;
+    hint.textContent=owner?'Los cambios se aplican a los registros nuevos. Los anteriores conservan el valor guardado.':'Puedes agregar cargos después de buscarlos, si no hay coincidencias. La búsqueda requiere conexión. Los cargos existentes solo los puede modificar el administrador.';
+    if(owner){
+      addCargo.hidden=true;status.textContent='';
+      list.innerHTML=!fieldSelected?'':values(group.value).map(value=>`<div class="catalogOption"><span>${esc(value)}</span><div class="catalogOptionActions">${group.value==='acta.motive'?`<button type="button" data-edit-option="${esc(value)}">EDITAR</button>`:''}<button type="button" data-remove-option="${esc(value)}">RETIRAR</button></div></div>`).join('')||'<p class="hint">Este campo no tiene opciones activas.</p>';
+    }
     else{list.innerHTML=matches.map(value=>`<div class="catalogOption"><span>${esc(value)}</span></div>`).join('');addCargo.hidden=!assistant()||!searchToken||busy}
   };
-  group.addEventListener('change',draw);
+  group.addEventListener('change',()=>{addForm.reset();draw()});
   query.addEventListener('input',invalidateSearch);
   searchForm.addEventListener('submit',async event=>{
     event.preventDefault();if(!assistant()||busy)return;
@@ -109,16 +205,19 @@ function mountAdmin(){
   });
   addForm.addEventListener('submit',async event=>{
     event.preventDefault();if(!window.SKAdminAuth?.isAdmin())return;
-    const form=event.currentTarget,value=clean(form.elements.value.value),key=group.value,current=values(key);
-    if(!value||!Object.hasOwn(defaults,key))return;
-    if(current.some(item=>norm(item)===norm(value)))return alert('Esa opción ya existe en este campo.');
-    try{await saveOptions({...config,[key]:[...current,value]});form.reset();draw()}catch(error){alert(error.message)}
+    const form=event.currentTarget,value=clean(form.elements.value.value),key=group.value;
+    if(!value||!key)return;
+    try{await changeOption(key,null,value);if(group.value===key&&clean(form.elements.value.value)===value)form.reset();draw()}catch(error){alert(error.message)}
   });
   list.addEventListener('click',async event=>{
-    const button=event.target.closest('[data-remove-option]');if(!button||!window.SKAdminAuth?.isAdmin())return;
-    const key=group.value,current=values(key),index=Number(button.dataset.removeOption),value=current[index];
-    if(!value||!confirm(`¿Retirar “${value}” de las opciones disponibles?\n\nLos registros históricos conservarán este valor.`))return;
-    try{await saveOptions({...config,[key]:current.filter((_,i)=>i!==index)});draw()}catch(error){alert(error.message)}
+    const button=event.target.closest('[data-remove-option],[data-edit-option]');if(!button||!window.SKAdminAuth?.isAdmin())return;
+    const key=group.value,previous=button.dataset.editOption??button.dataset.removeOption;
+    let value=null;
+    if(button.hasAttribute('data-edit-option')){
+      value=clean(prompt('Nuevo nombre del motivo del acta',previous));
+      if(!value||value===previous)return;
+    }else if(!confirm(`¿Retirar “${previous}” de las opciones disponibles?\n\nLos registros históricos conservarán este valor.`))return;
+    try{await changeOption(key,previous,value);draw()}catch(error){alert(error.message)}
   });
   window.SKFormOptions.render=draw;window.addEventListener('skadmin-permissions',draw);draw();
 }
@@ -127,7 +226,7 @@ if(document.currentScript?.hasAttribute?.('data-options-only'))return;
 if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',()=>{mountAdmin();load().then(()=>window.SKFormOptions.render?.())},{once:true});else{mountAdmin();load().then(()=>window.SKFormOptions.render?.())}
 window.addEventListener('load',()=>setTimeout(()=>load().then(()=>window.SKFormOptions.render?.()),500),{once:true});
 window.addEventListener('skweb-db-ready',load);
-window.addEventListener('skweb-synced',load);
+window.addEventListener('skweb-synced',()=>load().then(()=>window.SKFormOptions.render?.()));
 window.addEventListener('skplaza-synced',load);
 })();
 
