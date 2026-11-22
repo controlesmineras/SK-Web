@@ -38,7 +38,25 @@ async function open(scope){
   dialog.style.cssText='width:min(680px,94vw);max-height:90dvh;border:0;border-radius:14px;padding:16px;color:#102f45';
   document.body.append(dialog);
  }
- dialog.innerHTML='<div class="sectionHead"><h2></h2><button type="button" data-close>Cerrar</button></div><section class="plazaAccessPeople"><h3>Accesos activos</h3><div data-active class="list" style="max-height:34vh"></div></section><section class="plazaAccessPeople"><h3>Nuevo acceso</h3><div class="accessPersonField"><label for="accessPersonSearch">FUNCIONARIO</label><input id="accessPersonSearch" type="search" placeholder="Buscar por nombre o documento…" autocomplete="off" aria-controls="accessPersonResults" aria-expanded="false"><div id="accessPersonResults" data-results class="accessPersonResults" hidden></div></div><div data-person-info class="accessPersonInfo" hidden><label>DOCUMENTO<input data-document readonly tabindex="-1"></label><label>EMPRESA DEL FUNCIONARIO<input data-company readonly tabindex="-1"></label></div></section><section data-manage class="plazaAccessPeople" hidden></section><p role="status" aria-live="polite"></p><div data-copy></div>';
+ dialog.innerHTML=`
+  <div class="sectionHead"><h2></h2><button type="button" data-close>Cerrar</button></div>
+  <section class="plazaAccessPeople">
+   <h3>Nuevo acceso</h3>
+   <div class="accessPersonField">
+    <label for="accessPersonSearch">FUNCIONARIO</label>
+    <input id="accessPersonSearch" type="search" placeholder="Buscar por nombre o documento…" autocomplete="off" aria-controls="accessPersonResults" aria-expanded="false">
+    <div id="accessPersonResults" data-results class="accessPersonResults" hidden></div>
+   </div>
+   <div data-person-info class="accessPersonInfo" hidden>
+    <label>DOCUMENTO<input data-document readonly tabindex="-1"></label>
+    <label>EMPRESA DEL FUNCIONARIO<input data-company readonly tabindex="-1"></label>
+   </div>
+  </section>
+  <section data-manage class="plazaAccessPeople" hidden></section>
+  <p role="status" aria-live="polite"></p><div data-copy></div>
+  <section class="plazaAccessPeople">
+   <h3>Accesos activos</h3><div data-active class="list" style="max-height:34vh"></div>
+  </section>`;
  const find=selector=>dialog.querySelector(selector);
  const active=find('[data-active]'),results=find('[data-results]'),manage=find('[data-manage]'),search=find('#accessPersonSearch'),status=find('[role=status]'),copy=find('[data-copy]'),info=find('[data-person-info]');
  find('h2').textContent='Accesos a '+app.name;
@@ -278,7 +296,7 @@ async function open(scope){
    }));
    const label=document.createElement('label'),toggle=document.createElement('input');toggle.type='checkbox';toggle.checked=settings?.allowSpareDelivery===true;toggle.disabled=!settingsReady;label.append(toggle,document.createTextNode('Permitir entregar repuestos YT y Columna desde Bodega de Producción'));section.append(label);
    toggle.onchange=()=>{const value=toggle.checked;run('Guardando permiso…',async()=>{try{const result=await request('productionWarehouseConfigure',{allowSpareDelivery:value});toggle.checked=result.warehouseSettings.allowSpareDelivery;status.textContent='Permiso actualizado. Producción lo recibirá al sincronizar.';}catch(error){toggle.checked=!value;throw error}})};
-   active.closest('section').after(section);
+   active.closest('section').before(section);
   }
   const failures=new Map();
   for(const [name,result] of [['Personal local',local],[apps.admin.name,admin],[apps.production.name,production]]){

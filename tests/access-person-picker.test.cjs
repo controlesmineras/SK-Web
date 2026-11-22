@@ -27,7 +27,7 @@ function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant',
   if(tag==='dialog')Object.defineProperty(node,'innerHTML',{set(){
    for(const selector of ['[data-active]','[data-results]','[data-manage]','#accessPersonSearch','[role=status]','[data-copy]','[data-person-info]','[data-document]','[data-company]','h2','[data-close]','.accessPersonField'])nodes[selector]=make('div');
    nodes['.accessPersonField'].append(nodes['#accessPersonSearch'],nodes['[data-results]']);
-   nodes['[data-active]'].closest=()=>({after:section=>{nodes.warehouse=section}});
+   nodes['[data-active]'].closest=()=>({before:section=>{nodes.warehouse=section}});
    for(const key of ['[data-results]','[data-manage]','[data-person-info]'])nodes[key].hidden=true;
   }});
   return node;
