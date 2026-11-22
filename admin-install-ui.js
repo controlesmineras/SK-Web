@@ -117,8 +117,7 @@
   document.addEventListener('touchcancel',()=>{pullStart=null;pullDistance=0},{passive:true});
   document.addEventListener('keydown',event=>{if(event.key==='Escape')document.querySelector('#adminPullActions')?.remove()});
 
-  // Criterios de inventario: el buscador no muestra el catálogo completo.
-  // Los resultados aparecen únicamente al escribir y permanecen dentro de una lista desplazable.
+  // El catálogo activo controla los resultados; el buscador controla cuándo se despliegan.
   function installInventorySearchUX(){
     if(!document.querySelector('#inventorySearchUXStyle')){
       const style=document.createElement('style');
@@ -130,16 +129,32 @@
       const search=document.querySelector('#inventoryItemSearch'),list=document.querySelector('#inventoryItemList'),count=document.querySelector('#inventoryItemCount');
       if(!search||!list||search.dataset.searchUx==='1')return false;
       search.dataset.searchUx='1';
-      const update=()=>{
-        const hasText=search.value.trim().length>0||document.querySelector('#inventoryItems')?.dataset.catalogKind==='spare';
-        list.hidden=!hasText;
-        if(count)count.hidden=!hasText;
-      };
-      window.addEventListener('skweb-inventory-kind',update);
-      search.addEventListener('input',()=>requestAnimationFrame(update));
-      search.addEventListener('search',()=>requestAnimationFrame(update));
-      document.querySelector('#newInventoryItem')?.addEventListener('click',()=>{search.value='';update()});
-      update();
+      search.setAttribute('aria-controls',list.id);
+      function show(open){
+        list.hidden=!open;
+        if(count)count.hidden=!open;
+        search.setAttribute('aria-expanded',String(open));
+      }
+      const open=()=>show(true);
+      for(const event of ['focus','click','input','search'])search.addEventListener(event,open);
+      search.addEventListener('keydown',event=>{
+        if(event.key==='ArrowDown'){event.preventDefault();open();list.querySelector('button')?.focus()}
+        if(event.key==='Enter'&&!list.hidden){
+          event.preventDefault();const choices=list.querySelectorAll('button');
+          if(choices.length===1)choices[0].click();
+        }
+      });
+      const inside=target=>target===search||list.contains(target);
+      document.addEventListener('keydown',event=>{
+        if(event.key==='Escape'&&inside(event.target)){event.preventDefault();search.focus();show(false)}
+      });
+      for(const event of ['pointerdown','focusin'])document.addEventListener(event,e=>{if(!inside(e.target))show(false)});
+      list.addEventListener('click',e=>{if(e.target.closest('button'))show(false)});
+      const showCategory=()=>show(document.querySelector('#inventoryItems')?.dataset.catalogKind==='spare');
+      window.addEventListener('skweb-inventory-kind',showCategory);
+      document.querySelector('#spareCatalogFilter')?.addEventListener('click',e=>{if(e.target.closest('[data-spare-filter]'))open()});
+      document.querySelector('#newInventoryItem')?.addEventListener('click',()=>{search.value='';show(false)});
+      showCategory();
       return true;
     };
     if(wire())return;

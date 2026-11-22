@@ -362,3 +362,20 @@ test('copiar saldos respeta cierres, apertura, alias y consumos de Mecánica sin
  assert.equal(next.updatedAt,single.updatedAt);
  assert.equal(runtime({enabled:false}).c.adminProductionBalances_({},[['spare',next.updatedAt]]).enabled,false);
 });
+
+test('Bodega distingue las aperturas nativas y de Admin de los ingresos y los ajustes posteriores',()=>{
+ const app=fs.readFileSync('produccion/warehouse.js','utf8');
+ const items=new Map([['tool',item],['spare',spare]]);
+ const ui=vm.createContext({criteriaById:()=>items,view:'home'});
+ vm.runInContext(app.slice(app.indexOf(' function movementKind('),app.indexOf(' function renderTable(')),ui);
+ const adminRow=(id,revision,part='tool')=>({id,kind:'quantity_adjustment',itemId:part,balanceBefore:0,balanceAfter:2,
+  requestSignature:JSON.stringify(['production',part,2,revision,0])});
+ const rows=[{id:'native',kind:'opening'},{id:'local',kind:'opening',pending:true},adminRow('previous','0|0'),
+  adminRow('opening-new','0|0','spare'),adminRow('correction','3|0'),adminRow('mechanics','0|0','spare'),
+  {id:'receipt',kind:'income'},{id:'from-plaza',kind:'transfer_in'},{id:'out',kind:'delivery'}];
+ const ids=view=>{ui.view=view;return rows.filter(row=>ui.movementInView(ui.movementKind(row))).map(row=>row.id)};
+ assert.deepEqual(ids('income'),['receipt','from-plaza']);
+ assert.deepEqual(ids('openingHistory'),['native','local','previous','opening-new']);
+ assert.deepEqual(ids('opening'),ids('openingHistory'));
+ assert.deepEqual(ids('delivery'),['out']);assert.deepEqual(ids('history'),rows.map(row=>row.id));
+});

@@ -4,7 +4,8 @@
  let account='',snapshot={},view='home',warehouseDirty=false,busy=false,savingMovement=false,module='',exportRows=[],timer,activeSync;
  const spareGroups=window.SKSpareGroups;
  const stockExpanded=new Map();
- let selectedReturnId='';
+ let selectedReturnId='',openingHistoryFrom='home';
+ const openingHistoryLabel='CONSULTAR SALDOS DE APERTURA';
  const kinds={quantity_adjustment:'Ajuste de cantidad',income:'Ingreso externo',opening:'Saldo de apertura',delivery:'Entrega',loan:'Préstamo',return:'Reintegro',transfer_in:'Ingreso desde Plaza',transfer_out:'Traslado a Plaza'};
  const roles=user=>Array.isArray(user?.roles)?user.roles:[user?.role||'assistant'];
  const permits=(user,scope)=>roles(user).some(role=>role==='admin'||role==='assistant'||role===scope);
@@ -38,6 +39,8 @@
  toolbar.after(navigation,home,panel);
  const find=s=>panel.querySelector(s),form=find('form'),f=form.elements,feedback=find('#warehouseStatus');
  const tell=message=>{feedback.textContent=message};
+ const openingHistoryButton=button(openingHistoryLabel,()=>setView('openingHistory'));
+ openingHistoryButton.hidden=true;form.after(openingHistoryButton);
  form.addEventListener('input',()=>{warehouseDirty=true});form.addEventListener('change',()=>{warehouseDirty=true});
  const isEpp=row=>row.isEpp===true||['true','si','sí','1','yes'].includes(String(row.isEpp||'').trim().toLowerCase());
  const criteria=()=>(snapshot.catalog?.criteria||[]).filter(row=>!row.deleted&&row.active!==false&&!isEpp(row)),people=()=>snapshot.catalog?.personal||[];
@@ -295,9 +298,14 @@
  };
  function setView(next){
   if(savingMovement||next!==view&&!leaveCurrent())return;
+  if(next!==view){
+   if(next==='openingHistory')openingHistoryFrom=view;
+   find('#warehouseSearch').value='';
+  }
   stockExpanded.clear();view=next;warehouseDirty=false;selectedReturnId='';
-  const returning=view==='return',queryView=['stock','history','loans'].includes(view);
+  const returning=view==='return',queryView=['stock','history','openingHistory','loans'].includes(view);
   form.hidden=view==='home'||queryView;
+  openingHistoryButton.hidden=view!=='income'&&view!=='opening';
   find('.warehouseActions').hidden=view!=='home';find('.tableWrap').hidden=view==='home'||returning;
   find('#warehouseLoanFilter').hidden=view!=='loans';find('#warehouseFilters').hidden=!queryView;find('#warehouseExports').hidden=!queryView;
   find('#warehousePending').hidden=returning;
@@ -317,7 +325,7 @@
   }
   renderTable();paintNavigation();
  }
- const actions=[['ENTREGAS','delivery'],['INGRESOS','income'],['PRÉSTAMOS','loan'],['REINTEGROS','return'],['PRÉSTAMOS PENDIENTES','loans'],['CONSULTAR MOVIMIENTOS','history'],['EXISTENCIAS','stock'],['ENVIAR A PLAZA','transfer_out'],['SALDO DE APERTURA','opening']];
+ const actions=[['ENTREGAS','delivery'],['INGRESOS','income'],['PRÉSTAMOS','loan'],['REINTEGROS','return'],['PRÉSTAMOS PENDIENTES','loans'],['CONSULTAR MOVIMIENTOS','history'],['EXISTENCIAS','stock'],['ENVIAR A PLAZA','transfer_out'],['SALDO DE APERTURA','opening'],[openingHistoryLabel,'openingHistory']];
  for(const [label,value] of actions){const node=button(label,()=>setView(value));node.dataset.view=value;find('.warehouseActions').append(node);}
  f.sourceLoanId.onchange=()=>{const loan=records().find(row=>row.sourceDeliveryId===f.sourceLoanId.value);if(loan){f.quantity.value=loan.quantity;f.assetId.value=loan.assetId||'';}};
  f.assetMode.onchange=fieldsForItem;f.itemId.onchange=fieldsForItem;
@@ -364,9 +372,29 @@
   return {rows,display,truncated};
  }
  function registrationHour(row){return window.SKMovementTime.hour(window.SKMovementTime.warehouse(row))||'—';}
+ function movementKind(row){
+  if(row.kind!=='quantity_adjustment')return row.kind;
+  if(row.id?.startsWith('opening-'))return 'opening';
+  // En registros anteriores, la primera apertura de un elemento común conserva la revisión inicial.
+  const criterion=criteriaById().get(row.itemId);
+  if(criterion&&!criterion.isYtSpare&&row.balanceBefore===0&&row.requestSignature){
+   try{
+    const signature=JSON.parse(row.requestSignature);
+    if(Array.isArray(signature)&&signature[0]==='production'&&signature[1]===row.itemId&&signature[3]==='0|0'&&signature[4]===0)return 'opening';
+   }catch{}
+  }
+  return row.kind;
+ }
+ function movementInView(kind){
+  if(view==='income')return kind==='income'||kind==='transfer_in';
+  if(view==='openingHistory'||view==='opening')return kind==='opening';
+  if(view==='delivery'||view==='loan'||view==='transfer_out'||view==='return')return kind===view;
+  return true;
+ }
  function renderTable(){
-  if(view==='return')return;
-  const query=norm(find('#warehouseSearch').value).trim();let headers,rows,display,truncated;
+  renderRejected();
+  if(view==='return'||view==='home')return;
+  const query=find('#warehouseFilters').hidden?'':norm(find('#warehouseSearch').value).trim();let headers,rows,display,truncated;
   if(view==='stock'){
    headers=['ELEMENTO','UNIDAD','DISPONIBLE EN PRODUCCIÓN'];
    ({rows,display,truncated}=stockRows(query));
@@ -380,7 +408,11 @@
   }else{
    headers=['FECHA','HORA REGISTRO','MOVIMIENTO','ELEMENTO / ACTIVO','CANTIDAD','FUNCIONARIO','BODEGUERO/A DE TURNO','REGISTRADO POR','DESTINO','ESTADO'];
    rows=[...records(),...pending().map(row=>({...row,itemName:item(row.itemId)?.name,personName:people().find(p=>p.id===row.personId)?.nombre,pending:true}))].reverse().flatMap(row=>{
-    const cells=[displayDate(row.fechaISO),registrationHour(row),kinds[row.kind]||row.kind,row.assetLabel||row.itemName,row.kind==='quantity_adjustment'?row.balanceBefore+' → '+row.balanceAfter:row.quantity,row.personName||'—',row.shiftKeeperName||'—',row.recordedByName||row.recordedBy||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO'];
+    const kind=movementKind(row);
+    if(!movementInView(kind))return [];
+    const amount=kind==='quantity_adjustment'?row.balanceBefore+' → '+row.balanceAfter:
+     kind==='opening'&&row.kind==='quantity_adjustment'?row.balanceAfter:row.quantity;
+    const cells=[displayDate(row.fechaISO),registrationHour(row),kinds[kind]||kind,row.assetLabel||row.itemName,amount,row.personName||'—',row.shiftKeeperName||'—',row.recordedByName||row.recordedBy||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO'];
     return matchesQuery(cells,row.itemId,query)?[cells]:[];
    });
   }
@@ -398,7 +430,18 @@
    const icon=el('span',entry.expanded?'📂':'📁');icon.setAttribute('aria-hidden','true');toggle.prepend(icon);
    cell.colSpan=headers.length;cell.append(toggle);tr.append(cell);return tr;
   }));
+  if(view==='openingHistory'&&!rows.length){
+   const tr=el('tr'),td=el('td',query?'No hay saldos de apertura que coincidan.':'Aún no hay saldos de apertura registrados.');
+   td.colSpan=headers.length;tr.append(td);body.append(tr);
+  }
   if(truncated||(!display&&rows.length>250)){const tr=el('tr'),td=el('td','Hay más resultados. Filtra la consulta o exporta el listado completo.');td.colSpan=headers.length;tr.append(td);body.append(tr);}
+ }
+ function renderRejected(){
+  const box=find('#warehousePending');box.replaceChildren();
+  for(const row of pending().filter(row=>row.syncRejected&&movementInView(movementKind(row)))){
+   const message=el('p',(item(row.itemId)?.name||row.itemId)+': '+row.syncError);
+   message.append(button('RETIRAR RECHAZADO',async()=>{if(!confirm('¿Retirar este movimiento rechazado del equipo? No se modifican los registros confirmados.'))return;await store.discard(account,row);snapshot=await store.read(account);paintWarehouse();}));box.append(message);
+  }
  }
  function paintWarehouse(){
   const ready=snapshot.settings?.enabled;
@@ -410,11 +453,6 @@
   if(view==='return'){renderReturns();if(!form.hidden)recipientPicker.refresh();}
   else if(!form.hidden){choices();recipientPicker.refresh();}
   if(!form.hidden)updateKeeper();
-  const box=find('#warehousePending');box.replaceChildren();
-  for(const row of pending().filter(row=>row.syncRejected)){
-   const message=el('p',(item(row.itemId)?.name||row.itemId)+': '+row.syncError);
-   message.append(button('RETIRAR RECHAZADO',async()=>{if(!confirm('¿Retirar este movimiento rechazado del equipo? No se modifican los registros confirmados.'))return;await store.discard(account,row);snapshot=await store.read(account);paintWarehouse();}));box.append(message);
-  }
   renderTable();paintNavigation();if(module==='warehouse')paintHeader();
  }
  function paintHeader(){
@@ -458,7 +496,7 @@
  }
  function goBack(){
   if(!session)return;
-  if(module==='warehouse'&&view!=='home'){setView('home');return;}
+  if(module==='warehouse'&&view!=='home'){setView(view==='openingHistory'?openingHistoryFrom:'home');return;}
   if(module==='mechanic'&&mechanicMenu.hidden){
    if(!leaveCurrent())return;
    const previous=mechanicMenu.querySelector('[aria-pressed="true"]');
@@ -506,7 +544,7 @@
   })();return activeSync;
  }
  form.onsubmit=async event=>{
-  event.preventDefault();if(savingMovement||!session)return;
+  event.preventDefault();if(form.hidden||savingMovement||!session)return;
   const active=session,returning=view==='return',loan=returning?returnLoan():null;
   const selected=item(returning?loan?.itemId:f.itemId.value),date=readDate(f.fechaISO);
   try{
@@ -547,11 +585,11 @@
   }catch(error){if(session===active)tell(error.message);}
   finally{savingMovement=false;if(session===active)paintWarehouse();}
  };
- find('[data-excel]').onclick=()=>window.SKDownloadTableExcel?.(exportRows,'Bodega_Produccion_'+today()+'.xlsx');
+ find('[data-excel]').onclick=()=>window.SKDownloadTableExcel?.(exportRows,(view==='openingHistory'?'Saldos_de_apertura_Produccion_':'Bodega_Produccion_')+today()+'.xlsx');
  find('[data-pdf]').onclick=()=>{
   const target=window.open('','_blank');if(!target){tell('Permite la ventana de impresión para guardar el PDF.');return;}
   target.document.title='Bodega de Producción';const style=target.document.createElement('style');style.textContent='@page{size:A4 landscape;margin:12mm}body{font:12px sans-serif}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:6px}thead{display:table-header-group}';target.document.head.append(style);
-  const heading=target.document.createElement('h1');heading.textContent='BODEGA DE PRODUCCIÓN';const table=target.document.createElement('table');
+  const heading=target.document.createElement('h1');heading.textContent=view==='openingHistory'?'SALDOS DE APERTURA · BODEGA DE PRODUCCIÓN':'BODEGA DE PRODUCCIÓN';const table=target.document.createElement('table');
   exportRows.forEach((values,index)=>{const tr=(index?table.tBodies[0]||table.createTBody():table.createTHead()).insertRow();values.forEach(value=>{const cell=index?tr.insertCell():target.document.createElement('th');cell.textContent=value;if(!index)tr.append(cell);});});target.document.body.append(heading,table);target.print();
  };
  window.SKProductionWarehouse={permits,roles,paintNavigation,get module(){return module},get snapshot(){return snapshot},async open(){await load();choose('')},choose,sync:synchronize,paintHeader,close(){account='';snapshot={};module='';warehouseDirty=false;panel.hidden=true;home.hidden=true;mechanics.hidden=true;},resume(){if(session&&permits(session.user,'warehouse'))void synchronize()}};

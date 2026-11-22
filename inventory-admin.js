@@ -200,7 +200,12 @@ let renderVersion=0;
 async function render(){
  const form=document.querySelector('#inventoryItemForm');
  if(!form||typeof all!=='function'||typeof db==='undefined'||!db)return;
- const version=++renderVersion,[criteria,assets]=await Promise.all([all('inventoryCriteria'),all('assets')]);if(version!==renderVersion)return;
+ const count=document.querySelector('#inventoryItemCount'),list=document.querySelector('#inventoryItemList');
+ const scope=catalogKind==='spare'?currentSpareType():catalogKind;
+ if(list&&list.dataset.scope!==scope){
+  list.dataset.scope=scope;list.textContent='';if(count)count.textContent='';
+ }
+ const version=++renderVersion,[criteria,assets]=await Promise.all([all('inventoryCriteria'),catalogKind==='common'?all('assets'):[]]);if(version!==renderVersion)return;
  const q=norm(document.querySelector('#inventoryItemSearch')?.value),active=criteria.filter(x=>!x.deleted&&x.active!==false&&(catalogKind==='spare'?x.isYtSpare:!x.isYtSpare)&&(catalogKind!=='spare'||x.spareEquipment===currentSpareType()));
  const registeredNames=new Set(active.flatMap(x=>[itemName(x),itemSecondary(x),itemTertiary(x)].map(norm).filter(Boolean))),registeredIds=new Set(active.map(x=>x.id)),classes=new Map();
  for(const asset of catalogKind==='spare'?[]:assets){
@@ -213,7 +218,6 @@ async function render(){
  const rows=ordered.filter(item=>matchesCatalogItem(item,q)).map(item=>({name:item.isYtSpare?window.SKSpareGroups.recordName(item):itemName(item),item}));
  for(const name of classes.values())rows.push({name});
  if(catalogKind==='common')rows.sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true,sensitivity:'base'}));
- const count=document.querySelector('#inventoryItemCount'),list=document.querySelector('#inventoryItemList');
  if(count)count.textContent=(q?`${rows.length} coincidencia${rows.length===1?'':'s'}`:`${rows.length} elementos`)+(classes.size?` · ${classes.size} sin criterio`:'');
  if(list)list.innerHTML=rows.map(({name,item})=>{
   if(!item)return `<button type="button" class="invItem invMissingCriterion" data-inv-class="${esc(name)}"><span><b>${esc(name)}</b><small>Solo en Activos fijos · Sin criterio de inventario</small></span><span class="invMissingAction">Crear criterio</span></button>`;
@@ -244,7 +248,7 @@ function syncSpareFilterButtons(){
 }
 function selectSpareType(type){
  if(saving||!window.SKSpareGroups.types.includes(type)||type===currentSpareType())return;
- const form=document.querySelector('#inventoryItemForm');form.elements.spareEquipment.value=type;syncSpareFields(form);render();
+ const form=document.querySelector('#inventoryItemForm');form.elements.spareEquipment.value=type;document.querySelector('#inventoryItemSearch').value='';syncSpareFields(form);render();
 }
 function openKind(kind){catalogKind=kind==='spare'?'spare':'common';mount();const spare=catalogKind==='spare',sec=document.querySelector('#inventoryItems');sec.dataset.catalogKind=catalogKind;document.querySelector('#inventoryCatalogTitle').textContent=spare?'CRITERIOS YT/COLUMNA':'Elementos de inventario';document.querySelector('#inventoryFormTitle').textContent=spare?'Datos del repuesto':'Datos del elemento';document.querySelector('#newInventoryItem').textContent=spare?'+ Agregar repuesto':'+ Agregar elemento';document.querySelector('#spareCatalogFilter').hidden=!spare;syncSpareFilterButtons();document.querySelector('#inventoryItemSearch').value='';sec.querySelectorAll('[data-catalog-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.catalogKind===catalogKind)));reset();render();window.dispatchEvent(new Event('skweb-inventory-kind'));}
 let editVersion=0,lastSavedItemId='';
@@ -317,7 +321,7 @@ function bind(){
    const warehouse=button.dataset.quantityWarehouse;
    const itemId=criterionForm.elements.id.value||(warehouse==='production'?lastSavedItemId:'');
    const query=warehouse==='production'&&!lastSavedItemId?document.querySelector('#inventoryItemSearch').value.trim():'';
-   window.SKAdminNav.go('inventoryQuantities',{warehouse,itemId,query});
+   window.SKAdminNav.go('inventoryQuantities',{warehouse,itemId,query,catalogKind,spareType:currentSpareType()});
   });
  });
  const helpButton=document.querySelector('#inventoryHelpToggle'),help=document.querySelector('#inventoryCatalogHelp');
@@ -402,7 +406,8 @@ function queueQuantity(warehouse,itemId,quantity,observed,opening=false){
    if(stockRevision(current)!==stockRevision(observed)||current?.quantity!==observed?.quantity)
     return abort('La existencia cambió. Revisa el saldo actualizado y vuelve a guardar.');
    const change=mark();
-   queue.put({...change,id,operationId:change.id,warehouse,itemId,quantity,observedQuantity:Number(current?.quantity||0),stockRevision:newOpening?'0|0':stockRevision(current)});
+   const operationId=newOpening?'opening-'+change.id:change.id;
+   queue.put({...change,id,operationId,warehouse,itemId,quantity,observedQuantity:Number(current?.quantity||0),stockRevision:newOpening?'0|0':stockRevision(current)});
   };
  });
 }
@@ -534,6 +539,8 @@ async function openQuantities(options={}){
   restrictions=new Map();
   criteria=catalog.filter(row=>{
    if(!isQuantityCriterion(row))return false;
+   if(options.catalogKind==='common'&&quantityFlag(row.isYtSpare))return false;
+   if(options.catalogKind==='spare'&&(!quantityFlag(row.isYtSpare)||row.spareEquipment!==options.spareType))return false;
    const reason=quantityRestriction(row,balances.get(row.id),warehouse);
    if(reason)restrictions.set(row.id,reason);
    return production||!reason;

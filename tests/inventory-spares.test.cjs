@@ -207,7 +207,7 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  await h.save();
  const [item]=await h.ctx.all('inventoryCriteria');
  productionButton.handlers.click();
- assert.equal(opened.view,'inventoryQuantities');
+ assert.equal(opened.view,'inventoryQuantities');assert.equal(opened.catalogKind,'common');
  assert.equal(opened.itemId,item.id);
  assert.equal(h.form.elements.id.value,'','la ficha queda lista para el siguiente elemento');
 
@@ -253,7 +253,7 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  field.value='0';
  await form.onsubmit({preventDefault(){}});
  const [pending]=await h.ctx.all('inventoryQuantityAdjustments');
- assert.equal(pending.itemId,item.id);assert.equal(pending.stockRevision,'0|0');assert.equal(pending.quantity,0);
+ assert.match(pending.operationId,/^opening-/);assert.equal(pending.itemId,item.id);assert.equal(pending.stockRevision,'0|0');assert.equal(pending.quantity,0);
  assert.equal((await h.ctx.all('inventoryStock')).length,0);
  let sends=0;
  w.SKAdminAuth.request=async(_,q)=>{
@@ -268,6 +268,13 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  assert.equal((await h.ctx.all('productionQuantityCache'))[0].quantity,0);
  assert.equal((await h.ctx.all('inventoryQuantityAdjustments')).length,0);
  // Nombres y alias que también reconoce el selector de ingresos y salidas de Producción.
+ const spare={id:'yt29',isYtSpare:true,spareEquipment:'YT 29',spareItemName:'Calibrador',name:'Calibrador YT29'};
+ await h.ctx.put('inventoryCriteria',spare);
+ await h.ctx.put('inventoryCriteria',{...spare,id:'column',spareEquipment:'Columna 29'});
+ await h.api.openQuantities({warehouse:'production',catalogKind:'common'});
+ assert.deepEqual(Array.from(type('Cali'),row=>row.dataset.itemId),[fixed.id,item.id,epp.id]);
+ await h.api.openQuantities({warehouse:'production',catalogKind:'spare',spareType:'YT 29'});
+ assert.deepEqual(Array.from(type(''),row=>row.dataset.itemId),[spare.id]);
  const legacy={id:'antiguo',itemName:'Calibrador de profundidad',secondaryName:'Sonda',CI_ALIAS_SECUNDARIO:'Medidor de hondo'};
  await h.ctx.put('inventoryCriteria',legacy);
  await h.api.openQuantities({warehouse:'production'});
