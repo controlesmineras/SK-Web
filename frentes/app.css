@@ -23,6 +23,7 @@ fieldset{border:0;padding:0;margin:0;min-width:0}legend{padding:0}small,.meta{co
 }
 
 .accountBar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.accountBar #updateLabor{display:inline-grid;place-items:center;flex:0 0 50px;width:50px;height:50px;padding:0;background:#eef4f8;color:#102f45}
 .accountBar #account{flex:1;min-width:0;margin:0;overflow-wrap:anywhere}
 .accountBar #sync{flex-shrink:0;min-height:44px;padding:8px 12px;border:1px solid var(--primary);background:white;color:var(--primary)}
 

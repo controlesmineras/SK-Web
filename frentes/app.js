@@ -6,7 +6,7 @@ const personKeys=['documento','primerNombre','segundoNombre','primerApellido','s
 const stamp=()=>crypto.randomUUID();
 const sessionKey='sk-frentes:session';
 let session=null,state=FrontStore.empty(),selected=null,editing=null,manualShift=false,running=null,generation=0;
-let activeRequest,saveBusy=false;
+let activeRequest,saveBusy=false,initialReportDate='';
 const owner=s=>s.access+':'+(s.access==='admin'?s.user.username:s.user.documento);
 const message=(id,text)=>{$(id).textContent=text;};
 const list=()=>people(state,editing?.id);
@@ -36,7 +36,7 @@ function clearPerson(){
   selected=null;setMode('search');$('search').value='';$('matches').replaceChildren();$('add').hidden=true;
 }
 function reset(){
-  editing=null;manualShift=false;report.reset();clearPerson();f.fecha.value=today();updateShift();f.corte.disabled=true;
+  editing=null;manualShift=false;report.reset();clearPerson();initialReportDate=today();f.fecha.value=initialReportDate;updateShift();f.corte.disabled=true;
   $('cancelReview').hidden=true;message('editorTitle','Nuevo reporte');message('save','Guardar reporte');catalogs();
 }
 function choose(p){
@@ -293,5 +293,62 @@ window.addEventListener('online',sync);window.addEventListener('offline',()=>{if
 document.addEventListener('visibilitychange',()=>{if(!document.hidden&&session){updateShift();void sync();}});
 setInterval(()=>{if(session&&!document.hidden)updateShift();},30000);
 setInterval(()=>{if(session&&!document.hidden)void sync();},300000);
-if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{if(session)message('notice','No se pudo preparar la apertura sin conexión. Vuelve a abrir la app con internet.');});
+function registerWorker(){
+  return navigator.serviceWorker?.register('./sw.js',{updateViaCache:'none'});
+}
+registerWorker()?.catch(()=>{if(session)message('notice','No se pudo preparar la apertura sin conexión. Vuelve a abrir la app con internet.');});
+
+function updateBlocker(){
+  if(!navigator.onLine)return 'Conéctate a internet para actualizar Labor.';
+  if(saveBusy||running)return 'Espera a que termine el guardado o la sincronización y vuelve a pulsar Actualizar app.';
+  if(editing||selected||newMode()||$('search').value||f.nivel.value||f.corte.value||
+    f.fecha.value!==initialReportDate||f.fecha.validity.customError||(manualShift&&f.turno.value!==shift())){
+    return 'Termina el reporte en curso antes de actualizar Labor.';
+  }
+  return '';
+}
+function waitForActivation(worker){
+  return new Promise((resolve,reject)=>{
+    const finish=error=>{
+      clearTimeout(timer);
+      worker.removeEventListener('statechange',check);
+      if(error)reject(error);else resolve();
+    };
+    const check=()=>{
+      if(worker.state==='activated')finish();
+      else if(worker.state==='redundant')finish(new Error('No se instaló la actualización.'));
+    };
+    const timer=setTimeout(()=>finish(new Error('La instalación está tardando más de lo esperado. Vuelve a intentarlo.')),30000);
+    worker.addEventListener('statechange',check);
+    check();
+  });
+}
+$('updateLabor').onclick=async event=>{
+  const button=event.currentTarget,s=session,blocked=updateBlocker();
+  if(!s||button.disabled)return;
+  if(blocked)return message('notice',blocked);
+  button.disabled=true;button.setAttribute('aria-busy','true');
+  message('notice','Buscando la versión más reciente de Labor…');
+  try{
+    const url=new URL(location.href);
+    url.searchParams.set('_appUpdate',Date.now());
+    const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout?.(20000)});
+    if(!response.ok)throw new Error('No se pudo abrir Labor.');
+    const registration=await registerWorker();
+    if(registration){
+      if(!registration.installing&&!registration.waiting)await registration.update();
+      const worker=registration.installing||registration.waiting||registration.active;
+      if(!worker)throw new Error('No se pudo preparar la actualización.');
+      await waitForActivation(worker);
+    }
+    if(session!==s)return;
+    const reason=updateBlocker();
+    if(reason)return message('notice',reason);
+    location.replace(url.href);
+  }catch{
+    if(session===s)message('notice','No se pudo actualizar Labor. Revisa la conexión y vuelve a intentarlo.');
+  }finally{
+    button.disabled=false;button.removeAttribute('aria-busy');
+  }
+};
 try{const s=JSON.parse(sessionStorage.getItem(sessionKey)||'null');if(s?.user&&s.token)enter(s).catch(error=>message('loginMessage',error.message));}catch{sessionStorage.removeItem(sessionKey);}
