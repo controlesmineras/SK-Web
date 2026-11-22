@@ -63,7 +63,7 @@
   async function updateAdminApp(){
     const updateButton=document.querySelector('#adminUpdateAppHome');
     if(!navigator.onLine){alert('Necesitas conexión a Internet para actualizar la aplicación. Los datos guardados en el dispositivo no se modificarán.');return}
-    if(updateButton){updateButton.disabled=true;updateButton.textContent='↻ ACTUALIZANDO…'}
+    if(updateButton){updateButton.disabled=true;updateButton.setAttribute('aria-busy','true');updateButton.setAttribute('aria-label','Actualizando app');updateButton.title='Actualizando app'}
     try{
       // La navegación ya usa la red antes de la caché; no retrasar la recarga
       // mientras se precargan todos los recursos del service worker.
@@ -77,7 +77,7 @@
     }catch(error){
       console.error('Actualización de SK Admin:',error);
       alert('No fue posible actualizar la aplicación. Revisa la conexión e intenta nuevamente.');
-      if(updateButton){updateButton.disabled=false;updateButton.textContent='↻ ACTUALIZAR APP'}
+      if(updateButton){updateButton.disabled=false;updateButton.removeAttribute('aria-busy');updateButton.setAttribute('aria-label','Actualizar app');updateButton.title='Actualizar app'}
     }
   }
   document.querySelector('#adminUpdateAppHome')?.addEventListener('click',updateAdminApp);
