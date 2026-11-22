@@ -17,6 +17,8 @@
 #warehouseInfoToggle:focus-visible{outline:3px solid #8fd6ed;outline-offset:2px}
 .warehouseActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
 .warehouseActions button{min-height:48px;padding:0 3px;font-size:clamp(.9375rem,3.65vw,1.0625rem);line-height:1.06;white-space:normal;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3}
+/* La escala de la etiqueta conserva el alto y los saltos de línea del botón. */
+.warehouseActions button>span{display:block;transform:scale(.94)}
 /* Colores de las cuatro operaciones de registro de Plaza Blending. */
 .warehouseActions [data-view="delivery"]{background:linear-gradient(145deg,#faecd6,#ecc58e);border-color:#d9a65f;color:#513718}
 .warehouseActions [data-view="income"]{background:linear-gradient(145deg,#e4efe9,#bad3c5);border-color:#91b6a2;color:#173d31}

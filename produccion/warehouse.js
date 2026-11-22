@@ -333,7 +333,12 @@
   renderTable();paintNavigation();
  }
  const actions=[['ENTREGAS','delivery'],['INGRESOS','income'],['PRÉSTAMOS','loan'],['REINTEGROS','return'],['PRÉSTAMOS PENDIENTES','loans'],['CONSULTAR MOVIMIENTOS','history'],['EXISTENCIAS','stock'],['ENVIAR A PLAZA','transfer_out'],['SALDO DE APERTURA','opening'],[openingHistoryLabel,'openingHistory']];
- for(const [label,value] of actions){const node=button(label,()=>setView(value));node.dataset.view=value;find('.warehouseActions').append(node);}
+ for(const [label,value] of actions){
+  const node=button('',()=>setView(value));
+  node.dataset.view=value;
+  node.append(el('span',label));
+  find('.warehouseActions').append(node);
+ }
  f.sourceLoanId.onchange=()=>{const loan=records().find(row=>row.sourceDeliveryId===f.sourceLoanId.value);if(loan){f.quantity.value=loan.quantity;f.assetId.value=loan.assetId||'';}};
  f.assetMode.onchange=fieldsForItem;f.itemId.onchange=fieldsForItem;
  find('#warehouseSearch').oninput=()=>{stockExpanded.clear();renderTable()};find('#warehouseLoanFilter').onchange=renderTable;
