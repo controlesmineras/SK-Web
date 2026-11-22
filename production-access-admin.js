@@ -97,11 +97,9 @@ async function open(scope){
    const name=document.createElement('b'),roles=document.createElement('p');
    name.textContent=identity(row);roles.textContent=row.pending?'Invitación pendiente de activar':[...new Set(rolesFor(row))].join(' · ');
    card.append(name,roles);
-   if(scope==='labor'){
-    if(row.pending)card.append(button('Renovar enlace',()=>generate(row)));
-    card.append(button(row.pending?'Cancelar invitación':'Quitar acceso',()=>disable(row)));
-   }else if(row.role!=='owner'){
+   if(row.role!=='owner'){
     card.append(button(row.pending?'Renovar enlace':'Restablecer acceso',()=>generate(row,scope==='production'?productionSelection(row):row.role)),button('Gestionar accesos',()=>choose(row,true)));
+    if(scope==='labor')card.append(button(row.pending?'Cancelar invitación':'Quitar acceso',()=>disable(row)));
    }
    active.append(card);
   }
@@ -137,6 +135,7 @@ async function open(scope){
     note.textContent='Para generar el enlace, primero hay que verificar los accesos de Labor.';
     manage.append(note);
    }
+   if(existing)manage.append(button(row.pending?'Cancelar invitación':'Quitar acceso a Labor',()=>disable(row)));
    if(!invite.disabled)invite.focus({preventScroll:true});manage.scrollIntoView({block:'nearest'});return;
   }
   const role=document.createElement('select'),label=document.createElement('label');
@@ -235,7 +234,10 @@ async function open(scope){
    }
    if(!current())return;
    access[scope]=access[scope].filter(other=>other!==row);
-   if(selected===row){selected=null;manage.hidden=true}
+   if(selected===row){
+    if(scope==='labor')clearLaborSelection();
+    else{selected=null;manage.hidden=true}
+   }
    renderActive();renderSearch();status.textContent=cancelInvite?'Invitación cancelada.':'Acceso retirado.';
   });
  }
