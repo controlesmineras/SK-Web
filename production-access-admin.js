@@ -14,6 +14,7 @@ function mount(){
 }
 
 const apps={
+ labor:{name:'Labor',roles:{reporter:'Registro de reportes'}},
  admin:{name:'SK Web Admin',roles:{assistant:'Auxiliar administrativo',admin:'Administrador'}},
  plaza:{name:'Plaza Blending',roles:{assistant:'Auxiliar',operator:'Bodeguero/a',supervisor:'Supervisor/a'}},
  production:{name:'Producción',roles:{mechanic:'Mecánico',warehouse:'Bodeguero/a',mechanic_warehouse:'Mecánico y bodeguero/a',assistant:'Auxiliar',admin:'Administrador'}}
@@ -60,13 +61,14 @@ async function open(scope){
  const find=selector=>dialog.querySelector(selector);
  const active=find('[data-active]'),results=find('[data-results]'),manage=find('[data-manage]'),search=find('#accessPersonSearch'),status=find('[role=status]'),copy=find('[data-copy]'),info=find('[data-person-info]');
  find('h2').textContent='Accesos a '+app.name;
+ if(scope==='labor')active.previousElementSibling.textContent='Usuarios e invitaciones';
  find('[data-close]').onclick=()=>dialog.close();
  const request=(action,data)=>auth().request(action,data);
  const current=()=>dialog.open&&dialog.querySelector('[data-active]')===active&&auth()?.isAdmin();
  const reload=()=>{dialog.close();return open(scope)};
  const expiredSession=error=>/sesi[oó]n.*(?:venci|caduc|expir)|inicia sesi[oó]n/i.test(error?.message||'');
  let people=[],selected=null,inviteUrl='',busy=false,adminRoles=['assistant'],warehouseV1=false;
- const access={admin:null,plaza:null,production:null};
+ const access={admin:null,plaza:null,production:null,labor:null};
  function clearInvite(){inviteUrl='';copy.replaceChildren()}
  function identity(p){return [personName(p)||'Sin nombre',doc(p),p.cargo].filter(Boolean).join(' · ')}
  function showResults(show){results.hidden=!show;search.setAttribute('aria-expanded',String(show))}
@@ -84,15 +86,15 @@ async function open(scope){
   const rows=access[scope];
   active.replaceChildren();
   if(!rows){active.textContent='No se pudieron cargar los accesos de esta app.';return}
-  if(!rows.length){active.textContent='No hay accesos activos.';return}
+  if(!rows.length){active.textContent=scope==='labor'?'Todavía no hay usuarios ni invitaciones de Labor.':'No hay accesos activos.';return}
   for(const row of rows){
    const card=document.createElement('div');
    card.className='plazaAccessPeople';
    const name=document.createElement('b'),roles=document.createElement('p');
-   name.textContent=identity(row);roles.textContent=[...new Set(rolesFor(row))].join(' · ');
+   name.textContent=identity(row);roles.textContent=row.pending?'Invitación pendiente de activar':[...new Set(rolesFor(row))].join(' · ');
    card.append(name,roles);
    if(row.role!=='owner'){
-    card.append(button('Restablecer acceso',()=>generate(row,scope==='production'?productionSelection(row):row.role)),button('Gestionar accesos',()=>choose(row,true)));
+    card.append(button(row.pending?'Renovar enlace':'Restablecer acceso',()=>generate(row,scope==='production'?productionSelection(row):row.role)),button('Gestionar accesos',()=>choose(row,true)));
    }
    active.append(card);
   }
@@ -119,6 +121,12 @@ async function open(scope){
   const title=document.createElement('h3');
   title.textContent=(existing?'Gestionar accesos de ':'Nuevo acceso para ')+identity(row);
   manage.replaceChildren(title);
+  if(scope==='labor'){
+   const invite=button('Generar enlace de Labor',()=>generate(row));
+   manage.append(invite);
+   if(existing)manage.append(button(row.pending?'Cancelar invitación':'Quitar acceso a Labor',()=>disable(row)));
+   invite.focus({preventScroll:true});manage.scrollIntoView({block:'nearest'});return;
+  }
   const role=document.createElement('select'),label=document.createElement('label');
   label.textContent='Rol en '+app.name;
   for(const key of scope==='plaza'?['assistant','operator']:Object.keys(app.roles))role.add(new Option(app.roles[key],key));
@@ -166,6 +174,7 @@ async function open(scope){
     throw error;
    }
    if(!current())return;
+   if(scope==='labor'&&result.scope!=='labor')throw new Error('El servicio central no confirmó una invitación de Labor.');
    if(scope==='admin'&&((result.adminRole&&result.adminRole!==data.adminRole)||(data.adminRole==='admin'&&result.adminRole!=='admin')))throw new Error('El servicio no confirmó el rol seleccionado. Actualiza Code.gs y su implementación.');
    if(scope==='plaza'&&result.plazaRole!==role)throw new Error('El servicio devolvió un rol distinto. Revisa la versión de Code.gs.');
    if(scope==='production'&&(result.productionRole!==data.productionRole||(data.productionRoles.includes('warehouse')&&JSON.stringify(result.productionRoles)!==JSON.stringify(data.productionRoles))))throw new Error('Actualiza y despliega Code.gs para asignar roles de Producción.');
@@ -173,6 +182,12 @@ async function open(scope){
    const url=new URL(scope==='production'?'produccion/':'crear-acceso.html',location.href);
    if(scope==='production')url.hash=new URLSearchParams({invitation:result.token});
    else url.searchParams.set('invite',result.token);
+   if(scope==='labor'){
+    url.searchParams.set('app','labor');
+    if(!access.labor.some(account=>same(account,row))){
+     access.labor.push({...row,role:'reporter',pending:true});renderActive();
+    }
+   }
    inviteUrl=url.href;
    status.textContent='Invitación para '+identity(row)+'. Válida durante 24 horas y para un solo uso.';
    copy.append(button('Copiar enlace',async()=>{
@@ -194,6 +209,7 @@ async function open(scope){
   if(busy||!confirm('¿Quitar acceso a '+app.name+' a '+identity(row)+'?'))return;
   clearInvite();
   run('Quitando acceso…',async()=>{
+   if(scope==='labor')await request('laborDisable',{document:doc(row)});
    if(scope==='admin')await request('adminUserDisable',{id:row.id});
    if(scope==='production')await request('productionDisable',{document:doc(row)});
    if(scope==='plaza'){
@@ -255,6 +271,26 @@ async function open(scope){
    const person=people.find(p=>same({personId:p.id,document:doc(p)},row));
    return {...person,...row,nombre:person?.nombre||row.name||row.nombre,role:row.role||'assistant'};
   });
+ }
+ if(scope==='labor'){
+  await run('Cargando usuarios de Labor…',async()=>{
+   try{
+    await auth().waitForLoginRenewal?.();
+    if(!current())return;
+    const [,result]=await Promise.all([loadPeople(),request('laborUsers')]);
+    if(!current())return;
+    if(result.scope!=='labor'||!Array.isArray(result.users))throw new Error('El servicio central no confirmó los usuarios de Labor.');
+    const byId=new Map(people.map(p=>[p.id,p]));
+    access.labor=result.users.map(row=>({...byId.get(row.personId),...row})).sort((a,b)=>identity(a).localeCompare(identity(b),'es'));
+    renderActive();renderSearch();status.textContent='';
+   }catch(error){
+    if(!current())return;
+    renderActive();copy.append(button('Reintentar consulta',reload));
+    if(/solicitud no válida/i.test(error.message))throw new Error('Falta actualizar el servicio central para generar accesos de Labor.');
+    throw error;
+   }
+  });
+  return;
  }
  if(scope==='plaza'){
   // Los usuarios de Plaza pertenecen a Personal. Las otras apps solo aportan etiquetas.
@@ -319,10 +355,10 @@ async function open(scope){
  });
 }
 document.addEventListener('click',event=>{
- const trigger=event.target.closest('#adminUsersBtn,.plazaAccessBtn,#productionUsersBtn');
+ const trigger=event.target.closest('#adminUsersBtn,.plazaAccessBtn,#productionUsersBtn,#laborUsersBtn');
  if(!trigger||!auth()?.isAdmin())return;
  event.preventDefault();event.stopImmediatePropagation();
- open(trigger.id==='adminUsersBtn'?'admin':trigger.id==='productionUsersBtn'?'production':'plaza');
+ open(trigger.id==='laborUsersBtn'?'labor':trigger.id==='adminUsersBtn'?'admin':trigger.id==='productionUsersBtn'?'production':'plaza');
 },true);
 function permissions(){mount();const button=document.getElementById('productionUsersBtn');if(button){button.hidden=!auth()?.isAdmin();if(button.hidden)button.style.setProperty('display','none','important');else button.style.removeProperty('display')}}
 window.addEventListener('skadmin-permissions',permissions);

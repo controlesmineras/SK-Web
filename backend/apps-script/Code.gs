@@ -14,7 +14,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth,q.productionBalanceVersions)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='laborLogin')return laborLogin_(q);if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='laborUsers'||q.action==='laborDisable'){requireAdmin_(auth);return laborAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth,q.productionBalanceVersions)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Frentes de trabajo: la ficha nueva y su reporte se confirman en la misma escritura.
 function frontDocument_(value){
@@ -75,8 +75,11 @@ function workFrontSync_(q){
   lock.waitLock(30000);
   try{
     const id=findFile_(), cloud=id ? readFile_(id,lock) : {};
-    const admin=q.access==='admin', auth=admin?verifyAdminToken_(q.token):verifyToken_(q.token,cloud);
-    const actor=admin?'admin:'+auth.username:'plaza:'+auth.document;
+    let actor;
+    if(q.access==='labor')actor='labor:'+verifyLaborToken_(q.token,cloud).document;
+    else if(q.access==='admin')actor='admin:'+verifyAdminToken_(q.token).username;
+    else if(!q.access||q.access==='plaza')actor='plaza:'+verifyToken_(q.token,cloud).document;
+    else throw new Error('Selecciona un acceso válido para Labor.');
     const now=nextRevision_(cloud.updatedAt);
     let changed=false;
     const receipts=q.reports.map(input=>{
@@ -95,17 +98,72 @@ function workFrontSync_(q){
   }finally{lock.releaseLock();}
 }
 
+function laborAccessKey_(document){return 'SK_LABOR_USER_'+invitationKey_(document).slice('SK_INVITE_'.length)}
+function laborAccount_(document){
+ const raw=PropertiesService.getScriptProperties().getProperty(laborAccessKey_(document));
+ return raw?JSON.parse(raw):null;
+}
+function laborPerson_(account,cloud){
+ return (cloud.personal||[]).find(p=>p.id===account.personId&&!p.deleted&&p.active!==false&&String(p.documento||'').trim()===account.document);
+}
+function laborAccessAdmin_(q){
+ const props=PropertiesService.getScriptProperties();
+ if(q.action==='laborDisable'){
+  const document=String(q.document||'').trim();
+  if(!document)throw new Error('Selecciona un funcionario.');
+  const lock=LockService.getScriptLock();lock.waitLock(30000);
+  try{revokeInvitations_('labor',document);props.deleteProperty(laborAccessKey_(document));return json_({ok:true})}
+  finally{lock.releaseLock()}
+ }
+ const users=new Map(),pending=[];
+ for(const [key,raw] of Object.entries(props.getProperties())){
+  if(key.startsWith('SK_LABOR_USER_')){
+   const {personId,document}=JSON.parse(raw);
+   users.set(document,{personId,document,role:'reporter'});
+  }else if(key.startsWith('SK_INVITE_')){
+   const invite=JSON.parse(raw);
+   if(invite.scope==='labor'&&invite.expires>Date.now())pending.push(invite);
+  }
+ }
+ for(const {personId,document} of pending){
+  if(!users.has(document))users.set(document,{personId,document,role:'reporter',pending:true});
+ }
+ return json_({ok:true,scope:'labor',users:[...users.values()]});
+}
+function laborLogin_(q){
+ const document=String(q.document||'').trim(),account=laborAccount_(document);
+ if(!account||!safeEqual_(account.passwordHash,hashPin_(document,String(q.password||''))))throw new Error('Documento o contraseña incorrectos para Labor.');
+ const id=findFile_(),person=laborPerson_(account,id?readFile_(id):{});
+ if(!person)throw new Error('Usuario no habilitado para Labor.');
+ const expiresAt=Date.now()+12*60*60*1000;
+ const payload=JSON.stringify(['labor',document,account.revision,expiresAt]);
+ return json_({ok:true,scope:'labor',expiresAt,token:Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload),
+  user:{id:person.id,documento:document,nombre:person.nombre||document,role:'reporter'}});
+}
+function verifyLaborToken_(token,cloud){
+ const bits=String(token||'').split('.');
+ if(bits.length!==2)throw new Error('Inicia sesión en Labor.');
+ const payload=Utilities.newBlob(Utilities.base64DecodeWebSafe(bits[0])).getDataAsString();
+ if(!safeEqual_(bits[1],sign_(payload)))throw new Error('Sesión de Labor no válida.');
+ let parts;try{parts=JSON.parse(payload)}catch(_){throw new Error('Inicia sesión en Labor.')}
+ if(!Array.isArray(parts)||parts.length!==4||parts[0]!=='labor')throw new Error('Inicia sesión en Labor.');
+ const [,document,revision,expiresAt]=parts,account=laborAccount_(document);
+ if(!account||account.revision!==revision||!laborPerson_(account,cloud))throw new Error('La cuenta ya no tiene acceso a Labor.');
+ if(!Number.isFinite(expiresAt)||expiresAt<=Date.now())throw new Error('La sesión de Labor venció.');
+ return account;
+}
 // Invitaciones de un solo uso: el enlace contiene un secreto aleatorio, nunca una contraseña.
 function invitationKey_(token){return 'SK_INVITE_'+hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,String(token),Utilities.Charset.UTF_8))}
 function assignableAdminRole_(role){if(!['assistant','admin'].includes(role))throw new Error('Rol de Web Admin no válido');return role}
 function isAdmin_(auth){return Boolean(auth&&['owner','admin'].includes(auth.role))}
 function accessInvitationCreate_(q){
- const scope=['plaza','admin','production'].includes(q.scope)?q.scope:'';
+ const scope=['plaza','admin','production','labor'].includes(q.scope)?q.scope:'';
  if(!scope)throw new Error('Aplicación no válida');
  const personId=String(q.personId||'').trim(),lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
   const fileId=findFile_(),cloud=fileId?readFile_(fileId,lock):{},person=(cloud.personal||[]).find(x=>x&&x.id===personId&&!x.deleted);
   if(!person||!String(person.documento||'').trim())throw new Error('Selecciona un colaborador sincronizado con documento');
+  if(scope==='labor'&&person.active===false)throw new Error('El funcionario está inactivo.');
   if(scope==='admin'){
    const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');
    if(area!=='seguridad fisica')throw new Error('Solo se permite acceso a Web Admin a personal de Seguridad física');
@@ -122,17 +180,22 @@ function accessInvitationCreate_(q){
   const productionRoles=scope==='production'?productionRoles_({roles:q.productionRoles,role:q.productionRole||productionAccess_(document)?.role}):[];
   const productionAccess=scope==='production'?{productionRole:productionPrimaryRole_(productionRoles),productionRoles}:{};
   props.setProperty(invitationKey_(secret),JSON.stringify({scope:scope,personId:person.id,document:document,expires:expires,...plazaAccess,...productionAccess,...adminAccess}));
-  return json_({ok:true,token:secret,document:document,name:person.nombre||'',...plazaAccess,...productionAccess,...adminAccess,expiresAt:new Date(expires).toISOString()});
+  return json_({ok:true,scope,token:secret,document:document,name:person.nombre||'',...plazaAccess,...productionAccess,...adminAccess,expiresAt:new Date(expires).toISOString()});
  }finally{lock.releaseLock()}
 }
 function revokeInvitations_(scope,document){const props=PropertiesService.getScriptProperties();Object.keys(props.getProperties()).filter(k=>k.indexOf('SK_INVITE_')===0).forEach(k=>{try{const row=JSON.parse(props.getProperty(k));if(row.scope===scope&&row.document===document)props.deleteProperty(k)}catch(_){props.deleteProperty(k)}})}
 function invitationRecord_(q){const token=String(q.invitation||'');if(!/^[a-f0-9]{96}$/.test(token))throw new Error('Enlace de invitación no válido');const key=invitationKey_(token),raw=PropertiesService.getScriptProperties().getProperty(key);if(!raw)throw new Error('El enlace ya se usó o dejó de ser válido');const row=JSON.parse(raw);if(row.expires<Date.now())throw new Error('El enlace venció. Solicita uno nuevo');return{key:key,row:row}}
 function accessInvitationInfo_(q){const invite=invitationRecord_(q),row=invite.row;return json_({ok:true,scope:row.scope,document:row.document,expiresAt:new Date(row.expires).toISOString()})}
 function accessInvitationAccept_(q){const password=String(q.password||'');if(password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');const lock=LockService.getScriptLock();lock.waitLock(30000);
- try{const invite=invitationRecord_(q),row=invite.row,document=String(q.document||'').trim();if(document!==row.document)throw new Error('El documento no corresponde a la invitación');
+ try{const invite=invitationRecord_(q),row=invite.row,document=String(q.document||'').trim();if(q.expectedScope&&q.expectedScope!==row.scope)throw new Error('El enlace no corresponde a esta aplicación.');if(document!==row.document)throw new Error('El documento no corresponde a la invitación');
   const fileId=findFile_(),cloud=fileId?readFile_(fileId,lock):{},person=(cloud.personal||[]).find(x=>x&&x.id===row.personId&&!x.deleted&&String(x.documento||'').trim()===document);
   if(!person)throw new Error('El colaborador ya no está disponible en Personal');const now=new Date().toISOString();
   if(row.scope==='plaza'){(cloud.personal||[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()===document).forEach(x=>{x.pinHash=hashPin_(document,password);x.plazaEnabled=true;x.plazaRole=['assistant','supervisor'].includes(row.plazaRole)?row.plazaRole:'operator';x.updatedAt=now});cloud.updatedAt=nextRevision_(cloud.updatedAt);writeFile_(fileId,cloud)}
+  else if(row.scope==='labor'){
+   if(person.active===false)throw new Error('El funcionario está inactivo.');
+   const account={document,personId:person.id,passwordHash:hashPin_(document,password),revision:Utilities.getUuid()};
+   PropertiesService.getScriptProperties().setProperty(laborAccessKey_(document),JSON.stringify(account));
+  }
   else if(row.scope==='production'){saveProductionAccess_(person,hashPin_(document,password),row.productionRoles||row.productionRole)}
   else if(row.scope==='admin'){const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');if(area!=='seguridad fisica')throw new Error('El colaborador ya no pertenece a Seguridad física');const users=adminUsers_();if(users.some(x=>x.role==='owner'&&(x.personId===person.id||x.document===document||x.username===document)))throw new Error('No se puede reemplazar el acceso principal');const adminRole=assignableAdminRole_(row.adminRole??'assistant');let user=users.find(x=>x.role!=='owner'&&(x.personId===person.id||x.document===document));if(!user){if(users.some(x=>x.username===document))throw new Error('El documento ya está registrado como otro usuario');user={id:'ADMIN-'+Utilities.getUuid(),createdAt:now};users.push(user)}user.personId=person.id;user.document=document;user.username=document;user.name=person.nombre||document;user.role=adminRole;user.enabled=true;user.passwordHash=hashPin_(document,password);user.updatedAt=now;saveAdminUsers_(users)}
   else throw new Error('Aplicación no válida');PropertiesService.getScriptProperties().deleteProperty(invite.key);return json_({ok:true,scope:row.scope});

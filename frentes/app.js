@@ -151,7 +151,7 @@ async function verifier(password,salt){
   const hash=await crypto.subtle.deriveBits({name:'PBKDF2',salt:bytes.encode(salt),iterations:150000,hash:'SHA-256'},key,256);
   return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
 }
-function resetLoginLabel(){const plaza=login.elements.access.value==='plaza';message('identityLabel',plaza?'Documento':'Usuario');login.elements.identity.inputMode=plaza?'numeric':'text';}
+function resetLoginLabel(){const admin=login.elements.access.value==='admin';message('identityLabel',admin?'Usuario':'Documento');login.elements.identity.inputMode=admin?'text':'numeric';}
 login.elements.access.onchange=resetLoginLabel;resetLoginLabel();
 function offlineStatus(){
   const stamp=state.lastSync?new Date(state.lastSync).toLocaleString('es-CO',{timeZone:'America/Bogota'}):'sin descarga previa';
@@ -170,16 +170,16 @@ login.onsubmit=async event=>{
     let s;
     if(navigator.onLine){
       try{
-        const payload=mode==='plaza'?{action:'plazaLogin',document:id,pin:pw}:{action:'adminLogin',username:id,password:pw};
+        const payload=mode==='labor'?{action:'laborLogin',document:id,password:pw}:mode==='plaza'?{action:'plazaLogin',document:id,pin:pw}:{action:'adminLogin',username:id,password:pw};
         const result=await post(payload);
-        if(!result.user||!result.token)throw new Error('Respuesta de acceso incompleta.');
+        if(!result.user||!result.token||(mode==='labor'&&result.scope!=='labor'))throw new Error('Respuesta de acceso incompleta.');
         s={access:mode,user:result.user,token:result.token,expiresAt:result.expiresAt,loginId:id};
         const salt=stamp();localStorage.setItem(key,JSON.stringify({salt,hash:await verifier(pw,salt),session:s}));
       }catch(error){if(error.central){if(/incorrect|no habilitad|desactiv|revocad/i.test(error.message))localStorage.removeItem(key);throw error;}}
     }
     if(!s){
       const cached=JSON.parse(localStorage.getItem(key)||'null');
-      if(!cached||await verifier(pw,cached.salt)!==cached.hash)throw new Error('No se pudo validar el acceso local. El primer ingreso en este dispositivo requiere conexión y una cuenta habilitada.');
+      if(!cached||!cached.session||cached.session.access!==mode||await verifier(pw,cached.salt)!==cached.hash)throw new Error('No se pudo validar el acceso local. El primer ingreso en este dispositivo requiere conexión y una cuenta habilitada.');
       s=cached.session;
     }
     login.elements.password.value='';await enter(s);
@@ -246,7 +246,7 @@ async function synchronize(s,signal){
     try{
       result=await post({action:'workFrontSync',token:s.token,access:s.access,reports:sent},signal);
     }catch(error){
-      if(!error.central||!/solicitud no válida|inicia sesión en Web Admin|sesión de Web Admin venció|no tiene acceso a Web Admin|acceso no autorizado/i.test(error.message))throw error;
+      if(s.access==='labor'||!error.central||!/solicitud no válida|inicia sesión en Web Admin|sesión de Web Admin venció|no tiene acceso a Web Admin|acceso no autorizado/i.test(error.message))throw error;
       if(s.access==='admin'){
         await post({action:'adminWhoAmI',token:s.token},signal);
         if(!current.lastSync){
