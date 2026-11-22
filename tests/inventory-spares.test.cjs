@@ -190,3 +190,62 @@ test('la cola offline conserva ajustes simultáneos por bodega y cada recibo act
  assert.equal((await h.ctx.all('productionQuantityCache'))[0].quantity,3);
  const remaining=await h.ctx.all('inventoryQuantityAdjustments');assert.equal(remaining.length,1);assert.match(remaining[0].syncError,/cambió/);
 });
+
+test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias antes del primer movimiento',async()=>{
+ const h=await harness(),w=h.ctx.window,doc=h.ctx.document;
+ const productionButton=h.node('[data-quantity-warehouse=production]');
+ productionButton.dataset.quantityWarehouse='production';
+ const queryAll=doc.querySelectorAll;
+ doc.querySelectorAll=selector=>selector==='[data-quantity-warehouse]'?[productionButton]:queryAll(selector);
+ w.SKAdminAuth={isAdmin:()=>true,canView:()=>true};
+ let opened;
+ w.SKAdminNav={go:(view,opts)=>{opened={view,...opts}}};
+ h.api.bind();
+ h.form.elements.isYtSpare.checked=false;
+ h.form.elements.name.value='Calibrador Vernier';
+ h.form.elements.secondaryName.value='Pie de rey';
+ await h.save();
+ const [item]=await h.ctx.all('inventoryCriteria');
+ productionButton.handlers.click();
+ assert.equal(opened.view,'inventoryQuantities');
+ assert.equal(opened.itemId,item.id);
+ assert.equal(h.form.elements.id.value,'','la ficha queda lista para el siguiente elemento');
+
+ const section=h.node('#inventoryQuantities'),form=h.node('form'),menu=h.node('#quantityItems');
+ section.querySelector=form.querySelector=h.node;
+ section.classList={contains:()=>true};form.reset=()=>{};form.reportValidity=()=>true;
+ const field={value:'',focus(){},get valueAsNumber(){return Number(this.value)}};
+ form.elements={quantity:field};
+ menu.replaceChildren=(...rows)=>{menu.rows=rows};
+ doc.createElement=()=>({dataset:{},append(detail){this.detail=detail.textContent}});
+ const search=h.node('#quantityItemSearch'),type=query=>{search.value=query;search.oninput();return menu.rows};
+ const selected=()=>new Promise((resolve,reject)=>{
+  let tries=0;function check(){if(!field.disabled)return resolve();if(++tries>1000)return reject(Error('Cantidad deshabilitada'));setImmediate(check)}check();
+ });
+ await h.api.openQuantities(opened);await selected();
+ assert.equal(search.value,item.name);
+ await h.api.openQuantities({warehouse:'production'});
+ assert.equal(type('').some(row=>row.dataset.itemId===item.id),false);
+ const [choice]=type('pie de rey');
+ assert.equal(choice.dataset.itemId,item.id);
+ assert.match(choice.detail,/Ingresar saldo inicial/);
+ menu.onclick({target:{closest:()=>choice}});await selected();
+ assert.equal(field.value,'','un saldo sin leer jamás se presenta como cero');
+ field.value='0';
+ await form.onsubmit({preventDefault(){}});
+ const [pending]=await h.ctx.all('inventoryQuantityAdjustments');
+ assert.equal(pending.itemId,item.id);assert.equal(pending.stockRevision,'0|0');assert.equal(pending.quantity,0);
+ assert.equal((await h.ctx.all('inventoryStock')).length,0);
+ let sends=0;
+ w.SKAdminAuth.request=async(_,q)=>{
+  sends++;assert.equal(q.operationId,pending.operationId);
+  return {warehouse:'production',operationId:q.operationId,status:'accepted',stock:{id:item.id,itemId:item.id,quantity:0,updatedAt:'1|0',sampledAt:'2026-11-22T10:00:00Z'}};
+ };
+ await h.api.syncQuantities();assert.equal(sends,0,'el ajuste espera la confirmación del criterio');
+ await h.ctx.put('inventoryCriteria',{...item,syncState:'synced'});
+ await h.api.syncQuantities();assert.equal(sends,1);
+ await h.api.openQuantities({warehouse:'production'});
+ assert.deepEqual(Array.from(type(''),row=>row.dataset.itemId),[item.id]);
+ assert.equal((await h.ctx.all('productionQuantityCache'))[0].quantity,0);
+ assert.equal((await h.ctx.all('inventoryQuantityAdjustments')).length,0);
+});

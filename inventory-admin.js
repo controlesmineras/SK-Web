@@ -240,8 +240,8 @@ function selectSpareType(type){
  const form=document.querySelector('#inventoryItemForm');form.elements.spareEquipment.value=type;syncSpareFields(form);render();
 }
 function openKind(kind){catalogKind=kind==='spare'?'spare':'common';mount();const spare=catalogKind==='spare',sec=document.querySelector('#inventoryItems');sec.dataset.catalogKind=catalogKind;document.querySelector('#inventoryCatalogTitle').textContent=spare?'CRITERIOS YT/COLUMNA':'Elementos de inventario';document.querySelector('#inventoryFormTitle').textContent=spare?'Datos del repuesto':'Datos del elemento';document.querySelector('#newInventoryItem').textContent=spare?'+ Agregar repuesto':'+ Agregar elemento';document.querySelector('#spareCatalogFilter').hidden=!spare;syncSpareFilterButtons();document.querySelector('#inventoryItemSearch').value='';sec.querySelectorAll('[data-catalog-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.catalogKind===catalogKind)));reset();render();window.dispatchEvent(new Event('skweb-inventory-kind'));}
-let editVersion=0;
-function reset(){editVersion++;const f=document.querySelector('#inventoryItemForm'),type=currentSpareType();clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;f.reset();f.elements.spareEquipment.value=type;f.elements.id.value='';delete f.dataset.sourceClass;syncResultSelection(f);f.elements.isYtSpare.checked=catalogKind==='spare';if(catalogKind==='spare')f.elements.unit.value='Unidad';f.elements.allowAssignment.checked=true;f.elements.allowLoan.checked=false;f.elements.allowTransfer.checked=true;f.elements.allowRemission.checked=true;syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);document.querySelector('#inventoryItemSave').textContent='Guardar elemento';document.querySelector('#inventoryItemDeactivate').hidden=true;document.querySelector('#inventoryItemStatus').hidden=true}
+let editVersion=0,lastSavedItemId='';
+function reset(){lastSavedItemId='';editVersion++;const f=document.querySelector('#inventoryItemForm'),type=currentSpareType();clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;f.reset();f.elements.spareEquipment.value=type;f.elements.id.value='';delete f.dataset.sourceClass;syncResultSelection(f);f.elements.isYtSpare.checked=catalogKind==='spare';if(catalogKind==='spare')f.elements.unit.value='Unidad';f.elements.allowAssignment.checked=true;f.elements.allowLoan.checked=false;f.elements.allowTransfer.checked=true;f.elements.allowRemission.checked=true;syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);document.querySelector('#inventoryItemSave').textContent='Guardar elemento';document.querySelector('#inventoryItemDeactivate').hidden=true;document.querySelector('#inventoryItemStatus').hidden=true}
 async function edit(id){const version=++editVersion;const criteria=await all('inventoryCriteria'),x=criteria.find(r=>r.id===id);if(!x||version!==editVersion)return;const f=document.querySelector('#inventoryItemForm');clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;for(const [n,v] of Object.entries({id:x.id,name:itemName(x),unit:itemUnit(x),secondaryName:itemSecondary(x),tertiaryName:itemTertiary(x),spareEquipment:x.spareEquipment||"YT 29",spareItemNumber:x.spareItemNumber||"",spareItemName:x.spareItemName||"",sparePartCode:x.sparePartCode||"",spareApplication:x.spareApplication||""}))if(f.elements[n])f.elements[n].value=v;delete f.dataset.sourceClass;syncResultSelection(f);boolFields.forEach(n=>f.elements[n].checked=defaultEnabledOperations.has(n)?x[n]!==false:x[n]===true);syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);if(f.elements.fractionable.checked)f.elements.containerUnit.value=x.containerUnit||'';document.querySelector('#inventoryItemSave').textContent='Guardar cambios';document.querySelector('#inventoryItemDeactivate').hidden=false;document.querySelector('#inventoryItemDeactivate').textContent=x.isYtSpare?'Eliminar repuesto':'Retirar elemento';await render();if(version===editVersion)f.scrollIntoView({behavior:'smooth',block:'start'})}
 let saving=false;
 async function save(e){
@@ -274,7 +274,7 @@ async function save(e){
 
  if(!name)throw new Error('Escribe el nombre del elemento.');
  await put('inventoryCriteria',item);committed=true;
- reset();status.hidden=false;
+ reset();lastSavedItemId=item.id;status.hidden=false;
  status.textContent=(id?'Cambios guardados en este dispositivo.':'Elemento guardado en este dispositivo.')+' Pendiente de sincronizar; se enviará al tener conexión.';
  window.dispatchEvent(new Event('skweb-inventory-refresh'));
  window.skSyncApi?.schedule?.(300);
@@ -302,10 +302,15 @@ async function deactivate(){
 }
 
 function bind(){
+ const criterionForm=document.querySelector('#inventoryItemForm');
+ criterionForm.addEventListener('input',()=>{lastSavedItemId=''});
+ criterionForm.addEventListener('change',()=>{lastSavedItemId=''});
  document.querySelectorAll('[data-quantity-warehouse]').forEach(button=>{
-  button.addEventListener('click',()=>window.SKAdminNav.go('inventoryQuantities',{
-   warehouse:button.dataset.quantityWarehouse,itemId:document.querySelector('#inventoryItemForm').elements.id.value
-  }));
+  button.addEventListener('click',()=>{
+   const warehouse=button.dataset.quantityWarehouse;
+   const itemId=criterionForm.elements.id.value||(warehouse==='production'?lastSavedItemId:'');
+   window.SKAdminNav.go('inventoryQuantities',{warehouse,itemId});
+  });
  });
  const helpButton=document.querySelector('#inventoryHelpToggle'),help=document.querySelector('#inventoryCatalogHelp');
  helpButton.addEventListener('click',()=>{
@@ -321,6 +326,13 @@ function canAdjustQuantity(item,stock,warehouse){
   (warehouse!=='production'||!quantityFlag(item.isEpp))&&
   !quantityFlag(item.isFixedAsset??item.esActivoFijo??item.CI_ES_A_FIJO)&&itemName(item)&&
   !stock?.deleted&&stock?.active!==false;
+}
+// La apertura se envía con la revisión inicial. El servidor rechaza el ajuste si otra
+// persona ya registró existencias. Un repuesto vinculado puede tener saldo en Mecánica.
+function canOpenProductionQuantity(item,meta){
+ if(!item||meta?.enabled===false)return false;
+ if(!quantityFlag(item.isYtSpare))return true;
+ return !item.productionPartId&&window.SKSpareGroups.types.some(type=>norm(type).replace(/ /g,'')===norm(item.spareEquipment).replace(/ /g,''));
 }
 function adjustmentTransaction(tables,write){
  return new Promise((resolve,reject)=>{
@@ -346,7 +358,9 @@ function queueQuantity(warehouse,itemId,quantity,observed,opening=false){
    if(!canAdjustQuantity(item.result,current,warehouse))return abort('El criterio ya no permite editar la cantidad.');
    if(existing.result)return abort('Este elemento ya tiene un ajuste pendiente en esta bodega.');
    if(current?.syncState==='pending')return abort('Primero sincroniza los cambios del criterio de este elemento.');
-   const newOpening=warehouse==='production'&&!current&&opening&&stocks.result.some(row=>!row.itemId&&row.enabled);
+   const meta=warehouse==='production'&&stocks.result.find(row=>!row.itemId);
+   if(meta?.enabled===false)return abort('La Bodega de Producción aún no está activada.');
+   const newOpening=warehouse==='production'&&!current&&opening&&canOpenProductionQuantity(item.result,meta);
    if(warehouse==='production'&&!current&&!newOpening)return abort('Sincroniza los saldos de Producción antes de ajustar este elemento.');
    if(stockRevision(current)!==stockRevision(observed)||current?.quantity!==observed?.quantity)
     return abort('La existencia cambió. Revisa el saldo actualizado y vuelve a guardar.');
@@ -374,7 +388,11 @@ function settleQuantity(adjustment,confirmed,conflict){
 }
 async function syncQuantities(){
  const adjustments=(await all(quantityAdjustments)).filter(row=>!row.syncError);
+ if(!adjustments.length)return;
+ const pendingCriteria=new Set((await all('inventoryCriteria')).filter(item=>item.syncState==='pending').map(item=>item.id));
  for(const row of adjustments){
+  // El criterio pudo haberse creado mientras ya se enviaba la sincronización anterior.
+  if(pendingCriteria.has(row.itemId))continue;
   let result;
   try{
    result=row.warehouse?await window.SKAdminAuth.request('adminWarehouseQuantityV1',{
@@ -450,33 +468,39 @@ async function openQuantities(options={}){
  form.reset();search.disabled=true;menu.hidden=true;quantity.disabled=button.disabled=true;
  status.textContent='';section._refreshQuantity=null;form.onsubmit=null;
  if(typeof db==='undefined'||!db){status.textContent='El almacenamiento local todavía está cargando. Vuelve a abrir el módulo.';return}
- let items=[],criteria=[],meta,selected,stock,pending,opening=false,selectionVersion=0,listVersion=0;
+ let criteria=[],registeredIds=new Set(),meta,selected,stock,pending,opening=false,selectionVersion=0,listVersion=0;
  async function loadList(){
   const version=++listVersion;
   const [catalog,stocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),production?all(quantityAdjustments):[]]);
   if(view!==quantityViewVersion||version!==listVersion)return;
   const balances=new Map(stocks.filter(row=>row.itemId).map(row=>[row.itemId,row]));
   meta=production&&stocks.find(row=>!row.itemId);
+  registeredIds=new Set([...balances.keys(),...adjustments.filter(row=>row.warehouse==='production').map(row=>row.itemId)]);
   criteria=catalog.filter(row=>canAdjustQuantity(row,balances.get(row.id),warehouse));
-  const pendingIds=new Set(adjustments.filter(row=>row.warehouse==='production').map(row=>row.itemId));
-  items=criteria.filter(row=>!production||balances.has(row.id)||pendingIds.has(row.id))
-   .sort((a,b)=>itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'}));
+  criteria.sort((a,b)=>{
+   if(production&&registeredIds.has(a.id)!==registeredIds.has(b.id))return registeredIds.has(a.id)?-1:1;
+   return itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'});
+  });
   if(!menu.hidden)drawItems();
   if(!selected&&production){
    if(!meta)status.textContent='Sincroniza SK Web Admin para descargar los saldos de Producción en este equipo.';
    else if(!meta.enabled)status.textContent='La Bodega de Producción aún no está activada.';
-   else status.textContent=items.length?'':'Aún no hay elementos registrados en Producción.';
+   else status.textContent=registeredIds.size?'':'Busca un elemento del catálogo para ingresar su saldo inicial.';
   }
  }
  try{await loadList()}catch(error){status.textContent='No se pudo leer el inventario local: '+error.message;return}
  if(view!==quantityViewVersion)return;
  function drawItems(){
-  const query=selected?'':search.value;
-  const matches=items.filter(row=>matchesItemSearch([itemName(row),itemSecondary(row),itemTertiary(row),row.spareApplication].join(' '),row.spareItemNumber,query,row.sparePartCode));
+  const query=selected?'':search.value.trim();
+  const matches=criteria.filter(row=>
+   (!production||registeredIds.has(row.id)||quantityFlag(row.isYtSpare)||query)&&
+   matchesItemSearch([itemName(row),itemSecondary(row),itemTertiary(row),row.spareApplication].join(' '),row.spareItemNumber,query,row.sparePartCode));
   menu.replaceChildren(...matches.map(row=>{
    const option=document.createElement('button');
    option.type='button';option.dataset.itemId=row.id;option.textContent=itemName(row);
    const aliases=[itemSecondary(row),itemTertiary(row)].filter(Boolean);
+   if(production&&!registeredIds.has(row.id)&&meta?.enabled!==false)
+    aliases.push(canOpenProductionQuantity(row,meta)?'Ingresar saldo inicial':'Saldo por sincronizar');
    if(aliases.length){const detail=document.createElement('small');detail.textContent=aliases.join(' · ');option.append(detail)}
    return option;
   }));
@@ -491,23 +515,25 @@ async function openQuantities(options={}){
   const wasPending=pending,current=currentStocks.find(row=>row.itemId===id);
   const dirty=!quantity.disabled&&quantity.value!==(stock?String(stock.quantity):production?'':'0');
   pending=adjustments.find(row=>row.itemId===id&&(row.warehouse||'plaza')===warehouse);
-  const eligible=canAdjustQuantity(currentItems.find(row=>row.id===id),current,warehouse);
-  // Un criterio común elegido expresamente en el catálogo general puede recibir su primera apertura.
-  opening=production&&meta?.enabled&&!current&&options.itemId===id&&!quantityFlag(selected.isYtSpare)&&eligible;
+  const item=currentItems.find(row=>row.id===id);
+  const eligible=canAdjustQuantity(item,current,warehouse);
+  const currentMeta=production&&currentStocks.find(row=>!row.itemId);
+  opening=production&&!current&&eligible&&canOpenProductionQuantity(item,currentMeta);
 
   if(!keepInput||!dirty||pending||!eligible){
    stock=current;
    quantity.value=pending?.quantity??current?.quantity??(production?'':0);
   }
-  quantity.disabled=button.disabled=Boolean(pending||!eligible||production&&!current&&!opening||current?.syncState==='pending');
+  quantity.disabled=button.disabled=Boolean(pending||!eligible||currentMeta?.enabled===false||production&&!current&&!opening||current?.syncState==='pending');
   if(pending?.syncError)status.textContent=pending.syncError+' Puedes descartar el ajuste desde Inicio y volver a registrarlo con el saldo actualizado.';
   else if(pending)status.textContent='Guardado en este equipo · pendiente de sincronizar con '+warehouseName+'.';
   else if(!eligible)status.textContent='El criterio ya no permite editar la cantidad.';
   else if(current?.syncState==='pending')status.textContent='Primero sincroniza los cambios del criterio de este elemento.';
-  else if(wasPending)status.textContent='Ajuste procesado. Saldo en la base sincronizada: '+quantity.value+'.';
-  else if(opening)status.textContent='Este elemento aún no tiene movimientos en Producción. Escribe su saldo inicial para incorporarlo.';
-  else if(production&&!current)status.textContent=meta?'Este elemento no tiene saldo registrado en Producción.':'Sincroniza SK Web Admin para descargar los saldos de Producción en este equipo.';
-  else if(!keepInput)status.textContent='';
+  else if(currentMeta?.enabled===false)status.textContent='La Bodega de Producción aún no está activada.';
+  else if(wasPending&&current)status.textContent='Ajuste procesado. Saldo en la base sincronizada: '+quantity.value+'.';
+  else if(opening)status.textContent=currentMeta?'Escribe el saldo inicial de este elemento en Producción.':'Escribe el saldo inicial. Al sincronizar se comprobará si ya hay existencias registradas en Producción.';
+  else if(production&&!current)status.textContent='Sincroniza SK Web Admin para consultar el saldo de este repuesto en Producción.';
+  else status.textContent='';
  }
  function report(error){status.textContent=error.message}
  search.disabled=false;
@@ -538,7 +564,7 @@ async function openQuantities(options={}){
  }
  menu.onclick=event=>{
   const option=event.target.closest('[data-item-id]');
-  if(option)selectItem(items.find(row=>row.id===option.dataset.itemId)).catch(report);
+  if(option)selectItem(criteria.find(row=>row.id===option.dataset.itemId)).catch(report);
  };
  section._refreshQuantity=()=>{
   if(!section.classList.contains('active')||button.dataset.saving==='1')return;
