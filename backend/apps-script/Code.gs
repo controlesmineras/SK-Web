@@ -14,7 +14,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth,q.productionBalanceVersions)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Frentes de trabajo: la ficha nueva y su reporte se confirman en la misma escritura.
 function frontDocument_(value){
@@ -180,7 +180,7 @@ function adminUserSave_(q){
  }finally{lock.releaseLock()}
 }
 function adminUserDisable_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{const rows=adminUsers_(),user=rows.find(x=>x.id===String(q.id||''));if(!user)throw new Error('El usuario no existe');if(user.role==='owner')throw new Error('No se puede desactivar al Administrador principal');user.enabled=false;user.updatedAt=new Date().toISOString();revokeInvitations_('admin',user.document);saveAdminUsers_(rows);return json_({ok:true,user:publicAdminUser_(user)})}finally{lock.releaseLock()}}
-function adminSyncAuthorized_(incoming,since,auth){if(!isAdmin_(auth)){const allowed=['personal','actas','consumptions','novelties','assets'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,!isAdmin_(auth)&&['novelties','assets'].some(name=>(incoming[name]||[]).some(row=>row&&row.syncState==='pending'))?'':since,auth)}
+function adminSyncAuthorized_(incoming,since,auth,productionVersions){if(!isAdmin_(auth)){const allowed=['personal','actas','consumptions','novelties','assets'],blocked=Object.keys(incoming||{}).filter(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.syncState==='pending')&&!allowed.includes(name));if(blocked.length)throw new Error('Tu rol no permite modificar: '+blocked.join(', '))}return adminSync_(incoming,!isAdmin_(auth)&&['novelties','assets'].some(name=>(incoming[name]||[]).some(row=>row&&row.syncState==='pending'))?'':since,auth,productionVersions)}
 
 // Se ejecuta bajo el mismo bloqueo de sincronización. El registro de marcas nunca
 // se borra al dar de baja un activo ni se acepta desde un cliente.
@@ -641,7 +641,15 @@ function validateActaStatus_(incoming,cloud,auth){
  }
 }
 
-function adminSync_(incoming,since,auth){
+function adminSync_(incoming,since,auth,productionVersions){
+ function respond(central,reply){
+  if(Array.isArray(productionVersions)&&isAdmin_(auth)){
+   // Un problema en el libro de Producción no invalida un guardado confirmado en la base general.
+   try{reply.productionBalances=adminProductionBalances_(central,productionVersions);}
+   catch(error){reply.productionBalances={error:String(error.message||error)};}
+  }
+  return json_(reply);
+ }
  const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{
   const id=findFile_(),cloud=id?readFile_(id,lock):{},baseUpdatedAt=cloud.updatedAt||'',changes={},recovered=completePendingAssetMarks_(cloud);
@@ -653,8 +661,8 @@ function adminSync_(incoming,since,auth){
   const hasPending=Object.keys(incoming||{}).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.id&&x.syncState==='pending'));
   if(!hasPending){
    if(recovered)writeFile_(id,cloud);
-   if(!recovered&&since&&baseUpdatedAt===since)return json_({ok:true,capabilities:collaboratorSyncCapabilities_(),notModified:true,updatedAt:baseUpdatedAt});
-   return json_({ok:true,capabilities:collaboratorSyncCapabilities_(),data:cloud,updatedAt:cloud.updatedAt||''});
+   if(!recovered&&since&&baseUpdatedAt===since)return respond(cloud,{ok:true,capabilities:collaboratorSyncCapabilities_(),notModified:true,updatedAt:baseUpdatedAt});
+   return respond(cloud,{ok:true,capabilities:collaboratorSyncCapabilities_(),data:cloud,updatedAt:cloud.updatedAt||''});
   }
   Object.keys(incoming||{}).forEach(name=>{if(name==='schema'||name==='updatedAt'||!Array.isArray(incoming[name]))return;changes[name]=incoming[name].filter(x=>x&&x.id&&x.syncState==='pending').map(x=>Object.assign({},x,{syncState:'synced'}))});
   // Una solicitud de marca solo cambia la marcación. Un dispositivo atrasado no
@@ -672,8 +680,8 @@ function adminSync_(incoming,since,auth){
   validateAssetSerials_(cloud.assets||[],(changes.assets||[]).filter(row=>editedAssets.has(row.id)),Array.from(criterionRows.values()));
   const marking=assignAssetMarks_(cloud,changes.assets||[],auth);if(changes.assets)changes.assets=marking.assets;delete changes.assetMarkRegistry;
   const merged=merge_(cloud,changes);if(marking.registry.length)merged.assetMarkRegistry=marking.registry;writeFile_(id,merged);
-  if(!recovered&&since&&baseUpdatedAt===since&&!marking.changed&&!marking.assets.some(asset=>asset.markingPolicy==='letters-v1'))return json_({ok:true,capabilities:collaboratorSyncCapabilities_(),acknowledged:true,updatedAt:merged.updatedAt});
-  return json_({ok:true,capabilities:collaboratorSyncCapabilities_(),data:merged,updatedAt:merged.updatedAt});
+  if(!recovered&&since&&baseUpdatedAt===since&&!marking.changed&&!marking.assets.some(asset=>asset.markingPolicy==='letters-v1'))return respond(merged,{ok:true,capabilities:collaboratorSyncCapabilities_(),acknowledged:true,updatedAt:merged.updatedAt});
+  return respond(merged,{ok:true,capabilities:collaboratorSyncCapabilities_(),data:merged,updatedAt:merged.updatedAt});
  }finally{lock.releaseLock()}
 }
 
@@ -1407,13 +1415,85 @@ function productionSpareBalance_(data,spare,central){
  const ids=new Set(part.aliases),closed=(data.inventoryCounts||[]).filter(row=>row.status==='closed'&&row.origin===spare.origen&&row.date<=today).sort((a,b)=>b.date.localeCompare(a.date)||String(b.closedAt||'').localeCompare(String(a.closedAt||'')))[0];
  const opening=closed?.rows.find(row=>(row.aliases||[row.partId]).some(id=>ids.has(id)));
  const matches=row=>!row.deleted&&row.origen===spare.origen&&ids.has(row.partId)&&row.fechaISO<=today;
- const initial=(data.incomes||[]).filter(row=>matches(row)&&row.kind==='initial').at(-1);
+ return productionPartBalance_(opening,closed,(data.incomes||[]).filter(matches),(data.consumptions||[]).filter(matches));
+}
+function productionPartBalance_(opening,closed,incomes,consumptions){
+ const initial=incomes.filter(row=>row.kind==='initial').at(-1);
  let total=opening?.physical??initial?.cantidad??0;
- const includes=row=>matches(row)&&(opening?productionAfterClose_(row,closed.date,closed.closedAt):!initial?.openingFromDate||row.fechaISO>=initial.fechaISO);
- for(const row of data.incomes||[])if(includes(row)){if(['income','warehouse-return'].includes(row.kind))total+=row.cantidad;else if(row.kind==='warehouse-out')total-=row.cantidad;}
- for(const row of data.consumptions||[])if(includes(row))total-=row.cantidad;
+ const includes=row=>opening?productionAfterClose_(row,closed.date,closed.closedAt):!initial?.openingFromDate||row.fechaISO>=initial.fechaISO;
+ for(const row of incomes)if(includes(row)){if(['income','warehouse-return'].includes(row.kind))total+=row.cantidad;else if(row.kind==='warehouse-out')total-=row.cantidad;}
+ for(const row of consumptions)if(includes(row))total-=row.cantidad;
  return total;
 }
+
+// Agrupa el libro una vez por sincronización, incluso cuando varios criterios identifican la misma pieza.
+function productionPartBalancesByCriterion_(data,central){
+ const today=Utilities.formatDate(new Date(),'America/Bogota','yyyy-MM-dd');
+ const byOrigin=new Map(),byCriterion=new Map(),criteria=central.inventoryCriteria||[];
+ let catalogOrder=0;
+ for(const origin of ['YT28','YT29','Columna28','Columna29']){
+  const catalog=productionCatalog_(central.parts||[],criteria,origin),byAlias=new Map();
+  const closed=(data.inventoryCounts||[]).filter(row=>row.status==='closed'&&row.origin===origin&&row.date<=today)
+   .sort((a,b)=>b.date.localeCompare(a.date)||String(b.closedAt||'').localeCompare(String(a.closedAt||'')))[0];
+  for(const part of catalog.values()){
+   const group={closed,incomes:[],consumptions:[],order:catalogOrder++};
+   for(const id of part.aliases){
+    if(!byAlias.has(id))byAlias.set(id,group);
+    if(!byCriterion.has(id))byCriterion.set(id,group);
+   }
+  }
+  for(const row of closed?.rows||[]){
+   for(const id of row.aliases||[row.partId]){
+    const group=byAlias.get(id);if(group&&!group.opening)group.opening=row;
+   }
+  }
+  byOrigin.set(origin,byAlias);
+ }
+ for(const table of ['incomes','consumptions']){
+  for(const row of data[table]||[]){
+   if(row.deleted||!(row.fechaISO<=today))continue;
+   byOrigin.get(row.origen)?.get(row.partId)?.[table].push(row);
+  }
+ }
+ for(const group of new Set(byCriterion.values()))group.quantity=productionPartBalance_(group.opening,group.closed,group.incomes,group.consumptions);
+ return byCriterion;
+}
+function adminProductionBalances_(central,versions){
+ const known=new Map(versions),enabled=productionWarehouseSettings_().enabled===true;
+ const sampledAt=new Date().toISOString(),rows=[];let count=0;
+ if(enabled){
+  const file=productionDataFile_(),book=productionReadData_(file);
+  if(productionImportPlaza_(book,central))productionSaveData_(file,book);
+  const warehouse=new Map(),parts=productionPartBalancesByCriterion_(book,central);
+  for(const movement of book.warehouseMovements||[]){
+   if(movement.status==='rejected')continue;
+   const previous=warehouse.get(movement.itemId);
+   warehouse.set(movement.itemId,{quantity:(previous?.quantity||0)+Number(movement.delta||0),revision:movement.revision||0});
+  }
+  for(const item of central.inventoryCriteria||[]){
+   if(!item.id||item.deleted||item.active===false||item.recordType==='formOptions'||item.id==='SYSTEM-FORM-OPTIONS-V1'||
+      productionWarehouseEpp_(item)||truthy_(item.isFixedAsset??item.esActivoFijo??item.CI_ES_A_FIJO))continue;
+   const movement=warehouse.get(item.id);
+   let quantity;
+   if(item.isYtSpare){
+    // productionSpare_ acepta ambos identificadores y elige la primera coincidencia del catálogo.
+    const own=parts.get(item.id),legacy=parts.get(item.productionPartId);
+    const part=own&&legacy?(own.order<legacy.order?own:legacy):(own||legacy);
+    if(!part)continue;
+    quantity=part.quantity;
+   }else{
+    if(!movement)continue;
+    quantity=movement.quantity;
+   }
+   count++;
+   const revision=String(movement?.revision||0)+'|'+quantity;
+   if(known.get(item.id)!==revision)rows.push({itemId:item.id,quantity,updatedAt:revision});
+   known.delete(item.id);
+  }
+ }
+ return {protocol:'production-balances-v1',enabled,sampledAt,count,rows,removed:Array.from(known.keys())};
+}
+
 function productionWarehouseBalance_(data,item,central){
  const spare=productionSpare_(item,central);if(spare)return productionSpareBalance_(data,spare,central);
  return (data.warehouseMovements||[]).filter(row=>row.itemId===item.id&&row.status!=='rejected').reduce((n,row)=>n+Number(row.delta||0),0);

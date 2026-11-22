@@ -1,7 +1,7 @@
 const DB='sk-web-local',VER=7,stores=['personal','assets','novelties','parts','consumptions','incomes','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries','actas'];const quantityAdjustments='inventoryQuantityAdjustments',localStores=[...stores,quantityAdjustments];let db;const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],uuid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,now=()=>new Date().toISOString();
 const GOOGLE_CLIENT_ID='102740984387-di4t4r2djjc9t4l84b8ttl7cf49ef20g.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata',CLOUD_FILE='sk-web-central.json';let tokenClient,accessToken='';
-const productionQuantityCache='productionQuantityCache';
+const productionQuantityCache='productionQuantityCache',productionBalanceMetaKey=['snapshot-v1'];
 const assetProfileStore='assetNoveltyProfiles';
 const assetEventStores=['novelties','blendingIncomes','blendingDeliveries'];
 const assetProfileTables=['assets','personal',...assetEventStores,assetProfileStore];

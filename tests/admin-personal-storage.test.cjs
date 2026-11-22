@@ -121,3 +121,27 @@ test('el contador mantiene el número pendiente sin conexión, con error y duran
  await c.ctx.window.SKAdminSyncUI.refresh();assert.equal(badge.textContent,'2');assert.equal(badge.hidden,false);assert.match(badge.title,/sin conexión/);
  for(const state of ['error','syncing']){c.ctx.window.SKAdminSyncUI.setState(state);await c.ctx.window.SKAdminSyncUI.refresh();assert.equal(badge.textContent,'2');assert.equal(badge.hidden,false);}
 });
+
+test('sincronización general descarga saldos por lote, conserva ceros y elimina retirados sin tocar Plaza ni los ajustes pendientes',async()=>{
+ let turn=0;const moment=n=>'2026-11-22T10:00:0'+n+'.000Z';
+ const c=await client({respond:q=>{
+  const versions=q.productionBalanceVersions;turn++;
+  const common={ok:true,updatedAt:date,notModified:true,productionBalances:{protocol:'production-balances-v1',enabled:true,sampledAt:moment(turn),count:1,rows:[],removed:[]}};
+  if(turn===1){assert.deepEqual(versions,[]);common.productionBalances.rows=[{itemId:'pin',quantity:0,updatedAt:'0|0'}];}
+  if(turn===2){assert.deepEqual(versions,[['pin','0|0']]);common.productionBalances.rows=[{itemId:'pin',quantity:3,updatedAt:'1|3'}];}
+  if(turn===3){common.productionBalances.count=0;common.productionBalances.removed=['pin'];}
+  if(turn===4)delete common.productionBalances;
+  return common;
+ }});
+ c.ctx.window.SKAdminAuth.isAdmin=()=>true;
+ await c.ctx.put('inventoryStock',{id:'plaza-pin',itemId:'pin',quantity:12});
+ assert.equal(await c.sync(),true);assert.equal((await c.ctx.all('productionQuantityCache')).find(row=>row.itemId==='pin').quantity,0);
+ assert.equal(await c.sync(),true);assert.equal((await c.ctx.all('productionQuantityCache')).find(row=>row.itemId==='pin').quantity,3);
+ await c.ctx.put('inventoryQuantityAdjustments',{id:['production','pin'],itemId:'pin',warehouse:'production',quantity:8,syncState:'pending'});
+ assert.equal(await c.sync(),false);
+ assert.equal((await c.ctx.all('productionQuantityCache')).some(row=>row.itemId==='pin'),false);
+ assert.equal((await c.ctx.all('inventoryQuantityAdjustments')).length,1);
+ assert.equal((await c.ctx.all('inventoryStock'))[0].quantity,12);
+ await c.ctx.clearStore('inventoryQuantityAdjustments');assert.equal(await c.sync(),false);assert.match(c.status.textContent,/Saldos de Producción pendientes/);
+ assert.equal(c.requests.length,4);
+});

@@ -334,7 +334,7 @@ function adjustmentTransaction(tables,write){
 const stockTable=warehouse=>warehouse==='production'?productionQuantityCache:'inventoryStock';
 // Las claves anteriores de Plaza siguen siendo válidas después de actualizar la app.
 const queueKey=(warehouse,itemId)=>warehouse==='production'?['production',itemId]:itemId;
-function queueQuantity(warehouse,itemId,quantity,observed){
+function queueQuantity(warehouse,itemId,quantity,observed,opening=false){
  const table=stockTable(warehouse),id=queueKey(warehouse,itemId);
  return adjustmentTransaction(['inventoryCriteria',table,quantityAdjustments],(tx,abort)=>{
   const queue=tx.objectStore(quantityAdjustments);
@@ -346,11 +346,12 @@ function queueQuantity(warehouse,itemId,quantity,observed){
    if(!canAdjustQuantity(item.result,current,warehouse))return abort('El criterio ya no permite editar la cantidad.');
    if(existing.result)return abort('Este elemento ya tiene un ajuste pendiente en esta bodega.');
    if(current?.syncState==='pending')return abort('Primero sincroniza los cambios del criterio de este elemento.');
-   if(warehouse==='production'&&!current)return abort('Consulta primero la cantidad de Producción con conexión.');
+   const newOpening=warehouse==='production'&&!current&&opening&&stocks.result.some(row=>!row.itemId&&row.enabled);
+   if(warehouse==='production'&&!current&&!newOpening)return abort('Sincroniza los saldos de Producción antes de ajustar este elemento.');
    if(stockRevision(current)!==stockRevision(observed)||current?.quantity!==observed?.quantity)
     return abort('La existencia cambió. Revisa el saldo actualizado y vuelve a guardar.');
    const change=mark();
-   queue.put({...change,id,operationId:change.id,warehouse,itemId,quantity,observedQuantity:Number(current?.quantity||0),stockRevision:stockRevision(current)});
+   queue.put({...change,id,operationId:change.id,warehouse,itemId,quantity,observedQuantity:Number(current?.quantity||0),stockRevision:newOpening?'0|0':stockRevision(current)});
   };
  });
 }
@@ -399,16 +400,6 @@ async function syncQuantities(){
   window.dispatchEvent(new Event('skweb-inventory-refresh'));
  }
 }
-async function refreshProductionQuantity(itemId){
- const result=await window.SKAdminAuth.request('adminWarehouseQuantityV1',{mode:'get',warehouse:'production',itemId});
- const stock=result.stock;
- if(result.warehouse!=='production'||stock?.id!==itemId||stock?.itemId!==itemId||!stock.sampledAt||!Number.isFinite(stock.quantity))
-  throw new Error('El servicio central aún no confirmó el saldo de Producción.');
- await adjustmentTransaction([productionQuantityCache],tx=>{
-  const table=tx.objectStore(productionQuantityCache),request=table.get(itemId);
-  request.onsuccess=()=>{if(!request.result||request.result.sampledAt<=stock.sampledAt)table.put(stock)};
- });
-}
 let quantityViewVersion=0;
 async function openQuantities(options={}){
  const warehouse=options.warehouse==='production'?'production':'plaza',production=warehouse==='production';
@@ -445,7 +436,7 @@ async function openQuantities(options={}){
    if(event.relatedTarget&&!picker.contains(event.relatedTarget))choices.hidden=true;
   });
   document.addEventListener('pointerdown',event=>{if(!picker.contains(event.target))choices.hidden=true});
-  for(const event of ['skweb-inventory-refresh','skweb-local-change'])
+  for(const event of ['skweb-inventory-refresh','skweb-local-change','skweb-production-balances'])
    window.addEventListener(event,()=>section._refreshQuantity?.());
  }
  const form=section.querySelector('form'),search=section.querySelector('#quantityItemSearch'),
@@ -459,14 +450,26 @@ async function openQuantities(options={}){
  form.reset();search.disabled=true;menu.hidden=true;quantity.disabled=button.disabled=true;
  status.textContent='';section._refreshQuantity=null;form.onsubmit=null;
  if(typeof db==='undefined'||!db){status.textContent='El almacenamiento local todavía está cargando. Vuelve a abrir el módulo.';return}
- let criteria,stocks;
- try{[criteria,stocks]=await Promise.all([all('inventoryCriteria'),all(table)])}
- catch(error){status.textContent='No se pudo leer el inventario local: '+error.message;return}
+ let items=[],criteria=[],meta,selected,stock,pending,opening=false,selectionVersion=0,listVersion=0;
+ async function loadList(){
+  const version=++listVersion;
+  const [catalog,stocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),production?all(quantityAdjustments):[]]);
+  if(view!==quantityViewVersion||version!==listVersion)return;
+  const balances=new Map(stocks.filter(row=>row.itemId).map(row=>[row.itemId,row]));
+  meta=production&&stocks.find(row=>!row.itemId);
+  criteria=catalog.filter(row=>canAdjustQuantity(row,balances.get(row.id),warehouse));
+  const pendingIds=new Set(adjustments.filter(row=>row.warehouse==='production').map(row=>row.itemId));
+  items=criteria.filter(row=>!production||balances.has(row.id)||pendingIds.has(row.id))
+   .sort((a,b)=>itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'}));
+  if(!menu.hidden)drawItems();
+  if(!selected&&production){
+   if(!meta)status.textContent='Sincroniza SK Web Admin para descargar los saldos de Producción en este equipo.';
+   else if(!meta.enabled)status.textContent='La Bodega de Producción aún no está activada.';
+   else status.textContent=items.length?'':'Aún no hay elementos registrados en Producción.';
+  }
+ }
+ try{await loadList()}catch(error){status.textContent='No se pudo leer el inventario local: '+error.message;return}
  if(view!==quantityViewVersion)return;
- const balances=new Map(stocks.map(row=>[row.itemId,row]));
- const items=criteria.filter(row=>canAdjustQuantity(row,balances.get(row.id),warehouse))
-  .sort((a,b)=>itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'}));
- let selected,stock,pending,selectionVersion=0;
  function drawItems(){
   const query=selected?'':search.value;
   const matches=items.filter(row=>matchesItemSearch([itemName(row),itemSecondary(row),itemTertiary(row),row.spareApplication].join(' '),row.spareItemNumber,query,row.sparePartCode));
@@ -486,20 +489,24 @@ async function openQuantities(options={}){
   const [currentItems,currentStocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),all(quantityAdjustments)]);
   if(view!==quantityViewVersion||version!==selectionVersion)return;
   const wasPending=pending,current=currentStocks.find(row=>row.itemId===id);
-  const dirty=!quantity.disabled&&quantity.value!==String(stock?.quantity??0);
+  const dirty=!quantity.disabled&&quantity.value!==(stock?String(stock.quantity):production?'':'0');
   pending=adjustments.find(row=>row.itemId===id&&(row.warehouse||'plaza')===warehouse);
   const eligible=canAdjustQuantity(currentItems.find(row=>row.id===id),current,warehouse);
+  // Un criterio común elegido expresamente en el catálogo general puede recibir su primera apertura.
+  opening=production&&meta?.enabled&&!current&&options.itemId===id&&!quantityFlag(selected.isYtSpare)&&eligible;
+
   if(!keepInput||!dirty||pending||!eligible){
    stock=current;
    quantity.value=pending?.quantity??current?.quantity??(production?'':0);
   }
-  quantity.disabled=button.disabled=Boolean(pending||!eligible||production&&!current||current?.syncState==='pending');
+  quantity.disabled=button.disabled=Boolean(pending||!eligible||production&&!current&&!opening||current?.syncState==='pending');
   if(pending?.syncError)status.textContent=pending.syncError+' Puedes descartar el ajuste desde Inicio y volver a registrarlo con el saldo actualizado.';
   else if(pending)status.textContent='Guardado en este equipo · pendiente de sincronizar con '+warehouseName+'.';
   else if(!eligible)status.textContent='El criterio ya no permite editar la cantidad.';
   else if(current?.syncState==='pending')status.textContent='Primero sincroniza los cambios del criterio de este elemento.';
   else if(wasPending)status.textContent='Ajuste procesado. Saldo en la base sincronizada: '+quantity.value+'.';
-  else if(production&&!current)status.textContent='Conéctate para consultar por primera vez el saldo de este elemento en Producción.';
+  else if(opening)status.textContent='Este elemento aún no tiene movimientos en Producción. Escribe su saldo inicial para incorporarlo.';
+  else if(production&&!current)status.textContent=meta?'Este elemento no tiene saldo registrado en Producción.':'Sincroniza SK Web Admin para descargar los saldos de Producción en este equipo.';
   else if(!keepInput)status.textContent='';
  }
  function report(error){status.textContent=error.message}
@@ -528,25 +535,14 @@ async function openQuantities(options={}){
   await readSelected();
   if(view!==quantityViewVersion||selected!==item)return;
   if(!quantity.disabled&&section.classList.contains('active'))quantity.focus();
-  if(!production||navigator.onLine===false||pending)return;
-  if(!stock)status.textContent='Consultando la cantidad de Producción…';
-  try{
-   await refreshProductionQuantity(item.id);
-   if(view!==quantityViewVersion||selected!==item)return;
-   if(!pending)status.textContent='';
-   await readSelected(true);
-  }catch(error){
-   if(view!==quantityViewVersion||selected!==item)return;
-   const reason=/solicitud no válida/i.test(error.message)?'Actualiza la implementación de Apps Script para consultar Producción.':error.message;
-   status.textContent=(stock?'Último saldo sincronizado. ':'')+reason;
-  }
  }
  menu.onclick=event=>{
   const option=event.target.closest('[data-item-id]');
   if(option)selectItem(items.find(row=>row.id===option.dataset.itemId)).catch(report);
  };
  section._refreshQuantity=()=>{
-  if(section.classList.contains('active')&&button.dataset.saving!=='1')readSelected(true).catch(report);
+  if(!section.classList.contains('active')||button.dataset.saving==='1')return;
+  loadList().then(()=>readSelected(true)).catch(report);
  };
  form.onsubmit=async event=>{
   event.preventDefault();
@@ -555,7 +551,7 @@ async function openQuantities(options={}){
   if(!id||!Number.isFinite(value)||value<0)return;
   button.dataset.saving='1';search.disabled=quantity.disabled=button.disabled=true;menu.hidden=true;
   let failure;
-  try{await queueQuantity(warehouse,id,value,stock)}
+  try{await queueQuantity(warehouse,id,value,stock,opening)}
   catch(error){failure=error}
   finally{delete button.dataset.saving;search.disabled=false}
   if(!failure)window.dispatchEvent(new Event('skweb-local-change'));
@@ -565,7 +561,7 @@ async function openQuantities(options={}){
   if(failure)report(failure);
  };
  if(options.itemId){
-  const item=items.find(row=>row.id===options.itemId);
+  const item=criteria.find(row=>row.id===options.itemId);
   if(item)selectItem(item).catch(report);
   else status.textContent='Este elemento se controla por ficha o no admite ajuste de cantidad en '+warehouseName+'.';
  }

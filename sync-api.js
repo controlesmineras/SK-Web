@@ -48,7 +48,47 @@
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   function isTransient(error){const msg=String(error?.message||error||'').toLowerCase();return error?.name==='AbortError'||msg.includes('load failed')||msg.includes('failed to fetch')||msg.includes('network')||msg.includes('respondió 429')||msg.includes('respondió 5')}
   function phase(message){const status=document.querySelector('#syncStatus');if(status)status.textContent=message;}
-  async function sendOnce(snapshot,attempt,forceFull=false){
+  // Las revisiones proceden de la misma IndexedDB que las cantidades. Un registro antiguo leído
+  // individualmente también se concilia en la primera sincronización del conjunto.
+  async function productionVersions(){
+    if(!window.SKAdminAuth?.isAdmin?.()||typeof productionQuantityCache==='undefined')return undefined;
+    return (await all(productionQuantityCache)).filter(row=>row.itemId).map(row=>[row.itemId,row.updatedAt]);
+  }
+  async function applyProductionBalances(versions,reply){
+    if(!reply)throw new Error('Actualiza Code.gs y publica la nueva versión para sincronizar los saldos de Producción.');
+    if(reply.error)throw new Error(reply.error);
+    const {enabled,sampledAt,count,rows,removed}=reply;
+    const ids=new Set(),expected=new Map(versions);
+    if(reply.protocol!=='production-balances-v1'||typeof enabled!=='boolean'||!Number.isFinite(Date.parse(sampledAt))||
+      !Number.isSafeInteger(count)||count<0||!Array.isArray(rows)||!Array.isArray(removed))throw new Error('Respuesta de saldos de Producción incompleta.');
+    for(const row of rows){
+      if(!row?.itemId||ids.has(row.itemId)||!Number.isFinite(row.quantity)||!row.updatedAt)throw new Error('Saldo de Producción sin confirmar.');
+      ids.add(row.itemId);expected.set(row.itemId,row.updatedAt);
+    }
+    for(const id of removed){
+      if(ids.has(id)||!expected.delete(id))throw new Error('Retiro de saldo sin confirmar.');
+    }
+    if(expected.size!==count||!enabled&&count)throw new Error('La lista de saldos de Producción está incompleta.');
+    await new Promise((resolve,reject)=>{
+      const tx=db.transaction(productionQuantityCache,'readwrite'),table=tx.objectStore(productionQuantityCache),req=table.getAll();
+      let failure;
+      req.onsuccess=()=>{
+        const previous=req.result.find(row=>!row.itemId);
+        if(previous?.sampledAt>sampledAt)return;
+        const current=new Map(req.result.filter(row=>row.itemId).map(row=>[row.itemId,row.updatedAt]));
+        if(current.size!==versions.length||versions.some(([id,rev])=>current.get(id)!==rev)){
+          failure=new Error('Otra pestaña actualizó los saldos de Producción. Se comprobarán en la próxima sincronización.');
+          tx.abort();return;
+        }
+        for(const id of removed)table.delete(id);
+        for(const row of rows)table.put({id:row.itemId,itemId:row.itemId,quantity:row.quantity,updatedAt:row.updatedAt,sampledAt});
+        table.put({id:productionBalanceMetaKey,enabled,sampledAt});
+      };
+      tx.oncomplete=resolve;tx.onabort=()=>reject(failure||tx.error||new Error('No se guardaron los saldos de Producción.'));
+    });
+    window.dispatchEvent(new Event('skweb-production-balances'));
+  }
+  async function sendOnce(snapshot,attempt,forceFull=false,versions){
     const c=config(),controller=new AbortController();let timeout;
     phase(attempt===1?'Enviando cambios y consultando la base central…':'Reintentando la conexión con la base central…');
     const expired=new Promise((_,reject)=>{timeout=setTimeout(()=>{
@@ -59,7 +99,7 @@
       // Abort alone is insufficient if a browser/redirect/body reader never settles.
       // Racing the entire exchange also ignores late replies without confirming data.
       const exchange=(async()=>{
-        const r=await fetch(c.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({action:snapshot.novelties?.some(row=>row.noveltyAction?.status==='pending')?'syncNoveltyChanges':snapshot.novelties?.some(row=>row.datedNovelty)?'syncDatedNovelties':'sync',key:c.apiKey,token:window.SKAdminAuth?.token?.()||'',since:forceFull||collaboratorRevisionApi!==c.apiUrl?'':(localStorage.getItem('skWebServerUpdatedAt')||''),data:snapshot}),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
+        const r=await fetch(c.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({productionBalanceVersions:versions,action:snapshot.novelties?.some(row=>row.noveltyAction?.status==='pending')?'syncNoveltyChanges':snapshot.novelties?.some(row=>row.datedNovelty)?'syncDatedNovelties':'sync',key:c.apiKey,token:window.SKAdminAuth?.token?.()||'',since:forceFull||collaboratorRevisionApi!==c.apiUrl?'':(localStorage.getItem('skWebServerUpdatedAt')||''),data:snapshot}),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
         if(!r.ok)throw new Error(`El servicio respondió ${r.status}`);
         let result;try{result=await r.json()}catch(error){if(controller.signal.aborted||error?.name==='AbortError')throw error;throw new Error('El servicio devolvió una respuesta incompleta. Pulsa la nube para reintentar.');}
         if(!result?.ok)throw new Error(result?.error||'El servicio rechazó la sincronización');return result;
@@ -68,11 +108,11 @@
     }finally{clearTimeout(timeout)}
   }
   function sessionRejected(error){return /sesión.*venció|sesion.*vencio|inicia sesión/i.test(String(error?.message||''))}
-  async function send(snapshot,forceFull=false,allowRenewal=true){
+  async function send(snapshot,forceFull=false,allowRenewal=true,versions){
     let lastError;
     for(let attempt=1;attempt<=2;attempt++){
       const sentToken=window.SKAdminAuth?.token?.()||'';
-      try{return await sendOnce(snapshot,attempt,forceFull)}catch(error){
+      try{return await sendOnce(snapshot,attempt,forceFull,versions)}catch(error){
         lastError=error;
         if(sessionRejected(error)&&attempt===1){
           // Cached login renews its token in the background. Use that result first.
@@ -89,16 +129,22 @@
     }
     throw lastError;
   }
-  async function finishSync(label,detail){
+  async function finishSync(label,detail,versions,balances){
+    let balanceError;
+    if(versions){
+      try{await applyProductionBalances(versions,balances);}
+      catch(error){balanceError=error.message;}
+    }
     await window.SKInventoryAdmin?.syncQuantities?.();
     const pending=await pendingSnapshot(),adjustments=await readAdjustments(),status=document.querySelector('#syncStatus');
     const count=stores.reduce((total,store)=>total+pending[store].length,adjustments.length);
     const adjustmentError=adjustments.find(row=>row.syncError)?.syncError;
     if(detail.waitingForServer&&pending.novelties?.some(row=>row.datedNovelty||row.noveltyAction)){if(status)status.textContent='Novedades guardadas en este dispositivo. Falta actualizar Apps Script para sincronizarlas.';ui('idle');return false;}
     if(count){
-      if(status)status.textContent=`Sincronización parcial · ${count} ${count===1?'registro pendiente':'registros pendientes'}; se conservan en este dispositivo.${adjustmentError?' · '+adjustmentError:''}`;
+      if(status)status.textContent=`Sincronización parcial · ${count} ${count===1?'registro pendiente':'registros pendientes'}; se conservan en este dispositivo.${adjustmentError?' · '+adjustmentError:''}${balanceError?' · Producción: '+balanceError:''}`;
       ui('idle');if(pending.personal?.length)schedule(300);return false;
     }
+    if(balanceError){if(status)status.textContent='Sincronización parcial · Saldos de Producción pendientes. '+balanceError;ui('error');return false;}
     if(status)status.textContent=`${label} · ${new Date().toLocaleString('es-CO')}`;
     ui('synced');window.dispatchEvent(new CustomEvent('skweb-synced',{detail:{source:'api',...detail}}));return true;
   }
@@ -119,7 +165,7 @@
     const b=buttonStart(),s=document.querySelector('#syncStatus');
     try{
       running=true;ui('syncing');phase('Revisando los cambios guardados en este dispositivo…');
-      const snapshot=await pendingSnapshot();
+      const snapshot=await pendingSnapshot(),versions=await productionVersions();
       const changed=snapshot.novelties?.filter(row=>row.noveltyAction?.status==='pending')||[];
       const dated=snapshot.novelties?.filter(row=>row.datedNovelty&&!row.noveltyAction)||[];
       let waitingForServer=false;
@@ -129,16 +175,16 @@
       // Negotiate that guarantee before trusting an unchanged snapshot.
       forceFull=forceFull||!silent||Boolean(snapshot.personal?.length)||(snapshot.assets||[]).some(row=>row.markRequest==='existing-v1'&&row.markStatus==='pending');
       let result;
-      try{result=await send(snapshot,forceFull||dated.length>0||changed.length>0,!silent);}
+      try{result=await send(snapshot,forceFull||dated.length>0||changed.length>0,!silent,versions);}
       catch(error){
         if(!(dated.length||changed.length)||!/solicitud no v[aá]lida/i.test(error.message))throw error;
         // El servicio anterior rechaza la acción antes de escribir. El resto de la cola puede avanzar.
         snapshot.novelties=snapshot.novelties.filter(row=>!row.datedNovelty&&!row.noveltyAction);
-        waitingForServer=true;result=await send(snapshot,true,!silent);
+        waitingForServer=true;result=await send(snapshot,true,!silent,versions);
       }
       const hasPending=stores.some(store=>snapshot[store]?.length);
       const valid=result=>result&&(result.notModified||result.acknowledged||(result.data&&typeof result.data==='object'&&!Array.isArray(result.data)));
-      if(!valid(result)||(result.notModified&&hasPending)){localStorage.removeItem('skWebServerUpdatedAt');result=await send(snapshot,true,!silent)}
+      if(!valid(result)||(result.notModified&&hasPending)){localStorage.removeItem('skWebServerUpdatedAt');result=await send(snapshot,true,!silent,versions)}
       if(!valid(result))throw new Error('El servicio no devolvió la confirmación de sincronización');
       if(result.notModified&&hasPending)throw new Error('El servicio no confirmó los cambios pendientes');
       if(dated.length&&!waitingForServer&&dated.some(row=>!result.data?.novelties?.some(remote=>remote.id===row.id&&remote.datedNovelty&&typeof remote.historyOnly==='boolean')))
@@ -153,13 +199,13 @@
       const serverUpdatedAt=result.updatedAt||result.data?.updatedAt||'';
       if(result.notModified){
         if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
-        return await finishSync('Sincronizado · sin cambios',{notModified:true,waitingForServer});
+        return await finishSync('Sincronizado · sin cambios',{notModified:true,waitingForServer},versions,result.productionBalances);
       }
       if(result.acknowledged){
         phase('Confirmando los registros guardados…');await markSnapshotSynced(snapshot);phase('Actualizando las listas…');await refresh();window.SKInventoryAdmin?.render?.();
         if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
         window.dispatchEvent(new Event('skweb-inventory-refresh'));
-        return await finishSync('Sincronizado rápidamente',{acknowledged:true,waitingForServer});
+        return await finishSync('Sincronizado rápidamente',{acknowledged:true,waitingForServer},versions,result.productionBalances);
       }
       const merged=result.data,localAssetIds=new Set((await all('assets')).map(x=>x.id).filter(Boolean)),mergedAssetIds=new Set((merged.assets||[]).map(x=>x.id));
       for(const [store,rows] of Object.entries(merged))if(Array.isArray(rows))merged[store]=rows.map(row=>row?.syncState==='pending'?{...row,syncState:'synced'}:row);
@@ -168,7 +214,7 @@
       phase('Aplicando la respuesta en este dispositivo…');await window.writeSyncedSnapshot(merged,snapshot);await seedParts();phase('Actualizando las listas…');await refresh();window.SKInventoryAdmin?.render?.();
       if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
       window.dispatchEvent(new Event('skweb-inventory-refresh'));
-      return await finishSync('Sincronizado automáticamente',{waitingForServer});
+      return await finishSync('Sincronizado automáticamente',{waitingForServer},versions,result.productionBalances);
     }catch(e){
       retryAfter=Date.now()+60000;console.error('SK Web automatic sync:',e);ui('error');
       if(s)s.textContent=navigator.onLine?'Sincronización pendiente · '+(e?.message||e):'Sin conexión · cambios seguros en este dispositivo';

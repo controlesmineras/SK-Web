@@ -334,3 +334,31 @@ test('los repuestos ajustados comparten el saldo de Mecánica y el recibo solo s
   assert.throws(()=>call({...query,itemId:criterion.id}),/criterio no permite/);
  }
 });
+
+test('Admin recibe en su sincronización los saldos administrados, incluso agotados, y solo los cambios posteriores',()=>{
+ const surface={id:'serum',name:'Suero oral'},bag={id:'bolsa',name:'Bolsa de muestreo'},epp={id:'epp',name:'Guantes',isEpp:true};
+ const r=runtime({central:{inventoryCriteria:[item,spare,surface,bag,epp,hammer],blendingDeliveries:[transfer('from-plaza')]}});
+ const admin={role:'admin',username:'test'},pull=(versions=[],since=r.central.updatedAt,auth=admin)=>r.c.adminSyncAuthorized_({},since,auth,versions);
+ const first=pull();assert.ok(first.notModified);
+ assert.deepEqual(Array.from(first.productionBalances.rows,row=>[row.itemId,row.quantity]),[['tool',10],['spare',0]]);
+ const known=first.productionBalances.rows.map(row=>[row.itemId,row.updatedAt]);
+ assert.equal(pull(known).productionBalances.rows.length,0);
+ assert.equal(pull(known,undefined,{role:'assistant'}).productionBalances,undefined);
+ const consumed=op('delivery',10);r.sync([consumed]);
+ assert.deepEqual(Array.from(pull(known).productionBalances.rows,row=>[row.itemId,row.quantity]),[['tool',0]]);
+ r.central.inventoryCriteria.find(row=>row.id==='tool').isEpp=true;
+ assert.deepEqual(Array.from(pull(known).productionBalances.removed),['tool']);
+ assert.equal(r.production.warehouseMovements.filter(row=>row.id==='plaza-from-plaza').length,1);
+});
+test('copiar saldos respeta cierres, apertura, alias y consumos de Mecánica sin movimientos nuevos de Bodega',()=>{
+ const closed={id:'count',status:'closed',origin:'YT29',date:'2020-02-01',closedAt:'2020-02-01T11:00:00Z',rows:[{partId:'p10',aliases:['p10','spare'],physical:5}]};
+ const r=runtime({production:{inventoryCounts:[closed],incomes:[{id:'opening',kind:'initial',origen:'YT29',partId:'p10',fechaISO:'2019-01-01',cantidad:80},
+  {id:'after',kind:'income',origen:'YT29',partId:'spare',fechaISO:'2020-02-01',recordedAt:'2020-02-01T12:00:00Z',cantidad:2}]}});
+ const pull=(v=[])=>r.c.adminProductionBalances_(r.central,v),first=pull(),row=first.rows.find(x=>x.itemId==='spare');
+ assert.equal(row.quantity,7);
+ r.production.consumptions.push({id:'consume',origen:'YT29',partId:'p10',fechaISO:date,cantidad:7});
+ const next=pull([['spare',row.updatedAt]]).rows[0];assert.equal(next.quantity,0);assert.notEqual(next.updatedAt,row.updatedAt);
+ const single=r.c.adminWarehouseQuantity_({warehouse:'production',itemId:'spare',mode:'get'},{role:'admin'}).stock;
+ assert.equal(next.updatedAt,single.updatedAt);
+ assert.equal(runtime({enabled:false}).c.adminProductionBalances_({},[['spare',next.updatedAt]]).enabled,false);
+});
