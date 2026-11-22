@@ -162,10 +162,10 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
 }
 @media print{.adminBackButton:not([hidden]){display:none}}
 
-#adminRegisterMenu .adminHomeMenu .sectionHead h2{font-weight:600!important}
-#adminRegisterMenu .adminHomeMenuGrid button{
+:is(#adminRegisterMenu,#adminQueryMenu) .adminHomeMenu .sectionHead h2{font-weight:600!important}
+:is(#adminRegisterMenu,#adminQueryMenu) .adminHomeMenuGrid button{
   font-family:inherit;font-weight:500!important;color:#102f45!important;
   background:#e2edf3!important;border-color:#738a99!important;
 }
-#adminRegisterMenu .adminHomeMenuGrid button:hover{background:#cfdfeb!important}
-#adminRegisterMenu .adminHomeMenuGrid button:focus-visible{outline:2px solid #245d7c;outline-offset:2px}
+:is(#adminRegisterMenu,#adminQueryMenu) .adminHomeMenuGrid button:hover{background:#cfdfeb!important}
+:is(#adminRegisterMenu,#adminQueryMenu) .adminHomeMenuGrid button:focus-visible{outline:2px solid #245d7c;outline-offset:2px}
