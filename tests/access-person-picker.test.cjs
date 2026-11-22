@@ -16,7 +16,9 @@ function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant',
  const document={readyState:'loading',activeElement:null,querySelector:()=>null,getElementById:()=>null,
   addEventListener(type,handler){if(type==='click')click=handler},createElement:make,createTextNode:textContent=>({textContent}),body:{append(node){dialog=node}}};
  function make(tag){
-  const node={tag,children:[],value:'',hidden:false,disabled:false,attrs:{},style:{},
+  const node={tag,children:[],value:'',hidden:false,disabled:false,attrs:{},style:{},classList:{
+    toggle(name,enabled){if(enabled)this.names.add(name);else this.names.delete(name)},names:new Set()
+   },
    append(...children){this.children.push(...children);for(const child of children)child.parent=this},
    replaceChildren(...children){this.children=[];this.textContent='';this.append(...children)},
    setAttribute(name,value){this.attrs[name]=value},contains(other){return this===other||this.children.some(child=>child.contains?.(other))},

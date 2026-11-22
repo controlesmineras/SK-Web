@@ -6,7 +6,7 @@ function mount(){
  const home=document.querySelector('#home .homeAccess');
  if(!home||document.getElementById('productionUsersBtn'))return;
  const button=document.createElement('button');
- button.type='button';button.id='productionUsersBtn';button.className='homeAccessBtn';button.textContent='USUARIOS DE PRODUCCIÓN';button.style.gridColumn='1 / -1';
+ button.type='button';button.id='productionUsersBtn';button.className='homeAccessBtn';button.innerHTML='<span class="adminAccessLock" aria-hidden="true">🔐</span><span>USUARIOS DE PRODUCCIÓN</span><img class="adminAccessLogo" src="produccion/produccion-perforadora-512.png" width="34" height="34" alt="">';button.style.gridColumn='1 / -1';
  
  const adminButton=document.getElementById('adminUsersBtn');
  if(adminButton)adminButton.before(button);
