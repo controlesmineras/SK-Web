@@ -10,8 +10,8 @@
 <main>
 <section id="login" class="login card">
 <p class="sectionLabel">Registro operativo</p><h1>Labor</h1>
-<form id="accessForm"><label>Ingresar con<select name="access"><option value="labor">Labor</option><option value="plaza">Plaza Blending</option><option value="admin">SK Web Admin</option></select></label>
-<label><span id="identityLabel">Documento</span><input name="identity" autocomplete="username" required></label>
+<form id="accessForm">
+<label>Documento<input name="identity" inputmode="numeric" autocomplete="username" required></label>
 <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
 <button class="primary">Ingresar</button><p id="loginMessage" role="status"></p></form></section>
 <section id="workspace" hidden>

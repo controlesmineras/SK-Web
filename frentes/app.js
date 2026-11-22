@@ -7,7 +7,7 @@ const stamp=()=>crypto.randomUUID();
 const sessionKey='sk-frentes:session';
 let session=null,state=FrontStore.empty(),selected=null,editing=null,manualShift=false,running=null,generation=0;
 let activeRequest,saveBusy=false,initialReportDate='';
-const owner=s=>s.access+':'+(s.access==='admin'?s.user.username:s.user.documento);
+const owner=s=>'labor:'+s.user.documento;
 const message=(id,text)=>{$(id).textContent=text;};
 const list=()=>people(state,editing?.id);
 const newMode=()=>!$('personFields').disabled;
@@ -145,14 +145,12 @@ async function post(body,signal){
   }catch(error){if(error.central)throw error;throw new Error('No se pudo conectar con la base central. Los pendientes se conservan.');}
   finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);}
 }
-const offlineKey=(mode,id)=>'sk-frentes:acceso:'+mode+':'+id.trim().toLowerCase();
+const offlineKey=id=>'sk-frentes:acceso:labor:'+id.trim().toLowerCase();
 async function verifier(password,salt){
   const bytes=new TextEncoder(),key=await crypto.subtle.importKey('raw',bytes.encode(password),'PBKDF2',false,['deriveBits']);
   const hash=await crypto.subtle.deriveBits({name:'PBKDF2',salt:bytes.encode(salt),iterations:150000,hash:'SHA-256'},key,256);
   return Array.from(new Uint8Array(hash),b=>b.toString(16).padStart(2,'0')).join('');
 }
-function resetLoginLabel(){const admin=login.elements.access.value==='admin';message('identityLabel',admin?'Usuario':'Documento');login.elements.identity.inputMode=admin?'text':'numeric';}
-login.elements.access.onchange=resetLoginLabel;resetLoginLabel();
 function offlineStatus(){
   const stamp=state.lastSync?new Date(state.lastSync).toLocaleString('es-CO',{timeZone:'America/Bogota'}):'sin descarga previa';
   return 'Sin conexión · Personal en este dispositivo: '+stamp+'.';
@@ -164,22 +162,21 @@ async function enter(s){
 }
 login.onsubmit=async event=>{
   event.preventDefault();const b=login.querySelector('button');if(b.disabled)return;b.disabled=true;
-  const mode=login.elements.access.value,id=login.elements.identity.value.trim(),pw=login.elements.password.value,key=offlineKey(mode,id);
+  const id=login.elements.identity.value.trim(),pw=login.elements.password.value,key=offlineKey(id);
   message('loginMessage','Verificando acceso…');
   try{
     let s;
     if(navigator.onLine){
       try{
-        const payload=mode==='labor'?{action:'laborLogin',document:id,password:pw}:mode==='plaza'?{action:'plazaLogin',document:id,pin:pw}:{action:'adminLogin',username:id,password:pw};
-        const result=await post(payload);
-        if(!result.user||!result.token||(mode==='labor'&&result.scope!=='labor'))throw new Error('Respuesta de acceso incompleta.');
-        s={access:mode,user:result.user,token:result.token,expiresAt:result.expiresAt,loginId:id};
+        const result=await post({action:'laborLogin',document:id,password:pw});
+        if(!result.user?.documento||!result.token||result.scope!=='labor')throw new Error('Respuesta de acceso incompleta.');
+        s={access:'labor',user:result.user,token:result.token,expiresAt:result.expiresAt,loginId:id};
         const salt=stamp();localStorage.setItem(key,JSON.stringify({salt,hash:await verifier(pw,salt),session:s}));
       }catch(error){if(error.central){if(/incorrect|no habilitad|desactiv|revocad/i.test(error.message))localStorage.removeItem(key);throw error;}}
     }
     if(!s){
       const cached=JSON.parse(localStorage.getItem(key)||'null');
-      if(!cached||!cached.session||cached.session.access!==mode||await verifier(pw,cached.salt)!==cached.hash)throw new Error('No se pudo validar el acceso local. El primer ingreso en este dispositivo requiere conexión y una cuenta habilitada.');
+      if(!cached||!cached.session||cached.session.access!=='labor'||await verifier(pw,cached.salt)!==cached.hash)throw new Error('No se pudo validar el acceso local. El primer ingreso en este dispositivo requiere conexión y una cuenta habilitada.');
       s=cached.session;
     }
     login.elements.password.value='';await enter(s);
@@ -192,76 +189,12 @@ function logout(){
 }
 $('logout').onclick=logout;
 
-// El servicio anterior ya permite consultar Personal y crear sin modificar fichas existentes.
-// El reporte completo queda en cola hasta recibir su propio comprobante.
-async function legacyPlaza(s,signal){
-  const snap=await post({action:'plazaSync',token:s.token,data:{}},signal);
-  if(!Array.isArray(snap.data?.personal))throw new Error('No se recibió el directorio de Personal.');
-  const people=snap.data.personal.filter(p=>p&&!p.deleted),config=snap.data.inventoryCriteria?.find(x=>x.id==='SYSTEM-FORM-OPTIONS-V1');
-  const account=owner(s);
-  let current=await access(account,local=>{local.people=people;local.options=config?.options||{};local.lastSync=new Date().toISOString();});
-  const proposals=new Map(current.reports.filter(r=>r.status==='pending'&&r.newPerson).map(r=>[r.personId,r]));
-  for(const [id,r] of proposals){
-    if(session!==s||signal.aborted)return;
-    const found=current.people.find(p=>doc(p.documento)===doc(r.documento));
-    const reply=found?{exists:true,user:found}:await post({action:'plazaCollaborator',token:s.token,collaborator:r.newPerson,update:false},signal);
-    if(typeof reply.exists!=='boolean'||!reply.user?.id||doc(reply.user.documento)!==doc(r.documento))throw new Error('El servidor no confirmó el documento. El reporte sigue pendiente.');
-    current=await access(account,local=>{
-      if(!local.people.some(p=>p.id===reply.user.id))local.people.push(reply.user);
-      for(const row of local.reports.filter(row=>row.status==='pending'&&row.newPerson&&row.personId===id)){
-        if(reply.exists){
-          row.status='review';row.message='Revisa tu reporte. El funcionario ya está registrado y no se puede volver a registrar.';row.existing=reply.user;
-        }else{row.personId=reply.user.id;row.newPerson=null;}
-      }
-    });
-  }
-  return current;
-}
-// La copia local de Admin puede estar disponible en una tablet que ya lo utiliza.
-async function adminLocalPeople(){
-  if (!indexedDB.databases || !(await indexedDB.databases()).some(entry=>entry.name==='sk-web-local'))return [];
-  return new Promise((resolve,reject)=>{
-    const req=indexedDB.open('sk-web-local');
-    req.onupgradeneeded=()=>req.transaction.abort();
-    req.onerror=()=>reject(req.error);
-    req.onsuccess=()=>{
-      const db=req.result;
-      if(!db.objectStoreNames.contains('personal')){db.close();resolve([]);return;}
-      const tx=db.transaction('personal'),read=tx.objectStore('personal').getAll();
-      tx.oncomplete=()=>{db.close();resolve(read.result.filter(p=>p.id && !p.deleted && p.syncState!=='pending').map(p=>{
-        const safe={id:p.id,nombre:personName(p),active:p.active!==false};
-        for(const key of personKeys)safe[key]=p[key]||'';
-        return safe;
-      }));};
-      tx.onabort=tx.onerror=()=>{db.close();reject(tx.error);};
-    };
-  });
-}
 async function synchronize(s,signal){
   const account=owner(s);
   let current=await access(account);
   while(session===s&&!signal.aborted){
     const sent=current.reports.filter(r=>r.status==='pending').slice(0,50);
-    let result;
-    try{
-      result=await post({action:'workFrontSync',token:s.token,access:s.access,reports:sent},signal);
-    }catch(error){
-      if(s.access==='labor'||!error.central||!/solicitud no válida|inicia sesión en Web Admin|sesión de Web Admin venció|no tiene acceso a Web Admin|acceso no autorizado/i.test(error.message))throw error;
-      if(s.access==='admin'){
-        await post({action:'adminWhoAmI',token:s.token},signal);
-        if(!current.lastSync){
-          const cached=await adminLocalPeople();
-          if(cached.length){
-            const local=await access(account,data=>{if(!data.lastSync)data.people=cached;});
-            if(session===s){state=local;render();}
-          }
-        }
-        throw new Error('Falta activar Frentes de trabajo en Apps Script. Los reportes siguen en este dispositivo.');
-      }
-      const local=await legacyPlaza(s,signal);
-      if(local&&session===s){state=local;catalogs();render();message('syncMessage',local.reports.some(r=>r.status==='review')?'Revisa tu reporte en Mis reportes. El funcionario ya está registrado.':'Personal actualizado. Para enviar los reportes falta activar Frentes de trabajo en Apps Script.');}
-      return;
-    }
+    const result=await post({action:'workFrontSync',access:'labor',token:s.token,reports:sent},signal);
     current=await access(account,local=>FrontStore.apply(local,result,sent));
     if(session!==s)return;
     state=current;catalogs();render();
@@ -282,7 +215,7 @@ function sync(){
   running=task.catch(error=>{
     if(session!==s)return;
     if(/cuenta ya no tiene acceso|usuario no habilitado/i.test(error.message)){
-      localStorage.removeItem(offlineKey(s.access,s.loginId));logout();message('loginMessage','Esta cuenta ya no tiene acceso.');return;
+      localStorage.removeItem(offlineKey(s.loginId));logout();message('loginMessage','Esta cuenta ya no tiene acceso.');return;
     }
     message('syncMessage',/sesión.*(venció|válida)|inicia sesión/i.test(error.message)?'Vuelve a ingresar para renovar la sesión. Los pendientes se conservan.':error.message);
   }).finally(()=>{if(gen===generation){running=null;activeRequest=null;$('sync').disabled=false;}});
@@ -351,4 +284,4 @@ $('updateLabor').onclick=async event=>{
     button.disabled=false;button.removeAttribute('aria-busy');
   }
 };
-try{const s=JSON.parse(sessionStorage.getItem(sessionKey)||'null');if(s?.user&&s.token)enter(s).catch(error=>message('loginMessage',error.message));}catch{sessionStorage.removeItem(sessionKey);}
+try{const s=JSON.parse(sessionStorage.getItem(sessionKey)||'null');if(s?.access==='labor'&&s.user?.documento&&s.token)enter(s).catch(error=>message('loginMessage',error.message));else sessionStorage.removeItem(sessionKey);}catch{sessionStorage.removeItem(sessionKey);}

@@ -12,10 +12,10 @@ function backend(){
   })}});
   vm.runInContext(source,ctx);
   Object.assign(ctx,{findFile_:()=>'central',readFile_:()=>{assert.ok(locked);return structuredClone(cloud);},writeFile_:(_,data)=>{assert.ok(locked);if(failWrite)throw Error('Drive');writes++;cloud=structuredClone(data);},
-    verifyToken_:token=>{if(token!=='valid')throw Error('Sesión no válida');return {document:'oper'};},verifyAdminToken_:()=>({username:'admin'}),json_:x=>x});
-  return {call:(reports,overrides={})=>ctx.workFrontSync_({token:'valid',access:'plaza',reports,...overrides}),cloud:()=>cloud,writes:()=>writes,fail:(v)=>{failWrite=v;}};
+    verifyLaborToken_:token=>{if(token!=='valid')throw Error('Sesión no válida');return {document:'oper'};},json_:x=>x});
+  return {call:(reports,overrides={})=>ctx.workFrontSync_({token:'valid',access:'labor',reports,...overrides}),cloud:()=>cloud,writes:()=>writes,fail:(v)=>{failWrite=v;}};
 }
-const make=(props={})=>({id:'FT-'+randomUUID(),rev:randomUUID(),owner:'plaza:oper',fecha:'2026-11-21',turno:'S',nivel:16,corte:'850 B',personId:'p1',documento:'12345',status:'pending',...props});
+const make=(props={})=>({id:'FT-'+randomUUID(),rev:randomUUID(),owner:'labor:oper',fecha:'2026-11-21',turno:'S',nivel:16,corte:'850 B',personId:'p1',documento:'12345',status:'pending',...props});
 const newPerson=(numero='200')=>make({documento:numero,personId:'FP-'+randomUUID(),newPerson:{documento:numero,primerNombre:'Prueba',primerApellido:'Local',empresa:'SK 3.7',area:'Producción',cargo:'Machinero',pinHash:'ignore'}});
 test('turnos de Colombia y cambio de día sin depender de la zona del dispositivo',()=>{
   for(const [stamp,want] of [['10:59','S'],['11:00','D'],['18:59','D'],['19:00','T'],['02:59','T'],['03:00','S']])assert.equal(store.shift(new Date('2026-11-21T'+stamp+':00Z')),want);
@@ -30,6 +30,7 @@ test('la lectura devuelve solo Personal y el acceso revocado no puede enviar',()
   const b=backend(),result=b.call([]);
   assert.equal(result.personal.length,1);assert.equal(result.personal[0].pinHash,undefined);assert.equal(result.reports,undefined);assert.equal(b.writes(),0);
   assert.throws(()=>b.call([make()],{token:'expired'}),/Sesión/);
+  for(const access of ['plaza','admin',undefined])assert.throws(()=>b.call([],{access}),/cuenta de Labor/);
 });
 test('dos dispositivos, un mismo documento, un alta y un reporte por revisar que se puede corregir',()=>{
   const b=backend(),a=newPerson('2.000-1'),c=newPerson('20001');
@@ -55,7 +56,7 @@ test('solo se confirma una escritura persistida y el mismo identificador puede r
   b.fail(false);b.call([a]);assert.equal(b.cloud().personal.length,2);
 });
 test('IndexedDB conserva las altas, impide dos propuestas locales y protege revisiones entre pestañas',async()=>{
-  const key='plaza:'+randomUUID(),a=newPerson(),c=newPerson();
+  const key='labor:'+randomUUID(),a=newPerson(),c=newPerson();
   const result=await Promise.allSettled([a,c].map(row=>store.access(key,state=>store.save(state,row))));
   assert.equal(result.filter(x=>x.status==='fulfilled').length,1);
   const state=await store.access(key),row=state.reports[0];assert.equal(store.people(state).length,1);
@@ -67,7 +68,7 @@ test('IndexedDB conserva las altas, impide dos propuestas locales y protege revi
   assert.equal((await store.access(key)).reports[0].status,'pending');assert.equal((await store.access('otra-cuenta')).reports.length,0);
 });
 test('un acuse ausente nunca da el reporte por sincronizado',async()=>{
-  const key='plaza:'+randomUUID(),r=make();
+  const key='labor:'+randomUUID(),r=make();
   await store.access(key,s=>store.save(s,r));
   await assert.rejects(store.access(key,s=>store.apply(s,{protocol:'work-front-v1',personal:[],receipts:[]},[r])),/Falta confirmar/);
   assert.equal((await store.access(key)).reports[0].status,'pending');

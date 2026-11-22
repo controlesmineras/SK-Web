@@ -70,16 +70,13 @@ function frontReport_(cloud, input, actor, now){
   return {id:input.id,status:'synced',personId:person.id,changed:true};
 }
 function workFrontSync_(q){
+  if(q.access!=='labor')throw new Error('Ingresa con tu cuenta de Labor.');
   if (!Array.isArray(q.reports) || q.reports.length>50) throw new Error('Lote de reportes no válido.');
   const lock = LockService.getScriptLock();
   lock.waitLock(30000);
   try{
     const id=findFile_(), cloud=id ? readFile_(id,lock) : {};
-    let actor;
-    if(q.access==='labor')actor='labor:'+verifyLaborToken_(q.token,cloud).document;
-    else if(q.access==='admin')actor='admin:'+verifyAdminToken_(q.token).username;
-    else if(!q.access||q.access==='plaza')actor='plaza:'+verifyToken_(q.token,cloud).document;
-    else throw new Error('Selecciona un acceso válido para Labor.');
+    const actor='labor:'+verifyLaborToken_(q.token,cloud).document;
     const now=nextRevision_(cloud.updatedAt);
     let changed=false;
     const receipts=q.reports.map(input=>{
