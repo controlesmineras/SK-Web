@@ -11,7 +11,7 @@ const seed=[
  {id:'deleted',nombre:'Borrado',documento:'222',deleted:true},
  {id:'inactive',nombre:'Inactivo',documento:'333',active:false}
 ];
-function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant','admin'],productionUsers=()=>({users:[]}),renewForSync,waitForLoginRenewal}={}){
+function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant','admin'],productionUsers=()=>({users:[]}),createInvite,renewForSync,waitForLoginRenewal}={}){
  let click,dialog;const nodes={},requests=[];
  const document={readyState:'loading',activeElement:null,querySelector:()=>null,getElementById:()=>null,
   addEventListener(type,handler){if(type==='click')click=handler},createElement:make,createTextNode:textContent=>({textContent}),body:{append(node){dialog=node}}};
@@ -36,7 +36,7 @@ function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant',
   requests.push({action,data});
   if(action==='adminUsersList'){if(failAccess)throw Error('Offline');return {users:[],adminRoles}}
   if(action==='productionUsers')return productionUsers();
-  if(action==='accessInvitationCreate')return {token:'test-token',plazaRole:data.plazaRole,productionRole:data.productionRole,adminRole:data.adminRole};
+  if(action==='accessInvitationCreate')return createInvite?createInvite(data):{token:'test-token',plazaRole:data.plazaRole,productionRole:data.productionRole,adminRole:data.adminRole};
   throw Error('Unexpected request: '+action);
  }}};
  vm.runInNewContext(source,{document,window,console,all:async()=>structuredClone(seed),URL,location:{href:'https://example.test/SK-Web/'},queueMicrotask,
@@ -45,7 +45,7 @@ function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant',
  const open=async()=>{click({target:{closest:()=>trigger},preventDefault(){},stopImmediatePropagation(){}});await tick()};
  const search=async value=>{const input=nodes['#accessPersonSearch'];input.focus();input.value=value;input.oninput();await tick()};
  const results=()=>nodes['[data-results]'].children;
- return{open,search,results,nodes,requests,dialog:()=>dialog,
+ return{open,search,results,nodes,requests,document,dialog:()=>dialog,
   role(value){nodes['[data-manage]'].children.flatMap(node=>node.children).find(node=>node.tag==='select').value=value},
   choose(index=0){results()[index].onclick()},
   generate:async()=>{nodes['[data-manage]'].children.find(node=>node.tag==='button').onclick();await tick()}};
@@ -130,4 +130,57 @@ test('distingue una versión sin Bodega de una respuesta incompleta',async()=>{
   assert.ok(incomplete.nodes.warehouse);
   assert.equal(incomplete.nodes.warehouse.children.some(node=>/Actualiza Code\.gs|ACTIVAR BODEGA/.test(node.textContent)),false);
  }
+});
+
+test('Plaza permite asignar al bodeguero aunque la consulta de Producción siga pendiente',async()=>{
+ let finish;
+ const production=new Promise(resolve=>{finish=resolve});
+ const s=app('plaza',{productionUsers:()=>production});
+ await s.open();
+ assert.equal(s.nodes['#accessPersonSearch'].disabled,false);
+ await s.search('123');s.choose();s.role('operator');await s.generate();
+ const invite=s.requests.find(row=>row.action==='accessInvitationCreate');
+ assert.equal(invite.data.personId,'ana');assert.equal(invite.data.plazaRole,'operator');
+ finish({users:[]});await tick();
+ assert.ok(s.nodes['[data-copy]'].children.some(node=>node.textContent==='Copiar enlace'));
+});
+test('un toque que quita el foco al buscador conserva la coincidencia hasta seleccionarla',async()=>{
+ const s=app();await s.open();await s.search('123');
+ const field=s.nodes['.accessPersonField'];
+ s.document.activeElement=s.document.body;
+ field.onfocusout({relatedTarget:null});
+ await tick();assert.equal(s.nodes['[data-results]'].hidden,false);
+ s.choose();assert.equal(s.nodes['[data-document]'].value,'123');
+});
+test('elegir un homónimo fija su documento aunque el buscador reciba foco u otro evento con el mismo texto',async()=>{
+ const s=app();await s.open();await s.search('jose');
+ const list=s.nodes['[data-results]'],input=s.nodes['#accessPersonSearch'];
+ const option=s.results()[1];
+ let focusPreserved=false;
+ list.onpointerdown({button:0,target:{closest:()=>option},preventDefault(){focusPreserved=true}});
+ assert.equal(focusPreserved,true);
+ assert.equal(s.nodes['[data-manage]'].hidden,true);
+ option.onclick();
+ input.focus();input.oninput();
+ assert.equal(list.hidden,true);assert.equal(input.value,'José Pérez');
+ assert.equal(s.nodes['[data-document]'].value,'789');assert.equal(s.nodes['[data-manage]'].hidden,false);
+ s.role('operator');await s.generate();
+ assert.equal(s.requests.at(-1).data.personId,'jose2');assert.equal(s.requests.at(-1).data.plazaRole,'operator');
+ await s.search('Ana');
+ assert.equal(s.nodes['[data-manage]'].hidden,true);assert.equal(s.nodes['[data-document]'].value,'');
+});
+test('si vence la sesión al generar, permite renovarla y reintentar con el mismo funcionario y rol',async()=>{
+ let fresh=false;
+ const s=app('plaza',{createInvite:data=>{
+  if(!fresh)throw Error('La sesión de Web Admin venció');
+  return {token:'test',plazaRole:data.plazaRole};
+ },renewForSync:async()=>{fresh=true;return true}});
+ await s.open();await s.search('456');s.choose();s.role('operator');await s.generate();
+ assert.match(s.nodes['[role=status]'].textContent,/venció/);
+ await s.nodes['[data-copy]'].children.find(node=>node.textContent==='Renovar sesión de Admin').onclick();
+ assert.equal(s.dialog().open,true);assert.equal(s.nodes['[data-document]'].value,'456');
+ assert.equal(s.requests.filter(row=>row.action==='accessInvitationCreate').length,1);
+ await s.generate();
+ assert.equal(s.requests.at(-1).data.personId,'jose1');assert.equal(s.requests.at(-1).data.plazaRole,'operator');
+ assert.ok(s.nodes['[data-copy]'].children.some(node=>node.textContent==='Copiar enlace'));
 });

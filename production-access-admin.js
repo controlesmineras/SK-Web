@@ -44,6 +44,9 @@ async function open(scope){
  find('h2').textContent='Accesos a '+app.name;
  find('[data-close]').onclick=()=>dialog.close();
  const request=(action,data)=>auth().request(action,data);
+ const current=()=>dialog.open&&dialog.querySelector('[data-active]')===active&&auth()?.isAdmin();
+ const reload=()=>{dialog.close();return open(scope)};
+ const expiredSession=error=>/sesi[oó]n.*(?:venci|caduc|expir)|inicia sesi[oó]n/i.test(error?.message||'');
  let people=[],selected=null,inviteUrl='',busy=false,adminRoles=['assistant'],warehouseV1=false;
  const access={admin:null,plaza:null,production:null};
  function clearInvite(){inviteUrl='';copy.replaceChildren()}
@@ -108,6 +111,7 @@ async function open(scope){
   }
   manage.append(button(existing?'Generar enlace con el rol seleccionado':'Generar enlace',()=>generate(row,role?.value||row.role)));
   if(existing)manage.append(button('Quitar acceso',()=>disable(row)));
+  role.focus({preventScroll:true});
   manage.scrollIntoView({block:'nearest'});
  }
  async function run(message,fn){
@@ -125,7 +129,25 @@ async function open(scope){
    if(scope==='admin')data.adminRole=role||'assistant';
    if(scope==='plaza')data.plazaRole=role;
    if(scope==='production'){data.productionRoles=role==='mechanic_warehouse'?['mechanic','warehouse']:[role];data.productionRole=role==='mechanic_warehouse'?'mechanic':role;if(!warehouseV1&&data.productionRoles.includes('warehouse'))throw new Error('Actualiza Code.gs para habilitar Bodega y los roles combinados.');}
-   const result=await request('accessInvitationCreate',data);
+   let result;
+   if(scope==='plaza'){
+    await auth().waitForLoginRenewal?.();
+    if(!current())return;
+   }
+   try{result=await request('accessInvitationCreate',data)}
+   catch(error){
+    if(scope==='plaza'&&current()&&expiredSession(error)){
+     copy.append(button('Renovar sesión de Admin',async()=>{
+      dialog.close();
+      const renewed=await auth().renewForSync();
+      if(dialog.open||dialog.querySelector('[data-active]')!==active||!auth()?.isAdmin())return;
+      dialog.showModal();
+      if(renewed){clearInvite();status.textContent='Sesión renovada. Vuelve a generar el enlace para '+identity(row)+'.'}
+     }));
+    }
+    throw error;
+   }
+   if(!current())return;
    if(scope==='admin'&&((result.adminRole&&result.adminRole!==data.adminRole)||(data.adminRole==='admin'&&result.adminRole!=='admin')))throw new Error('El servicio no confirmó el rol seleccionado. Actualiza Code.gs y su implementación.');
    if(scope==='plaza'&&result.plazaRole!==role)throw new Error('El servicio devolvió un rol distinto. Revisa la versión de Code.gs.');
    if(scope==='production'&&(result.productionRole!==data.productionRole||(data.productionRoles.includes('warehouse')&&JSON.stringify(result.productionRoles)!==JSON.stringify(data.productionRoles))))throw new Error('Actualiza y despliega Code.gs para asignar roles de Producción.');
@@ -168,35 +190,41 @@ async function open(scope){
   });
  }
  search.oninput=()=>{
+  if(selected&&search.value===(personName(selected)||doc(selected)))return;
   selected=null;manage.hidden=true;manage.replaceChildren();clearInvite();status.textContent='';
   info.hidden=true;find('[data-document]').value='';find('[data-company]').value='';renderSearch();
  };
- search.onfocus=renderSearch;
+ search.onfocus=()=>{if(!selected)renderSearch()};
  search.onkeydown=event=>{
   if(event.key==='ArrowDown'){event.preventDefault();renderSearch();results.querySelector('button')?.focus()}
+ };
+ // Mantén el foco hasta recibir el clic. Un desplazamiento táctil no elige a nadie.
+ results.onpointerdown=event=>{
+  if(event.button===0&&event.target.closest('button'))event.preventDefault();
  };
  dialog.onpointerdown=event=>{if(!find('.accessPersonField').contains(event.target))showResults(false)};
  dialog.onkeydown=event=>{
   if(event.key==='Escape'&&!results.hidden){event.preventDefault();event.stopPropagation();search.focus();showResults(false)}
  };
- find('.accessPersonField').onfocusout=()=>queueMicrotask(()=>{if(!find('.accessPersonField').contains(document.activeElement))showResults(false)});
+ find('.accessPersonField').onfocusout=event=>{
+  if(event.relatedTarget&&!find('.accessPersonField').contains(event.relatedTarget))showResults(false);
+ };
  dialog.showModal();
- await run('Cargando Personal y accesos…',async()=>{
+ async function loadPeople(){
+  people=(await all('personal')).filter(person=>!person.deleted).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
+  access.plaza=people.filter(person=>person.plazaEnabled).map(person=>({...person,personId:person.id,role:person.plazaRole||'operator'}));
+ }
+ async function loadUsers(){
   await auth().waitForLoginRenewal?.();
-  const current=()=>dialog.open&&dialog.querySelector('[data-active]')===active&&auth()?.isAdmin();
-  if(!current())return;
+  if(!current())return [];
   async function readUsers(action){
    const result=await request(action);
    if(!Array.isArray(result?.users))throw new Error('El servicio devolvió una lista de accesos incompleta.');
    return result;
   }
-  const [local,admin,production]=await Promise.allSettled([all('personal'),readUsers('adminUsersList'),readUsers('productionUsers')]);
-  if(!current())return;
-  const reload=()=>{dialog.close();return open(scope)};
-  if(local.status==='fulfilled'){
-   people=local.value.filter(person=>!person.deleted).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
-   access.plaza=people.filter(person=>person.plazaEnabled).map(person=>({...person,personId:person.id,role:person.plazaRole||'operator'}));
-  }
+  return Promise.allSettled([readUsers('adminUsersList'),readUsers('productionUsers')]);
+ }
+ function applyUsers(admin,production){
   if(admin.status==='fulfilled'){
    adminRoles=Array.isArray(admin.value.adminRoles)?admin.value.adminRoles:['assistant'];
    access.admin=(admin.value.users||[]).filter(row=>row.enabled).map(row=>{
@@ -209,6 +237,31 @@ async function open(scope){
    const person=people.find(p=>same({personId:p.id,document:doc(p)},row));
    return {...person,...row,nombre:person?.nombre||row.name||row.nombre,role:row.role||'assistant'};
   });
+ }
+ if(scope==='plaza'){
+  // Los usuarios de Plaza pertenecen a Personal. Las otras apps solo aportan etiquetas.
+  await run('Cargando Personal…',async()=>{
+   try{await loadPeople()}
+   catch(error){copy.append(button('Reintentar consulta',reload));throw error}
+   if(current()){renderActive();renderSearch();status.textContent=''}
+  });
+  if(!current()||!access.plaza)return;
+  const [admin,production]=await loadUsers();
+  if(current()&&admin&&production){
+   applyUsers(admin,production);
+   access.plaza.forEach((row,index)=>{
+    const roles=active.children[index]?.querySelector('p');
+    if(roles)roles.textContent=[...new Set(rolesFor(row))].join(' · ');
+   });
+  }
+  return;
+ }
+ await run('Cargando Personal y accesos…',async()=>{
+  const [local,remote]=await Promise.allSettled([loadPeople(),loadUsers()]);
+  if(!current())return;
+  if(remote.status==='rejected')throw remote.reason;
+  const [admin,production]=remote.value;
+  applyUsers(admin,production);
   renderActive();renderSearch();
   if(scope==='production'){
    const section=document.createElement('section');section.className='plazaAccessPeople';section.append(Object.assign(document.createElement('h3'),{textContent:'Bodega de Producción'}));
@@ -237,7 +290,7 @@ async function open(scope){
   status.textContent=Array.from(failures,([message,names])=>names.join(' y ')+' · '+message).join(' ');
   if(failures.size){
    copy.append(button('Reintentar consulta',reload));
-   if([admin,production].some(result=>result.status==='rejected'&&/sesi[oó]n.*(?:venci|caduc|expir)|inicia sesi[oó]n/i.test(result.reason?.message||''))){
+   if([admin,production].some(result=>result.status==='rejected'&&expiredSession(result.reason))){
     copy.append(button('Renovar sesión de Admin',async()=>{
      dialog.close();
      await auth().renewForSync();
