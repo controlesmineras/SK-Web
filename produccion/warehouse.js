@@ -35,9 +35,15 @@
    <small id="${id}Info" hidden></small>
   </div>`;
  }
- panel.innerHTML='<h2>BODEGA DE PRODUCCIÓN</h2><p id="warehouseNote" class="warehouseHint"></p><div class="warehouseActions" role="group" aria-label="Tareas de bodega"></div><p id="warehouseStatus" role="status" aria-live="polite"></p><div id="warehousePending"></div><div id="warehouseReturnPicker" hidden><label>BUSCAR PRÉSTAMO<input id="warehouseReturnSearch" type="search" placeholder="Elemento, marca, serial, nombre o documento" autocomplete="off"></label><div id="warehouseReturnList"></div></div><form id="warehouseForm" hidden>'+personField('keeper','BODEGUERO/A DE TURNO')+'<strong data-return-summary class="wide" hidden></strong><label class="wide" id="warehouseItemField"><span data-item-caption>SELECCIONE ELEMENTO A ENTREGAR</span><select name="itemId" required></select></label><label data-asset-mode class="wide" hidden>ACTIVO<select name="assetMode"><option value="registered">Registrado</option><option value="new">Registrar activo nuevo</option></select></label><div data-new-asset class="wide" hidden><label>SERIAL<input name="newSerial" maxlength="160"></label><label>MODELO<input name="newModel" maxlength="100"></label><label>MARCA COMERCIAL<input name="newBrand" maxlength="100"></label><label>MARCA O NÚMERO ANTERIOR<input name="newMark" maxlength="100"></label><label>NÚMERO DE CLASE (YT / COLUMNA)<input name="newNumber" maxlength="30"></label><label>MINA DE ORIGEN<input name="newMine" value="Sandra K" maxlength="100"></label><label>LONGITUD<input name="newLength" maxlength="40" placeholder="Cuando aplique"></label></div><label data-asset class="wide" hidden>ACTIVO REGISTRADO<select name="assetId"></select></label><label data-source-loan class="wide" hidden>PRÉSTAMO DE PLAZA A DEVOLVER<select name="sourceLoanId"></select></label><label>FECHA<input name="fechaISO" type="text" placeholder="DD/MM/AAAA" inputmode="numeric" maxlength="10" required></label><label>CANTIDAD<input name="quantity" type="number" min="0.001" step="any" required></label>'+personField('person','QUIÉN RECIBE')+'<label data-destination class="wide">DÓNDE ESTARÁ EL ELEMENTO<input name="destination" maxlength="160" placeholder="Área, nivel o lugar"></label><label data-income class="wide" hidden>MOTIVO DEL INGRESO<select name="incomeType"><option value="ENTRADA">Entrada externa</option><option value="REPARACIÓN">Reparación</option></select></label><label class="wide">OBSERVACIONES<textarea name="notes" rows="2" maxlength="1000"></textarea></label><button class="wide" type="submit">GUARDAR</button><button type="button" class="wide" data-cancel-return hidden>CANCELAR</button></form><div id="warehouseFilters"><input type="search" id="warehouseSearch" placeholder="Buscar en la consulta"><select id="warehouseLoanFilter" aria-label="Estado de préstamos" hidden><option value="pending">PENDIENTES</option><option value="returned">DEVUELTOS</option><option value="all">TODOS</option></select></div><div id="warehouseExports"><button type="button" data-excel>EXPORTAR EXCEL</button><button type="button" data-pdf>EXPORTAR PDF</button></div><div class="tableWrap"><table id="warehouseTable"><thead></thead><tbody></tbody></table></div>';
+ panel.innerHTML='<div class="warehouseHeading"><h2>BODEGA DE PRODUCCIÓN</h2><button type="button" id="warehouseInfoToggle" aria-label="Información de la bodega" aria-expanded="false" aria-controls="warehouseNote">i</button></div><p id="warehouseNote" class="warehouseHint" hidden></p><div class="warehouseActions" role="group" aria-label="Tareas de bodega"></div><p id="warehouseStatus" role="status" aria-live="polite"></p><div id="warehousePending"></div><div id="warehouseReturnPicker" hidden><label>BUSCAR PRÉSTAMO<input id="warehouseReturnSearch" type="search" placeholder="Elemento, marca, serial, nombre o documento" autocomplete="off"></label><div id="warehouseReturnList"></div></div><form id="warehouseForm" hidden>'+personField('keeper','BODEGUERO/A DE TURNO')+'<strong data-return-summary class="wide" hidden></strong><label class="wide" id="warehouseItemField"><span data-item-caption>SELECCIONE ELEMENTO A ENTREGAR</span><select name="itemId" required></select></label><label data-asset-mode class="wide" hidden>ACTIVO<select name="assetMode"><option value="registered">Registrado</option><option value="new">Registrar activo nuevo</option></select></label><div data-new-asset class="wide" hidden><label>SERIAL<input name="newSerial" maxlength="160"></label><label>MODELO<input name="newModel" maxlength="100"></label><label>MARCA COMERCIAL<input name="newBrand" maxlength="100"></label><label>MARCA O NÚMERO ANTERIOR<input name="newMark" maxlength="100"></label><label>NÚMERO DE CLASE (YT / COLUMNA)<input name="newNumber" maxlength="30"></label><label>MINA DE ORIGEN<input name="newMine" value="Sandra K" maxlength="100"></label><label>LONGITUD<input name="newLength" maxlength="40" placeholder="Cuando aplique"></label></div><label data-asset class="wide" hidden>ACTIVO REGISTRADO<select name="assetId"></select></label><label data-source-loan class="wide" hidden>PRÉSTAMO DE PLAZA A DEVOLVER<select name="sourceLoanId"></select></label><label>FECHA<input name="fechaISO" type="text" placeholder="DD/MM/AAAA" inputmode="numeric" maxlength="10" required></label><label>CANTIDAD<input name="quantity" type="number" min="0.001" step="any" required></label>'+personField('person','QUIÉN RECIBE')+'<label data-destination class="wide">DÓNDE ESTARÁ EL ELEMENTO<input name="destination" maxlength="160" placeholder="Área, nivel o lugar"></label><label data-income class="wide" hidden>MOTIVO DEL INGRESO<select name="incomeType"><option value="ENTRADA">Entrada externa</option><option value="REPARACIÓN">Reparación</option></select></label><label class="wide">OBSERVACIONES<textarea name="notes" rows="2" maxlength="1000"></textarea></label><button class="wide" type="submit">GUARDAR</button><button type="button" class="wide" data-cancel-return hidden>CANCELAR</button></form><div id="warehouseFilters"><input type="search" id="warehouseSearch" placeholder="Buscar en la consulta"><select id="warehouseLoanFilter" aria-label="Estado de préstamos" hidden><option value="pending">PENDIENTES</option><option value="returned">DEVUELTOS</option><option value="all">TODOS</option></select></div><div id="warehouseExports"><button type="button" data-excel>EXPORTAR EXCEL</button><button type="button" data-pdf>EXPORTAR PDF</button></div><div class="tableWrap"><table id="warehouseTable"><thead></thead><tbody></tbody></table></div>';
  toolbar.after(navigation,home,panel);
  const find=s=>panel.querySelector(s),form=find('form'),f=form.elements,feedback=find('#warehouseStatus');
+ const infoToggle=find('#warehouseInfoToggle'),warehouseNote=find('#warehouseNote');
+ function showWarehouseInfo(expanded){
+  warehouseNote.hidden=!expanded;
+  infoToggle.setAttribute('aria-expanded',String(expanded));
+ }
+ infoToggle.onclick=()=>showWarehouseInfo(warehouseNote.hidden);
  const tell=message=>{feedback.textContent=message};
  const openingHistoryButton=button(openingHistoryLabel,()=>setView('openingHistory'));
  openingHistoryButton.hidden=true;form.after(openingHistoryButton);
@@ -299,6 +305,7 @@
  function setView(next){
   if(savingMovement||next!==view&&!leaveCurrent())return;
   if(next!==view){
+   showWarehouseInfo(false);
    if(next==='openingHistory')openingHistoryFrom=view;
    find('#warehouseSearch').value='';
   }
@@ -445,9 +452,20 @@
  }
  function paintWarehouse(){
   const ready=snapshot.settings?.enabled;
-  find('#warehouseNote').textContent=!snapshot.catalog?'Puedes abrir las pantallas. Para registrar movimientos, sincroniza una vez y descarga los criterios de la bodega.':!ready?'BODEGA PENDIENTE DE ACTIVACIÓN. Puedes abrir las pantallas y consultar los datos descargados. Para registrar movimientos: SK Web Admin → USUARIOS DE PRODUCCIÓN → Bodega de Producción → ACTIVAR BODEGA DE PRODUCCIÓN. Después sincroniza aquí.':
-   'Cantidades propias de Producción. Ingresos automáticos desde '+new Date(snapshot.settings.transferStartAt).toLocaleString('es-CO',{timeZone:'America/Bogota'})+'.'+(!snapshot.settings.allowSpareDelivery?' La entrega de repuestos YT y Columna está bloqueada.':'');
-  if(ready&&snapshot.catalog&&!String(snapshot.catalogRevision||'').startsWith('warehouse-assets-v2|'))find('#warehouseNote').textContent+=' Para incluir los activos de la bodega del nivel 4, actualiza Code.gs y sincroniza.';
+  if(!snapshot.catalog){
+   warehouseNote.textContent='Para registrar movimientos, sincroniza una vez y descarga los criterios de la bodega. Mientras tanto, puedes abrir las pantallas.';
+  }else if(!ready){
+   warehouseNote.textContent='Bodega pendiente de activación. Puedes consultar los datos descargados. Para registrar movimientos, abre SK Web Admin → Usuarios de Producción → Bodega de Producción, pulsa «Activar Bodega de Producción» y sincroniza aquí.';
+  }else{
+   const start=new Date(snapshot.settings.transferStartAt).toLocaleString('es-CO',{timeZone:'America/Bogota'});
+   const notes=['Producción lleva sus propias existencias. Los ingresos desde Plaza Blending se registran automáticamente desde '+start.replace(/\.$/,'')+'.'];
+   if(!snapshot.settings.allowSpareDelivery){
+    notes.push('La entrega de repuestos YT y Columna está bloqueada para toda la bodega en SK Web.');
+    if(session?.user&&!roles(session.user).includes('mechanic'))notes.push('Tu cuenta no tiene asignado el rol de Mecánico.');
+   }
+   if(!String(snapshot.catalogRevision||'').startsWith('warehouse-assets-v2|'))notes.push('Para incluir los activos de la bodega del nivel 4, actualiza Code.gs y sincroniza.');
+   warehouseNote.textContent=notes.join('\n');
+  }
   for(const node of panel.querySelectorAll('[data-view]')){node.hidden=node.dataset.view==='opening'&&!roles(session?.user).includes('admin');node.disabled=false;}
   find('[type=submit]').disabled=savingMovement||!ready||!snapshot.catalog;
   if(view==='return'){renderReturns();if(!form.hidden)recipientPicker.refresh();}
@@ -509,6 +527,7 @@
   if(!session||!leaveCurrent())return;
   const both=permits(session.user,'warehouse')&&permits(session.user,'mechanic');
   if(next&&!permits(session.user,next))return;
+  showWarehouseInfo(false);
   module=next||(!both?(permits(session.user,'warehouse')?'warehouse':'mechanic'):'');
   home.hidden=Boolean(module);panel.hidden=module!=='warehouse';mechanics.hidden=module!=='mechanic';
   byId('reviewIncomeConflicts').hidden=module!=='mechanic'||!window.SKProductionSync.pendingSummary(state).incomeRejected||session.user.role!=='admin';

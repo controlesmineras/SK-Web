@@ -10,9 +10,13 @@
 @media(min-width:901px){
  #productionModuleHome::after{width:clamp(12rem,16vw,15rem)}
 }
-#warehousePanel{color:#f8fafc}#warehouseNote,#warehousePending{color:#173d59}#warehousePanel h2{text-align:center;font-size:1.25rem}
+#warehousePanel{color:#f8fafc}#warehouseNote,#warehousePending{color:#173d59}
+.warehouseHeading{display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:12px}
+#warehousePanel .warehouseHeading h2{margin:0;text-align:center;font-size:1.25rem}
+#warehouseInfoToggle{flex:0 0 44px;width:44px;height:44px;min-height:44px;padding:0;border:1px solid #a5c3d1;border-radius:50%;background:#edf3f7;color:#173d59;font:bold 1.4rem/1 Georgia,serif;text-transform:none}
+#warehouseInfoToggle:focus-visible{outline:3px solid #8fd6ed;outline-offset:2px}
 .warehouseActions{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}
-.warehouseActions button{min-height:48px;white-space:normal;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3}
+.warehouseActions button{min-height:48px;padding:0 3px;font-size:clamp(.9375rem,3.65vw,1.0625rem);line-height:1.06;white-space:normal;background:#edf3f7;color:#173d59;border:1px solid #b5c8d3}
 /* Colores de las cuatro operaciones de registro de Plaza Blending. */
 .warehouseActions [data-view="delivery"]{background:linear-gradient(145deg,#faecd6,#ecc58e);border-color:#d9a65f;color:#513718}
 .warehouseActions [data-view="income"]{background:linear-gradient(145deg,#e4efe9,#bad3c5);border-color:#91b6a2;color:#173d31}
