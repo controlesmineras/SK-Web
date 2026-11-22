@@ -77,7 +77,7 @@ function updateMode(){
   document.querySelectorAll('#actas [data-document-type]').forEach(button=>{const active=button.dataset.documentType===documentType;button.classList.toggle('active',active);button.setAttribute('aria-pressed',String(active))});
   for(const [selector,visible] of [['.actaArea',documentType==='ACTA'],['.actaMotivo',documentType==='ACTA'],['.oficioAsunto',documentType==='OFICIO'],['.oficioDestinatario',documentType==='OFICIO']]){const field=form.querySelector(selector);field.hidden=!visible;field.querySelector('input,select').required=visible}
   form.querySelector('.documentLinkLabel').firstChild.textContent=`ENLACE AL ${documentType} DIGITALIZADO (OPCIONAL)`;
-  document.getElementById('newActa').textContent=documentType==='ACTA'?'+ NUEVA ACTA':'+ NUEVO OFICIO';
+  document.getElementById('newActa').textContent=documentType==='ACTA'?'+ NUEVA ACTA':'LIMPIAR FORMULARIO';
   document.getElementById('actaSave').textContent=editing?'GUARDAR CAMBIOS':previous?'REGISTRAR ACTA ANTERIOR':`REGISTRAR ${documentType}`;
   updateNotCreated();
   updateDeleteLast();
