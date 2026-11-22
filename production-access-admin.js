@@ -103,9 +103,9 @@ async function open(scope){
  function renderSearch(){
   results.replaceChildren();
   const query=normalize(search.value);
-  if(!access[scope])results.textContent='Carga los accesos activos antes de conceder un acceso.';
+  if(scope!=='labor'&&!access[scope])results.textContent='Carga los accesos activos antes de conceder un acceso.';
   else{
-   const matches=people.filter(person=>eligible(person)&&normalize([personName(person),doc(person)].join(' ')).includes(query)&&!access[scope].some(row=>same(row,{personId:person.id,document:doc(person)}))).sort((a,b)=>personName(a).localeCompare(personName(b),'es',{sensitivity:'base'}));
+   const matches=people.filter(person=>eligible(person)&&normalize([personName(person),doc(person)].join(' ')).includes(query)&&!access[scope]?.some(row=>same(row,{personId:person.id,document:doc(person)}))).sort((a,b)=>personName(a).localeCompare(personName(b),'es',{sensitivity:'base'}));
    for(const person of matches.slice(0,60)){
     const row=button('',()=>choose({...person,personId:person.id},false)),name=document.createElement('b'),documentNumber=document.createElement('span');
     name.textContent=personName(person)||'Sin nombre';documentNumber.textContent=doc(person);
@@ -123,9 +123,15 @@ async function open(scope){
   manage.replaceChildren(title);
   if(scope==='labor'){
    const invite=button('Generar enlace de Labor',()=>generate(row));
+   invite.disabled=!access.labor;
    manage.append(invite);
+   if(invite.disabled){
+    const note=document.createElement('p');
+    note.textContent='Para generar el enlace, primero hay que verificar los accesos de Labor.';
+    manage.append(note);
+   }
    if(existing)manage.append(button(row.pending?'Cancelar invitación':'Quitar acceso a Labor',()=>disable(row)));
-   invite.focus({preventScroll:true});manage.scrollIntoView({block:'nearest'});return;
+   if(!invite.disabled)invite.focus({preventScroll:true});manage.scrollIntoView({block:'nearest'});return;
   }
   const role=document.createElement('select'),label=document.createElement('label');
   label.textContent='Rol en '+app.name;
@@ -146,7 +152,7 @@ async function open(scope){
   try{await fn()}catch(error){status.textContent=error.message||String(error)}finally{busy=false;search.disabled=false}
  }
  function generate(row,role){
-  if(busy)return;
+  if(busy||(scope==='labor'&&!access.labor))return;
   clearInvite();
   if(scope==='admin'&&role==='admin'&&!adminRoles.includes('admin')){status.textContent='Actualiza Code.gs y su implementación antes de generar un acceso de Administrador.';return}
   if(!row.personId){status.textContent='Esta cuenta no está vinculada a un colaborador de Personal.';return}
@@ -273,23 +279,42 @@ async function open(scope){
   });
  }
  if(scope==='labor'){
-  await run('Cargando usuarios de Labor…',async()=>{
+  search.disabled=true;
+  active.textContent='Cargando usuarios e invitaciones de Labor…';
+  try{await loadPeople()}
+  catch(error){
+   if(current()){
+    status.textContent='No se pudo cargar Personal en este dispositivo.';
+    active.replaceChildren(button('Reintentar consulta',reload));
+   }
+   return;
+  }
+  if(!current())return;
+  search.disabled=false;
+  renderSearch();
+  async function loadLaborUsers(){
+   active.textContent='Cargando usuarios e invitaciones de Labor…';
    try{
     await auth().waitForLoginRenewal?.();
     if(!current())return;
-    const [,result]=await Promise.all([loadPeople(),request('laborUsers')]);
+    const result=await request('laborUsers');
     if(!current())return;
-    if(result.scope!=='labor'||!Array.isArray(result.users))throw new Error('El servicio central no confirmó los usuarios de Labor.');
+    if(result?.scope!=='labor'||!Array.isArray(result.users))throw new Error('El servicio central no confirmó los usuarios de Labor.');
     const byId=new Map(people.map(p=>[p.id,p]));
     access.labor=result.users.map(row=>({...byId.get(row.personId),...row})).sort((a,b)=>identity(a).localeCompare(identity(b),'es'));
-    renderActive();renderSearch();status.textContent='';
+    renderActive();
+    if(selected){
+     const existing=access.labor.find(row=>same(row,selected));
+     choose(existing||selected,Boolean(existing));
+    }else renderSearch();
    }catch(error){
     if(!current())return;
-    renderActive();copy.append(button('Reintentar consulta',reload));
-    if(/solicitud no válida/i.test(error.message))throw new Error('Falta actualizar el servicio central para generar accesos de Labor.');
-    throw error;
+    const detail=/solicitud no válida/i.test(error.message)?'Actualiza la implementación de Code.gs para habilitar Labor.':error.message;
+    active.textContent=['No se pudieron verificar los accesos de Labor.',detail].filter(Boolean).join(' ');
+    active.append(button('Reintentar consulta',loadLaborUsers));
    }
-  });
+  }
+  await loadLaborUsers();
   return;
  }
  if(scope==='plaza'){
