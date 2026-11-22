@@ -240,7 +240,11 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  assert.ok(menu.rows[2].disabled);assert.match(menu.rows[2].detail,/Plaza Blending/);
  assert.equal(type('no existe').length,0);
  await h.api.openQuantities({warehouse:'production'});
- assert.equal(type('').some(row=>row.dataset.itemId===item.id),false);
+ const unfiltered=type('');
+ assert.deepEqual(Array.from(unfiltered,row=>row.dataset.itemId),[item.id],'la primera apertura está disponible al desplegar el campo vacío');
+ assert.match(unfiltered[0].detail,/Ingresar saldo inicial/);
+ await h.api.openQuantities({warehouse:'production',query:'Cali Ver'});
+ assert.equal(search.value,'Calibrador Vernier');assert.equal(field.disabled,false);assert.equal(field.value,'');
  const [choice]=type('pie de rey');
  assert.equal(choice.dataset.itemId,item.id);
  assert.match(choice.detail,/Ingresar saldo inicial/);
@@ -263,4 +267,12 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  assert.deepEqual(Array.from(type(''),row=>row.dataset.itemId),[item.id]);
  assert.equal((await h.ctx.all('productionQuantityCache'))[0].quantity,0);
  assert.equal((await h.ctx.all('inventoryQuantityAdjustments')).length,0);
+ // Nombres y alias que también reconoce el selector de ingresos y salidas de Producción.
+ const legacy={id:'antiguo',itemName:'Calibrador de profundidad',secondaryName:'Sonda',CI_ALIAS_SECUNDARIO:'Medidor de hondo'};
+ await h.ctx.put('inventoryCriteria',legacy);
+ await h.api.openQuantities({warehouse:'production'});
+ for(const query of ['Cali prof','medidor hondo']){
+  assert.equal(w.SKSpareGroups.matches(legacy,query),true);
+  assert.deepEqual(Array.from(type(query),row=>[row.dataset.itemId,row.textContent]),[[legacy.id,legacy.itemName]]);
+ }
 });

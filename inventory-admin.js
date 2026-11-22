@@ -21,7 +21,7 @@ const boolFields=['allowAccessories','isYtSpare','isFixedAsset','usesSerial','us
 let catalogKind='common';
 const currentSpareType=()=>document.querySelector('#inventoryItemForm')?.elements.spareEquipment.value||'YT 29';
 const defaultEnabledOperations=new Set(['allowAssignment','allowTransfer','allowRemission']);
-const itemName=x=>x?.name||x?.nombre||x?.elemento||x?.CI_ELEMENTO||x?.ciElemento||'';
+const itemName=x=>x?.name||x?.nombre||x?.elemento||x?.CI_ELEMENTO||x?.ciElemento||x?.element||x?.itemName||'';
 const itemSecondary=x=>x?.secondaryName||x?.nombreSecundario||x?.CI_NOMBRE_SECUNDARIO||x?.CI_ALIAS_SECUNDARIO||x?.aliasSecundario||'';
 const itemTertiary=x=>x?.tertiaryName||x?.nombreTerciario||x?.CI_NOMBRE_TERCIARIO||x?.CI_ALIAS_TERCIARIO||x?.aliasTerciario||'';
 const itemUnit=x=>x?.unit||x?.unidadMedida||x?.CI_UNIDAD_MEDIDA||x?.ciUnidadMedida||'';
@@ -149,7 +149,7 @@ function syncSpareFields(f){
 }
 const spareUse=item=>item.spareApplication||item.application||item.ubicacionAplicacion||'';
 function matchesCatalogItem(item,query){
- if(!query)return true;
+ if(!query||window.SKSpareGroups.matches(item,query))return true;
  const spare=quantityFlag(item.isYtSpare);
  const text=[itemName(item),spare&&window.SKSpareGroups.recordName(item),itemSecondary(item),itemTertiary(item),
   itemUnit(item),spare&&spareUse(item),item.id].filter(Boolean).join(' ');
@@ -500,23 +500,20 @@ async function openQuantities(options={}){
   });
   criteria.sort((a,b)=>{
    if(restrictions.has(a.id)!==restrictions.has(b.id))return restrictions.has(a.id)?1:-1;
-   if(production&&registeredIds.has(a.id)!==registeredIds.has(b.id))return registeredIds.has(a.id)?-1:1;
    return itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'});
   });
   if(!menu.hidden)drawItems();
   if(!selected&&production){
-   if(!meta)status.textContent='Sincroniza SK Web Admin para descargar los saldos de Producción en este equipo.';
+   if(!meta)status.textContent='Puedes registrar un saldo inicial. Al sincronizar se comprobarán las existencias de Producción.';
    else if(!meta.enabled)status.textContent='La Bodega de Producción aún no está activada.';
-   else status.textContent=registeredIds.size?'':'Busca un elemento del catálogo para ingresar su saldo inicial.';
+   else status.textContent=registeredIds.size?'':'Elige un elemento del catálogo para ingresar su saldo inicial.';
   }
  }
  try{await loadList()}catch(error){status.textContent='No se pudo leer el inventario local: '+error.message;return}
  if(view!==quantityViewVersion)return;
  function drawItems(){
   const query=selected?'':search.value.trim();
-  const matches=criteria.filter(row=>
-   (query||!restrictions.has(row.id)&&(!production||registeredIds.has(row.id)||quantityFlag(row.isYtSpare)))&&
-   matchesCatalogItem(row,query));
+  const matches=criteria.filter(row=>(query||!restrictions.has(row.id))&&matchesCatalogItem(row,query));
   menu.replaceChildren(...matches.map(row=>{
    const option=document.createElement('button');
    option.type='button';option.dataset.itemId=row.id;option.textContent=itemName(row);
@@ -614,7 +611,9 @@ async function openQuantities(options={}){
  const item=options.itemId&&criteria.find(row=>String(row.id)===String(options.itemId));
  if(item&&matchesCatalogItem(item,options.query))selectItem(item).catch(report);
  else if(production&&options.query){
-  search.value=options.query;drawItems();
+  const matches=criteria.filter(row=>matchesCatalogItem(row,options.query));
+  if(matches.length===1)await selectItem(matches[0]);
+  else {search.value=options.query;drawItems()}
  }else if(options.itemId)status.textContent='Este elemento se controla por ficha o no admite ajuste de cantidad en '+warehouseName+'.';
 }
 window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities};window.addEventListener('load',()=>setTimeout(mount,120));
