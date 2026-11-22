@@ -532,13 +532,14 @@ async function openQuantities(options={}){
  const logo=section.querySelector('.quantityWarehouseLogo');
  logo.alt='Logo de '+warehouseName;
  logo.src=production?'./produccion/produccion-perforadora-512.png':'./plaza/icon-volqueta.svg';
- form.reset();search.disabled=true;menu.hidden=true;quantity.disabled=button.disabled=true;
+ form.reset();delete button.dataset.saving;search.disabled=true;menu.hidden=true;quantity.disabled=button.disabled=true;
  status.textContent='';section._refreshQuantity=null;form.onsubmit=null;
  if(typeof db==='undefined'||!db){status.textContent='El almacenamiento local todavía está cargando. Vuelve a abrir el módulo.';return}
  let criteria=[],restrictions=new Map(),registeredIds=new Set(),meta,selected,stock,pending,opening=false,selectionVersion=0,listVersion=0;
+ let lastSavedItem=null;
  async function loadList(){
-  const version=++listVersion;
-  const [catalog,stocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),production?all(quantityAdjustments):[]]);
+  const version=++listVersion,saved=lastSavedItem;
+  const [catalog,stocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),production||saved?all(quantityAdjustments):[]]);
   if(view!==quantityViewVersion||version!==listVersion)return;
   const balances=new Map(stocks.filter(row=>row.itemId).map(row=>[row.itemId,row]));
   meta=production&&stocks.find(row=>!row.itemId);
@@ -557,7 +558,14 @@ async function openQuantities(options={}){
    return itemName(a).localeCompare(itemName(b),'es',{numeric:true,sensitivity:'base'});
   });
   if(!menu.hidden)drawItems();
-  if(!selected&&production){
+  if(saved&&saved===lastSavedItem){
+   const queued=adjustments.find(row=>row.itemId===saved.id&&(row.warehouse||'plaza')===warehouse);
+   if(queued?.syncError)status.textContent=itemName(saved)+' · '+queued.syncError;
+   else if(!queued){
+    const balance=balances.get(saved.id);
+    status.textContent=balance?'Saldo de '+itemName(saved)+' en la base sincronizada: '+balance.quantity+'.':'El ajuste ya no está pendiente.';
+   }
+  }else if(!selected&&!lastSavedItem&&production){
    if(!meta)status.textContent='Puedes registrar un saldo inicial. Al sincronizar se comprobarán las existencias de Producción.';
    else if(!meta.enabled)status.textContent='La Bodega de Producción aún no está activada.';
    else status.textContent=registeredIds.size?'':'Elige un elemento del catálogo para ingresar su saldo inicial.';
@@ -585,7 +593,7 @@ async function openQuantities(options={}){
  }
  async function readSelected(keepInput=false){
   const id=selected?.id,version=++selectionVersion;
-  if(!id)return;
+  if(!id||button.dataset.saving==='1')return;
   const [currentItems,currentStocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),all(quantityAdjustments)]);
   if(view!==quantityViewVersion||version!==selectionVersion)return;
   const wasPending=pending,current=currentStocks.find(row=>row.itemId===id);
@@ -623,9 +631,12 @@ async function openQuantities(options={}){
  function report(error){status.textContent=error.message}
  search.disabled=false;
  search.onfocus=search.onclick=drawItems;
+ function clearSelection(){
+  selected=stock=pending=null;opening=false;selectionVersion++;showFixedCount(false);
+  quantity.value='';quantity.disabled=button.disabled=true;
+ }
  search.oninput=()=>{
-  selected=stock=pending=null;selectionVersion++;showFixedCount(false);
-  quantity.value='';quantity.disabled=button.disabled=true;status.textContent='';
+  lastSavedItem=null;clearSelection();status.textContent='';
   drawItems();
  };
  form.onkeydown=event=>{
@@ -640,7 +651,7 @@ async function openQuantities(options={}){
  };
  async function selectItem(item){
   if(!item)return;
-  selected=item;search.value=itemName(item);menu.hidden=true;
+  lastSavedItem=null;selected=item;search.value=itemName(item);menu.hidden=true;
   showFixedCount(fixedCriterion(item));countOutput.textContent='';status.textContent='';
   stock=pending=null;quantity.value='';quantity.disabled=button.disabled=true;
   quantity.step=quantityFlag(item.isYtSpare)||production&&!quantityFlag(item.fractionable)?'1':'any';
@@ -661,16 +672,27 @@ async function openQuantities(options={}){
   if(button.disabled||!countField.hidden||!window.SKAdminAuth?.canView?.('inventoryQuantities')||!form.reportValidity())return;
   const id=selected?.id,value=quantity.valueAsNumber;
   if(!id||!Number.isFinite(value)||value<0)return;
-  button.dataset.saving='1';search.disabled=quantity.disabled=button.disabled=true;menu.hidden=true;
-  let failure;
-  try{await queueQuantity(warehouse,id,value,stock,opening)}
-  catch(error){failure=error}
-  finally{delete button.dataset.saving;search.disabled=false}
-  if(!failure)window.dispatchEvent(new Event('skweb-local-change'));
-  if(view!==quantityViewVersion)return;
-  try{await readSelected()}
-  catch(error){report(failure||error);return}
-  if(failure)report(failure);
+  const observed=stock;
+  selectionVersion++;button.dataset.saving='1';search.disabled=quantity.disabled=button.disabled=true;menu.hidden=true;
+  try{
+   await queueQuantity(warehouse,id,value,observed,opening);
+  }catch(error){
+   if(view!==quantityViewVersion)return;
+   delete button.dataset.saving;
+   try{await readSelected()}catch(readError){error=new Error(error.message+' '+readError.message)}
+   if(view!==quantityViewVersion)return;
+   search.disabled=false;
+   if(!quantity.disabled)quantity.value=String(value);
+   report(error);
+   if(stock&&stock.quantity!==observed?.quantity)status.textContent+=' Saldo actualizado: '+stock.quantity+'.';
+   return;
+  }
+  if(view===quantityViewVersion){
+   lastSavedItem=selected;clearSelection();search.value='';
+   delete button.dataset.saving;search.disabled=false;
+   status.textContent='Guardado en este equipo · pendiente de sincronizar con '+warehouseName+'.';
+  }
+  window.dispatchEvent(new Event('skweb-local-change'));
  };
  const item=options.itemId&&criteria.find(row=>String(row.id)===String(options.itemId));
  if(item&&matchesCatalogItem(item,options.query))await selectItem(item).catch(report);

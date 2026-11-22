@@ -253,6 +253,8 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  field.value='0';
  await form.onsubmit({preventDefault(){}});
  const [pending]=await h.ctx.all('inventoryQuantityAdjustments');
+ assert.equal(search.value,'');assert.equal(field.value,'');assert.ok(field.disabled&&menu.hidden);
+ assert.match(h.node('.status').textContent,/pendiente de sincronizar con Producción/);
  assert.match(pending.operationId,/^opening-/);assert.equal(pending.itemId,item.id);assert.equal(pending.stockRevision,'0|0');assert.equal(pending.quantity,0);
  assert.equal((await h.ctx.all('inventoryStock')).length,0);
  let sends=0;
