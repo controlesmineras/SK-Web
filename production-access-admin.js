@@ -39,6 +39,7 @@ async function open(scope){
   dialog.style.cssText='width:min(680px,94vw);max-height:90dvh;border:0;border-radius:14px;padding:16px;color:#102f45';
   document.body.append(dialog);
  }
+ dialog.classList.toggle('laborAccessDialog',scope==='labor');
  dialog.innerHTML=`
   <div class="sectionHead"><h2></h2><button type="button" data-close>Cerrar</button></div>
   <section class="plazaAccessPeople">
@@ -61,7 +62,10 @@ async function open(scope){
  const find=selector=>dialog.querySelector(selector);
  const active=find('[data-active]'),results=find('[data-results]'),manage=find('[data-manage]'),search=find('#accessPersonSearch'),status=find('[role=status]'),copy=find('[data-copy]'),info=find('[data-person-info]');
  find('h2').textContent='Accesos a '+app.name;
- if(scope==='labor')active.previousElementSibling.textContent='Usuarios e invitaciones';
+ if(scope==='labor'){
+  active.previousElementSibling.textContent='Usuarios e invitaciones';
+  active.style.removeProperty('max-height');
+ }
  find('[data-close]').onclick=()=>dialog.close();
  const request=(action,data)=>auth().request(action,data);
  const current=()=>dialog.open&&dialog.querySelector('[data-active]')===active&&auth()?.isAdmin();
@@ -97,9 +101,12 @@ async function open(scope){
    const name=document.createElement('b'),roles=document.createElement('p');
    name.textContent=identity(row);roles.textContent=row.pending?'Invitación pendiente de activar':[...new Set(rolesFor(row))].join(' · ');
    card.append(name,roles);
+   if(scope==='labor')card.classList.add(row.pending?'laborInviteCard':'laborUserCard');
    if(row.role!=='owner'){
-    card.append(button(row.pending?'Renovar enlace':'Restablecer acceso',()=>generate(row,scope==='production'?productionSelection(row):row.role)),button('Gestionar accesos',()=>choose(row,true)));
-    if(scope==='labor')card.append(button(row.pending?'Cancelar invitación':'Quitar acceso',()=>disable(row)));
+    const actions=scope==='labor'?document.createElement('div'):card;
+    if(scope==='labor'){actions.className='laborCardActions';card.append(actions)}
+    actions.append(button(row.pending?'Renovar enlace':'Restablecer acceso',()=>generate(row,scope==='production'?productionSelection(row):row.role)),button('Gestionar accesos',()=>choose(row,true)));
+    if(scope==='labor')actions.append(button(row.pending?'Cancelar invitación':'Quitar acceso',()=>disable(row)));
    }
    active.append(card);
   }

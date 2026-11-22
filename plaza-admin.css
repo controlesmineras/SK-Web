@@ -17,3 +17,44 @@
 .dangerBtn{background:#a92323!important;color:#fff!important}
 .dangerBtn:disabled{opacity:.45;cursor:not-allowed}
 @media(max-width:720px){.plazaAccessLayout{grid-template-columns:1fr}.plazaAccessForm{grid-template-columns:1fr}.plazaAccessState,.plazaAccessActions{grid-column:1}.plazaAccessActions{grid-template-columns:1fr}}
+
+.laborAccessDialog .sectionHead{margin-bottom:8px}
+.laborAccessDialog .sectionHead h2{margin:0}
+.laborAccessDialog > .plazaAccessPeople{padding:10px 12px;border-radius:10px}
+.laborAccessDialog > .plazaAccessPeople + .plazaAccessPeople{margin-top:8px}
+.laborAccessDialog .plazaAccessPeople h3{margin:0 0 6px;font-size:1rem}
+.laborAccessDialog [role="status"]{margin:6px 0;font-size:.9rem}
+.laborAccessDialog [role="status"]:empty,.laborAccessDialog [data-copy]:empty{margin:0;height:0}
+.laborAccessDialog > section:last-child{margin-top:8px}
+.laborAccessDialog [data-active]{display:grid;gap:7px;max-height:none;overflow:visible}
+.laborAccessDialog .laborUserCard,.laborAccessDialog .laborInviteCard{
+  min-width:0;padding:7px 0 0;border:1px solid #9cb8c9;border-inline-start:4px solid #346681;
+  border-radius:9px;background:#edf5f9;overflow-wrap:anywhere;
+}
+.laborAccessDialog .laborInviteCard{border-color:#d1b778;border-inline-start-color:#b4871f;background:#fff6df}
+.laborAccessDialog [data-active] b,.laborAccessDialog [data-active] p{display:block;padding:0 10px;line-height:1.3}
+.laborAccessDialog [data-active] b{font-size:.94rem;color:#102f45}
+.laborAccessDialog [data-active] p{margin:2px 0 6px;font-size:.84rem;color:#36546a}
+.laborAccessDialog .laborInviteCard p{color:#705218}
+.laborCardActions{
+  display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px;
+  padding:5px 6px;background:#234b63;border-radius:0 0 7px 5px;
+}
+.laborAccessDialog [data-manage]{background:#234b63;color:white;border-color:#234b63}
+.laborAccessDialog [data-manage] button{margin:0 5px 4px 0}
+.laborCardActions button,.laborAccessDialog [data-manage] button{
+  min-width:0;min-height:34px;padding:4px 7px;border:1px solid #9cb8c9;border-radius:6px;
+  background:#fff;color:#12384f;font-size:.8rem;font-weight:700;line-height:1.2;
+}
+.laborCardActions button:last-child{background:#ffedbf;color:#51380b;border-color:#dab565}
+.laborCardActions button:hover,.laborAccessDialog [data-manage] button:hover{background:#ddedf6}
+.laborCardActions button:last-child:hover{background:#ffdd8a}
+.laborCardActions button:focus-visible,.laborAccessDialog [data-manage] button:focus-visible{outline:3px solid #f7c657;outline-offset:1px}
+@media(max-width:550px),(pointer:coarse){
+  .laborCardActions button,.laborAccessDialog [data-manage] button{min-height:44px}
+}
+@media(max-width:420px){
+  .laborAccessDialog > .plazaAccessPeople{padding:8px}
+  .laborCardActions{gap:4px;padding:4px}
+  .laborCardActions button{padding-inline:2px}
+}
