@@ -294,7 +294,7 @@ document.addEventListener('visibilitychange',()=>{if(!document.hidden&&session){
 setInterval(()=>{if(session&&!document.hidden)updateShift();},30000);
 setInterval(()=>{if(session&&!document.hidden)void sync();},300000);
 function registerWorker(){
-  return navigator.serviceWorker?.register('./sw.js',{updateViaCache:'none'});
+  return navigator.serviceWorker?.register('./sw.js?v='+document.documentElement.dataset.laborVersion,{updateViaCache:'none'});
 }
 registerWorker()?.catch(()=>{if(session)message('notice','No se pudo preparar la apertura sin conexión. Vuelve a abrir la app con internet.');});
 

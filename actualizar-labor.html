@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="es-CO"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Actualizar Labor · SK 3.7</title><link rel="icon" href="frentes/labor-192.png">
+<link rel="stylesheet" href="frentes/app.css?v=funcionarios-4">
+</head><body>
+<main><section class="login card"><h1>Actualizar Labor</h1>
+<p id="status" role="status" style="margin:1em 0">Buscando la versión publicada…</p>
+<button type="button" class="primary" id="retry" hidden>Reintentar</button>
+</section></main>
+<script>
+const statusText=document.getElementById('status'),retry=document.getElementById('retry');
+const scope=new URL('./frentes/',location.href);
+function activated(worker){
+  return new Promise((resolve,reject)=>{
+    const timer=setTimeout(()=>finish(false),60000);
+    function finish(ok){
+      clearTimeout(timer);worker.removeEventListener('statechange',check);
+      if(ok)resolve();else reject(new Error('La instalación no terminó. Comprueba la conexión y toca Reintentar.'));
+    }
+    function check(){
+      if(worker.state==='activated')finish(true);
+      else if(worker.state==='redundant')finish(false);
+    }
+    worker.addEventListener('statechange',check);check();
+  });
+}
+async function openCurrentLabor(){
+  retry.hidden=true;
+  statusText.textContent='Buscando la versión publicada…';
+  try{
+    const page=new URL('index.html',scope);
+    page.searchParams.set('_actualizar',Date.now());
+    const response=await fetch(page,{cache:'no-store',signal:AbortSignal.timeout?.(20000)});
+    if(!response.ok)throw new Error('No se pudo descargar Labor.');
+    const html=new DOMParser().parseFromString(await response.text(),'text/html');
+    const version=html.documentElement.dataset.laborVersion;
+    if(!version)throw new Error('La descarga todavía muestra la versión anterior. Toca Reintentar.');
+    if('serviceWorker' in navigator){
+      statusText.textContent='Instalando el formulario de Labor…';
+      const script=new URL('sw.js',scope);script.searchParams.set('v',version);
+      const reg=await navigator.serviceWorker.register(script.href,{scope:scope.href,updateViaCache:'none'});
+      const worker=[reg.installing,reg.waiting,reg.active].find(w=>w&&w.scriptURL===script.href);
+      if(!worker)throw new Error('La actualización aún no está lista. Toca Reintentar.');
+      await activated(worker);
+    }
+    page.searchParams.set('v',version);
+    location.replace(page.href);
+  }catch(error){
+    statusText.textContent=error instanceof TypeError||error.name==='TimeoutError'?'No se pudo descargar Labor. Comprueba la conexión y toca Reintentar.':error.message;
+    retry.hidden=false;
+  }
+}
+retry.onclick=openCurrentLabor;
+openCurrentLabor();
+</script></body></html>
