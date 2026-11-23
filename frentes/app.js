@@ -5,9 +5,10 @@ const labels={D:'Día',T:'Tarde',S:'Serena'},statuses={pending:'Pendiente',synce
 const personKeys=['documento','primerNombre','segundoNombre','primerApellido','segundoApellido','empresa','area','cargo','telefono'];
 const stamp=()=>crypto.randomUUID();
 const sessionKey='sk-frentes:session';
+const updateDraftKey='sk-frentes:update-draft';
 let session=null,state=FrontStore.empty(),editing=null,manualShift=false,running=null,generation=0;
 const selected=[];
-let activeRequest,saveBusy=false,initialReportDate='';
+let activeRequest,savingReport=null;
 const owner=s=>'labor:'+s.user.documento;
 const message=(id,text)=>{$(id).textContent=text;};
 function samePerson(a,b){
@@ -61,7 +62,7 @@ function paintSelected(){
     remove.textContent='×';
     remove.setAttribute('aria-label','Quitar a '+personName(p));
     remove.onclick=()=>{
-      if(saveBusy)return;
+      if(savingReport)return;
       selected.splice(selected.indexOf(p),1);
       paintSelected();
       if(newMode())results(true);
@@ -77,12 +78,12 @@ function paintSelected(){
   }));
 }
 function reset(){
-  editing=null;manualShift=false;report.reset();selected.length=0;paintSelected();clearSearch();initialReportDate=today();f.fecha.value=initialReportDate;updateShift();f.corte.disabled=true;
+  editing=null;manualShift=false;report.reset();selected.length=0;paintSelected();clearSearch();f.fecha.value=today();updateShift();f.corte.disabled=true;
   message('personLegend','Funcionarios');
   $('cancelReview').hidden=true;message('editorTitle','Nuevo reporte');message('save','Guardar reporte');catalogs();
 }
 function choose(p){
-  if(saveBusy||p.active===false||selected.some(row=>samePerson(row,p))||(editing&&selected.length))return;
+  if(savingReport||p.active===false||selected.some(row=>samePerson(row,p))||(editing&&selected.length))return;
   selected.push(p);clearSearch();paintSelected();message('notice','');
   if(editing)$('save').focus();else $('search').focus();
 }
@@ -169,7 +170,7 @@ function render(){
   if(newMode())results(true);else if(!$('lookup').hidden)results();
 }
 report.onsubmit=async event=>{
-  event.preventDefault();if(!session||saveBusy)return;
+  event.preventDefault();if(!session||savingReport)return;
   const s=session;
   try{
     if(!newMode()&&$('search').value.trim())throw new Error('Selecciona al funcionario que estás buscando o limpia la búsqueda antes de guardar.');
@@ -186,14 +187,15 @@ report.onsubmit=async event=>{
       personId:p.id,documento:p.documento||'',nombre:personName(p),
       newPerson:p.local||p.draftNew?Object.fromEntries(personKeys.map(k=>[k,p[k]||''])):null
     }));
-    const previous=editing?.rev;saveBusy=true;$('save').disabled=true;
-    const saved=await access(common.owner,local=>{
+    const previous=editing?.rev;$('save').disabled=true;
+    savingReport=access(common.owner,local=>{
       for(const row of rows)FrontStore.save(local,row,previous);
     });
+    const saved=await savingReport;
     if(session!==s)return;state=saved;reset();render();
     message('notice',rows.length===1?'Reporte guardado en este dispositivo.':'Reporte guardado en este dispositivo para '+rows.length+' funcionarios.');
     void sync();
-  }catch(error){message('notice',error.message);}finally{saveBusy=false;$('save').disabled=false;}
+  }catch(error){if(session===s)message('notice',error.message);}finally{savingReport=null;$('save').disabled=false;}
 };
 
 async function post(body,signal){
@@ -223,7 +225,7 @@ function offlineStatus(){
 async function enter(s){
   const data=await access(owner(s));session=s;generation++;state=data;sessionStorage.setItem(sessionKey,JSON.stringify(s));
   $('login').hidden=true;$('workspace').hidden=false;$('sessionActions').hidden=false;message('account',s.user.nombre||s.user.name||s.user.username||s.user.documento);
-  $('sync').disabled=false;message('loginMessage','');message('syncMessage',navigator.onLine?'':offlineStatus());message('notice','');reset();tab(false);render();void sync();
+  $('sync').disabled=false;message('loginMessage','');message('syncMessage',navigator.onLine?'':offlineStatus());message('notice','');reset();tab(false);restoreUpdateDraft(s);render();void sync();
 }
 login.onsubmit=async event=>{
   event.preventDefault();const b=login.querySelector('button');if(b.disabled)return;b.disabled=true;
@@ -248,7 +250,7 @@ login.onsubmit=async event=>{
   }catch(error){message('loginMessage',error.message);}finally{b.disabled=false;}
 };
 function logout(){
-  activeRequest?.abort();generation++;session=null;running=null;sessionStorage.removeItem(sessionKey);
+  activeRequest?.abort();generation++;session=null;running=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(updateDraftKey);
   state=FrontStore.empty();reset();$('rows').replaceChildren();message('account','');
   $('sessionActions').hidden=$('workspace').hidden=true;$('login').hidden=false;login.elements.password.value='';message('loginMessage','');
 }
@@ -296,14 +298,48 @@ function registerWorker(){
 }
 registerWorker()?.catch(()=>{if(session)message('notice','No se pudo preparar la apertura sin conexión. Vuelve a abrir la app con internet.');});
 
-function updateBlocker(){
-  if(!navigator.onLine)return 'Conéctate a internet para actualizar Labor.';
-  if(saveBusy||running)return 'Espera a que termine el guardado o la sincronización y vuelve a pulsar Actualizar app.';
-  if(editing||selected.length||newMode()||$('search').value||f.nivel.value||f.corte.value||
-    f.fecha.value!==initialReportDate||f.fecha.validity.customError||(manualShift&&f.turno.value!==shift())){
-    return 'Termina el reporte en curso antes de actualizar Labor.';
+function keepUpdateDraft(s,updateId){
+  const draft={
+    account:owner(s),updateId,editing,selected,manualShift,history:!$('history').hidden,
+    fecha:f.fecha.value,turno:f.turno.value,nivel:f.nivel.value,corte:f.corte.value,
+    search:$('search').value,person:newMode()?Object.fromEntries(personKeys.map(key=>[key,f[key].value])):null
+  };
+  sessionStorage.setItem(updateDraftKey,JSON.stringify(draft));
+}
+function restoreUpdateDraft(s){
+  const saved=sessionStorage.getItem(updateDraftKey);
+  if(!saved)return;
+  sessionStorage.removeItem(updateDraftKey);
+  let draft;
+  try{draft=JSON.parse(saved);}catch{return;}
+  if(draft?.account!==owner(s)||draft.updateId!==new URL(location.href).searchParams.get('_appUpdate'))return;
+  if(draft.editing){
+    const row=state.reports.find(r=>r.id===draft.editing.id&&r.rev===draft.editing.rev&&r.status==='review');
+    if(!row){tab(true);message('notice','El reporte cambió. Revísalo en Mis reportes.');return;}
+    review(row);
   }
-  return '';
+  f.fecha.value=draft.fecha;
+  manualShift=draft.manualShift;
+  if(manualShift)f.turno.value=draft.turno;
+  f.nivel.value=draft.nivel;
+  f.corte.disabled=!draft.nivel;
+  f.corte.value=draft.corte;
+  selected.push(...draft.selected);
+  paintSelected();
+  $('search').value=draft.search;
+  showRegistration(Boolean(draft.person));
+  if(draft.person){
+    f.empresa.value=draft.person.empresa;
+    catalogs();
+    for(const key of personKeys)f[key].value=draft.person[key];
+  }
+  tab(draft.history);
+}
+async function waitForReportOperations(s){
+  while(session===s&&(savingReport||running)){
+    message('notice',savingReport?'Esperando a que termine el guardado…':'Esperando a que termine la sincronización…');
+    await Promise.allSettled([savingReport,running]);
+  }
 }
 function waitForActivation(worker){
   return new Promise((resolve,reject)=>{
@@ -322,12 +358,14 @@ function waitForActivation(worker){
   });
 }
 $('updateLabor').onclick=async event=>{
-  const button=event.currentTarget,s=session,blocked=updateBlocker();
+  const button=event.currentTarget,s=session;
   if(!s||button.disabled)return;
-  if(blocked)return message('notice',blocked);
+  if(!navigator.onLine)return message('notice','Conéctate a internet para actualizar Labor.');
   button.disabled=true;button.setAttribute('aria-busy','true');
-  message('notice','Buscando la versión más reciente de Labor…');
   try{
+    await waitForReportOperations(s);
+    if(session!==s)return;
+    message('notice','Buscando la versión más reciente de Labor…');
     const url=new URL(location.href);
     url.searchParams.set('_appUpdate',Date.now());
     const response=await fetch(url,{cache:'no-store',signal:AbortSignal.timeout?.(20000)});
@@ -339,9 +377,12 @@ $('updateLabor').onclick=async event=>{
       if(!worker)throw new Error('No se pudo preparar la actualización.');
       await waitForActivation(worker);
     }
+    await waitForReportOperations(s);
     if(session!==s)return;
-    const reason=updateBlocker();
-    if(reason)return message('notice',reason);
+    if(!navigator.onLine)return message('notice','Conéctate a internet para actualizar Labor.');
+    if(f.fecha.validity.customError)return message('notice','Revisa la fecha del reporte antes de actualizar Labor.');
+    try{keepUpdateDraft(s,url.searchParams.get('_appUpdate'));}
+    catch{return message('notice','No se pudo conservar el formulario. Labor sigue abierta con tus datos.');}
     location.replace(url.href);
   }catch{
     if(session===s)message('notice','No se pudo actualizar Labor. Revisa la conexión y vuelve a intentarlo.');
