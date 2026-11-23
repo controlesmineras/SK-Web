@@ -42,3 +42,7 @@ fieldset{border:0;padding:0;margin:0;min-width:0}legend{padding:0}small,.meta{co
 }
 .reportLocation,#rows article{min-width:0}
 #rows article,.chosen,.matches{overflow-wrap:anywhere}
+#chosen{list-style:none;margin:0 0 12px;padding:0;display:grid;gap:8px}
+.chosen .small{flex-shrink:0;min-width:44px}
+.personActions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}
+.personActions .textButton{margin:0}

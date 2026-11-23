@@ -5,11 +5,19 @@ const labels={D:'Día',T:'Tarde',S:'Serena'},statuses={pending:'Pendiente',synce
 const personKeys=['documento','primerNombre','segundoNombre','primerApellido','segundoApellido','empresa','area','cargo','telefono'];
 const stamp=()=>crypto.randomUUID();
 const sessionKey='sk-frentes:session';
-let session=null,state=FrontStore.empty(),selected=null,editing=null,manualShift=false,running=null,generation=0;
+let session=null,state=FrontStore.empty(),editing=null,manualShift=false,running=null,generation=0;
+const selected=[];
 let activeRequest,saveBusy=false,initialReportDate='';
 const owner=s=>'labor:'+s.user.documento;
 const message=(id,text)=>{$(id).textContent=text;};
-const list=()=>people(state,editing?.id);
+function samePerson(a,b){
+  const documentKey=doc(a.documento);
+  return a.id===b.id || (documentKey!=='' && documentKey===doc(b.documento));
+}
+function list(){
+  const directory=people(state,editing?.id);
+  return directory.concat(selected.filter(p=>p.draftNew&&!directory.some(row=>samePerson(row,p))));
+}
 const newMode=()=>!$('personFields').disabled;
 const options=(key)=>state.options[key]||window.SKFormOptions?.values(key)||[];
 function selectOptions(control,placeholder,values){
@@ -27,23 +35,58 @@ f.nivel.onchange=()=>{f.corte.disabled=!f.nivel.value;};
 f.empresa.onchange=catalogs;
 for(const radio of f.turno)radio.onchange=()=>{manualShift=true;};
 function updateShift(){if(!manualShift&&!editing)f.turno.value=shift();}
-function setMode(mode){
-  $('lookup').hidden=mode!=='search';$('chosen').hidden=mode!=='selected';
-  $('personFields').hidden=$('personFields').disabled=mode!=='new';
-  if(mode!=='new')$('details').disabled=true;
+function showRegistration(open){
+  $('lookup').hidden=open||Boolean(editing&&selected.length);
+  $('personFields').hidden=$('personFields').disabled=!open;
+  if(!open)$('details').disabled=true;
 }
-function clearPerson(){
-  selected=null;setMode('search');$('search').value='';$('matches').replaceChildren();$('add').hidden=true;
+function clearSearch(){
+  showRegistration(false);$('search').value='';$('matches').replaceChildren();$('add').hidden=true;
+}
+function paintSelected(){
+  const cards=$('chosen');
+  cards.hidden=!selected.length;
+  cards.replaceChildren(...selected.map(p=>{
+    const card=document.createElement('li');
+    const identity=document.createElement('div');
+    const title=document.createElement('strong');
+    const meta=document.createElement('span');
+    const remove=document.createElement('button');
+    card.className='chosen';
+    title.textContent=personName(p);
+    meta.className='meta';
+    meta.textContent=info(p);
+    remove.type='button';
+    remove.className='small';
+    remove.textContent='×';
+    remove.setAttribute('aria-label','Quitar a '+personName(p));
+    remove.onclick=()=>{
+      if(saveBusy)return;
+      selected.splice(selected.indexOf(p),1);
+      paintSelected();
+      if(newMode())results(true);
+      else{
+        showRegistration(false);
+        results();
+        $('search').focus();
+      }
+    };
+    identity.append(title,meta);
+    card.append(identity,remove);
+    return card;
+  }));
 }
 function reset(){
-  editing=null;manualShift=false;report.reset();clearPerson();initialReportDate=today();f.fecha.value=initialReportDate;updateShift();f.corte.disabled=true;
+  editing=null;manualShift=false;report.reset();selected.length=0;paintSelected();clearSearch();initialReportDate=today();f.fecha.value=initialReportDate;updateShift();f.corte.disabled=true;
+  message('personLegend','Funcionarios');
   $('cancelReview').hidden=true;message('editorTitle','Nuevo reporte');message('save','Guardar reporte');catalogs();
 }
 function choose(p){
-  if(p.active===false)return;
-  selected=p;setMode('selected');message('chosenName',personName(p));message('chosenInfo',info(p));
+  if(saveBusy||p.active===false||selected.some(row=>samePerson(row,p))||(editing&&selected.length))return;
+  selected.push(p);clearSearch();paintSelected();message('notice','');
+  if(editing)$('save').focus();else $('search').focus();
 }
-function info(p){return [p.documento,p.empresa,p.cargo,p.active===false?'Inactivo':'',p.local?'Pendiente en este dispositivo':''].filter(Boolean).join(' · ');}
+function info(p){return [p.documento,p.empresa,p.cargo,p.active===false?'Inactivo':'',p.draftNew?'Nuevo funcionario':p.local?'Pendiente en este dispositivo':''].filter(Boolean).join(' · ');}
 function highlighted(node,value,query){
   const text=String(value||''),key=norm(query),pos=norm(text).indexOf(key);
   if(!key||pos<0){node.textContent=text;return;}
@@ -54,16 +97,21 @@ function results(byDoc=false){
   const value=(byDoc?f.documento:$('search')).value.trim(),box=$(byDoc?'docMatches':'matches');
   const found=matches(list(),value,byDoc);box.replaceChildren();
   const exact=byDoc&&found.find(p=>doc(p.documento)===doc(value));
-  if(byDoc){$('details').disabled=!/^[A-Z0-9]{1,32}$/.test(doc(value))||Boolean(exact);}
+  if(byDoc){
+    $('details').disabled=!/^[A-Z0-9]{1,32}$/.test(doc(value))||Boolean(exact);
+    $('includePerson').disabled=$('details').disabled;
+  }
   else $('add').hidden=!value||found.length>0;
   if(!value)return;
   for(const p of found.slice(0,12)){
-    const b=document.createElement('button');b.type='button';b.disabled=p.active===false;
+    const added=selected.some(row=>samePerson(row,p));
+    const b=document.createElement('button');b.type='button';b.disabled=p.active===false||added;
     const title=document.createElement('strong'),meta=document.createElement('span');meta.className='meta';
-    highlighted(title,personName(p),value);highlighted(meta,info(p),value);b.append(title,meta);b.onclick=()=>choose(p);box.append(b);
+    highlighted(title,personName(p),value);highlighted(meta,info(p)+(added?' · Ya agregado':''),value);b.append(title,meta);b.onclick=()=>choose(p);box.append(b);
   }
   let note='';
-  if(exact)note=exact.active===false?'Este documento pertenece a un funcionario inactivo. Revisa el documento.':'El documento ya está registrado. Selecciona al funcionario para usarlo en el reporte.';
+  if(exact&&selected.some(p=>samePerson(p,exact)))note='Este funcionario ya está agregado al reporte.';
+  else if(exact)note=exact.active===false?'Este documento pertenece a un funcionario inactivo. Revisa el documento.':'El documento ya está registrado. Selecciona al funcionario para usarlo en el reporte.';
   else if(!found.length)note=state.lastSync?'Sin coincidencias en este dispositivo.':'Sin coincidencias locales. Aún falta descargar Personal.';
   else if(found.length>12)note='Hay más coincidencias. Escribe otro dato para afinar la búsqueda.';
   if(note){const p=document.createElement('p');p.textContent=note;box.append(p);}
@@ -72,12 +120,25 @@ $('search').oninput=()=>results();f.documento.oninput=()=>results(true);
 $('add').onclick=()=>{
   const query=$('search').value.trim();
   const prior=state.reports.find(row=>row.id===editing?.id)?.newPerson;
-  personKeys.forEach(k=>f[k].value='');catalogs();setMode('new');
+  personKeys.forEach(k=>f[k].value='');catalogs();showRegistration(true);
   if(prior){f.empresa.value=prior.empresa;catalogs();for(const k of personKeys)if(k!=='documento')f[k].value=prior[k]||'';}
   if(/^[\d.\s-]+$/.test(query))f.documento.value=query;
   results(true);f.documento.focus();
 };
-$('clearPerson').onclick=$('cancelPerson').onclick=()=>{clearPerson();$('search').focus();};
+function personFromFields(){
+  results(true);
+  if($('details').disabled)throw new Error('Revisa el documento y selecciona la coincidencia si ya existe.');
+  const p=Object.fromEntries(personKeys.map(k=>[k,f[k].value.trim()]));
+  p.documento=doc(p.documento);
+  for(const key of personKeys){
+    if(!f[key].reportValidity()||(f[key].required&&!p[key]))throw new Error('Completa los datos del funcionario.');
+  }
+  return {...p,id:'FP-'+stamp(),draftNew:true};
+}
+$('includePerson').onclick=()=>{
+  try{choose(personFromFields());}catch(error){message('notice',error.message);}
+};
+$('cancelPerson').onclick=()=>{clearSearch();$('search').focus();};
 function tab(history){
   $('editor').hidden=history;$('history').hidden=!history;
   $('newTab').removeAttribute('aria-current');$('historyTab').removeAttribute('aria-current');
@@ -86,7 +147,7 @@ function tab(history){
 $('newTab').onclick=()=>tab(false);$('historyTab').onclick=()=>{tab(true);render();};
 function review(r){
   reset();editing={id:r.id,rev:r.rev};manualShift=true;f.fecha.value=r.fecha;f.turno.value=r.turno;f.nivel.value=String(r.nivel);f.corte.disabled=false;f.corte.value=r.corte;
-  $('search').value=r.documento||r.nombre;results();message('editorTitle','Revisar reporte');message('save','Confirmar reporte');$('cancelReview').hidden=false;
+  $('search').value=r.documento||r.nombre;results();message('personLegend','Funcionario');message('editorTitle','Revisar reporte');message('save','Confirmar reporte');$('cancelReview').hidden=false;
   message('notice',r.message||'Selecciona al funcionario correcto.');tab(false);$('search').focus();
 }
 $('cancelReview').onclick=()=>{reset();message('notice','');tab(true);};
@@ -109,24 +170,28 @@ function render(){
 }
 report.onsubmit=async event=>{
   event.preventDefault();if(!session||saveBusy)return;
-  const s=session;let p=selected,newPerson=null;
+  const s=session;
   try{
-    if(newMode()){
-      results(true);if($('details').disabled)throw new Error('Revisa el documento y selecciona la coincidencia si ya existe.');
-      newPerson=Object.fromEntries(personKeys.map(k=>[k,f[k].value.trim()]));
-      newPerson.documento=doc(newPerson.documento);
-      if(!newPerson.primerNombre||!newPerson.primerApellido||!newPerson.cargo)throw new Error('Completa los datos del funcionario.');
-      p={...newPerson,id:'FP-'+stamp(),nombre:personName(newPerson)};
-    }else if(selected?.local){
-      newPerson=Object.fromEntries(personKeys.map(k=>[k,selected[k]||'']));
-    }
-    if(!p)throw new Error('Busca y selecciona un funcionario para el reporte.');
+    if(!newMode()&&$('search').value.trim())throw new Error('Selecciona al funcionario que estás buscando o limpia la búsqueda antes de guardar.');
+    const roster=newMode()?[...selected,personFromFields()]:selected.slice();
+    if(!roster.length)throw new Error('Agrega al menos un funcionario al reporte.');
     if(!f.corte.value.trim())throw new Error('Escribe el corte del frente de trabajo.');
     updateShift();
-    const row={id:editing?.id||'FT-'+stamp(),rev:stamp(),owner:owner(s),fecha:f.fecha.value,turno:f.turno.value,nivel:Number(f.nivel.value),corte:f.corte.value.trim(),personId:p.id,documento:p.documento||'',nombre:personName(p),newPerson,status:'pending',message:'',existing:null};
+    const common={
+      owner:owner(s),fecha:f.fecha.value,turno:f.turno.value,nivel:Number(f.nivel.value),
+      corte:f.corte.value.trim(),status:'pending',message:'',existing:null
+    };
+    const rows=roster.map(p=>({
+      ...common,id:editing?.id||'FT-'+stamp(),rev:stamp(),
+      personId:p.id,documento:p.documento||'',nombre:personName(p),
+      newPerson:p.local||p.draftNew?Object.fromEntries(personKeys.map(k=>[k,p[k]||''])):null
+    }));
     const previous=editing?.rev;saveBusy=true;$('save').disabled=true;
-    const saved=await access(row.owner,local=>FrontStore.save(local,row,previous));
-    if(session!==s)return;state=saved;reset();render();message('notice','Reporte guardado en este dispositivo.');
+    const saved=await access(common.owner,local=>{
+      for(const row of rows)FrontStore.save(local,row,previous);
+    });
+    if(session!==s)return;state=saved;reset();render();
+    message('notice',rows.length===1?'Reporte guardado en este dispositivo.':'Reporte guardado en este dispositivo para '+rows.length+' funcionarios.');
     void sync();
   }catch(error){message('notice',error.message);}finally{saveBusy=false;$('save').disabled=false;}
 };
@@ -184,7 +249,7 @@ login.onsubmit=async event=>{
 };
 function logout(){
   activeRequest?.abort();generation++;session=null;running=null;sessionStorage.removeItem(sessionKey);
-  state=FrontStore.empty();reset();$('rows').replaceChildren();message('account','');message('chosenName','');message('chosenInfo','');
+  state=FrontStore.empty();reset();$('rows').replaceChildren();message('account','');
   $('sessionActions').hidden=$('workspace').hidden=true;$('login').hidden=false;login.elements.password.value='';message('loginMessage','');
 }
 $('logout').onclick=logout;
@@ -234,7 +299,7 @@ registerWorker()?.catch(()=>{if(session)message('notice','No se pudo preparar la
 function updateBlocker(){
   if(!navigator.onLine)return 'Conéctate a internet para actualizar Labor.';
   if(saveBusy||running)return 'Espera a que termine el guardado o la sincronización y vuelve a pulsar Actualizar app.';
-  if(editing||selected||newMode()||$('search').value||f.nivel.value||f.corte.value||
+  if(editing||selected.length||newMode()||$('search').value||f.nivel.value||f.corte.value||
     f.fecha.value!==initialReportDate||f.fecha.validity.customError||(manualShift&&f.turno.value!==shift())){
     return 'Termina el reporte en curso antes de actualizar Labor.';
   }

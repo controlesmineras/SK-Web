@@ -27,9 +27,9 @@
 <label><input type="radio" name="turno" value="S" aria-label="Serena"><span class="shiftFull" aria-hidden="true">Serena</span><span class="shiftShort" aria-hidden="true">S</span></label></div></fieldset></div>
 <fieldset class="group"><legend>Frente de trabajo</legend><div class="pair front"><label>Nivel<select name="nivel" required><option value="">Seleccionar nivel</option></select></label><label>Corte<input name="corte" placeholder="Ej. 850" maxlength="120" required disabled></label></div></fieldset>
 </div>
-<fieldset class="group reportPerson"><legend>Funcionario</legend>
+<fieldset class="group reportPerson"><legend id="personLegend">Funcionarios</legend>
+<ul id="chosen" aria-label="Funcionarios agregados" hidden></ul>
 <div id="lookup"><label>Buscar funcionario<input type="search" id="search" placeholder="Nombre o documento" autocomplete="off"></label><div id="matches" class="matches" aria-live="polite"></div><button type="button" id="add" class="secondary" hidden>Registrar funcionario</button></div>
-<div id="chosen" class="chosen" hidden><div><strong id="chosenName"></strong><div class="meta" id="chosenInfo"></div></div><button type="button" id="clearPerson" class="small" aria-label="Quitar funcionario">×</button></div>
 <fieldset id="personFields" hidden disabled><legend>Registrar funcionario</legend>
 <label>Documento<input name="documento" inputmode="numeric" maxlength="42" autocomplete="off" required></label><div id="docMatches" class="matches" aria-live="polite"></div>
 <fieldset id="details" disabled><div class="pair">
@@ -37,7 +37,7 @@
 <label>Primer apellido<input name="primerApellido" maxlength="160" required></label><label>Segundo apellido <small>(opcional)</small><input name="segundoApellido" maxlength="160"></label>
 <label>Empresa<select name="empresa" required></select></label><label>Área<select name="area" required></select></label>
 <label>Cargo<input name="cargo" list="cargos" maxlength="160" required><datalist id="cargos"></datalist></label><label>Teléfono <small>(opcional)</small><input type="tel" name="telefono" maxlength="40"></label>
-</div></fieldset><button type="button" class="textButton" id="cancelPerson">Volver al buscador</button></fieldset>
+</div></fieldset><div class="personActions"><button type="button" class="secondary" id="includePerson">Agregar al reporte</button><button type="button" class="textButton" id="cancelPerson">Volver al buscador</button></div></fieldset>
 </fieldset><div class="formActions"><button class="primary" id="save">Guardar reporte</button><button type="button" class="secondary" id="cancelReview" hidden>Cancelar revisión</button></div></form></section>
 <section id="history" class="card" hidden><h2>Mis reportes en este dispositivo</h2><div id="rows"></div></section>
 </section></main></body></html>
