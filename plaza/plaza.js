@@ -339,7 +339,14 @@ function matchesItemSearch(text,number,query){
   $('#plazaShiftSearch')?.addEventListener('input',renderShiftResults);
   $('#plazaShiftSearch')?.addEventListener('focus',renderShiftResults);
   $('#plazaShift')?.addEventListener('focusout',event=>{
-    if(!event.currentTarget.contains(event.relatedTarget))$('#plazaShiftResults').hidden=true;
+    if(event.relatedTarget&&!event.currentTarget.contains(event.relatedTarget))$('#plazaShiftResults').hidden=true;
+  });
+  $('#plazaShiftResults')?.addEventListener('pointerdown',event=>{
+    if(event.button===0&&event.target.closest('[data-shift-person]'))event.preventDefault();
+  });
+  $('body')?.addEventListener('pointerdown',event=>{
+    const results=$('#plazaShiftResults');
+    if(!results.hidden&&!$('#plazaShift').contains(event.target))results.hidden=true;
   });
   $('#plazaShiftResults')?.addEventListener('click',event=>{
     const button=event.target.closest('[data-shift-person]');
