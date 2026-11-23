@@ -87,11 +87,11 @@ function plaza(data){
  const ctx=vm.createContext({document:{querySelectorAll:()=>[],querySelector:key=>{if(key==='#deliveryCategoryFilter input:checked')return {value:'all'};if(!nodes.has(key))nodes.set(key,node());return nodes.get(key)}},window:{alert(){},addEventListener(){}},localStorage:{getItem:()=>null},sessionStorage:{getItem:()=>null},navigator:{onLine:true},setTimeout(){},clearTimeout(){},crypto:{},console});
  vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
  const source=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
- vm.runInContext(source+'\nwindow.audit={set:value=>{data=value},renderRecentQueries,deliveryReportRow,inventoryQueryRows,queryMovementCard};})();',ctx);ctx.window.audit.set(clone(data));return{api:ctx.window.audit,nodes};
+ vm.runInContext(source+'\nwindow.audit={set:value=>{data=value},renderRecentQueries,deliveryReportRow,personHistoryRows,queryMovementCard,selectPerson:id=>{historyPersonId=id}};})();',ctx);ctx.window.audit.set(clone(data));return{api:ctx.window.audit,nodes};
 }
 test('Plaza presenta los dos registros con saldos originales y reintegro positivo; exporta su estado',()=>{
  const b=backend();b.request();const cloud=b.cloud(),h=plaza(cloud);h.api.renderRecentQueries();const html=h.nodes.get('#recentDeliveriesList').innerHTML;
  assert.match(html,/REVERSADO/);assert.match(html,/REVERSIÓN/);assert.match(html,/\+ Cantidad reintegrada/);assert.match(html,/− Cantidad entregada/);assert.match(html,/> 20 ·/);assert.match(html,/> 17<\/span>/);assert.match(html,/Reversión solicitada por:/);
  assert.match(h.api.deliveryReportRow(cloud.blendingDeliveries[0]).observaciones,/REVERSADO/);assert.match(h.api.deliveryReportRow(cloud.blendingDeliveries[2]).observaciones,/\+ Cantidad reintegrada: 4 · Nuevo saldo: 17/);
- const rows=h.api.inventoryQueryRows('stock');assert.equal(rows.length,3);assert.ok(rows.some(row=>row.id===original.id));assert.match(h.api.queryMovementCard(rows.find(row=>row.movementType==='REVERSIÓN')),/Reversión solicitada por:/);
+ h.api.selectPerson('person');const rows=h.api.personHistoryRows();assert.equal(rows.length,3);assert.ok(rows.some(row=>row.id===original.id));assert.match(h.api.queryMovementCard(rows.find(row=>row.movementType==='REVERSIÓN')),/Reversión solicitada por:/);
 });

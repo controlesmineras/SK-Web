@@ -548,7 +548,7 @@ function matchesItemSearch(text,number,query){
     $('#plazaShiftSearch').focus();
     return false;
   }
-  function showView(view){if(['income','delivery','loan','assetReturns'].includes(view)&&!requireShiftAtHome())return;if(view!==navigationRoute){$('#plazaShiftHelp').hidden=true;$('#plazaShiftInfo').setAttribute('aria-expanded','false')}navigationRoute=view;if(view==='recentDeliveries'){const allOption=$('#deliveryCategoryFilter input[value="all"]');if(allOption)allOption.checked=true}const returnsQuery=view==='loanHistory';if(returnsQuery||view==='assetReturns'){window.SKPlazaReturns?.setReadOnly(returnsQuery);view='assetReturns'}if(view==='loan'||view==='delivery'){openDeliveryMode(view==='loan'?'loan':'assignment');view='delivery'}currentView=view;const nav=$('nav'),queryViews=['contacts','recentDeliveries','recentIncomes','stockQuery','personHistory',...(returnsQuery?['assetReturns']:[])],homeButton=$('#plazaHeaderHome'),atHome=view==='home';renderShiftStatus();nav.hidden=atHome;if(homeButton){homeButton.disabled=atHome;homeButton.classList.toggle('isCurrent',atHome);homeButton.setAttribute('aria-label',atHome?'Ubicación actual: Inicio':'Volver a Inicio');homeButton.title=atHome?'':'Volver a Inicio'}document.querySelectorAll('nav button').forEach(button=>{const isHome=button.dataset.view==='home',isCurrent=button.dataset.view===view||(button.dataset.view==='contacts'&&queryViews.includes(view));button.style.display=view==='home'||isHome||isCurrent?'':'none';button.disabled=isCurrent&&!isHome;button.classList.toggle('active',isCurrent);button.classList.toggle('moduleIndicator',isCurrent&&!isHome)});document.querySelectorAll('.view').forEach(section=>section.classList.toggle('active',section.id===view));if(['home','contacts','personal','delivery','income'].includes(view))refreshSharedData();if(queryViews.includes(view))renderRecentQueries();if(view==='stockQuery'||view==='personHistory')renderInventoryQueries();if(view==='assetReturns')window.SKPlazaReturns?.refresh();refreshSyncedView();const scrollTop=$('#deliveryScrollTop');if(scrollTop)scrollTop.hidden=!(view==='recentDeliveries'&&window.scrollY>480);paintPlazaNavigation()}
+  function showView(view){if(['income','delivery','loan','assetReturns'].includes(view)&&!requireShiftAtHome())return;if(view!==navigationRoute){$('#plazaShiftHelp').hidden=true;$('#plazaShiftInfo').setAttribute('aria-expanded','false')}if(view==='stockQuery'&&currentView!=='stockQuery'){stockGroup='';stockRootFilter='';$('#stockSearch').value=''}navigationRoute=view;if(view==='recentDeliveries'){const allOption=$('#deliveryCategoryFilter input[value="all"]');if(allOption)allOption.checked=true}const returnsQuery=view==='loanHistory';if(returnsQuery||view==='assetReturns'){window.SKPlazaReturns?.setReadOnly(returnsQuery);view='assetReturns'}if(view==='loan'||view==='delivery'){openDeliveryMode(view==='loan'?'loan':'assignment');view='delivery'}currentView=view;const nav=$('nav'),queryViews=['contacts','recentDeliveries','recentIncomes','stockQuery','personHistory',...(returnsQuery?['assetReturns']:[])],homeButton=$('#plazaHeaderHome'),atHome=view==='home';renderShiftStatus();nav.hidden=atHome;if(homeButton){homeButton.disabled=atHome;homeButton.classList.toggle('isCurrent',atHome);homeButton.setAttribute('aria-label',atHome?'Ubicación actual: Inicio':'Volver a Inicio');homeButton.title=atHome?'':'Volver a Inicio'}document.querySelectorAll('nav button').forEach(button=>{const isHome=button.dataset.view==='home',isCurrent=button.dataset.view===view||(button.dataset.view==='contacts'&&queryViews.includes(view));button.style.display=view==='home'||isHome||isCurrent?'':'none';button.disabled=isCurrent&&!isHome;button.classList.toggle('active',isCurrent);button.classList.toggle('moduleIndicator',isCurrent&&!isHome)});document.querySelectorAll('.view').forEach(section=>section.classList.toggle('active',section.id===view));if(['home','contacts','personal','delivery','income'].includes(view))refreshSharedData();if(queryViews.includes(view)&&view!=='stockQuery')renderRecentQueries();if(view==='stockQuery'||view==='personHistory')renderInventoryQueries();if(view==='assetReturns')window.SKPlazaReturns?.refresh();refreshSyncedView();const scrollTop=$('#deliveryScrollTop');if(scrollTop)scrollTop.hidden=!(view==='recentDeliveries'&&window.scrollY>480);paintPlazaNavigation()}
   function hasUnsavedData(){if(currentView==='assetReturns')return window.SKPlazaReturns?.hasUnsaved()||false;if(currentView==='delivery'){const form=$('#deliveryForm');return Boolean(form.elements.recipientCompany.value||deliveryDraft.length||form.elements.itemId.closest('label')._hasItemSearchDraft?.()||form.elements.itemId.value||form.elements.recipientId.value||form.elements.destination.value||form.elements.notes.value||(String(form.elements.quantity.value||'').trim()&&!['0','1'].includes(String(form.elements.quantity.value))))}if(currentView==='income'){const form=$('#incomeForm');return Boolean(incomeDraft.length||form.elements.itemId.closest('label')._hasItemSearchDraft?.()||form.elements.itemId.value||form.elements.notes.value||$('#incomeCollaboratorSearch')?.value.trim()||(String(form.elements.quantity.value||'').trim()&&!['0','1'].includes(String(form.elements.quantity.value))))}return false}
   function discardDeliveryForm(){deliveryDraft=[];const form=$('#deliveryForm');form.reset();delete form.elements.destination.dataset.manualArea;clearItemSearch(form);$('#recipientSearch').value='';$('#recipientId').value='';const info=$('#recipientInfo');if(info)info.hidden=true;const results=$('#recipientResults');if(results)results.hidden=true;const noMatch=$('#recipientNoMatch');if(noMatch)noMatch.hidden=true;const register=$('#newRecipientBtn');if(register)register.hidden=true;const edit=$('#editRecipientBtn');if(edit){edit.hidden=true;edit.disabled=true}renderDeliveryDraft();updateDeliveryFields()}
   function discardIncomeForm(){incomeDraft=[];const form=$('#incomeForm');form.reset();clearItemSearch(form);window.SKPlaza?.clearIncomeCollaborator?.();renderIncomeDraft();form.elements.itemId.dispatchEvent(new Event('change',{bubbles:true}))}
@@ -568,9 +568,10 @@ function matchesItemSearch(text,number,query){
   function paintPlazaNavigation(){
     const bar=$('#plazaNavigation');if(!bar)return;bar.hidden=currentView==='home';
     const parent=plazaParent(),titles={income:'Registrar ingresos',delivery:'Registrar entregas',loan:'Prestar elementos',assetReturns:'Retorno de elementos',loanHistory:'Préstamos y devoluciones',recentDeliveries:'Entregas recientes',recentIncomes:'Ingresos recientes',stockQuery:'Existencias',contacts:'Personal',personHistory:'Historial del funcionario',personal:'Registrar colaborador'};
-    $('#plazaBreadcrumb').textContent=['Inicio',...(['register','query'].includes(parent)?[parent==='register'?'Hacer registros':'Hacer consultas']:parent==='contacts'?['Hacer consultas','Personal']:[]),titles[navigationRoute]||''].filter(Boolean).join(' / ');
+    $('#plazaBreadcrumb').textContent=['Inicio',...(['register','query'].includes(parent)?[parent==='register'?'Hacer registros':'Hacer consultas']:parent==='contacts'?['Hacer consultas','Personal']:[]),titles[navigationRoute]||'',navigationRoute==='stockQuery'&&stockGroup?window.SKSpareGroups.groupName(stockGroup):''].filter(Boolean).join(' / ');
   }
   function goBackPlaza(){
+    if(currentView==='stockQuery'&&stockGroup){changeStockGroup('');return}
     const returning=currentView==='assetReturns'&&window.SKPlazaReturns?.hasUnsaved();
     if(!leavePlazaScreen())return;
     if(returning)return;
@@ -945,45 +946,109 @@ function matchesItemSearch(text,number,query){
   function queryPerson(row){return(data.personal||[]).find(person=>person.id===row.recipientId||person.id===row.broughtById)||null}
   function queryMatchesPerson(row,id){const person=(data.personal||[]).find(p=>p.id===id);return row.recipientId===id||row.broughtById===id||row.returnedById===id||Boolean(person?.documento&&[row.recipientDocument,row.broughtByDocument,row.returnedByDocument].includes(person.documento))}
   function queryMatchesItem(row,id){if(row.itemId)return String(row.itemId)===String(id);const item=findItem(id),asset=(data.assets||[]).find(a=>a.id===row.assetId);return Boolean(item&&norm(row.itemName||asset?.clase)===norm(itemName(item)))}
-  function inventoryQueryRows(kind){
-    const prefix=kind==='stock'?'stock':'person',itemId=$('#'+prefix+'QueryForm').elements.itemId.value,personId=kind==='person'?historyPersonId:$('#stockPersonFilter').value;
-    const company=kind==='stock'?($('#stockCompanyFilter')?.value||''):'';
-    const fromValue=$('#'+prefix+'From').value,toValue=$('#'+prefix+'To').value,from=fromValue?new Date(fromValue+'T00:00:00'):null,to=toValue?new Date(toValue+'T23:59:59.999'):null;
-    if(kind==='stock'&&!itemId||kind==='person'&&!personId||from&&to&&from>to)return [];
-    const deliveries=(data.blendingDeliveries||[]).map(row=>({...row,queryType:row.movementType==='REVERSIÓN'?'REVERSIÓN':row.movementType==='DEVOLUCIÓN'?'DEVOLUCIÓN':row.deliveryType||'ENTREGA'}));
-    const rows=kind==='stock'?deliveries.concat((data.blendingIncomes||[]).map(row=>({...row,queryType:row.movementType==='REVERSIÓN'?'REVERSIÓN':'INGRESO'}))):deliveries.filter(row=>row.movementType!=='DEVOLUCIÓN');
-    return rows.filter(row=>{const date=movementDate(row),recordedCompany=String(row.recipientCompany||'').trim().toUpperCase(),matchesCompany=!company||(!['INGRESO','DEVOLUCIÓN'].includes(row.queryType)&&(company==='unrecorded'?!recordedCompany:recordedCompany===company));return (validQueryRow(row)||!row.deleted&&row.reversalMovementId)&&date&&matchesCompany&&(!itemId||queryMatchesItem(row,itemId))&&(!personId||queryMatchesPerson(row,personId))&&(!from||date>=from)&&(!to||date<=to)}).sort((a,b)=>movementDate(b)-movementDate(a));
+  function personHistoryRows(){
+    const itemId=$('#personQueryForm').elements.itemId.value;
+    const fromValue=$('#personFrom').value,toValue=$('#personTo').value;
+    const from=fromValue?new Date(fromValue+'T00:00:00'):null,to=toValue?new Date(toValue+'T23:59:59.999'):null;
+    if(!historyPersonId||from&&to&&from>to)return [];
+    return (data.blendingDeliveries||[]).filter(row=>{
+      const date=movementDate(row);
+      return row.movementType!=='DEVOLUCIÓN'&&(validQueryRow(row)||!row.deleted&&row.reversalMovementId)&&date&&
+        queryMatchesPerson(row,historyPersonId)&&(!itemId||queryMatchesItem(row,itemId))&&(!from||date>=from)&&(!to||date<=to);
+    }).map(row=>({...row,queryType:row.movementType==='REVERSIÓN'?'REVERSIÓN':row.deliveryType||'ENTREGA'}))
+      .sort((a,b)=>movementDate(b)-movementDate(a));
   }
   function queryMovementCard(row){if(row.movementType==='REVERSIÓN')return `<article${reversalAppearance(row)}><div><b>REVERSIÓN · ${esc(movementItem(row))}</b><span>${esc(movementDate(row)?.toLocaleString('es-CO'))}</span>${reversalBalance(row)}${reversalStatus(row)}${reversalRequester(row)}${movementPeopleFromPersonal(row)}</div></article>`;const person=queryPerson(row),name=row.queryType==='INGRESO'?(row.broughtByName||person?.nombre):(row.recipientName||person?.nombre),unit=findItem(row.itemId)?.unit||findItem(row.itemId)?.CI_UNIDAD_MEDIDA||'unidades';return `<article${reversalAppearance(row)}><div><b>${esc(row.queryType)} · ${esc(movementItem(row))}</b>${reversalStatus(row)}<span>${esc(movementDate(row)?.toLocaleString('es-CO'))} · Cantidad: ${esc(row.quantity??1)} ${esc(unit)}</span><span>${row.queryType==='INGRESO'?'Trae':'Recibe'}: ${esc(name||'No informado')} · Documento: ${esc(person?.documento||row.recipientDocument||row.broughtByDocument||'No informado')}</span>${!['INGRESO','DEVOLUCIÓN'].includes(row.queryType)?`<span>Empresa receptora: ${esc(String(row.recipientCompany||'').trim()||'Sin empresa registrada')}</span>`:''}${deliveryReplacementLabel(row)?`<span>Trae reposición: ${esc(deliveryReplacementLabel(row))}</span>`:''}${row.assetLabel?`<span>Activo: ${esc(movementAssetLabel(row))}</span>`:''}${row.destination?`<span>Destino: ${esc(row.destination)}</span>`:''}${row.notes?`<span>Observaciones: ${esc(row.notes)}</span>`:''}${loanReturnSummary(row)?`<span>${esc(loanReturnSummary(row))}</span>`:''}${movementPeopleFromPersonal(row)}${movementSyncStatus(row)}</div></article>`}
   function queryStock(item){if(!isFixedItem(item))return itemAvailability(item);return(data.assets||[]).filter(asset=>norm(asset.clase)===norm(itemName(item))&&assetAvailableForDelivery(asset)).length}
-  function queryTotalCard(entry,kind){
-    const summary=`<b>${esc(entry.name)}</b><span>Cantidad: ${esc(entry.quantity)} · Entregas: ${entry.count}</span>`;
-    if(kind!=='stock')return `<article><div>${summary}</div></article>`;
-    return `<details class="queryPersonDeliveries"><summary><span class="queryPersonSummary">${summary}</span><span class="queryDeliveryToggle"><span class="queryDeliveryShow">VER ENTREGAS</span><span class="queryDeliveryHide">OCULTAR ENTREGAS</span></span></summary><div class="queryDeliveryDetails"><p>Entregas en el rango seleccionado · Más recientes primero.</p><div class="recentMovementList">${entry.rows.map(queryMovementCard).join('')}</div></div></details>`;
+  let stockGroup='',stockRootFilter='';
+  const stockBalances=new Map();
+  function stockEntries(items,group,query){
+    const groups=window.SKSpareGroups;
+    const catalog=items.filter(item=>item.id&&!item.deleted&&item.active!==false&&item.recordType!=='formOptions'&&item.id!=='SYSTEM-FORM-OPTIONS-V1');
+    if(group)return groups.parts(catalog,group,query).map(item=>({item}));
+    const groupTypes=new Set(catalog.map(groups.key));
+    const folderText=value=>norm(value).replace(/(yt|columna)\s+(?=\d)/g,'$1').replace(/\brepuestos\b/g,'repuesto');
+    const words=folderText(query).split(/\s+/);
+    const folders=groups.types.filter(type=>groupTypes.has(type)&&words.every(word=>folderText(groups.groupName(type)).includes(word)));
+    const common=catalog.filter(item=>!groups.key(item)&&groups.matches(item,query))
+      .sort((a,b)=>recentCollator.compare(itemName(a),itemName(b)));
+    return [...folders.map(type=>({type})),...common.map(item=>({item}))];
+  }
+  function renderStockList(){
+    const groups=window.SKSpareGroups,search=$('#stockSearch');
+    $('#stockQueryTitle').textContent=stockGroup?groups.groupName(stockGroup):'CONSULTAR EXISTENCIAS';
+    search.placeholder=stockGroup?'Buscar por ítem, código o nombre…':'Buscar elemento o carpeta…';
+    const entries=stockEntries(data.inventoryCriteria||[],stockGroup,search.value);
+    const rows=entries.map(({type,item})=>{
+      const row=document.createElement('tr');
+      if(type){
+        const cell=row.insertCell();cell.colSpan=4;
+        const button=document.createElement('button');button.type='button';button.dataset.stockGroup=type;
+        const folder=document.createElement('span');folder.textContent='📂';folder.setAttribute('aria-hidden','true');
+        button.append(folder,groups.groupName(type));cell.append(button);return row;
+      }
+      const name=stockGroup?groups.partName(item):itemName(item);
+      const label=row.insertCell();label.textContent=name;
+      if(stockGroup&&item.sparePartCode){
+        const code=document.createElement('small');code.textContent='Código: '+item.sparePartCode;label.append(code);
+      }
+      row.insertCell().textContent=item.unit||item.unidadMedida||item.CI_UNIDAD_MEDIDA||'Unidad';
+      if(!stockBalances.has(item.id))stockBalances.set(item.id,queryStock(item));
+      row.insertCell().textContent=stockBalances.get(item.id);
+      row.insertCell().append(window.SKInventoryReference.link(item.referenceUrl,name));return row;
+    });
+    $('#stockQuery tbody').replaceChildren(...rows);
+    const empty=$('#stockEmpty');empty.hidden=rows.length>0;
+    empty.textContent=search.value.trim()?'No hay coincidencias en esta lista.':'No hay elementos en esta lista.';
+  }
+  function changeStockGroup(type){
+    const search=$('#stockSearch'),previous=stockGroup;
+    if(type)stockRootFilter=search.value;
+    stockGroup=type;search.value=type?'':stockRootFilter;
+    renderStockList();paintPlazaNavigation();
+    if(type)$('#stockQueryTitle').focus();
+    else ($('#stockQuery [data-stock-group="'+previous+'"]')||search).focus();
   }
   function queryAssignedAssets(){const person=(data.personal||[]).find(p=>p.id===historyPersonId);return(data.assets||[]).map(asset=>window.SKAssetHistory.project(asset,data).asset).filter(asset=>validQueryRow(asset)&&!isRetired(asset)&&norm(asset.ubicacion)!=='bodega de superficie'&&(String(asset.asignadaId||'')===historyPersonId||person?.documento&&String(asset.documentoAsignado||'')===String(person.documento)))}
   function renderInventoryQueries(){
-    if(!$('#stockQueryForm'))return;
-    for(const prefix of ['stock','person']){const form=$('#'+prefix+'QueryForm'),selected=form.elements.itemId.value;form.elements.itemId.innerHTML=options(deliveryItems(),itemName);if(selected&&!deliveryItems().some(item=>item.id===selected)){const item=findItem(selected);if(item)form.elements.itemId.add(new Option(itemName(item),selected))}form.elements.itemId.value=selected;if(!form.elements.itemId.closest('label').classList.contains('isOpen'))form.elements.itemId.closest('label')._refreshItemSearch?.()}
-    const selectedPerson=$('#stockPersonFilter').value;$('#stockPersonFilter').innerHTML='<option value="">Todos los funcionarios</option>'+(data.personal||[]).filter(p=>!p.deleted).sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')).map(p=>`<option value="${esc(p.id)}">${esc(p.nombre)} · ${esc(p.documento)}</option>`).join('');$('#stockPersonFilter').value=selectedPerson;
-    for(const kind of ['stock','person']){const form=$('#'+kind+'QueryForm'),item=findItem(form.elements.itemId.value),rows=inventoryQueryRows(kind),invalid=$('#'+kind+'From').value&&$('#'+kind+'To').value&&$('#'+kind+'From').value>$('#'+kind+'To').value,ready=kind==='stock'?Boolean(item):Boolean(historyPersonId);$('#'+kind+'QueryStatus').textContent=invalid?'La fecha inicial debe ser anterior o igual a la fecha final.':!ready?(kind==='stock'?'Selecciona un elemento para consultar sus existencias y movimientos.':'Selecciona un funcionario.'):`${rows.length} ${kind==='stock'&&$('#stockCompanyFilter')?.value?'entregas encontradas':'movimientos encontrados'} · Datos de la última sincronización y registros locales pendientes.`;$('#'+kind+'Movements').innerHTML=ready&&!invalid?(rows.map(queryMovementCard).join('')||'<p>No hay movimientos en este rango.</p>'):'';
-      const totals=new Map();for(const row of rows){if(['INGRESO','DEVOLUCIÓN','REVERSIÓN'].includes(row.queryType)||row.reversed===true||row.reversado===true)continue;const key=kind==='stock'?(row.recipientId||row.recipientDocument||row.recipientName||'Sin identificar'):(row.itemId||row.itemName),entry=totals.get(key)||{name:kind==='stock'?(queryPerson(row)?.nombre||row.recipientName||'No informado'):movementItem(row),quantity:0,count:0,rows:[]};entry.quantity+=Number(row.quantity??1)||0;entry.count++;entry.rows.push(row);totals.set(key,entry)}$('#'+kind+'Totals').innerHTML=ready&&!invalid?'<h3>'+(kind==='stock'?'ENTREGADO POR FUNCIONARIO':'ELEMENTOS RECIBIDOS EN EL RANGO')+'</h3>'+[...totals.values()].sort((a,b)=>b.quantity-a.quantity).map(entry=>queryTotalCard(entry,kind)).join(''):'';
+    if(currentView==='stockQuery'){stockBalances.clear();renderStockList();return}
+    if(currentView!=='personHistory')return;
+    const form=$('#personQueryForm'),select=form.elements.itemId,selected=select.value,items=deliveryItems();
+    select.innerHTML=options(items,itemName);
+    if(selected&&!items.some(item=>item.id===selected)){
+      const item=findItem(selected);if(item)select.add(new Option(itemName(item),selected));
     }
-    const item=findItem($('#stockQueryForm').elements.itemId.value);$('#queryStockBalance').textContent=item?`${itemName(item)} · EXISTENCIAS ACTUALES: ${queryStock(item)} ${isFixedItem(item)?'activos disponibles':item.unit||item.CI_UNIDAD_MEDIDA||'unidades'}`:'';
-    const reference=$('#queryStockReference');
-    $('#queryStockSummary').hidden=!item;reference.hidden=!item;
-    if(item){
-      const heading=reference.querySelector('[data-reference-heading]');
-      if(!heading.firstChild)heading.append(window.SKInventoryReference.heading());
-      reference.querySelector('[data-reference-link]').replaceChildren(window.SKInventoryReference.link(item.referenceUrl,itemName(item)));
+    select.value=selected;
+    const label=select.closest('label');if(!label.classList.contains('isOpen'))label._refreshItemSearch?.();
+    const rows=personHistoryRows(),from=$('#personFrom').value,to=$('#personTo').value,invalid=from&&to&&from>to;
+    $('#personQueryStatus').textContent=invalid?'La fecha inicial debe ser anterior o igual a la fecha final.':!historyPersonId?'Selecciona un funcionario.':
+      rows.length+' movimientos encontrados · Datos de la última sincronización y registros locales pendientes.';
+    $('#personMovements').innerHTML=historyPersonId&&!invalid?(rows.map(queryMovementCard).join('')||'<p>No hay movimientos en este rango.</p>'):'';
+    const totals=new Map();
+    for(const row of rows){
+      if(['INGRESO','DEVOLUCIÓN','REVERSIÓN'].includes(row.queryType)||row.reversed===true||row.reversado===true)continue;
+      const key=row.itemId||row.itemName,entry=totals.get(key)||{name:movementItem(row),quantity:0,count:0};
+      entry.quantity+=Number(row.quantity??1)||0;entry.count++;totals.set(key,entry);
     }
+    $('#personTotals').innerHTML=historyPersonId&&!invalid?'<h3>ELEMENTOS RECIBIDOS EN EL RANGO</h3>'+[...totals.values()].sort((a,b)=>b.quantity-a.quantity)
+      .map(entry=>`<article><div><b>${esc(entry.name)}</b><span>Cantidad: ${esc(entry.quantity)} · Entregas: ${entry.count}</span></div></article>`).join(''):'';
     const person=(data.personal||[]).find(p=>p.id===historyPersonId);$('#personHistoryTitle').textContent=person?`ENTREGAS Y ASIGNACIONES · ${person.nombre||person.documento}`:'ENTREGAS Y ASIGNACIONES';
     const itemId=$('#personQueryForm').elements.itemId.value,assets=queryAssignedAssets().filter(asset=>!itemId||norm(asset.clase)===norm(itemName(findItem(itemId))));$('#personAssigned').innerHTML='<h3>ACTIVOS ASIGNADOS ACTUALMENTE</h3><p class="permission">Estado actual; el rango de fechas se aplica al historial de entregas.</p>'+assets.map(asset=>`<article><b>${esc(assetLabel(asset))}</b><span>${esc(asset.estado||'')} · ${esc(asset.ubicacion||'')}</span></article>`).join('')+(assets.length?'':'<p>No tiene activos asignados que coincidan.</p>');
   }
   function openPersonHistory(id){historyPersonId=id;clearItemSearch($('#personQueryForm'));resetInventoryDates('person');showView('personHistory')}
   function resetInventoryDates(prefix){const today=new Date(),start=new Date(today);start.setDate(start.getDate()-29);$('#'+prefix+'From').value=localDateValue(start);$('#'+prefix+'To').value=localDateValue(today)}
   function setupInventoryQueries(){
-    const host=$('#app');for(const prefix of ['stock','person']){const section=document.createElement('section');section.id=prefix==='stock'?'stockQuery':'personHistory';section.className='view inventoryQuery';section.innerHTML=`<h2 ${prefix==='person'?'id="personHistoryTitle"':''}>${prefix==='stock'?'CONSULTAR EXISTENCIAS':'ENTREGAS Y ASIGNACIONES'}</h2>${prefix==='person'?'<button type="button" id="backHistoryPeople">VOLVER A PERSONAL</button>':''}<form id="${prefix}QueryForm"><label>${prefix==='stock'?'SELECCIONE ELEMENTO':'FILTRAR POR ELEMENTO (OPCIONAL)'}<select name="itemId"></select></label><div class="deliveryQueryFilters"><label>DESDE<input id="${prefix}From" type="date"></label><label>HASTA<input id="${prefix}To" type="date"></label>${prefix==='stock'?'<label>EMPRESA RECEPTORA<select id="stockCompanyFilter"><option value="">Todas las empresas</option><option value="SK">SK</option><option value="DESMIN">DESMIN</option><option value="unrecorded">Sin empresa registrada</option></select></label><label>FUNCIONARIO<select id="stockPersonFilter"><option value="">Todos los funcionarios</option></select></label>':''}<button type="button" id="${prefix}ResetFilters">LIMPIAR FILTROS</button></div></form>${prefix==='stock'?'<p class="permission">El filtro de empresa se aplica a las entregas; las existencias muestran el saldo total del elemento. Los registros anteriores sin este dato aparecen en «Sin empresa registrada».</p><div id="queryStockSummary" hidden><p id="queryStockBalance" class="stockBalance" role="status"></p><div id="queryStockReference" hidden><span data-reference-heading></span><span data-reference-link></span></div></div>':''}<p id="${prefix}QueryStatus" role="status"></p><div id="${prefix}Totals" class="recentMovementList"></div>${prefix==='person'?'<div id="personAssigned" class="recentMovementList"></div>':''}<h3>MOVIMIENTOS</h3><div id="${prefix}Movements" class="recentMovementList"></div>`;host.append(section);const form=$('#'+prefix+'QueryForm');setupItemSearch(form,'Buscar elemento para consultar');form.addEventListener('submit',e=>e.preventDefault());form.addEventListener('change',renderInventoryQueries);resetInventoryDates(prefix);$('#'+prefix+'ResetFilters').addEventListener('click',()=>{resetInventoryDates(prefix);if(prefix==='person')clearItemSearch(form);else{$('#stockPersonFilter').value='';$('#stockCompanyFilter').value=''}renderInventoryQueries()})}
+    $('#stockReferenceHeader').append(window.SKInventoryReference.heading());
+    $('#stockSearch').addEventListener('input',renderStockList);
+    $('#stockQuery tbody').addEventListener('click',event=>{
+      const button=event.target.closest('[data-stock-group]');if(button)changeStockGroup(button.dataset.stockGroup);
+    });
+    const form=$('#personQueryForm');setupItemSearch(form,'Buscar elemento para consultar');
+    form.addEventListener('submit',event=>event.preventDefault());
+    form.addEventListener('change',renderInventoryQueries);resetInventoryDates('person');
+    $('#personResetFilters').addEventListener('click',()=>{
+      resetInventoryDates('person');clearItemSearch(form);renderInventoryQueries();
+    });
     $('#backHistoryPeople').addEventListener('click',()=>showView('contacts'));
     const style=document.createElement('style');style.textContent='.recipientCompany{display:flex;gap:12px;border:1px solid #b9c8d3;border-radius:10px;padding:12px;grid-column:1/-1}.recipientCompany legend{font-weight:800}.recipientCompany label{flex:1;display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #c4cacf;border-radius:8px;cursor:pointer}.recipientCompany input{width:20px;height:20px;margin:0}.recipientCompany label:has(input:checked){background:#e1eff8;border-color:#173d59}.inventoryQuery form{display:block}.inventoryQuery .recentMovementList{margin:16px 0}.stockBalance{font-weight:800;padding:16px;background:#eaf1f6;border-radius:10px}.inventoryQuery h3{margin-top:20px}';document.head.append(style);renderInventoryQueries();
   }
