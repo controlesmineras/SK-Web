@@ -40,7 +40,7 @@ main form,main .tableWrap{color:#172033}
 #stockLookupTable{width:100%;background:white;color:#172f40;border-collapse:collapse}
 #stockLookupTable th,#stockLookupTable td{padding:9px;text-align:left;border-bottom:1px solid #d7e1e7;overflow-wrap:anywhere}
 #stockLookupTable small{display:block;color:#526674}
-#stockLookupTable th:last-child,#stockLookupTable td:last-child,#warehousePanel:has([data-view="stock"][aria-pressed="true"]) table :is(td:not([colspan]),th):last-child{text-align:right;font-variant-numeric:tabular-nums}
+#stockLookupTable :is(th,td):nth-child(2),#warehousePanel:has([data-view="stock"][aria-pressed="true"]) table :is(td:not([colspan]),th):nth-child(3){text-align:right;font-variant-numeric:tabular-nums}
 @media(max-width:480px){.stockLookupFilters{grid-template-columns:1fr}}
 #sheetPurchasesExcel{margin-bottom:10px}
 #partOptions button{font-size:1rem}
@@ -215,9 +215,9 @@ body>main:has(#access:not([hidden])),#access{
 #incomeChangePending span{display:block;margin:8px 0}
 </style>
 <link rel="stylesheet" href="warehouse.css?v=20261122-consultas-movimientos"><script defer src="../movement-time.js?v=1"></script><script defer src="warehouse-store.js?v=2"></script>
-<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="../spare-groups.js?v=20261120-existencias-repuestos"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=4-cabecera"><script defer src="purchase-workbook.js?v=20261120-codigo-elemento"></script><script defer src="consumption-reports.js?v=20261120-compras-1"></script><script defer src="../asset-search.js?v=20261120-coincidencias-activos-1"></script><script defer src="app.js?v=20261120-existencias-repuestos"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=20261121-orden-en-linea"></script>
-<script defer src="install-ui.js?v=1"></script><script defer src="../plaza/spare-picker.js?v=20261120-existencias-repuestos"></script><script defer src="warehouse.js?v=20261122-consultas-movimientos"></script>
-<link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script></head>
+<script defer src="../sync-config.js"></script><script defer src="../spare-catalog.js"></script><script defer src="../spare-groups.js?v=20261120-existencias-repuestos"></script><script defer src="sync-protocol.js?v=4"></script><link rel="stylesheet" href="consumption-reports.css?v=4-cabecera"><script defer src="purchase-workbook.js?v=20261120-codigo-elemento"></script><script defer src="consumption-reports.js?v=20261120-compras-1"></script><script defer src="../asset-search.js?v=20261120-coincidencias-activos-1"></script><script defer src="app.js?v=20261123-imagen-ficha"></script><script defer src="consumption-pdf.js?v=1"></script><script defer src="../consumption-query-v2.js?v=20261121-orden-en-linea"></script>
+<script defer src="install-ui.js?v=1"></script><script defer src="../plaza/spare-picker.js?v=20261120-existencias-repuestos"></script><script defer src="warehouse.js?v=20261123-imagen-ficha"></script>
+<link rel="stylesheet" href="../date-calendar.css?v=3"><script defer src="../date-calendar.js?v=3"></script><link rel="stylesheet" href="../inventory-reference.css?v=20261123-imagen-ficha"><script src="../inventory-reference.js?v=20261123-imagen-ficha"></script></head>
 <body>
 <header id="productionHeader" hidden><img class="productionHeaderLogo" src="./produccion-perforadora-192.png" width="44" height="44" alt="Producción">
 <div id="productionHomePath" role="navigation" aria-label="Ubicación en Producción">
@@ -291,7 +291,7 @@ body>main:has(#access:not([hidden])),#access{
 <label>Inventario<select id="lookupOrigin"><option>YT29</option><option>YT28</option><option>Columna29</option><option>Columna28</option></select></label>
 <label>Buscar repuesto<input id="lookupSearch" type="search" placeholder="Ítem, nombre, aplicación o código" autocomplete="off"></label>
 </div>
-<div class="tableWrap"><table id="stockLookupTable"><thead><tr><th scope="col">Repuesto</th><th scope="col">Existencia</th></tr></thead><tbody></tbody></table></div>
+<div class="tableWrap"><table id="stockLookupTable"><thead><tr><th scope="col">Repuesto</th><th scope="col">Existencia</th><th scope="col" data-reference-heading></th></tr></thead><tbody></tbody></table></div>
 <p id="lookupStatus" class="hint" role="status" hidden></p>
 </section>
 <section id="stockEditPanel" aria-labelledby="mechanicTitle" hidden>

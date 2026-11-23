@@ -538,6 +538,8 @@ function partDescription(row){
 function paintStockLookup(){
  const panel=byId('stockLookupPanel');
  if(panel.hidden)return;
+ const referenceHeader=panel.querySelector('[data-reference-heading]');
+ if(!referenceHeader.firstChild)referenceHeader.append(window.SKInventoryReference.heading());
  const origin=byId('lookupOrigin').value;
  const parts=window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin);
  const query=byId('lookupSearch').value,rows=filterParts(parts,query),available=Array.isArray(state.incomes);
@@ -548,7 +550,8 @@ function paintStockLookup(){
    const code=document.createElement('small');code.textContent='Código: '+row.sparePartCode;detail.append(code);
   }
   quantity.textContent=available?stockFor(row,origin):'—';
-  tr.append(detail,quantity);return tr;
+  const reference=document.createElement('td');reference.append(window.SKInventoryReference.link(row.referenceUrl,partLabel(row)));
+  tr.append(detail,quantity,reference);return tr;
  }));
  const note=byId('lookupStatus');
  note.textContent=!available?'Sincroniza para consultar las existencias de este inventario.':!rows.length?'No hay repuestos que coincidan.':'';

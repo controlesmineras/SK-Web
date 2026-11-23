@@ -1,0 +1,19 @@
+.inventoryReferenceHeading{display:inline-flex;align-items:center;gap:.35rem;white-space:nowrap}
+.inventoryReferenceHeading button.inventoryReferenceInfo{display:inline-grid;place-items:center;flex:none;width:26px;min-width:26px;height:26px;min-height:26px;padding:0;margin:0;border:1px solid #86afc1;border-radius:50%;background:#e6f2f8;color:#164d65;font:bold 1rem/1 Georgia,serif;text-transform:none;cursor:pointer}
+a.inventoryReferenceLink{display:inline-block;padding:.25rem .4rem;color:#165775;font-weight:600;text-decoration:underline;text-underline-offset:.16em}
+#inventoryReferenceHelp{box-sizing:border-box;max-width:min(24rem,90vw);padding:1.25rem;border:1px solid #abc1ce;border-radius:12px;color:#182f40;background:#fff}
+#inventoryReferenceHelp::backdrop{background:#102f4580}
+#inventoryReferenceHelp h3,#inventoryReferenceHelp p{margin:0 0 .8rem;color:#182f40;text-transform:none}
+#inventoryReferenceHelp form{display:flex;justify-content:flex-end;padding:0;margin:0;background:none;border:0}
+#inventoryReferenceHelp button{padding:.55rem 1rem;border:0;border-radius:6px;background:#173d59;color:#fff}
+#inventoryStockQuery .tableWrap{overflow-x:auto;background:#fff;color:#172f40;border-radius:8px}
+#inventoryStockQuery table{width:100%;border-collapse:collapse}
+#inventoryStockQuery th,#inventoryStockQuery td{padding:.5rem;text-align:left;border-bottom:1px solid #d9e3e9}
+#inventoryStockQuery th{background:#edf3f6;color:#172f40}
+#inventoryStockQuery :is(th,td):nth-child(3){text-align:right;font-variant-numeric:tabular-nums}
+#inventoryStockQuery #stockQueryCount{display:block;margin:.5rem 0}
+#queryStockReference:not([hidden]){display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;color:#173d59;background:#eaf1f6;padding:.5rem 1rem;border-radius:8px}
+
+#queryStockSummary:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;gap:.4rem;margin:.8rem 0}
+#queryStockSummary #queryStockBalance{margin:0;align-content:center}
+@media(max-width:480px){#queryStockReference:not([hidden]){max-width:10.5rem;padding:.5rem;gap:.2rem}}

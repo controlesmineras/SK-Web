@@ -406,7 +406,7 @@
   const values=new Map();
   const items=criteria().filter(row=>{
    const cells=[[itemLabel(row),row.isYtSpare&&row.sparePartCode].filter(Boolean).join(' · '),row.unit||'Unidad',balance(row)];
-   values.set(row.id,cells);
+   values.set(row.id,[...cells,window.SKInventoryReference.url(row.referenceUrl)]);
    const type=spareGroups.key(row);
    if(type&&(/\bitem\s*\d+\b/.test(query)||/^\d+$/.test(query)))return spareGroups.matches(row,query);
    return !query||spareGroups.matches(row,query)||norm(cells.join(' ')).includes(query)||
@@ -426,7 +426,7 @@
      rows.push(cells);
      if(!expanded)continue;
      if(index>=250){truncated=true;continue;}
-     display.push([[spareGroups.partName(part),part.spareApplication||part.application||part.ubicacionAplicacion,part.sparePartCode].filter(Boolean).join(' · '),cells[1],cells[2]]);
+     display.push([[spareGroups.partName(part),part.spareApplication||part.application||part.ubicacionAplicacion,part.sparePartCode].filter(Boolean).join(' · '),...cells.slice(1)]);
     }
    }
   }
@@ -464,7 +464,7 @@
   const historyQuery=historyQueries.get(view);
   const query=find('#warehouseFilters').hidden?'':norm(find('#warehouseSearch').value).trim();let headers,rows,display,truncated;
   if(view==='stock'){
-   headers=['ELEMENTO','UNIDAD','DISPONIBLE EN PRODUCCIÓN'];
+   headers=['ELEMENTO','UNIDAD','DISPONIBLE','IMAGEN-FICHA'];
    ({rows,display,truncated}=stockRows(query));
   }else if(view==='loans'||historyQuery?.loanFilter){
    headers=['FECHA','HORA REGISTRO','ELEMENTO / ACTIVO','QUIÉN RECIBIÓ','PRESTADO','PENDIENTE','ESTADO'];
@@ -485,11 +485,25 @@
    });
   }
   exportRows=[headers,...rows];
-  const head=el('tr');for(const label of headers)head.append(el('th',label));find('thead').replaceChildren(head);
+  const head=el('tr');
+  for(const label of headers){
+   const th=el('th',label);th.scope='col';
+   if(view==='stock'&&label==='IMAGEN-FICHA')th.replaceChildren(window.SKInventoryReference.heading());
+   head.append(th);
+  }
+  find('thead').replaceChildren(head);
   const body=find('tbody'),visible=display||rows.slice(0,250);
   body.replaceChildren(...visible.map(entry=>{
    const tr=el('tr');
-   if(Array.isArray(entry)){for(const value of entry)tr.append(el('td',value));return tr}
+   if(Array.isArray(entry)){
+    entry.forEach((value,index)=>{
+     const cell=el('td');
+     if(view==='stock'&&index===3)cell.append(window.SKInventoryReference.link(value,entry[0]));
+     else cell.textContent=value??'';
+     tr.append(cell);
+    });
+    return tr;
+   }
    const cell=el('td'),toggle=button(entry.label,()=>{
     stockExpanded.set(entry.type,!entry.expanded);renderTable();
     body.querySelector('[data-stock-group="'+entry.type+'"]').focus();
@@ -680,7 +694,12 @@
   const target=window.open('','_blank');if(!target){tell('Permite la ventana de impresión para guardar el PDF.');return;}
   target.document.title='Bodega de Producción';const style=target.document.createElement('style');style.textContent='@page{size:A4 landscape;margin:12mm}body{font:12px sans-serif}table{border-collapse:collapse;width:100%}th,td{border:1px solid #999;padding:6px}thead{display:table-header-group}';target.document.head.append(style);
   const heading=target.document.createElement('h1');heading.textContent=view==='openingHistory'?'SALDOS DE APERTURA · BODEGA DE PRODUCCIÓN':'BODEGA DE PRODUCCIÓN';const table=target.document.createElement('table');
-  exportRows.forEach((values,index)=>{const tr=(index?table.tBodies[0]||table.createTBody():table.createTHead()).insertRow();values.forEach(value=>{const cell=index?tr.insertCell():target.document.createElement('th');cell.textContent=value;if(!index)tr.append(cell);});});target.document.body.append(heading,table);target.print();
+  exportRows.forEach((values,index)=>{const tr=(index?table.tBodies[0]||table.createTBody():table.createTHead()).insertRow();values.forEach((value,column)=>{
+   const cell=index?tr.insertCell():target.document.createElement('th');
+   if(index&&view==='stock'&&column===3)cell.append(window.SKInventoryReference.link(value,values[0]));
+   else cell.textContent=value;
+   if(!index)tr.append(cell);
+  });});target.document.body.append(heading,table);target.print();
  };
  window.SKProductionWarehouse={permits,roles,paintNavigation,get module(){return module},get snapshot(){return snapshot},async open(){await load();choose('')},choose,sync:synchronize,paintHeader,close(){account='';snapshot={};module='';warehouseDirty=false;panel.hidden=true;home.hidden=true;mechanics.hidden=true;},resume(){if(session&&permits(session.user,'warehouse'))void synchronize()}};
  byId('sync').addEventListener('click',event=>{if(module==='warehouse'){event.stopImmediatePropagation();void synchronize();}},true);
