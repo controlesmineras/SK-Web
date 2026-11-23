@@ -7,7 +7,7 @@ async function harness(){
  const typeButtons=Array.from(sourceText.matchAll(/data-spare-filter="([^"]+)"/g),m=>({dataset:{spareFilter:m[1]},attributes:{},setAttribute(k,v){this.attributes[k]=v},closest(){return this}}));
  const nodes=new Map();
  const node=s=>{if(!nodes.has(s))nodes.set(s,{dataset:{},handlers:{},value:'',innerHTML:'',textContent:'',querySelectorAll:()=>[],addEventListener(t,fn){this.handlers[t]=fn}});return nodes.get(s)};
- for(const key of ['allowAccessories','id','name','secondaryName','tertiaryName','unit','containerUnit','spareEquipment','spareItemNumber','spareItemName','spareApplication','sparePartCode','isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable']){
+ for(const key of ['allowAccessories','id','name','secondaryName','tertiaryName','referenceUrl','unit','containerUnit','spareEquipment','spareItemNumber','spareItemName','spareApplication','sparePartCode','isYtSpare','isFixedAsset','usesSerial','usesLength','usesModel','usesManufacturer','requiresInternalMark','isEpp','allowAssignment','allowLoan','allowTransfer','allowRemission','fractionable']){
   const label={hidden:false};elements[key]={value:'',checked:false,dataset:{},options:[{value:'Unidad'}],closest:()=>label,focus(){}};
  }
  const form={elements,dataset:{},addEventListener(){},reportValidity(){},scrollIntoView(){},closest:()=>form,querySelectorAll:()=>[],querySelector:()=>null,reset(){for(const field of Object.values(elements)){field.value='';field.checked=false;}}};
@@ -17,7 +17,8 @@ async function harness(){
  const ctx=vm.createContext({window,indexedDB:new IDBFactory(),crypto:webcrypto,document:{querySelector:s=>s==='#inventoryItemForm'?form:s==='#inventoryItemSave'?button:s==='#inventoryItemStatus'?status:node(s),querySelectorAll:s=>s==='[data-spare-filter]'?typeButtons:[]},setTimeout(){},Event:class{constructor(type){this.type=type}},console:{error(){}}});
  vm.runInContext(fs.readFileSync('app.js','utf8').split('const PARTS=')[0],ctx);await ctx.openDB();
  vm.runInContext(fs.readFileSync('spare-groups.js','utf8'),ctx);
- const source=fs.readFileSync('inventory-admin.js','utf8').replace('window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities}', 'window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities,save,edit,syncSpareFields,bind}');
+ const source=fs.readFileSync('inventory-admin.js','utf8').replace('window.SKInventoryAdmin={mount', 'window.SKInventoryAdmin={save,edit,syncSpareFields,bind,mount');
+ ctx.URL=URL;vm.runInContext(fs.readFileSync('inventory-reference.js','utf8'),ctx);
  vm.runInContext(source,ctx);window.SKInventoryAdmin.bind();
  const rows=async()=>{const out=[];for(const table of ['inventoryCriteria','inventoryStock','incomes'])for(const row of await ctx.all(table))out.push({table,row});return out};
  return {api:window.SKInventoryAdmin,form,status,button,events,ctx,typeButtons,node,selectType:async type=>{const target=typeButtons.find(b=>b.dataset.spareFilter===type);assert.ok(target);node('#spareCatalogFilter').handlers.click({target});await window.SKInventoryAdmin.render()},db:vm.runInContext('db',ctx),rows,save:()=>window.SKInventoryAdmin.save({currentTarget:form,preventDefault(){}})};
@@ -92,8 +93,21 @@ test('ubicación o aplicación es opcional, se guarda offline y permite editarla
  delete item.spareApplication;await h.ctx.put('inventoryCriteria',item);await h.api.edit(item.id);assert.equal(h.form.elements.spareApplication.value,'');await h.save();assert.match(h.status.textContent,/Cambios guardados/);
 });
 
+test('la referencia del elemento común se puede agregar, editar y quitar de un criterio anterior',async()=>{
+ const h=await harness(),original={id:'herramienta',name:'Instalador',unit:'Unidad',active:true};
+ await h.ctx.put('inventoryCriteria',original);
+ for(const value of ['https://example.test/imagen.png','https://example.test/ficha.pdf','']){
+  await h.api.edit(original.id);h.form.elements.referenceUrl.value=value;await h.save();
+  await h.api.edit(original.id);assert.equal(h.form.elements.referenceUrl.value,value);
+  const saved=(await h.rows())[0].row;assert.equal(saved.referenceUrl,value);assert.equal(saved.id,original.id);
+ }
+ for(const invalid of ['javascript:alert(1)','data:text/html,x','//example.test/a','https://','ftp://example.test/a']){
+  assert.equal(h.ctx.window.SKInventoryReference.url(invalid),'');
+ }
+});
+
 test('el protocolo existente sincroniza la aplicación y su borrado con otro Admin, Plaza y Producción',async()=>{
- const h=await harness();h.form.elements.spareApplication.value='Va con el pin de ajuste del cabezal';await h.save();
+ const h=await harness();h.form.elements.spareApplication.value='Va con el pin de ajuste del cabezal';h.form.elements.referenceUrl.value='https://ejemplo.test/pin.pdf';await h.save();
  const item=(await h.rows()).find(x=>x.table==='inventoryCriteria').row,clone=x=>JSON.parse(JSON.stringify(x));
  let cloud={assets:[],parts:[],personal:[{id:'person-test',documento:'test',nombre:'Prueba'}],inventoryCriteria:[],inventoryStock:[],blendingIncomes:[],blendingDeliveries:[]};
  const server=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})},DriveApp:{getFilesByName:()=>({hasNext:()=>false})}});
@@ -102,12 +116,12 @@ test('el protocolo existente sincroniza la aplicación y su borrado con otro Adm
  server.verifyToken_=()=>({role:'plaza_operator',document:'test'});server.verifyProductionToken_=()=>({role:'admin',document:'test',personId:'person-test'});
  const owner={role:'owner',username:'test'};
  for(const value of [item.spareApplication,'']){
-  const pending={...item,spareApplication:value,updatedAt:new Date(Date.parse(cloud.updatedAt||item.updatedAt)+1).toISOString(),syncState:'pending'};
+  const pending={...item,spareApplication:value,referenceUrl:value?item.referenceUrl:'',updatedAt:new Date(Date.parse(cloud.updatedAt||item.updatedAt)+1).toISOString(),syncState:'pending'};
   server.adminSyncAuthorized_({inventoryCriteria:[pending]},'',owner);
   const admin=server.adminSyncAuthorized_({},'',owner).data.inventoryCriteria.find(x=>x.id===item.id);
   const plaza=server.plazaSync_({token:'test',data:{}}).data.inventoryCriteria.find(x=>x.id===item.id);
   const production=server.productionSync_({token:'test',pending:[]}).inventoryCriteria.find(x=>x.id===item.id);
-  for(const row of [admin,plaza,production]){assert.equal(row.spareApplication,value);assert.equal(row.syncState,'synced');assert.equal(row.spareItemName,item.spareItemName);}
+  for(const row of [admin,plaza,production]){assert.equal(row.spareApplication,value);assert.equal(row.referenceUrl,value?'https://ejemplo.test/pin.pdf':'');assert.equal(row.syncState,'synced');assert.equal(row.spareItemName,item.spareItemName);}
  }
 });
 

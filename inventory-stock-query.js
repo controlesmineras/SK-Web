@@ -1,8 +1,44 @@
-// Consulta de existencias: solo lectura para SK Admin.
+// Consulta de solo lectura de las existencias de Plaza Blending desde SK Admin.
 (()=>{
-const norm=s=>String(s||'').trim().toLocaleLowerCase('es').normalize('NFD').replace(/[\u0300-\u036f]/g,'');
-const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-async function render(){if(typeof all!=='function'||!window.db)return;const host=document.querySelector('#queries');if(!host)return;host.innerHTML=`<div class="sectionHead"><h2>Consultar existencias</h2><button type="button" data-return-home>Volver al inicio</button></div><p class="hint">Consulta de solo lectura. Aquí no se pueden modificar cantidades ni elementos.</p><input id="stockQuerySearch" type="search" placeholder="Buscar elemento…" autocomplete="off"><small id="stockQueryCount"></small><div id="stockQueryList" class="list" style="margin-top:12px"></div>`;host.querySelector('[data-return-home]').onclick=()=>window.SKAdminNav?.go?.('home');host.querySelector('#stockQuerySearch').addEventListener('input',draw);await draw()}
-async function draw(){const criteria=await all('inventoryCriteria'),stock=await all('inventoryStock'),sm=new Map(stock.map(x=>[x.itemId,x])),q=norm(document.querySelector('#stockQuerySearch')?.value),rows=criteria.filter(x=>!x.deleted&&(!q||norm(x.name||x.nombre||x.elemento).includes(q))).sort((a,b)=>String(a.name||a.nombre||a.elemento||'').localeCompare(String(b.name||b.nombre||b.elemento||''),'es'));const list=document.querySelector('#stockQueryList'),count=document.querySelector('#stockQueryCount');if(!list)return;count.textContent=`${rows.length} elementos`;list.innerHTML=rows.map(x=>{const qty=Number(sm.get(x.id)?.quantity)||0,name=x.name||x.nombre||x.elemento||'Sin nombre',unit=x.unit||x.unidadMedida||'';return `<div class="row"><div><b>${esc(name)}</b><small>${esc(unit)} · ${qty>0?'Disponible':'Sin existencias'}</small></div><div><b>${qty}</b></div></div>`}).join('')||'<p class="hint">No hay elementos que coincidan.</p>'}
-window.addEventListener('skweb-open-queries',render);window.SKInventoryStockQuery={render};
+ 'use strict';
+ const host=document.getElementById('inventoryStockQuery');
+ const search=host.querySelector('input'),body=host.querySelector('tbody'),count=host.querySelector('#stockQueryCount');
+ const reference=window.SKInventoryReference;
+ host.querySelector('[data-reference-heading]').append(reference.heading());
+ let items=[],version=0;
+ const norm=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLocaleLowerCase('es');
+ function draw(){
+  const query=norm(search.value.trim()),rows=items.filter(row=>row.search.includes(query));
+  count.textContent=rows.length+' elementos';
+  body.replaceChildren(...rows.map(({name,unit,quantity,referenceUrl})=>{
+   const tr=document.createElement('tr');
+   for(const value of [name,unit,quantity])tr.insertCell().textContent=value;
+   tr.insertCell().append(reference.link(referenceUrl,name));return tr;
+  }));
+ }
+ async function render(){
+  if(typeof db==='undefined'||!db)return;
+  const revision=++version;
+  const [criteria,stock,adjustments]=await Promise.all([all('inventoryCriteria'),all('inventoryStock'),all(quantityAdjustments)]);
+  const stockById=new Map(stock.filter(row=>!row.deleted&&row.active!==false).map(row=>[row.itemId,row.quantity]));
+  for(const pending of adjustments){
+   if((pending.warehouse||'plaza')==='plaza'&&!pending.syncError)stockById.set(pending.itemId,pending.quantity);
+  }
+  const active=criteria.filter(item=>item.id&&!item.deleted&&item.active!==false&&item.recordType!=='formOptions'&&item.id!=='SYSTEM-FORM-OPTIONS-V1');
+  const {fixedCriterion,availableFixedQuantity}=window.SKInventoryAdmin;
+  const assets=active.some(fixedCriterion)?await all('assets'):[];
+  const result=await Promise.all(active.map(async item=>{
+   const name=item.name||item.nombre||item.elemento||item.CI_ELEMENTO||'Sin nombre';
+   return {name,unit:item.unit||item.unidadMedida||item.CI_UNIDAD_MEDIDA||'',
+    quantity:fixedCriterion(item)?await availableFixedQuantity(item,'plaza',assets):stockById.get(item.id)??0,
+    referenceUrl:item.referenceUrl,search:norm([name,item.secondaryName,item.tertiaryName,item.sparePartCode].filter(Boolean).join(' '))};
+  }));
+  if(revision!==version)return;
+  items=result.sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true}));draw();
+ }
+ search.addEventListener('input',draw);
+ function refreshActive(){if(host.classList.contains('active'))void render()}
+ window.addEventListener('skweb-synced',refreshActive);
+ window.addEventListener('skweb-inventory-refresh',refreshActive);
+ window.SKInventoryStockQuery={render};
 })();

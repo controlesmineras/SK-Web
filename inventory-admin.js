@@ -95,6 +95,7 @@ function injectStyle(){if(document.querySelector('#inventoryAdminStyle'))return;
 @container (max-width:20rem){
  #inventoryItems[data-catalog-kind="spare"] #inventoryItemForm>.invAliasField{grid-column:1/-1}
 }
+#inventoryItems #inventoryItemForm>label.invReferenceField{grid-column:1/-1}
 #inventoryItemForm h3:has(+.invPerms){margin:4px 0 0}
 #inventoryItemForm .invPerms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 @container (min-width:36rem){#inventoryItemForm .invPerms{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -161,7 +162,7 @@ function matchesCatalogItem(item,query){
   itemUnit(item),spare&&spareUse(item),item.id].filter(Boolean).join(' ');
  return matchesItemSearch(text,item.spareItemNumber,query,spare?item.sparePartCode:'');
 }
-const validationLabels={name:'Nombre del elemento',unit:'Unidad de medida',spareEquipment:'Tipo de repuesto',spareItemName:'Nombre del ítem',containerUnit:'Unidad contenedora'};
+const validationLabels={referenceUrl:'Enlace a imagen o ficha técnica',name:'Nombre del elemento',unit:'Unidad de medida',spareEquipment:'Tipo de repuesto',spareItemName:'Nombre del ítem',containerUnit:'Unidad contenedora'};
 function clearValidation(f){
  delete f.dataset.validationAttempted;
  f.querySelectorAll('[aria-invalid]').forEach(field=>{field.removeAttribute('aria-invalid');field.removeAttribute('aria-errormessage')});
@@ -173,10 +174,11 @@ function validateInventory(f,focus=false){
  for(const field of f.querySelectorAll('input,select,textarea')){
   if(field.disabled||!field.willValidate||field.closest('label')?.hidden)continue;
   const missing=field.required&&!String(field.value).trim();
-  if(!missing&&field.validity.valid)continue;
+  const invalidLink=field.name==='referenceUrl'&&field.value.trim()&&!window.SKInventoryReference.url(field.value);
+  if(!missing&&!invalidLink&&field.validity.valid)continue;
   invalid.push(field);field.setAttribute('aria-invalid','true');
   const error=document.createElement('span');error.className='invFieldError';error.id='inv-error-'+field.name;
-  error.textContent=missing?'Completa este campo obligatorio.':'Revisa el valor de este campo.';
+  error.textContent=invalidLink?'Escribe un enlace completo que empiece por https:// o http://.':missing?'Completa este campo obligatorio.':'Revisa el valor de este campo.';
   field.setAttribute('aria-errormessage',error.id);field.closest('label')?.append(error);
  }
  const summary=f.querySelector('#inventoryValidationSummary');
@@ -202,6 +204,7 @@ function mount(){if(document.querySelector('#inventoryItems'))return;injectStyle
 <label class="invAliasField">NOMBRE TERCIARIO<input name="tertiaryName"></label>
 <label class="invCompactField">UNIDAD DE MEDIDA<select name="unit" required><option value="">Seleccionar…</option>${INVENTORY_UNITS.map(x=>`<option value="${x}">${x}</option>`).join('')}</select></label>
 <label class="invSpareApplication" hidden>UBICACIÓN O APLICACIÓN<textarea name="spareApplication" rows="1" placeholder="Opcional. Ej.: Va con el pin de ajuste del cabezal" disabled></textarea></label>
+<label class="invReferenceField">ENLACE A IMAGEN O FICHA TÉCNICA (OPCIONAL)<input name="referenceUrl" type="url" placeholder="https://…" autocomplete="off"></label>
 <h3>¿Qué operaciones permite?</h3><div class="invPerms">${sw('allowAssignment','Asignaciones','checked')}${sw('allowLoan','Préstamos')}${sw('allowTransfer','Traslados','checked')}${sw('allowRemission','Remisiones','checked')}${sw('fractionable','Permite entrega fraccionada')}<label class="invContainerUnit" hidden>UNIDAD CONTENEDORA<input name="containerUnit" placeholder="Rollo, carrete, galón…" disabled></label></div><div class="invActions"><button type="submit" id="inventoryItemSave">Guardar elemento</button><button type="button" id="inventoryItemDeactivate" class="invDanger" hidden>Retirar elemento</button><button type="button" id="inventoryItemCancel" class="adminFormCancel">CANCELAR</button></div><p id="inventoryItemStatus" class="status" hidden></p></form></div>`;main.append(sec);bind();syncSwitchText(sec);syncFractionableField(sec);syncFixedAssetFields(sec);syncSpareFields(sec.querySelector("form"));render()}
 let renderVersion=0;
 async function render(){
@@ -260,7 +263,7 @@ function selectSpareType(type){
 function openKind(kind){catalogKind=kind==='spare'?'spare':'common';mount();const spare=catalogKind==='spare',sec=document.querySelector('#inventoryItems');sec.dataset.catalogKind=catalogKind;document.querySelector('#inventoryCatalogTitle').textContent=spare?'CRITERIOS YT/COLUMNA':'Elementos de inventario';document.querySelector('#inventoryFormTitle').textContent=spare?'Datos del repuesto':'Datos del elemento';document.querySelector('#spareCatalogFilter').hidden=!spare;syncSpareFilterButtons();document.querySelector('#inventoryItemSearch').value='';sec.querySelectorAll('[data-catalog-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.catalogKind===catalogKind)));reset();render();window.dispatchEvent(new Event('skweb-inventory-kind'));}
 let editVersion=0,lastSavedItemId='';
 function reset(){lastSavedItemId='';editVersion++;const f=document.querySelector('#inventoryItemForm'),type=currentSpareType();clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;f.reset();f.elements.spareEquipment.value=type;f.elements.id.value='';delete f.dataset.sourceClass;syncResultSelection(f);f.elements.isYtSpare.checked=catalogKind==='spare';if(catalogKind==='spare')f.elements.unit.value='Unidad';f.elements.allowAssignment.checked=true;f.elements.allowLoan.checked=false;f.elements.allowTransfer.checked=true;f.elements.allowRemission.checked=true;syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);document.querySelector('#inventoryItemSave').textContent='Guardar elemento';document.querySelector('#inventoryItemDeactivate').hidden=true;document.querySelector('#inventoryItemStatus').hidden=true}
-async function edit(id){const version=++editVersion;const criteria=await all('inventoryCriteria'),x=criteria.find(r=>r.id===id);if(!x||version!==editVersion)return;const f=document.querySelector('#inventoryItemForm');clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;for(const [n,v] of Object.entries({id:x.id,name:itemName(x),unit:itemUnit(x),secondaryName:itemSecondary(x),tertiaryName:itemTertiary(x),spareEquipment:x.spareEquipment||"YT 29",spareItemNumber:x.spareItemNumber||"",spareItemName:x.spareItemName||"",sparePartCode:x.sparePartCode||"",spareApplication:x.spareApplication||""}))if(f.elements[n])f.elements[n].value=v;delete f.dataset.sourceClass;syncResultSelection(f);boolFields.forEach(n=>f.elements[n].checked=n==='isFixedAsset'?fixedCriterion(x):defaultEnabledOperations.has(n)?x[n]!==false:x[n]===true);syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);if(f.elements.fractionable.checked)f.elements.containerUnit.value=x.containerUnit||'';document.querySelector('#inventoryItemSave').textContent='Guardar cambios';document.querySelector('#inventoryItemDeactivate').hidden=false;document.querySelector('#inventoryItemDeactivate').textContent=x.isYtSpare?'Eliminar repuesto':'Retirar elemento';await render();if(version===editVersion)f.scrollIntoView({behavior:'smooth',block:'start'})}
+async function edit(id){const version=++editVersion;const criteria=await all('inventoryCriteria'),x=criteria.find(r=>r.id===id);if(!x||version!==editVersion)return;const f=document.querySelector('#inventoryItemForm');clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;for(const [n,v] of Object.entries({id:x.id,name:itemName(x),unit:itemUnit(x),secondaryName:itemSecondary(x),tertiaryName:itemTertiary(x),referenceUrl:x.referenceUrl||'',spareEquipment:x.spareEquipment||"YT 29",spareItemNumber:x.spareItemNumber||"",spareItemName:x.spareItemName||"",sparePartCode:x.sparePartCode||"",spareApplication:x.spareApplication||""}))if(f.elements[n])f.elements[n].value=v;delete f.dataset.sourceClass;syncResultSelection(f);boolFields.forEach(n=>f.elements[n].checked=n==='isFixedAsset'?fixedCriterion(x):defaultEnabledOperations.has(n)?x[n]!==false:x[n]===true);syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);if(f.elements.fractionable.checked)f.elements.containerUnit.value=x.containerUnit||'';document.querySelector('#inventoryItemSave').textContent='Guardar cambios';document.querySelector('#inventoryItemDeactivate').hidden=false;document.querySelector('#inventoryItemDeactivate').textContent=x.isYtSpare?'Eliminar repuesto':'Retirar elemento';await render();if(version===editVersion)f.scrollIntoView({behavior:'smooth',block:'start'})}
 let saving=false;
 async function save(e){
  e.preventDefault();if(saving)return;
@@ -288,7 +291,7 @@ async function save(e){
  f.elements[candidate.field].focus();
  return}}const t=new Date().toISOString(),item=id?criteria.find(x=>x.id===id):{id:uuid(),createdAt:t};
  if(!item)throw new Error('No se encontró el criterio que estás editando. Vuelve a seleccionarlo.');
- Object.assign(item,{allowAccessories:f.elements.isFixedAsset.checked&&f.elements.allowAccessories.checked,deliveryWarehouse:f.elements.isYtSpare.checked?'Producción':'',isYtSpare:f.elements.isYtSpare.checked,spareEquipment:f.elements.isYtSpare.checked?f.elements.spareEquipment.value:"",spareItemNumber:f.elements.isYtSpare.checked?f.elements.spareItemNumber.value.trim():"",spareItemName:f.elements.isYtSpare.checked?f.elements.spareItemName.value.trim():"",sparePartCode:f.elements.isYtSpare.checked?f.elements.sparePartCode.value.trim():"",spareApplication:f.elements.isYtSpare.checked?f.elements.spareApplication.value.trim():"",name,unit,secondaryName,tertiaryName,containerUnit:f.elements.fractionable.checked?f.elements.containerUnit.value.trim():'',isFixedAsset:f.elements.isFixedAsset.checked,usesSerial:f.elements.usesSerial.checked,usesLength:f.elements.usesLength.checked,usesModel:f.elements.usesModel.checked,usesManufacturer:f.elements.usesManufacturer.checked,requiresInternalMark:f.elements.requiresInternalMark.checked,isEpp:f.elements.isEpp.checked,allowAssignment:f.elements.allowAssignment.checked,allowLoan:f.elements.allowLoan.checked,allowTransfer:f.elements.allowTransfer.checked,allowRemission:f.elements.allowRemission.checked,fractionable:f.elements.fractionable.checked,active:true,deleted:false,updatedAt:t,syncState:'pending'});
+ Object.assign(item,{allowAccessories:f.elements.isFixedAsset.checked&&f.elements.allowAccessories.checked,deliveryWarehouse:f.elements.isYtSpare.checked?'Producción':'',isYtSpare:f.elements.isYtSpare.checked,spareEquipment:f.elements.isYtSpare.checked?f.elements.spareEquipment.value:"",spareItemNumber:f.elements.isYtSpare.checked?f.elements.spareItemNumber.value.trim():"",spareItemName:f.elements.isYtSpare.checked?f.elements.spareItemName.value.trim():"",sparePartCode:f.elements.isYtSpare.checked?f.elements.sparePartCode.value.trim():"",spareApplication:f.elements.isYtSpare.checked?f.elements.spareApplication.value.trim():"",name,unit,secondaryName,tertiaryName,referenceUrl:f.elements.referenceUrl.value.trim(),containerUnit:f.elements.fractionable.checked?f.elements.containerUnit.value.trim():'',isFixedAsset:f.elements.isFixedAsset.checked,usesSerial:f.elements.usesSerial.checked,usesLength:f.elements.usesLength.checked,usesModel:f.elements.usesModel.checked,usesManufacturer:f.elements.usesManufacturer.checked,requiresInternalMark:f.elements.requiresInternalMark.checked,isEpp:f.elements.isEpp.checked,allowAssignment:f.elements.allowAssignment.checked,allowLoan:f.elements.allowLoan.checked,allowTransfer:f.elements.allowTransfer.checked,allowRemission:f.elements.allowRemission.checked,fractionable:f.elements.fractionable.checked,active:true,deleted:false,updatedAt:t,syncState:'pending'});
 
  if(!name)throw new Error('Escribe el nombre del elemento.');
  await put('inventoryCriteria',item);committed=true;
@@ -359,9 +362,9 @@ function canOpenProductionQuantity(item,meta){
  if(!quantityFlag(item.isYtSpare))return true;
  return !item.productionPartId&&window.SKSpareGroups.types.some(type=>norm(type).replace(/ /g,'')===norm(item.spareEquipment).replace(/ /g,''));
 }
-async function availableFixedQuantity(item,warehouse){
+async function availableFixedQuantity(item,warehouse,assets){
  const names=new Set([itemName(item),itemSecondary(item),itemTertiary(item)].map(norm).filter(Boolean));
- const members=(await all('assets')).filter(asset=>!asset.deleted&&asset.active!==false&&
+ const members=(assets||await all('assets')).filter(asset=>!asset.deleted&&asset.active!==false&&
   (asset.criteriaId?String(asset.criteriaId)===String(item.id):names.has(norm(asset.clase))));
  if(!members.length)return 0;
  const tx=db.transaction([...assetEventStores,'personal']);
@@ -723,6 +726,6 @@ async function openQuantities(options={}){
   else {search.value=options.query;drawItems()}
  }else if(options.itemId)status.textContent='Este elemento se controla por ficha o no admite ajuste de cantidad en '+warehouseName+'.';
 }
-window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities};window.addEventListener('load',()=>setTimeout(mount,120));
+window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities,fixedCriterion,availableFixedQuantity};window.addEventListener('load',()=>setTimeout(mount,120));
 })();
 
