@@ -17,11 +17,11 @@ function fixture(owner = 'Sandra K') {
   return {ctx,data:()=>data,send:(rows,assets=[])=>ctx.plazaSync_({syncProtocol:'plaza-receipts-v1',data:{blendingDeliveries:rows,assets}})};
 }
 const movement = (op,extra={}) => ({id:'exit',exitKind:'mine',assetId:'a',itemId:'tool',quantity:1,deliveryType:op,
-  destinationMine:'Providencia',ownerMineBefore:'Sandra K',ownerMismatchConfirmed:true,createdAt:when,updatedAt:when,syncState:'pending',...extra});
+  destinationMine:'Providencia',ownerMineBefore:'Sandra K',createdAt:when,updatedAt:when,syncState:'pending',...extra});
 for (const [op,owner,after] of [['TRASLADO','Sandra K','Providencia'],['PRÉSTAMO','Sandra K','Sandra K'],
   ['RETORNO','Providencia','Providencia'],['SALIDA A REPARACIÓN','Sandra K','Sandra K']]) {
   test(op+' conserva el movimiento y aplica su efecto una sola vez',()=>{
-    const f=fixture(owner),row=movement(op,{ownerMineBefore:owner,ownerMismatchConfirmed:owner!=='Providencia'});
+    const f=fixture(owner),row=movement(op,{ownerMineBefore:owner});
     const first=f.send([row]);
     assert.equal(first.acknowledgements.blendingDeliveries[0].status,'accepted');
     assert.equal(first.data.assets[0].mina,after);assert.equal(first.data.assets[0].ubicacion,'Mina Providencia');
@@ -32,11 +32,23 @@ for (const [op,owner,after] of [['TRASLADO','Sandra K','Providencia'],['PRÉSTAM
     assert.equal(f.send([{...row,id:'otro'}]).acknowledgements.blendingDeliveries[0].status,'rejected');
   });
 }
-test('diferencia sin confirmar, baja, autorrescatador, activo fuera de Plaza o mina propietaria desactualizada',()=>{
-  for(const [asset,override] of [[{}, {ownerMismatchConfirmed:false}],[{estado:'Dado de baja'},{}],[{clase:'Autorrescatador'},{}],
-    [{ubicacion:'Socavón'},{}],[{mina:'El Silencio'},{}]]) {
+test('un retorno solo se sincroniza si la mina de destino es la propietaria vigente',()=>{
+  for(const owner of ['Sandra K','El Silencio','']) {
+    for(const legacyConfirmation of [true,false]) {
+      const f=fixture(owner);
+      const row=movement('RETORNO',{ownerMineBefore:'Providencia',ownerMismatchConfirmed:legacyConfirmation});
+      const receipt=f.send([row]).acknowledgements.blendingDeliveries[0];
+      assert.equal(receipt.status,'rejected');assert.match(receipt.error,/mina propietaria/);
+      assert.equal(f.data().blendingDeliveries.length,0);assert.equal(f.data().assets[0].ubicacion,'Bodega de Superficie');
+    }
+  }
+  const f=fixture('Providencia'),receipt=f.send([movement('RETORNO')]).acknowledgements.blendingDeliveries[0];
+  assert.equal(receipt.status,'accepted');assert.equal(f.data().blendingDeliveries[0].ownerMineBefore,'Providencia');
+});
+test('baja, autorrescatador o activo fuera de Plaza impiden la salida',()=>{
+  for(const asset of [{estado:'Dado de baja'},{clase:'Autorrescatador'},{ubicacion:'Socavón'}]) {
     const f=fixture();Object.assign(f.data().assets[0],asset);
-    assert.equal(f.send([movement('TRASLADO',override)]).acknowledgements.blendingDeliveries[0].status,'rejected');
+    assert.equal(f.send([movement('TRASLADO')]).acknowledgements.blendingDeliveries[0].status,'rejected');
     assert.equal(f.data().blendingDeliveries.length,0);
   }
 });
