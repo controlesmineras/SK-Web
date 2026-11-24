@@ -25,8 +25,9 @@ function render(input,id,rows,onPick){
    const detail=query.extra(row.a,row.label);if(detail===null)continue;
    content=query.html([row.label,detail].filter(Boolean).join(' · '));
   }else{
-   if(!(row.p?matchesItemSearch(row.label,row.p.numero,q):!q||norm(row.label).includes(q)))continue;
-   content=window.SKAssetSearch.escape(row.label);
+   const searchText=row.p?[row.label,...window.SKSpareGroups.aliases(row.p)].join(' '):row.label;
+   if(!(row.p?matchesItemSearch(searchText,row.p.numero,q):!q||norm(row.label).includes(q)))continue;
+   content=window.SKAssetSearch.escape(row.label)+window.SKSpareGroups.aliasLine(row.p,q);
   }
   hits.push({row,content});if(hits.length===50)break;
  }

@@ -62,7 +62,20 @@ function initClassPicker(){
   const query=window.SKAssetSearch.query(input.value);
   const rows=[...criteriaByClass.values()].filter(item=>query.matches([item.name,...criterionAliases(item)].join(' ')));
   box.replaceChildren();
-  for(const item of rows){const button=document.createElement('button');button.type='button';button.setAttribute('role','option');button.dataset.classValue=item.name;const title=document.createElement('strong');title.innerHTML=query.html(item.name);button.append(title);for(const alias of criterionAliases(item)){const small=document.createElement('small');small.innerHTML=query.html(alias);small.style.cssText='display:block;color:#7b8794;font-weight:400';button.append(small)}box.append(button)}
+  for(const item of rows){
+   const button=document.createElement('button'),title=document.createElement('strong');
+   button.type='button';button.setAttribute('role','option');button.dataset.classValue=item.name;
+   title.innerHTML=query.html(item.name);button.append(title);
+   if(input.value.trim()){
+    button.insertAdjacentHTML('beforeend',window.SKSpareGroups.aliasLine(item,input.value));
+   }else{
+    for(const alias of criterionAliases(item)){
+     const small=document.createElement('small');small.textContent=alias;
+     small.style.cssText='display:block;color:#7b8794;font-weight:400';button.append(small);
+    }
+   }
+   box.append(button);
+  }
   if(!rows.length){const empty=document.createElement('div');empty.className='noSuggestion';empty.textContent='No hay clases de activos fijos que coincidan.';box.append(empty)}
   box.classList.add('open');input.closest('label')?.classList.add('class-picker-open');input.setAttribute('aria-expanded','true');
  };

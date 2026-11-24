@@ -42,6 +42,7 @@ class Node {
  append(...nodes){for(const node of nodes){if(node.parent)node.parent.children=node.parent.children.filter(x=>x!==node);node.parent=this;this.children.push(node)}}
  after(node){this.parent.append(node)}
  replaceChildren(...nodes){this.children=[];this.append(...nodes)}
+ insertAdjacentHTML(position,html){assert.equal(position,'beforeend');this.innerHTML=(this.innerHTML||'')+html}
  setAttribute(k,v){this.attributes[k]=v}
  removeAttribute(k){delete this.attributes[k]}
  addEventListener(k,fn){(this.events[k]||=[]).push(fn)}
@@ -60,7 +61,7 @@ function picker(delivery=true,config={}){
  const form=new Node('form');form.id=delivery?'deliveryForm':'incomeForm';const label=new Node('label'),select=new Node('select');label.append(select);form.append(label);form.elements={itemId:select};
  const document={createElement:tag=>new Node(tag),addEventListener(){}};
  const window={},ctx={window,document,Event:class{constructor(type){this.type=type}},Option:class extends Node{constructor(text,value){super('option');this.textContent=text;this.value=value}}};
- vm.runInNewContext(read('spare-groups.js'),ctx);vm.runInNewContext(read('plaza/spare-picker.js'),ctx);
+ vm.runInNewContext(read('asset-search.js'),ctx);vm.runInNewContext(read('spare-groups.js'),ctx);vm.runInNewContext(read('plaza/spare-picker.js'),ctx);
  let items=fixtures(),changes=0,quantity=5,loan=false;select.addEventListener('change',()=>changes++);
  const api=window.SKSparePicker.mount(form,{title:'ELEMENTO',isDelivery:delivery,items:()=>items,fixed:()=>false,availability:()=>quantity,aliases:()=>[],loan:()=>loan,badge:n=>({className:'available',text:String(n)}),...config});
  const click=(menu,key,value)=>{const button=menu.children.find(x=>x.dataset[key]===value);assert.ok(button,`${key}: ${value}`);menu.dispatchEvent({type:'click',target:button})};
@@ -153,4 +154,19 @@ test('el selector encuentra y conserva el código del repuesto seleccionado',()=
  assert.ok(c.detail.menu.children[0].children[0].children.some(x=>x.textContent==='Código: YT25-3.20'));
  c.choose('yt1');assert.equal(c.detail.input.value,'1 · Resorte · YT25-3.20');
  c.type('00102');assert.deepEqual(c.detail.menu.children.map(x=>x.dataset.itemId),['yt12']);
+});
+
+test('la coincidencia del selector explica el nombre alternativo y conserva el ID del elemento',()=>{
+ const c=picker(),row={id:'joy',name:'Pasteca minera tipo JOY',secondaryName:'Garrucha tipo JOY',CI_NOMBRE_TERCIARIO:'Polea minéra <A>'};
+ c.setItems([row]);
+ for(const [query,expected] of [['garru','<mark>Garru</mark>cha tipo JOY'],['polea minera','<mark>Polea</mark> <mark>minéra</mark> &#60;A&#62;']]){
+  c.type(query,c.main);
+  const button=c.main.menu.children[0],names=button.children[0];
+  assert.equal(button.dataset.itemId,'joy');assert.equal(names.children[0].textContent,row.name);
+  assert.ok(names.innerHTML.includes('Otro nombre: '+expected));
+ }
+ for(const query of ['','pasteca']){
+  c.type(query,c.main);
+  assert.equal(c.main.menu.children[0].children[0].innerHTML,undefined);
+ }
 });

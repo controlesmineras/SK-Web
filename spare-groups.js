@@ -24,6 +24,18 @@
       item.CI_ALIAS_SECUNDARIO,item.CI_ALIAS_TERCIARIO];
     return [...new Set(names.map(clean).filter(Boolean))];
   }
+  function aliasLine(item,search){
+    if(!clean(search)||!item)return '';
+    const names=aliases(item);
+    if(!names.length)return '';
+    const query=window.SKAssetSearch.query(search);
+    const counts=names.map(name=>query.matchCount(name));
+    const best=Math.max(...counts);
+    if(!best)return '';
+    const hits=names.filter((name,index)=>counts[index]===best);
+    const label=hits.length===1?'Otro nombre':'Otros nombres';
+    return '<small class="inventoryAliasMatch">'+label+': '+hits.map(query.html).join(' · ')+'</small>';
+  }
   function matches(item,query){
     let q=normalize(query);if(!q)return true;
     const code=key(item)?clean(item.sparePartCode):'';
@@ -48,5 +60,5 @@
     const groups=types.map(type=>({type,label:groupName(type),items:parts(active,type)})).filter(group=>group.items.length&&(!q||normalize(typeLabel(group.type)).includes(q)||group.items.some(item=>matches(item,q))));
     return [...groups,...active.filter(item=>!key(item)&&matches(item,query)).map(item=>({item}))];
   }
-  window.SKSpareGroups={types,key,typeLabel,groupName,partName,recordName,aliases,matches,parts,entries};
+  window.SKSpareGroups={types,key,typeLabel,groupName,partName,recordName,aliases,aliasLine,matches,parts,entries};
 })();
