@@ -76,7 +76,7 @@ function injectStyle(){if(document.querySelector('#inventoryAdminStyle'))return;
  }
 }
 #inventoryItemForm{container-type:inline-size}
-#inventoryItemForm>label,#inventoryItemForm .invContainerUnit{
+#inventoryItemForm>label,#inventoryItemForm .invContainerUnit,#inventoryItemForm .invReferenceField label{
  min-width:0;gap:4px;color:#465d6d;font-size:.875rem;font-weight:500;
  line-height:1.3;letter-spacing:normal;text-transform:none
 }
@@ -99,7 +99,9 @@ function injectStyle(){if(document.querySelector('#inventoryAdminStyle'))return;
 @container (max-width:20rem){
  #inventoryItems[data-catalog-kind="spare"] #inventoryItemForm>.invAliasField{grid-column:1/-1}
 }
-#inventoryItems #inventoryItemForm>label.invReferenceField{grid-column:1/-1}
+#inventoryItemForm .invReferenceField{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:end;gap:8px}
+#inventoryItemForm #inventoryReferenceOpen{grid-column:2;min-width:48px;min-height:44px;padding:0 12px;margin:0;border:1px solid #315e77;border-radius:7px;background:#173d59;color:#fff;font-size:.875rem;font-weight:700;cursor:pointer}
+#inventoryItemForm #inventoryReferenceOpen:disabled{background:#edf2f5;border-color:#c9d5dc;color:#5d7180;cursor:default}
 #inventoryItemForm h3:has(+.invPerms){margin:4px 0 0}
 #inventoryItemForm .invPerms{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
 @container (min-width:36rem){#inventoryItemForm .invPerms{grid-template-columns:repeat(3,minmax(0,1fr))}}
@@ -208,7 +210,8 @@ function mount(){if(document.querySelector('#inventoryItems'))return;injectStyle
 <label class="invAliasField">Nombre terciario<input name="tertiaryName"></label>
 <label class="invCompactField">Unidad de medida<select name="unit" required><option value="">Seleccionar…</option>${INVENTORY_UNITS.map(x=>`<option value="${x}">${x}</option>`).join('')}</select></label>
 <label class="invSpareApplication" hidden>Ubicación o aplicación<textarea name="spareApplication" rows="1" placeholder="Opcional. Ej.: Va con el pin de ajuste del cabezal" disabled></textarea></label>
-<label class="invReferenceField">Enlace a imagen o ficha técnica (opcional)<input name="referenceUrl" type="url" placeholder="https://…" autocomplete="off"></label>
+<div class="invReferenceField"><label>Enlace a imagen o ficha técnica (opcional)<input name="referenceUrl" type="url" placeholder="https://…" autocomplete="off"></label>
+<button type="button" id="inventoryReferenceOpen" aria-label="Ver imagen o ficha técnica en otra pestaña" disabled>VER</button></div>
 <h3>¿Qué operaciones permite?</h3><div class="invPerms">${sw('allowAssignment','Asignaciones','checked')}${sw('allowLoan','Préstamos')}${sw('allowTransfer','Traslados','checked')}${sw('allowRemission','Remisiones','checked')}${sw('fractionable','Permite entrega fraccionada')}<label class="invContainerUnit" hidden>Unidad contenedora<input name="containerUnit" placeholder="Rollo, carrete, galón…" disabled></label></div><div class="invActions"><button type="submit" id="inventoryItemSave">Guardar elemento</button><button type="button" id="inventoryItemDeactivate" class="invDanger" hidden>Retirar elemento</button><button type="button" id="inventoryItemCancel" class="adminFormCancel">CANCELAR</button></div><p id="inventoryItemStatus" class="status" hidden></p></form></div>`;main.append(sec);bind();syncSwitchText(sec);syncFractionableField(sec);syncFixedAssetFields(sec);syncSpareFields(sec.querySelector("form"));render()}
 let renderVersion=0;
 async function render(){
@@ -266,8 +269,8 @@ function selectSpareType(type){
 }
 function openKind(kind){catalogKind=kind==='spare'?'spare':'common';mount();const spare=catalogKind==='spare',sec=document.querySelector('#inventoryItems');sec.dataset.catalogKind=catalogKind;document.querySelector('#inventoryCatalogTitle').textContent=spare?'CRITERIOS YT/COLUMNA':'Elementos de inventario';document.querySelector('#inventoryFormTitle').textContent=spare?'Datos del repuesto':'Datos del elemento';document.querySelector('#spareCatalogFilter').hidden=!spare;syncSpareFilterButtons();document.querySelector('#inventoryItemSearch').value='';sec.querySelectorAll('[data-catalog-kind]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.catalogKind===catalogKind)));reset();render();window.dispatchEvent(new Event('skweb-inventory-kind'));}
 let editVersion=0,lastSavedItemId='';
-function reset(){lastSavedItemId='';editVersion++;const f=document.querySelector('#inventoryItemForm'),type=currentSpareType();clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;f.reset();f.elements.spareEquipment.value=type;f.elements.id.value='';delete f.dataset.sourceClass;syncResultSelection(f);f.elements.isYtSpare.checked=catalogKind==='spare';if(catalogKind==='spare')f.elements.unit.value='Unidad';f.elements.allowAssignment.checked=true;f.elements.allowLoan.checked=false;f.elements.allowTransfer.checked=true;f.elements.allowRemission.checked=true;syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);document.querySelector('#inventoryItemSave').textContent='Guardar elemento';document.querySelector('#inventoryItemDeactivate').hidden=true;document.querySelector('#inventoryItemStatus').hidden=true}
-async function edit(id){const version=++editVersion;const criteria=await all('inventoryCriteria'),x=criteria.find(r=>r.id===id);if(!x||version!==editVersion)return;const f=document.querySelector('#inventoryItemForm');clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;for(const [n,v] of Object.entries({id:x.id,name:itemName(x),unit:itemUnit(x),secondaryName:itemSecondary(x),tertiaryName:itemTertiary(x),referenceUrl:x.referenceUrl||'',spareEquipment:x.spareEquipment||"YT 29",spareItemNumber:x.spareItemNumber||"",spareItemName:x.spareItemName||"",sparePartCode:x.sparePartCode||"",spareApplication:x.spareApplication||""}))if(f.elements[n])f.elements[n].value=v;delete f.dataset.sourceClass;syncResultSelection(f);boolFields.forEach(n=>f.elements[n].checked=n==='isFixedAsset'?fixedCriterion(x):defaultEnabledOperations.has(n)?x[n]!==false:x[n]===true);syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);if(f.elements.fractionable.checked)f.elements.containerUnit.value=x.containerUnit||'';document.querySelector('#inventoryItemSave').textContent='Guardar cambios';document.querySelector('#inventoryItemDeactivate').hidden=false;document.querySelector('#inventoryItemDeactivate').textContent=x.isYtSpare?'Eliminar repuesto':'Retirar elemento';await render();if(version===editVersion)f.scrollIntoView({behavior:'smooth',block:'start'})}
+function reset(){lastSavedItemId='';editVersion++;const f=document.querySelector('#inventoryItemForm'),type=currentSpareType();clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;f.reset();syncReferenceButton(f);f.elements.spareEquipment.value=type;f.elements.id.value='';delete f.dataset.sourceClass;syncResultSelection(f);f.elements.isYtSpare.checked=catalogKind==='spare';if(catalogKind==='spare')f.elements.unit.value='Unidad';f.elements.allowAssignment.checked=true;f.elements.allowLoan.checked=false;f.elements.allowTransfer.checked=true;f.elements.allowRemission.checked=true;syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);document.querySelector('#inventoryItemSave').textContent='Guardar elemento';document.querySelector('#inventoryItemDeactivate').hidden=true;document.querySelector('#inventoryItemStatus').hidden=true}
+async function edit(id){const version=++editVersion;const criteria=await all('inventoryCriteria'),x=criteria.find(r=>r.id===id);if(!x||version!==editVersion)return;const f=document.querySelector('#inventoryItemForm');clearValidation(f);delete f.elements.unit.dataset.fixedUnit;delete f.elements.unit.dataset.nonFixedUnit;for(const [n,v] of Object.entries({id:x.id,name:itemName(x),unit:itemUnit(x),secondaryName:itemSecondary(x),tertiaryName:itemTertiary(x),referenceUrl:x.referenceUrl||'',spareEquipment:x.spareEquipment||"YT 29",spareItemNumber:x.spareItemNumber||"",spareItemName:x.spareItemName||"",sparePartCode:x.sparePartCode||"",spareApplication:x.spareApplication||""}))if(f.elements[n])f.elements[n].value=v;syncReferenceButton(f);delete f.dataset.sourceClass;syncResultSelection(f);boolFields.forEach(n=>f.elements[n].checked=n==='isFixedAsset'?fixedCriterion(x):defaultEnabledOperations.has(n)?x[n]!==false:x[n]===true);syncSwitchText(f);syncFractionableField(f);syncFixedAssetFields(f);syncSpareFields(f);if(f.elements.fractionable.checked)f.elements.containerUnit.value=x.containerUnit||'';document.querySelector('#inventoryItemSave').textContent='Guardar cambios';document.querySelector('#inventoryItemDeactivate').hidden=false;document.querySelector('#inventoryItemDeactivate').textContent=x.isYtSpare?'Eliminar repuesto':'Retirar elemento';await render();if(version===editVersion)f.scrollIntoView({behavior:'smooth',block:'start'})}
 let saving=false;
 async function save(e){
  e.preventDefault();if(saving)return;
@@ -326,8 +329,20 @@ async function deactivate(){
  reset();await render();window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-inventory-refresh'));window.dispatchEvent(new Event('skweb-consumption-changed'));await refresh();
 }
 
+function syncReferenceButton(form){
+ const href=window.SKInventoryReference.url(form.elements.referenceUrl.value);
+ document.querySelector('#inventoryReferenceOpen').disabled=!href;
+ return href;
+}
 function bind(){
  const criterionForm=document.querySelector('#inventoryItemForm');
+ const refreshReference=event=>{if(event.target===criterionForm.elements.referenceUrl)syncReferenceButton(criterionForm)};
+ criterionForm.addEventListener('input',refreshReference);
+ criterionForm.addEventListener('change',refreshReference);
+ document.querySelector('#inventoryReferenceOpen').addEventListener('click',()=>{
+  const href=syncReferenceButton(criterionForm);
+  if(href)window.open(href,'_blank','noopener,noreferrer');
+ });
  criterionForm.addEventListener('input',()=>{lastSavedItemId=''});
  criterionForm.addEventListener('change',()=>{lastSavedItemId=''});
  document.querySelectorAll('[data-quantity-warehouse]').forEach(button=>{
