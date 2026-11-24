@@ -306,26 +306,6 @@ function matchesItemSearch(text,number,query){
     const {movementDay, movementHour}=form.elements;
     return movementDay.value!==movementDay.defaultValue || movementHour.value!==movementHour.defaultValue;
   }
-  function normalizedMovementHour(value){
-    const match=/^(\d{1,2}):?(\d{2})$/.exec(value.trim());
-    if(!match||Number(match[1])>23||Number(match[2])>59)return '';
-    return match[1].padStart(2,'0')+':'+match[2];
-  }
-  function setupMovementHour(){
-    document.addEventListener('input',event=>{
-      const input=event.target;
-      if(input.name!=='movementHour')return;
-      input.setCustomValidity('');
-      if(/^\d{4}$/.test(input.value))input.value=normalizedMovementHour(input.value)||input.value;
-    });
-    document.addEventListener('change',event=>{
-      const input=event.target;
-      if(input.name!=='movementHour')return;
-      const hour=normalizedMovementHour(input.value);
-      if(hour)input.value=hour;
-      input.setCustomValidity(hour?'':'Escribe una hora entre 00:00 y 23:59.');
-    });
-  }
   function resetMovementTime(form){
     const {movementDay, movementHour}=form.elements;
     const {date,time}=window.SKAssetHistory.localTime(new Date());
@@ -333,7 +313,6 @@ function matchesItemSearch(text,number,query){
     movementDay.disabled=movementHour.disabled=locked;
     movementDay.defaultValue=movementDay.value=date;
     movementHour.defaultValue=movementHour.value=time;
-    movementHour.setCustomValidity('');
   }
   function refreshMovementTimeAccess(){
     for(const day of document.querySelectorAll('input[name="movementDay"]')){
@@ -344,7 +323,7 @@ function matchesItemSearch(text,number,query){
     const recordedAt=now.toISOString();
     let createdAt=recordedAt;
     if(canEditMovementTime() && movementTimeChanged(form)){
-      const day=form.elements.movementDay.value, hour=normalizedMovementHour(form.elements.movementHour.value);
+      const day=form.elements.movementDay.value, hour=form.elements.movementHour.value;
       const occurred=new Date(day+'T'+hour+'-05:00');
       if(!Number.isFinite(occurred.getTime()))throw new Error('Completa la fecha y la hora del movimiento.');
       const {date,time}=window.SKAssetHistory.localTime(occurred);
@@ -1156,7 +1135,7 @@ function matchesItemSearch(text,number,query){
     const style=document.createElement('style');style.textContent='.recipientCompany{display:flex;gap:12px;border:1px solid #b9c8d3;border-radius:10px;padding:12px;grid-column:1/-1}.recipientCompany legend{font-weight:800}.recipientCompany label{flex:1;display:flex;align-items:center;gap:8px;padding:12px;border:1px solid #c4cacf;border-radius:8px;cursor:pointer}.recipientCompany input{width:20px;height:20px;margin:0}.recipientCompany label:has(input:checked){background:#e1eff8;border-color:#173d59}.inventoryQuery form{display:block}.inventoryQuery .recentMovementList{margin:16px 0}.stockBalance{font-weight:800;padding:16px;background:#eaf1f6;border-radius:10px}.inventoryQuery h3{margin-top:20px}';document.head.append(style);renderInventoryQueries();
   }
 
-  injectItemSearchStyle();setupDeliveryForm();setupMovementHour();setupDeliveryAssetSearch();setupIncomeForm();setupItemSearch($('#deliveryForm'),'Buscar elemento a entregar');setupItemSearch($('#incomeForm'),'Buscar elemento a ingresar');renderDeliveryDraft();renderIncomeDraft();setupRegisterMenu();setupQueryMenu();setupInventoryQueries();setupSessionHeader();$('#sessionWelcomeStart').addEventListener('click',closeWelcomeMessage);$('#sessionWelcome').addEventListener('click',event=>{if(event.target.id==='sessionWelcome')closeWelcomeMessage()});
+  injectItemSearchStyle();setupDeliveryForm();setupDeliveryAssetSearch();setupIncomeForm();setupItemSearch($('#deliveryForm'),'Buscar elemento a entregar');setupItemSearch($('#incomeForm'),'Buscar elemento a ingresar');renderDeliveryDraft();renderIncomeDraft();setupRegisterMenu();setupQueryMenu();setupInventoryQueries();setupSessionHeader();$('#sessionWelcomeStart').addEventListener('click',closeWelcomeMessage);$('#sessionWelcome').addEventListener('click',event=>{if(event.target.id==='sessionWelcome')closeWelcomeMessage()});
   window.SKPlaza={openPersonHistory,recipientDestinationChanged,post,getData:()=>data,getUser:()=>user,movementShift,movementTimes,resetMovementTime,saveData:persistLocalChange,sync,renderRecentQueries,refreshDelivery:updateDeliveryFields,updatePendingBadge,renderRecipients:null,validateDeliveryRecipient,validateIncomeCollaborator,resumeDeliveryAfterCollaborator:async()=>{if(!pendingDeliveryAfterCollaborator)return false;pendingDeliveryAfterCollaborator=false;return saveDeliveryBatch($('#deliveryForm'))}};
   const mineExitForm=window.SKPlazaMineExits.mount({...window.SKPlaza,uuid,esc,isFixedItem,itemName,assetLabel,assetSelectionLabel,assetAvailableForDelivery});
   $('#app').addEventListener('click',event=>{
