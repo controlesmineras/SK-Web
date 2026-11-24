@@ -191,22 +191,45 @@ window.SKAdminAuth={waitForLoginRenewal,renewForSync,token:()=>token,user:()=>us
   button=document.createElement('button');button.id='entryPrincipalSettings';button.type='button';button.className='homeAccessBtn';button.textContent='CONFIGURAR USUARIO ADMIN';host.append(button);
   button.onclick=()=>{
    const dialog=document.createElement('dialog');dialog.id='entryPrincipalDialog';dialog.className='entryDialog';
-   dialog.innerHTML='<form><h2>Usuario admin</h2><p>Esta contraseña da acceso de administrador a las cuatro aplicaciones. Los registros quedan a nombre del colaborador que identifiques aquí.</p><label>Tu documento en Personal<input name="document" inputmode="numeric" required></label><label>Contraseña de la cuenta principal actual<input name="currentPassword" type="password" autocomplete="current-password" required></label><label>Nueva contraseña de admin<input name="newPassword" type="password" minlength="8" autocomplete="new-password" required></label><label>Confirmar contraseña<input name="confirm" type="password" minlength="8" autocomplete="new-password" required></label><button type="submit">Guardar contraseña</button><button type="button">Cerrar</button><p role="status"></p></form>';
-   const style=document.createElement('style');style.textContent='.entryDialog{max-width:min(460px,92vw);color:#17384f;border:1px solid #8a9ba5;border-radius:12px;padding:22px}.entryDialog input{box-sizing:border-box;width:100%;padding:10px;border:1px solid #8096a4;border-radius:6px}.entryDialog::backdrop{background:#102b4280}.entryDialog label{display:grid;gap:4px;margin:10px 0}.entryDialog button{margin:6px 6px 4px 0}';dialog.append(style);
-   document.body.append(dialog);const form=dialog.querySelector('form'),status=form.querySelector('[role=status]'),submit=form.querySelector('[type=submit]');
+   dialog.setAttribute('aria-labelledby','entryPrincipalTitle');
+   dialog.innerHTML=`
+    <div class="entryDialogHeading">
+     <h2 id="entryPrincipalTitle">Configurar usuario admin</h2>
+     <button type="button" class="entryDialogInfo" aria-label="Información sobre el usuario admin" aria-controls="entryPrincipalHelp" aria-expanded="false"><span aria-hidden="true">i</span></button>
+    </div>
+    <p id="entryPrincipalHelp" hidden>Esta contraseña da acceso de administrador a las cuatro aplicaciones. Los registros quedan a nombre del colaborador identificado por el documento que ingreses.</p>
+    <form>
+     <div class="entryDialogFields">
+      <label>Tu documento en Personal<input name="document" inputmode="numeric" required></label>
+      <label>Contraseña actual<input name="currentPassword" type="password" autocomplete="current-password" required></label>
+      <label>Nueva contraseña<input name="newPassword" type="password" minlength="8" autocomplete="new-password" required></label>
+      <label>Confirmar nueva contraseña<input name="confirm" type="password" minlength="8" autocomplete="new-password" required></label>
+     </div>
+     <p role="status" aria-live="polite"></p>
+     <div class="entryDialogActions"><button type="button" data-close>Cerrar</button><button type="submit">Guardar contraseña</button></div>
+    </form>`;
+   document.body.append(dialog);
+   const form=dialog.querySelector('form'),status=form.querySelector('[role=status]'),submit=form.querySelector('[type=submit]');
+   const info=dialog.querySelector('.entryDialogInfo'),help=dialog.querySelector('#entryPrincipalHelp');
+   info.onclick=()=>{help.hidden=!help.hidden;info.setAttribute('aria-expanded',String(!help.hidden));};
    form.elements.document.value=auth.user()?.document||'';
    dialog.onclose=()=>{form.reset();dialog.remove();button.focus();};
-   form.querySelector('[type=button]').onclick=()=>dialog.close();
+   const close=form.querySelector('[data-close]');
+   close.onclick=()=>dialog.close();
    form.onsubmit=async e=>{
     e.preventDefault();if(submit.disabled||!auth.isOwner())return;
-    if(form.elements.newPassword.value!==form.elements.confirm.value){status.textContent='Las contraseñas no coinciden.';return;}
-    submit.disabled=true;status.textContent='Guardando…';
+    if(form.elements.newPassword.value!==form.elements.confirm.value){status.dataset.state='error';status.textContent='Las contraseñas no coinciden.';form.elements.confirm.focus();return;}
+    submit.disabled=true;status.dataset.state='pending';status.textContent='Guardando…';
     try{
      const {document,currentPassword,newPassword}=Object.fromEntries(new FormData(form));
      const result=await auth.request('entryConfigure',{document,currentPassword,newPassword});
-     if(result.username!=='admin')throw new Error('Actualiza Code.gs para configurar admin.');
-     form.reset();status.textContent='Contraseña guardada. Ya puedes ingresar como admin en las cuatro apps.';
-    }catch(error){status.textContent=error.message;}finally{submit.disabled=false;}
+     if(result.username!=='admin')throw new Error('La base central no confirmó el cambio de contraseña.');
+     form.reset();form.querySelector('.entryDialogFields').hidden=true;submit.hidden=true;
+     status.dataset.state='success';status.textContent='Contraseña guardada. Ya puedes ingresar como admin en las cuatro apps.';close.focus();
+    }catch(error){
+     status.dataset.state='error';
+     status.textContent=/^Solicitud no válida\.?$/i.test(error.message)?'La versión publicada de Code.gs aún no reconoce esta opción. Actualiza la implementación de Apps Script.':error.message;
+    }finally{submit.disabled=false;}
    };
    dialog.showModal();
   };

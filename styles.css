@@ -169,3 +169,44 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
 }
 :is(#adminRegisterMenu,#adminQueryMenu) .adminHomeMenuGrid button:hover{background:#cfdfeb!important}
 :is(#adminRegisterMenu,#adminQueryMenu) .adminHomeMenuGrid button:focus-visible{outline:2px solid #245d7c;outline-offset:2px}
+
+.entryDialog {
+ width:min(35rem,calc(100% - 2rem));
+ max-width:none;
+ max-height:calc(100% - 2rem);
+ margin:auto;
+ padding:clamp(16px,3vw,24px);
+ overflow:auto;
+ color:#17384f;
+ background:#fff;
+ border:1px solid #9aacb7;
+ border-radius:12px;
+}
+.entryDialog::backdrop {background:#102b4280}
+.entryDialogHeading {display:flex;align-items:center;justify-content:space-between;gap:12px}
+.entryDialogHeading h2 {margin:0;font-size:1.15rem;line-height:1.3}
+.entryDialogInfo {
+ display:grid;place-items:center;flex:none;width:34px;height:34px;padding:0;
+ color:#526674;background:transparent;
+}
+.entryDialogInfo span {
+ display:grid;place-items:center;width:24px;height:24px;border:1.5px solid #8796a1;border-radius:50%;
+ background:linear-gradient(#fafcfd,#dce3e8);font:bold italic 17px/1 Georgia,serif;
+}
+.entryDialog button:focus-visible {outline:2px solid #276787;outline-offset:2px}
+.entryDialog #entryPrincipalHelp {margin:8px 0 0;padding:8px 12px;border-left:3px solid #93a5b2;background:#eff3f6;font-size:.875rem;line-height:1.45}
+.entryDialog form {display:block;margin:14px 0 0;padding:0;border:0}
+.entryDialogFields {display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px 16px}
+.entryDialogFields label {display:grid;gap:5px;margin:0;min-width:0;font-size:.8125rem;line-height:1.35;font-weight:600;text-transform:none;letter-spacing:normal}
+.entryDialogFields input {min-width:0;min-height:40px;padding:8px 10px;font-size:1rem;font-weight:400}
+.entryDialog [role=status] {margin:12px 0 0;padding:9px 12px;border-radius:6px;background:#f0f4f7;font-size:.875rem;line-height:1.45}
+.entryDialog [role=status]:empty,.entryDialog [hidden] {display:none}
+.entryDialog [data-state=success] {color:#21523e;background:#eaf4ed}
+.entryDialog [data-state=error] {color:#832e2b;background:#fbeeed}
+.entryDialogActions {display:flex;justify-content:flex-end;gap:8px;margin-top:18px}
+.entryDialogActions button {min-height:40px;padding:8px 16px;font-size:.875rem}
+.entryDialogActions [data-close] {border:1px solid #a8b8c3;background:#fff;color:#17384f}
+@media(max-width:540px) {
+ .entryDialogFields {grid-template-columns:minmax(0,1fr);gap:10px}
+ .entryDialogActions button {flex:1;padding-inline:8px}
+}
