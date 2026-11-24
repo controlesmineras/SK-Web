@@ -12,6 +12,51 @@
   const activePeople=()=>people().filter(person=>!person.deleted&&person.active!==false);
   const resolve=search=>{const value=norm(search?.value);if(!value)return null;const matches=activePeople().filter(person=>norm(label(person))===value||norm(person.documento)===value||norm(person.nombre)===value);return matches.length===1?matches[0]:null};
   const matchingPeople=search=>{const query=norm(search?.value);return (query?activePeople().filter(person=>norm([person.documento,person.document,personName(person)].join(' ')).includes(query)):activePeople()).sort((a,b)=>personName(a).localeCompare(personName(b),'es',{sensitivity:'base'}))};
+  function bindMineCarrier(){
+    const field=$('#mineCarrierField'),search=$('#mineCarrierSearch'),results=$('#mineCarrierResults');
+    if(!field||!search||!results)return;
+    const selected=search.form.elements.carrierId;
+    let active=-1;
+    function close(){
+      results.hidden=true;active=-1;search.setAttribute('aria-expanded','false');search.removeAttribute('aria-activedescendant');
+    }
+    function draw(){
+      const matches=matchingPeople(selected.value?null:search).filter(person=>person.id).slice(0,60);
+      results.innerHTML=matches.map((person,index)=>'<button type="button" tabindex="-1" role="option" id="mineCarrierOption-'+index+'" data-carrier-id="'+esc(person.id)+'" aria-selected="'+(person.id===selected.value)+'"><strong>'+esc(personName(person))+'</strong><small>'+esc(person.documento||person.document||'')+'</small></button>').join('')||'<p role="status">No hay colaboradores que coincidan.</p>';
+      active=-1;results.hidden=false;search.removeAttribute('aria-activedescendant');search.setAttribute('aria-expanded','true');
+    }
+    function change(id){
+      selected.value=id;selected.dispatchEvent(new Event('change',{bubbles:true}));
+    }
+    function choose(button){
+      const person=activePeople().find(row=>row.id===button.dataset.carrierId);
+      if(!person){change('');draw();return}
+      search.value=[personName(person),person.documento||person.document].filter(Boolean).join(' · ');
+      change(person.id);close();
+    }
+    search.addEventListener('focus',()=>{if(selected.value)search.select();draw()});
+    search.addEventListener('click',()=>{if(results.hidden){if(selected.value)search.select();draw()}});
+    search.addEventListener('input',()=>{change('');draw()});
+    search.addEventListener('keydown',event=>{
+      if(event.key==='Escape'||event.key==='Tab'){close();return}
+      if(!['Enter','ArrowUp','ArrowDown'].includes(event.key))return;
+      if(event.key==='Enter'&&results.hidden)return;
+      event.preventDefault();if(results.hidden)draw();
+      const options=results.querySelectorAll('[data-carrier-id]');if(!options.length)return;
+      if(event.key==='Enter'){
+        const option=options[active]||(options.length===1&&options[0]);if(option)choose(option);return;
+      }
+      const step=event.key==='ArrowDown'?1:-1;
+      options[active]?.classList.remove('isActive');
+      active=active<0?(step>0?0:options.length-1):(active+step+options.length)%options.length;
+      const option=options[active];option.classList.add('isActive');search.setAttribute('aria-activedescendant',option.id);option.scrollIntoView({block:'nearest'});
+    });
+    results.addEventListener('mousedown',event=>event.preventDefault());
+    results.addEventListener('click',event=>{const button=event.target.closest('[data-carrier-id]');if(button)choose(button)});
+    document.addEventListener('click',event=>{if(!results.hidden&&!field.contains(event.target))close()});
+    search.form.addEventListener('reset',()=>{selected.value='';close()});
+  }
+  bindMineCarrier();
   function missingFields(person){if(!person)return[];const full=splitName(person),missing=[];if(!String(full.documento||'').trim())missing.push('documento');if(!String(full.primerNombre||'').trim())missing.push('primer nombre');if(!String(full.primerApellido||'').trim())missing.push('primer apellido');if(!String(full.empresa||'').trim())missing.push('empresa');if(!String(full.area||'').trim())missing.push('área');if(!String(full.cargo||'').trim()||full.cargo==='No informado')missing.push('cargo');return missing}
   function ensureRecipientResults(){if($('#recipientResults'))return $('#recipientResults');const search=$('#recipientSearch'),labelEl=search?.closest('label');if(!labelEl)return null;const box=document.createElement('div');box.id='recipientResults';box.className='recipientResults';box.hidden=true;labelEl.append(box);box.addEventListener('click',event=>{const button=event.target.closest('[data-recipient-id]');if(!button)return;const person=activePeople().find(row=>personKey(row)===button.dataset.recipientId);if(!person)return;search.value=personName(person);recipientId.value=personKey(person);box.hidden=true;showRecipientInfo(person);updateDeliveryRegisterButton();updateDeliveryEditButton();window.SKPlaza?.validateDeliveryRecipient?.(personKey(person))});return box}
   function renderRecipientResults(){const search=$('#recipientSearch'),box=ensureRecipientResults();if(!search||!box)return;const rows=matchingPeople(search).slice(0,60);box.innerHTML=rows.map(person=>'<button type="button" data-recipient-id="'+esc(personKey(person))+'"><b>'+esc(person.nombre||[person.primerNombre,person.segundoNombre,person.primerApellido,person.segundoApellido].filter(Boolean).join(' '))+'</b><span>'+esc(person.documento||person.document||'')+'</span></button>').join('');box.hidden=!rows.length}

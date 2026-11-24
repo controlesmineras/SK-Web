@@ -182,3 +182,7 @@
 .plazaMovementTime{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:.75rem;max-width:32rem;width:100%;min-width:0}
 .plazaMovementTime label,.plazaMovementTime input{min-width:0}
 @media(max-width:360px){.plazaMovementTime{grid-template-columns:minmax(0,1fr)}}
+
+#mineCarrierResults[hidden]{display:none}
+#mineCarrierResults button.isActive{outline:2px solid #397696;outline-offset:-2px;background:#e1eff6}
+#mineCarrierResults small,#mineCarrierResults p{color:#526977;font-size:.84rem;font-weight:400}
