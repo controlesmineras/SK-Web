@@ -188,7 +188,9 @@ window.SKAdminAuth={waitForLoginRenewal,renewForSync,token:()=>token,user:()=>us
   let button=document.getElementById('entryPrincipalSettings');
   if(!auth.isOwner()){if(button)button.remove();document.querySelector('#entryPrincipalDialog[open]')?.close();return;}
   if(button)return;
-  button=document.createElement('button');button.id='entryPrincipalSettings';button.type='button';button.className='homeAccessBtn';button.textContent='CONFIGURAR USUARIO ADMIN';host.append(button);
+  button=document.createElement('button');button.id='entryPrincipalSettings';button.type='button';button.className='homeAccessBtn';
+  button.innerHTML='<span class="principalShield" aria-hidden="true"><span class="principalShieldFace"></span></span><span>CONFIGURAR USUARIO ADMIN</span>';
+  host.append(button);
   button.onclick=()=>{
    const dialog=document.createElement('dialog');dialog.id='entryPrincipalDialog';dialog.className='entryDialog';
    dialog.setAttribute('aria-labelledby','entryPrincipalTitle');
