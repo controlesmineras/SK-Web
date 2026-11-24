@@ -41,10 +41,10 @@ function createAssetHistory(){
   for(const source of ['novelties','blendingIncomes','blendingDeliveries'])for(const row of data[source]||[]){
    if(!row||row.deleted||!row.assetId||(assetId&&text(row.assetId)!==text(assetId)))continue;
    const manual=source==='novelties',income=source==='blendingIncomes',back=norm(row.movementType)==='devolucion';
-   const kind=manual?'novelty':income?'income':back?'return':norm(row.deliveryType)==='prestamo'?'loan':'assignment';
+   const kind=manual?'novelty':income?'income':back?'return':row.exitKind==='mine'?'mineExit':row.exitKind==='warehouse'?'transfer':norm(row.deliveryType)==='prestamo'?'loan':'assignment';
    const at=back?(row.returnedAt||row.createdAt||''):manual?eventTime(row):row.createdAt||'';
    const responsible=manual?person(people,row.responsableId,row.documentoResponsable,row.responsableNombre||row.nombreResponsable):income?person(people,row.broughtById,row.broughtByDocument,row.broughtByName):back?person(people,row.returnedById,row.returnedByDocument,row.returnedByName):person(people,row.recipientId,row.recipientDocument,row.recipientName,row.recipientArea,row.recipientCargo);
-   const title=manual?(row.descripcion||'Novedad'):income?'Ingreso a bodega':back?'Devolución de préstamo':kind==='loan'?'Préstamo':'Asignación';
+   const title=manual?(row.descripcion||'Novedad'):income?'Ingreso a bodega':back?'Devolución de préstamo':kind==='mineExit'?row.deliveryType+' · '+row.destinationMine:kind==='transfer'?'Traslado a bodega':kind==='loan'?'Préstamo':'Asignación';
    const key=source+':'+(row.id||[row.assetId,at,row.recipientId,row.broughtById,row.descripcion].join('|'));
    const entry={key,order:++order,assetId:row.assetId,source,kind,title,at,epoch:millis(at),...localTime(at),responsible,warehouse:warehouse(row,people,manual),location:manual?row.ubicacion||'':income||back?'Bodega de Superficie':row.destination||'Operación',state:manual?row.estado||'':'',reversed:reversed(row),pending:row.syncState==='pending',raw:row};
    const previous=entries.get(key);
@@ -81,7 +81,7 @@ function createAssetHistory(){
     nombreResponsable:entry.responsible.name,documentoResponsable:entry.responsible.document,
     nombreBodeguero:entry.warehouse.name,documentoBodeguero:entry.warehouse.document});
    if(entry.kind==='assignment')Object.assign(patch,{asignadaId:entry.responsible.id,areaAsignada:assignmentArea(row,entry.responsible)});
-   if(['income','return'].includes(entry.kind))Object.assign(patch,{asignadaId:'',areaAsignada:''});
+   if(['income','return','mineExit','transfer'].includes(entry.kind))Object.assign(patch,{asignadaId:'',areaAsignada:''});
   }
   return patch;
  }
@@ -174,11 +174,11 @@ function createAssetHistory(){
   if(movement&&coversSnapshot(movement.epoch)){
    const backInWarehouse=norm(result.ubicacion)==='bodega de superficie';
    if(movement.kind==='assignment'&&!retired(asset)&&!backInWarehouse){assigned={...movement.responsible,area:assignmentArea(movement.raw,movement.responsible)};result.asignadaId=assigned.id;result.areaAsignada=assigned.area||asset.areaAsignada||'';}
-   else if(['income','return'].includes(movement.kind)||retired(asset)||backInWarehouse){assigned={id:'',document:'',name:'',area:'',cargo:''};result.asignadaId='';result.areaAsignada='';}
+   else if(['income','return','mineExit','transfer'].includes(movement.kind)||retired(asset)||backInWarehouse){assigned={id:'',document:'',name:'',area:'',cargo:''};result.asignadaId='';result.areaAsignada='';}
   }
   // La asignación explícita de una novedad prevalece hasta el siguiente movimiento.
   // Se deriva del historial también cuando un auxiliar sincroniza con un servidor anterior.
-  const areaEvent=active.find(event=>['assignment','income','return'].includes(event.kind)||(event.kind==='novelty'&&text(event.raw.areaAsignada)));
+  const areaEvent=active.find(event=>['assignment','income','return','mineExit','transfer'].includes(event.kind)||(event.kind==='novelty'&&text(event.raw.areaAsignada)));
   if(areaEvent?.kind==='novelty'&&coversSnapshot(areaEvent.epoch)&&!retired(result)){
    result.areaAsignada=text(areaEvent.raw.areaAsignada);
   }

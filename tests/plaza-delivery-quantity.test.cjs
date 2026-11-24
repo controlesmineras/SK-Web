@@ -86,19 +86,14 @@ test('assignment also hides quantity for assets and preserves decimal delivery b
   c.select('');assert.equal(c.fields.quantity.required,false);assert.equal(c.fields.quantity.disabled,true);
 });
 
-test('ARIS MINING is available for loans and assignments and survives a recipient area change',()=>{
+test('ARIS MINING remains available for loans and normal deliveries reject assets',()=>{
   const c=formClient(),destination='A cargo de ARIS MINING';c.select('saw');
   assert.ok(c.fields.destination.options.some(option=>option.value===destination));
   c.fields.destination.value=destination;c.fields.assetId.value='asset';
   assert.equal(c.api.capture().destination,destination);
-  c.api.mode('assignment');c.api.update();
-  assert.ok(c.fields.destination.options.some(option=>option.value===destination));
-  c.fields.destination.value=destination;c.fields.destination.dataset.manualArea='1';c.fields.assetId.value='asset';
-  const row=c.api.capture();assert.equal(row.destination,destination);assert.equal(row.destinationAreaMode,'manual');
   c.api.add();c.data.personal=[{id:'person',area:'Producción'}];c.nodes.set('#recipientId',{value:'person'});c.api.recipientChanged();
   assert.equal(c.api.draft()[0].destination,destination);
-  c.select('saw');c.api.mode('loan');c.api.update();
-  assert.equal(c.fields.destination.options.filter(option=>option.value===destination).length,1);
+  c.api.mode('assignment');c.select('saw');assert.equal(c.api.capture(),null);
 });
 
 test('the specific asset selector shows manufacturer, serial, new mark and model without the class',()=>{
@@ -136,7 +131,7 @@ test('specific asset searches match partial serials, marks, models and multiple 
 
 
 test('a grouped spare capture keeps the criterion ID and explicit name for stock and Production',()=>{
-  const c=formClient();c.api.mode('assignment');
+  const c=formClient();c.api.mode('warehouse');
   c.data.inventoryCriteria.push({id:'criterion-resorte',isYtSpare:true,spareEquipment:'YT 29',spareItemNumber:'1',spareItemName:'Resorte del pin del cabezal',productionPartId:'legacy-part-1',name:'Repuesto YT 29 - Ítem 1 - Resorte'});
   c.data.inventoryStock.push({id:'stock-resorte',itemId:'criterion-resorte',quantity:8});
   c.select('criterion-resorte');c.fields.quantity.value='2';
@@ -146,8 +141,9 @@ test('a grouped spare capture keeps the criterion ID and explicit name for stock
   c.api.add();assert.equal(c.api.draft()[0].itemId,'criterion-resorte');assert.equal(c.fields.itemId.value,'');
 });
 
-test('ordinary delivery goes to Production only when its destination is explicitly selected',()=>{
+test('warehouse transfers credit Production while normal deliveries stay separate',()=>{
  const c=formClient();c.api.mode('assignment');c.select('pliers');c.fields.quantity.value='2';
- assert.equal(c.api.capture().destination,'');c.fields.destinationWarehouseId.value='production';assert.equal(c.api.capture().destination,'Producción');
+ assert.equal(c.api.capture().destination,'');c.fields.destinationWarehouseId.value='production';assert.equal(c.api.capture().destination,'');
+ c.api.mode('warehouse');c.api.update();assert.equal(c.api.capture().destinationWarehouseId,'production');
  c.select('cable');assert.equal(c.fields.destinationWarehouseId.value,'');
 });

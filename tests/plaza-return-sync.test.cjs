@@ -52,16 +52,16 @@ test('el formulario conserva el préstamo si falla el almacenamiento y evita dob
  fail=false;ctx.window.testing.save({preventDefault(){},currentTarget:form});ctx.window.testing.save({preventDefault(){},currentTarget:form});
  assert.equal(data.blendingDeliveries.length,2);assert.equal(data.blendingDeliveries[1].shiftKeeperName,'Bodeguera de turno');assert.equal(data.assets[0].ubicacion,'Bodega de Superficie');assert.equal(syncs,1);assert.equal(form.hidden,true);
 });
-test('Prestar filtra por el permiso existente y Entregas mantiene su catálogo',()=>{
+test('Prestar filtra por el permiso existente y Entregas excluye activos fijos',()=>{
  const h=harness();h.api.set({inventoryCriteria:[{id:'fixed',isFixedAsset:true,allowLoan:true},{id:'quantity',allowLoan:true},{id:'no',allowLoan:false},{id:'unspecified'},{id:'inactive',allowLoan:true,active:false}]});
  h.api.mode('loan');assert.deepEqual(Array.from(h.api.deliveryCatalog(),row=>row.id).sort(),['fixed','quantity']);
- h.api.mode('assignment');assert.equal(h.api.deliveryCatalog().length,4);
+ h.api.mode('assignment');assert.deepEqual(Array.from(h.api.deliveryCatalog(),row=>row.id).sort(),['no','quantity','unspecified']);
 });
 test('el modo determina préstamo o asignación sin selector y controla cantidades fraccionadas',()=>{
  const h=harness(),criterion={id:'fixed',name:'Pulidora',isFixedAsset:true,allowLoan:true};
  const data={inventoryCriteria:[criterion,{id:'quantity',name:'Herramienta',allowLoan:true}],assets:[{id:'asset',clase:'Pulidora',ubicacion:'Bodega de Superficie'}],inventoryStock:[{id:'stock',itemId:'quantity',quantity:10}]};
  h.api.set(data);const fields={itemId:{value:'fixed'},assetId:{value:'asset'},quantity:{value:'2'},destination:{value:'Inventario de Producción',dataset:{}},destinationLevel:{value:''},notes:{value:''}};h.nodes.set('#deliveryForm',{elements:fields});
- h.api.mode('assignment');assert.equal(h.api.currentDeliveryItem().deliveryType,'ASIGNACIÓN');
+ h.api.mode('assignment');assert.equal(h.api.currentDeliveryItem(),null);
  fields.destination.value='Operación';h.api.mode('loan');assert.equal(h.api.currentDeliveryItem().deliveryType,'PRÉSTAMO');
  criterion.allowLoan=false;assert.equal(h.api.currentDeliveryItem(),null);
  fields.itemId.value='quantity';fields.quantity.value='2.5';assert.equal(h.api.currentDeliveryItem(),null);
@@ -73,7 +73,7 @@ test('el menú conserva dos registros y agrupa las acciones debajo de PRÉSTAMOS
  h.ctx.document.createElement=()=>({addEventListener(){}});h.ctx.document.body={append:node=>{overlay=node}};
  h.api.setupRegisterMenu();
  const sections=overlay.innerHTML.split('<section class="loanMenuSection"');
- assert.equal(sections.length,2);assert.match(sections[0],/REGISTRAR INGRESOS/);assert.match(sections[0],/REGISTRAR ENTREGAS/);
+ assert.equal(sections.length,2);assert.match(sections[0],/REGISTRAR INGRESOS/);assert.match(sections[0],/REGISTRAR SALIDAS/);
  assert.doesNotMatch(sections[0],/data-register-view="loan"|data-register-view="assetReturns"/);
  assert.match(sections[1],/PRÉSTAMOS/);assert.match(sections[1],/PRESTAR ELEMENTOS/);assert.match(sections[1],/RETORNO DE ELEMENTOS/);
 });
