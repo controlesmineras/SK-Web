@@ -1,4 +1,4 @@
-const VERSION='funcionarios-4';
+const VERSION='identidad-labor-1';
 const CACHE='sk-frentes-'+VERSION;
 const scope=self.registration.scope;
 const indexUrl=new URL('./index.html?v='+VERSION,scope).href;
@@ -27,7 +27,7 @@ async function openLabor(){
   const timer=setTimeout(()=>controller.abort(),3500);
   try{
     const response=await fetch(indexUrl,{cache:'no-store',signal:controller.signal});
-    if(response.ok)return response;
+    if(response.ok && (await response.clone().text()).includes('data-labor-version="'))return response;
   }catch{
     // La copia instalada incluye los archivos que requiere su formulario.
   }finally{clearTimeout(timer);}

@@ -169,3 +169,29 @@ test('un inicio de sesión explícito pide elegir incluso al repetir cuenta y la
     assert.equal(ctx.selectedShiftPerson(),null);
   }
 });
+
+test('al corregir un acceso activo se conservan la contraseña y la identidad, incluso al reintentar',()=>{
+  const ctx=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}});
+  vm.runInContext(read('backend/apps-script/Code.gs'),ctx);
+  const person={id:'p1',documento:'123',plazaEnabled:true,plazaRole:'operator',pinHash:'existente'};
+  const cloud={personal:[person]};
+  let writes=0;
+  Object.assign(ctx,{findFile_:()=>1,readFile_:()=>cloud,writeFile_:()=>writes++,json_:v=>v,revokeInvitations_:()=>{}});
+  const request={personId:'p1',previousRole:'operator',role:'assistant'};
+  assert.equal(ctx.plazaChangeActiveRole_(request).plazaRole,'assistant');
+  assert.equal(ctx.plazaChangeActiveRole_(request).plazaRole,'assistant');
+  assert.equal(writes,1);
+  assert.equal(person.pinHash,'existente');
+  assert.equal(ctx.plazaAccount_(cloud,{document:'123',role:'plaza_operator'}).role,'plaza_assistant');
+  assert.throws(()=>ctx.plazaChangeActiveRole_({...request,previousRole:'supervisor',role:'operator'}),/rol cambió/);
+  person.plazaEnabled=false;
+  assert.throws(()=>ctx.plazaChangeActiveRole_(request),/no está activa/);
+});
+test('el permiso de fecha se obtiene del rol asignado en Plaza, incluidos nombres anteriores',()=>{
+  const ctx=vm.createContext({});
+  vm.runInContext(read('backend/apps-script/Code.gs'),ctx);
+  for(const role of ['supervisor','Administrador','plaza_supervisor'])assert.equal(ctx.plazaSessionRole_({plazaRole:role}),'plaza_supervisor');
+  assert.equal(ctx.plazaSessionRole_({plazaRole:'Auxiliar'}),'plaza_assistant');
+  assert.equal(ctx.plazaSessionRole_({cargo:'Supervisor',plazaRole:'operator'}),'plaza_operator');
+  assert.equal(ctx.plazaSessionRole_({cargo:'Supervisor'}),'plaza_operator');
+});

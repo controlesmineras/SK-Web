@@ -41,11 +41,11 @@ test('Labor consulta la red al abrir aunque la caché ya tenga un formulario',as
   let calls=0;
   const worker=installedWorker(async(url,options)=>{
     assert.equal(url,indexUrl);assert.equal(options.cache,'no-store');calls++;
-    return new Response('Formulario publicado');
+    return new Response(html);
   });
   await worker.lifecycle('install');
   for(const url of [scope,scope+'index.html?_appUpdate=1']){
-    assert.equal(await (await worker.load(url)).text(),'Formulario publicado');
+    assert.equal(await (await worker.load(url)).text(),html);
   }
   assert.equal(calls,2);
   assert.equal(worker.load(scope+'otra-pagina.html'),undefined);
@@ -64,4 +64,22 @@ test('sin conexión Labor abre el formulario instalado con todos sus recursos de
     assert.ok(resources.includes(url),file);
     assert.equal((await worker.load(url,'cors')).status,200);
   }
+});
+
+test('Labor y Producción tienen identificadores de instalación distintos en el mismo origen',()=>{
+  const ids=new Set();
+  for(const app of ['frentes','produccion']){
+    const manifest=JSON.parse(fs.readFileSync(path.join(root,app,'manifest.webmanifest'),'utf8'));
+    const manifestUrl=new URL('../'+app+'/manifest.webmanifest',scope);
+    const start=new URL(manifest.start_url,manifestUrl);
+    const id=new URL(manifest.id,start.origin);
+    assert.equal(id.href,start.href);
+    ids.add(id.href);
+  }
+  assert.equal(ids.size,2);
+});
+test('al recibir una pantalla de otra app Labor abre su propia copia instalada',async()=>{
+  const worker=installedWorker(async()=>new Response('<title>Producción</title>'));
+  await worker.lifecycle('install');
+  assert.equal(await (await worker.load(scope)).text(),html);
 });

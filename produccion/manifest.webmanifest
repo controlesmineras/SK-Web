@@ -1,7 +1,7 @@
 {
   "name": "Producción SK 3.7",
   "short_name": "Producción",
-  "id": "./",
+  "id": "/SK-Web/produccion/",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

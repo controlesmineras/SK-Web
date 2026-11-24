@@ -153,6 +153,18 @@ async function open(scope){
   if(scope==='admin'&&!adminRoles.includes('admin')){
    const note=document.createElement('p');note.className='hint';note.textContent='Para habilitar el rol Administrador, actualiza Code.gs y publica una nueva versión del servicio central.';manage.append(note);
   }
+  if(scope==='plaza'&&existing){
+   const saveRole=button('Guardar rol',()=>run('Guardando rol…',async()=>{
+    const person=people.find(p=>p.id===row.personId),updated=await window.SKPlazaAccess.changeActiveRole(person,role.value);
+    Object.assign(person,updated);Object.assign(row,{plazaRole:updated.plazaRole,role:updated.plazaRole});
+    if(!current())return;
+    clearInvite();renderActive();saveRole.hidden=role.value===row.role;
+    status.textContent='Rol guardado. Sincroniza Plaza Blending para aplicarlo en la sesión abierta.';
+   }));
+   saveRole.hidden=true;
+   role.onchange=()=>{saveRole.hidden=role.value===row.role};
+   manage.append(saveRole);
+  }
   manage.append(button(existing?'Generar enlace con el rol seleccionado':'Generar enlace',()=>generate(row,role?.value||row.role)));
   if(existing)manage.append(button('Quitar acceso',()=>disable(row)));
   role.focus({preventScroll:true});
@@ -271,7 +283,7 @@ async function open(scope){
  dialog.showModal();
  async function loadPeople(){
   people=(await all('personal')).filter(person=>!person.deleted).sort((a,b)=>String(a.nombre||'').localeCompare(String(b.nombre||''),'es'));
-  access.plaza=people.filter(person=>person.plazaEnabled).map(person=>({...person,personId:person.id,role:person.plazaRole||'operator'}));
+  access.plaza=people.filter(person=>person.plazaEnabled).map(person=>({...person,personId:person.id,role:window.SKPlazaAccess.accessRole(person)}));
  }
  async function loadUsers(){
   await auth().waitForLoginRenewal?.();
