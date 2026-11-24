@@ -250,7 +250,7 @@ function sandraKMine_(value){return cargoNorm_(value).replace(/[.\s-]/g,'')==='s
 function externalMinePrefix_(mine){const prefixes={'providencia':'P','el silencio':'S','carla':'C','alianza':'L'};return prefixes[cargoNorm_(mine)]||''}
 function collaboratorSyncCapabilities_(){return{collaboratorRevisionsV1:true}}
 function nextRevision_(previous){return new Date(Math.max(Date.now(),(Date.parse(previous)||0)+1)).toISOString()}
-function plazaIncomeCapabilities_(){return{collaboratorRevisionsV1:true,movementReceiptsV1:true,independentMovementGroupsV1:true,inventoryLoansV1:true,loanReturnsV1:true,externalIncomeV1:true,externalMarkSeparator:'-',minePrefixes:{'Providencia':'P','El Silencio':'S','Carla':'C','Alianza':'L'}}}
+function plazaIncomeCapabilities_(){return{collaboratorRevisionsV1:true,movementReceiptsV1:true,independentMovementGroupsV1:true,inventoryLoansV1:true,loanReturnsV1:true,externalIncomeV1:true,mineExitsV1:true,externalMarkSeparator:'-',minePrefixes:{'Providencia':'P','El Silencio':'S','Carla':'C','Alianza':'L'}}}
 function validatePlazaIncomeContext_(row,asset){
  if(!row.incomeType&&!row.originMine)return false; // Compatibilidad con registros anteriores.
  if(!repairIncomeClass_(asset.clase))throw new Error('El tipo de ingreso especial solo corresponde a YT y columnas');
@@ -923,7 +923,52 @@ function plazaPendingGroups_(incoming){
     });
   });
   assets.filter(asset=>!attached.has(asset.id)).forEach(asset=>groups.set('asset:'+asset.id,{assets:[asset],blendingIncomes:[],blendingDeliveries:[]}));
-  return Array.from(groups.values());
+  const ordered=Array.from(groups.values());
+  if(ordered.some(group=>group.blendingDeliveries.some(row=>row.exitKind==='mine'))){
+    const time=group=>Date.parse((group.blendingDeliveries[0]||group.blendingIncomes[0]||group.assets[0]).createdAt)||0;
+    ordered.sort((left,right)=>time(left)-time(right));
+    // El alta y su primera salida pueden sincronizarse juntas con la ficha local ya trasladada.
+    const mineAssets=new Set(ordered.flatMap(group=>group.blendingDeliveries.filter(row=>row.exitKind==='mine').map(row=>row.assetId)));
+    for(const group of ordered)group.assets=group.assets.map(asset=>{
+      const initial=asset.registeredFrom==='plaza-income'&&mineAssets.has(asset.id)&&group.blendingIncomes.find(row=>row.assetId===asset.id&&row.createdAt===asset.createdAt);
+      if(!initial)return asset;
+      const owner=initial.incomeType==='REPARACIÓN'?initial.originMine:'Sandra K';
+      return {...asset,mina:owner,activoExterno:!sandraKMine_(owner),estado:'Operativo/a',ubicacion:'Bodega de Superficie'};
+    });
+  }
+  return ordered;
+}
+function validatePlazaExit_(row,name,cloud,asset){
+ if(!row.exitKind)return; // Los registros anteriores mantienen su interpretación original.
+ if(name!=='blendingDeliveries'||row.movementType||!['delivery','mine','warehouse'].includes(row.exitKind))throw new Error('Tipo de salida no válido.');
+ const item=(cloud.inventoryCriteria||[]).find(entry=>entry.id===row.itemId&&!entry.deleted&&entry.active!==false);
+ const fixed=truthy_(item?.isFixedAsset??item?.esActivoFijo??item?.fixedAsset??item?.CI_ES_A_FIJO);
+ if(row.exitKind==='delivery'){
+  if(!item||fixed||row.assetId||row.destinationWarehouseId||row.destination)throw new Error('Entregas solo admite elementos de consumo para un funcionario.');
+  return;
+ }
+ if(row.exitKind==='warehouse'){
+  const settings=productionWarehouseSettings_();
+  if(!settings.enabled||String(row.createdAt)<settings.transferStartAt)throw new Error('Producción no está habilitada para la fecha del traslado.');
+  if(!item||productionWarehouseEpp_(item)||row.destinationWarehouseId!=='production'||row.deliveryType!=='TRASLADO A BODEGAS')throw new Error('Traslado a bodega no válido.');
+  if(fixed!==Boolean(row.assetId)||fixed&&(!asset||Number(row.quantity)!==1)||(!truthy_(item.fractionable)||item.isYtSpare)&&!Number.isSafeInteger(Number(row.quantity)))throw new Error('Cantidad o activo no válido para Producción.');
+  if(fixed&&(cargoNorm_(asset.clase)!==cargoNorm_(item.name||item.nombre||item.elemento||item.CI_ELEMENTO)||productionWarehouseRetired_(asset)))throw new Error('El activo no está habilitado para este traslado.');
+  if(item.isYtSpare)productionSpare_(item,cloud);
+  row.destination='Producción';return;
+ }
+ if(!asset||asset.deleted||Number(row.quantity)!==1||/auto[\s-]*r{1,2}escatador/.test(cargoNorm_(asset.clase))||
+    /dad[oa](?:\/a)? de baja|retirad[oa]|desechad[oa]/.test(cargoNorm_([asset.estado,asset.ubicacion].join(' '))))throw new Error('Activo no habilitado para salir de mina.');
+ const options=(cloud.inventoryCriteria||[]).find(entry=>entry.id==='SYSTEM-FORM-OPTIONS-V1'||entry.recordType==='formOptions');
+ const mines=options?.options?.['asset.owner']||['Sandra K','Providencia','El Silencio','Carla','Alianza'];
+ const mine=row.destinationMine,owner=String(asset.mina||asset.minaOrigen||'').trim(),key=value=>cargoNorm_(value).replace(/[.\s-]/g,'');
+ if(!mines.includes(mine)||sandraKMine_(mine)||row.destinationWarehouseId||
+    !['TRASLADO','PRÉSTAMO','RETORNO','SALIDA A REPARACIÓN'].includes(row.deliveryType))throw new Error('Selecciona una mina de destino y un tipo de operación válido.');
+ if(key(row.ownerMineBefore)!==key(owner)||key(owner)!==key(mine)&&row.ownerMismatchConfirmed!==true)throw new Error('Revisa la mina propietaria y confirma el destino del activo.');
+ if(cargoNorm_(asset.ubicacion)!=='bodega de superficie')throw new Error('No se le ha dado ingreso a Plaza Blending.');
+ row.destination='Mina '+mine;row.ownerMineBefore=owner;
+ if(row.deliveryType==='TRASLADO'){asset.mina=mine;asset.activoExterno=true;}
+ if(row.deliveryType==='SALIDA A REPARACIÓN')asset.estado='En reparación';
+ asset.ingresoTemporal=false;asset.asignadaId='';asset.areaAsignada='';
 }
 function applyPlazaChanges_(cloud,incoming,auth){
     const allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)])),cloudAssets=Array.isArray(cloud.assets)?cloud.assets:[],pendingAssets=(Array.isArray(incoming.assets)?incoming.assets:[]).filter(x=>x&&x.id&&x.syncState==='pending'),assetIds=new Set(cloudAssets.map(x=>x.id).filter(Boolean)),acceptedAssets=[];
@@ -946,6 +991,7 @@ function applyPlazaChanges_(cloud,incoming,auth){
         if(row.movementType==='REVERSIÓN'||row.reversalOf)throw new Error('Las reversiones se registran desde SK Web Admin');
         delete row.syncError;
         if(!Number.isFinite(qty)||!(qty>0)||!row.itemId)throw new Error('Movimiento incompleto');
+        validatePlazaExit_(row,name,cloud,row.assetId&&workingAssets.find(asset=>asset.id===row.assetId));
         const isReturn=row.movementType==='DEVOLUCIÓN';
         if(isReturn&&(name!=='blendingDeliveries'||!row.loanId))throw new Error('Retorno de elementos incompleto');
         if(row.bringsReplacement==='first-delivery'){
@@ -954,7 +1000,7 @@ function applyPlazaChanges_(cloud,incoming,auth){
           if(name!=='blendingDeliveries'||isReturn||row.assetId||fixed||criterion?.isEpp!==true||
              cargoNorm_(row.deliveryType)==='prestamo')delete row.bringsReplacement;
         }
-        if(name==='blendingDeliveries'&&!isReturn&&cargoNorm_(row.deliveryType)==='prestamo'){
+        if(name==='blendingDeliveries'&&!isReturn&&row.exitKind!=='mine'&&cargoNorm_(row.deliveryType)==='prestamo'){
           const criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===row.itemId&&!item.deleted&&item.active!==false);
           if(!criterion||!truthy_(criterion.allowLoan))throw new Error('El elemento no permite préstamos en Criterios de inventario');
           const fixed=truthy_(criterion.isFixedAsset??criterion.esActivoFijo??criterion.CI_ES_A_FIJO);
@@ -964,7 +1010,7 @@ function applyPlazaChanges_(cloud,incoming,auth){
           row.unit=criterion.unit||criterion.CI_UNIDAD_MEDIDA||'Unidad';
         }
         if(isReturn)applyPlazaLoanReturn_(row,workingAssets.find(asset=>asset&&asset.id===row.assetId&&!asset.deleted),workingDeliveries,cloud,auth);
-        if(name==='blendingDeliveries'&&!isReturn){
+        if(name==='blendingDeliveries'&&!isReturn&&row.exitKind!=='mine'){
           if(!row.recipientId)throw new Error('La entrega no tiene receptor confirmado');
           const recipient=(cloud.personal||[]).find(person=>person&&person.id===row.recipientId&&!person.deleted);
           if(!recipient)throw new Error('El colaborador receptor aún no está confirmado en la base central. Sincroniza primero Personal y vuelve a intentar la entrega.');
@@ -1811,10 +1857,10 @@ function createAssetHistory(){
   for(const source of ['novelties','blendingIncomes','blendingDeliveries'])for(const row of data[source]||[]){
    if(!row||row.deleted||!row.assetId||(assetId&&text(row.assetId)!==text(assetId)))continue;
    const manual=source==='novelties',income=source==='blendingIncomes',back=norm(row.movementType)==='devolucion';
-   const kind=manual?'novelty':income?'income':back?'return':norm(row.deliveryType)==='prestamo'?'loan':'assignment';
+   const kind=manual?'novelty':income?'income':back?'return':row.exitKind==='mine'?'mineExit':row.exitKind==='warehouse'?'transfer':norm(row.deliveryType)==='prestamo'?'loan':'assignment';
    const at=back?(row.returnedAt||row.createdAt||''):manual?eventTime(row):row.createdAt||'';
    const responsible=manual?person(people,row.responsableId,row.documentoResponsable,row.responsableNombre||row.nombreResponsable):income?person(people,row.broughtById,row.broughtByDocument,row.broughtByName):back?person(people,row.returnedById,row.returnedByDocument,row.returnedByName):person(people,row.recipientId,row.recipientDocument,row.recipientName,row.recipientArea,row.recipientCargo);
-   const title=manual?(row.descripcion||'Novedad'):income?'Ingreso a bodega':back?'Devolución de préstamo':kind==='loan'?'Préstamo':'Asignación';
+   const title=manual?(row.descripcion||'Novedad'):income?'Ingreso a bodega':back?'Devolución de préstamo':kind==='mineExit'?row.deliveryType+' · '+row.destinationMine:kind==='transfer'?'Traslado a bodega':kind==='loan'?'Préstamo':'Asignación';
    const key=source+':'+(row.id||[row.assetId,at,row.recipientId,row.broughtById,row.descripcion].join('|'));
    const entry={key,order:++order,assetId:row.assetId,source,kind,title,at,epoch:millis(at),...localTime(at),responsible,warehouse:warehouse(row,people,manual),location:manual?row.ubicacion||'':income||back?'Bodega de Superficie':row.destination||'Operación',state:manual?row.estado||'':'',reversed:reversed(row),pending:row.syncState==='pending',raw:row};
    const previous=entries.get(key);
@@ -1851,7 +1897,7 @@ function createAssetHistory(){
     nombreResponsable:entry.responsible.name,documentoResponsable:entry.responsible.document,
     nombreBodeguero:entry.warehouse.name,documentoBodeguero:entry.warehouse.document});
    if(entry.kind==='assignment')Object.assign(patch,{asignadaId:entry.responsible.id,areaAsignada:assignmentArea(row,entry.responsible)});
-   if(['income','return'].includes(entry.kind))Object.assign(patch,{asignadaId:'',areaAsignada:''});
+   if(['income','return','mineExit','transfer'].includes(entry.kind))Object.assign(patch,{asignadaId:'',areaAsignada:''});
   }
   return patch;
  }
@@ -1944,11 +1990,11 @@ function createAssetHistory(){
   if(movement&&coversSnapshot(movement.epoch)){
    const backInWarehouse=norm(result.ubicacion)==='bodega de superficie';
    if(movement.kind==='assignment'&&!retired(asset)&&!backInWarehouse){assigned={...movement.responsible,area:assignmentArea(movement.raw,movement.responsible)};result.asignadaId=assigned.id;result.areaAsignada=assigned.area||asset.areaAsignada||'';}
-   else if(['income','return'].includes(movement.kind)||retired(asset)||backInWarehouse){assigned={id:'',document:'',name:'',area:'',cargo:''};result.asignadaId='';result.areaAsignada='';}
+   else if(['income','return','mineExit','transfer'].includes(movement.kind)||retired(asset)||backInWarehouse){assigned={id:'',document:'',name:'',area:'',cargo:''};result.asignadaId='';result.areaAsignada='';}
   }
   // La asignación explícita de una novedad prevalece hasta el siguiente movimiento.
   // Se deriva del historial también cuando un auxiliar sincroniza con un servidor anterior.
-  const areaEvent=active.find(event=>['assignment','income','return'].includes(event.kind)||(event.kind==='novelty'&&text(event.raw.areaAsignada)));
+  const areaEvent=active.find(event=>['assignment','income','return','mineExit','transfer'].includes(event.kind)||(event.kind==='novelty'&&text(event.raw.areaAsignada)));
   if(areaEvent?.kind==='novelty'&&coversSnapshot(areaEvent.epoch)&&!retired(result)){
    result.areaAsignada=text(areaEvent.raw.areaAsignada);
   }

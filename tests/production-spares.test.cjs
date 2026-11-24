@@ -18,7 +18,7 @@ test('reruns do not duplicate criteria or overwrite stock, including deleted cri
 });
 test('destination remains Production even if a different value is submitted',()=>{
  const source=fs.readFileSync('plaza/plaza.js','utf8'),start=source.indexOf('function deliveryDestination('),end=source.indexOf('function updateDeliveryFields',start);
- const context={findItem:()=>({isYtSpare:true})};vm.runInNewContext(source.slice(start,end),context);
+ const context={deliveryMode:'warehouse',findItem:()=>({isYtSpare:true})};vm.runInNewContext(source.slice(start,end),context);
  assert.equal(context.deliveryDestination({elements:{itemId:{value:'p'},destination:{value:'Socavón'},destinationLevel:{value:'4'}}}),'Producción');
 });
 

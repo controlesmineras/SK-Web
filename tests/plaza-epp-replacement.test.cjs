@@ -71,7 +71,7 @@ test('fixed assets never require replacement even when also flagged EPP',async()
  c.select('gloves');c.answer('yes');c.select('saw');
  assert.equal(c.field.hidden,true);assert.ok(c.inputs.every(input=>!input.required&&!input.checked));
  c.form.elements.assetId.value='saw-1';c.form.elements.destination.value='A cargo de ARIS MINING';
- assert.equal(Object.hasOwn(c.api.capture(),'bringsReplacement'),false);
+ assert.equal(c.api.capture(),null);
  c.api.mode('loan');c.api.update();assert.equal(c.field.hidden,true);
  const loan=c.api.capture();assert.equal(loan.quantity,1);assert.equal(Object.hasOwn(loan,'bringsReplacement'),false);
  c.api.prepare([{...loan,bringsReplacement:true}]);c.form.elements.itemId.value='';
