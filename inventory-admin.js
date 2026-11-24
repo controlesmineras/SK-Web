@@ -233,7 +233,7 @@ async function render(){
   if(!item)return `<button type="button" class="invItem invMissingCriterion" data-inv-class="${esc(name)}"><span><b>${esc(name)}</b><small>Solo en Activos fijos · Sin criterio de inventario</small></span><span class="invMissingAction">Crear criterio</span></button>`;
   const unit=itemUnit(item);
   const application=item.isYtSpare&&spareUse(item);
-  return `<button type="button" class="invItem" data-inv-id="${esc(item.id)}"><span><b>${esc(name||'Sin nombre')}</b>${application?` <span class="invPartUse">${esc(application)}</span>`:''}<small>${item.isYtSpare&&item.sparePartCode?esc(item.sparePartCode)+' · ':''}${esc(unit)}</small></span></button>`;
+  return `<button type="button" class="invItem" data-inv-id="${esc(item.id)}"><span><b>${esc(name||'Sin nombre')}</b>${window.SKSpareGroups.aliasLine(item,q)}${application?` <span class="invPartUse">${esc(application)}</span>`:''}<small>${item.isYtSpare&&item.sparePartCode?esc(item.sparePartCode)+' · ':''}${esc(unit)}</small></span></button>`;
  }).join('')||'<p class="hint">No hay elementos que coincidan.</p>';
  syncResultSelection(form);
 }
@@ -590,7 +590,9 @@ async function openQuantities(options={}){
    const option=document.createElement('button');
    option.type='button';option.dataset.itemId=row.id;
    const name=document.createElement('span');name.className='quantityName';name.textContent=itemName(row);option.append(name);
-   const aliases=[itemSecondary(row),itemTertiary(row)].filter(Boolean);
+   const match=window.SKSpareGroups.aliasLine(row,query);
+   if(match)name.insertAdjacentHTML('beforeend',match);
+   const aliases=query?[]:[itemSecondary(row),itemTertiary(row)].filter(Boolean);
    const reason=restrictions.get(row.id);
    if(reason){option.disabled=true;aliases.push(reason)}
    else if(fixedCriterion(row))aliases.push('Activo fijo · Consultar disponibles');

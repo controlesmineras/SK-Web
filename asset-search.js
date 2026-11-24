@@ -12,6 +12,10 @@
   function query(input){
     const terms=[...new Set(fold(input).trim().split(/\s+/).filter(Boolean))];
     function matches(value){const text=fold(value);return terms.every(term=>text.includes(term))}
+    function matchCount(value){
+      const text=fold(value);
+      return terms.filter(term=>text.includes(term)).length;
+    }
     // Si un identificador buscado no está en el rótulo habitual, hacerlo visible en la tarjeta.
     function extra(asset,visible){
       const text=fold(visible),missing=terms.filter(term=>!text.includes(term));
@@ -68,7 +72,7 @@
       }
       return results;
     }
-    return {matches,extra,rows,html};
+    return {matches,matchCount,extra,rows,html};
   }
   window.SKAssetSearch={query,escape};
 })();

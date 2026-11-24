@@ -16,6 +16,7 @@ async function harness(){
  const window={addEventListener(){},dispatchEvent:e=>events.push(e.type)};
  const ctx=vm.createContext({window,indexedDB:new IDBFactory(),crypto:webcrypto,document:{querySelector:s=>s==='#inventoryItemForm'?form:s==='#inventoryItemSave'?button:s==='#inventoryItemStatus'?status:node(s),querySelectorAll:s=>s==='[data-spare-filter]'?typeButtons:[]},setTimeout(){},Event:class{constructor(type){this.type=type}},console:{error(){}}});
  vm.runInContext(fs.readFileSync('app.js','utf8').split('const PARTS=')[0],ctx);await ctx.openDB();
+ vm.runInContext(fs.readFileSync('asset-search.js','utf8'),ctx);
  vm.runInContext(fs.readFileSync('spare-groups.js','utf8'),ctx);
  const source=fs.readFileSync('inventory-admin.js','utf8').replace('window.SKInventoryAdmin={mount', 'window.SKInventoryAdmin={save,edit,syncSpareFields,bind,mount');
  ctx.URL=URL;vm.runInContext(fs.readFileSync('inventory-reference.js','utf8'),ctx);
@@ -231,7 +232,7 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  const field={value:'',focus(){},get valueAsNumber(){return Number(this.value)}};
  form.elements={quantity:field};
  menu.replaceChildren=(...rows)=>{menu.rows=rows};
- doc.createElement=()=>({dataset:{},append(child){this[child.className||'detail']=child.textContent}});
+ doc.createElement=()=>({dataset:{},insertAdjacentHTML(position,html){this.aliasLine=html},append(child){this[child.className||'detail']=child.textContent;if(child.className==='quantityName')this.nameNode=child}});
  const search=h.node('#quantityItemSearch'),type=query=>{search.value=query;search.oninput();return menu.rows};
  const selected=()=>new Promise((resolve,reject)=>{
   let tries=0;function check(){if(!field.disabled)return resolve();if(++tries>1000)return reject(Error('Cantidad deshabilitada'));setImmediate(check)}check();
@@ -261,6 +262,7 @@ test('un criterio nuevo se abre desde PRODUCCIÓN y se encuentra por su alias an
  assert.equal(search.value,'Calibrador Vernier');assert.equal(field.disabled,false);assert.equal(field.value,'');
  const [choice]=type('pie de rey');
  assert.equal(choice.dataset.itemId,item.id);
+ assert.match(choice.nameNode.aliasLine,/Otro nombre: <mark>Pie<\/mark> <mark>de<\/mark> <mark>rey<\/mark>/);
  assert.match(choice.detail,/Ingresar saldo inicial/);
  menu.onclick({target:{closest:()=>choice}});await selected();
  assert.equal(field.value,'','un saldo sin leer jamás se presenta como cero');

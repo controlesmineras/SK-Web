@@ -35,14 +35,20 @@
       document.addEventListener('click',event=>{if(!host.contains(event.target))close()});
       return {input,menu,open,close};
     }
-    function itemButton(item,index,prefix,short=false){
+    function itemButton(item,index,prefix,query,short=false){
       const button=document.createElement('button'),names=document.createElement('span'),strong=document.createElement('strong'),stock=document.createElement('span');
       button.type='button';button.id=form.id+prefix+index;button.dataset.itemId=item.id;button.setAttribute('role','option');button.setAttribute('aria-selected',String(select.value===item.id));button.disabled=disabled(item);
       names.className='itemSearchNames';strong.textContent=short?groups.partName(item):groups.recordName(item);names.append(strong);
+      const match=groups.aliasLine(item,query);
+      if(match)names.insertAdjacentHTML('beforeend',match);
       if(short&&api.showPartCode!==false&&item.sparePartCode){
         const code=document.createElement('span');code.textContent='Código: '+item.sparePartCode;names.append(code);
       }
-      for(const alias of api.aliases(item).slice(0,2)){const span=document.createElement('span');span.textContent=alias;names.append(span)}
+      const aliases=groups.aliases(item);
+      for(const detail of api.aliases(item).slice(0,2)){
+        if(query&&aliases.includes(detail))continue;
+        const span=document.createElement('span');span.textContent=detail;names.append(span);
+      }
       const quantity=api.availability(item),badge=api.fixed(item)&&quantity<=0?{className:'empty',text:'SIN ACTIVOS REGISTRADOS'}:api.badge(quantity);
       stock.className='itemStock '+badge.className;stock.textContent=badge.text;button.append(names,stock);return button;
     }
@@ -52,7 +58,7 @@
       const matches=groups.entries(available(),query);
       const entries=api.showAllItems?matches:matches.slice(0,80);
       menu.replaceChildren(...entries.map((entry,index)=>{
-        if(entry.item)return itemButton(entry.item,index,'ItemOption');
+        if(entry.item)return itemButton(entry.item,index,'ItemOption',query);
         const button=document.createElement('button'),names=document.createElement('span'),strong=document.createElement('strong'),detail=document.createElement('span');
         button.type='button';button.id=form.id+'GroupOption'+index;button.dataset.spareGroup=entry.type;button.setAttribute('role','option');button.setAttribute('aria-selected',String(selectedGroup===entry.type));
         names.className='itemSearchNames';strong.textContent=entry.label;
@@ -74,8 +80,9 @@
       }else chooseItem(button.dataset.itemId);
     });
     const detail=picker(child,'SpareSearch',api.showPartCode===false?'Busca por ítem o nombre…':'Busca por ítem, código o nombre…',(menu,input)=>{
-      const rows=groups.parts(available(),selectedGroup,select.value?'':input.value);
-      menu.replaceChildren(...rows.map((item,index)=>itemButton(item,index,'SpareOption',true)));empty(menu);
+      const query=select.value?'':input.value;
+      const rows=groups.parts(available(),selectedGroup,query);
+      menu.replaceChildren(...rows.map((item,index)=>itemButton(item,index,'SpareOption',query,true)));empty(menu);
     },button=>chooseItem(button.dataset.itemId));
     main.input.setAttribute('aria-label',api.title);
     function notify(){changing=true;try{select.dispatchEvent(new Event('change',{bubbles:true}))}finally{changing=false}}

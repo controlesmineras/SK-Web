@@ -352,7 +352,8 @@ function paintStockView({form:stockForm,panel,kind}){
  }
  stockForm.dataset.stockPartKey=partKey;
  const picker=stockForm.querySelector('.partOptions');
- if(!picker.hidden)paintPartCards(picker,filterParts(options,part?'':incomeFields.search.value),origin,row=>{
+ const query=part?'':incomeFields.search.value;
+ if(!picker.hidden)paintPartCards(picker,filterParts(options,query),origin,query,row=>{
   incomeFields.partId.value=row.id;
   incomeFields.search.value=partLabel(row);
   picker.hidden=true;
@@ -529,10 +530,13 @@ function appendPartApplication(node,part){
  }
 
 }
-function partDescription(row){
+function partDescription(row,query){
  const description=document.createElement('span'),name=document.createElement('strong');
  name.className='spareName';name.textContent=partLabel(row);
- description.append(name);appendPartApplication(description,row);
+ description.append(name);
+ const match=window.SKSpareGroups.aliasLine(row,query);
+ if(match)description.insertAdjacentHTML('beforeend',match);
+ appendPartApplication(description,row);
  return description;
 }
 function paintStockLookup(){
@@ -545,7 +549,7 @@ function paintStockLookup(){
  const query=byId('lookupSearch').value,rows=filterParts(parts,query),available=Array.isArray(state.incomes);
  panel.querySelector('tbody').replaceChildren(...rows.map(row=>{
   const tr=document.createElement('tr'),detail=document.createElement('td'),quantity=document.createElement('td');
-  detail.append(partDescription(row));
+  detail.append(partDescription(row,query));
   if(row.sparePartCode){
    const code=document.createElement('small');code.textContent='Código: '+row.sparePartCode;detail.append(code);
   }
@@ -557,11 +561,11 @@ function paintStockLookup(){
  note.textContent=!available?'Sincroniza para consultar las existencias de este inventario.':!rows.length?'No hay repuestos que coincidan.':'';
  note.hidden=!note.textContent;
 }
-function paintPartCards(container,rows,origin,choose){
+function paintPartCards(container,rows,origin,query,choose){
  container.replaceChildren(...rows.map(row=>{
   const button=document.createElement('button');
   button.type='button';
-  button.append(partDescription(row));
+  button.append(partDescription(row,query));
   if(Array.isArray(state.incomes)){
    const quantity=document.createElement('span');quantity.className='partAvailable';
    quantity.textContent='Existencia: '+stockFor(row,origin);button.append(quantity);
@@ -574,7 +578,7 @@ function paintPartCards(container,rows,origin,choose){
 function paintParts(){
  if(partCards.hidden)return;
  const origin=fields.tipoEquipo.value+inventoryOrigin;
- paintPartCards(partCards,filterParts(partOptions(),partSearch.value),origin,row=>{
+ paintPartCards(partCards,filterParts(partOptions(),partSearch.value),origin,partSearch.value,row=>{
   draft.push({partId:row.id,itemId:row.criterionId||'',noItem:row.numero||'',nombreRepuesto:row.nombre,cantidad:1,origen:origin,tipoEquipo:fields.tipoEquipo.value});
   partSearch.blur();
   closeParts();
@@ -1037,7 +1041,9 @@ function paintCount(){
    countStatus('CAMBIOS SIN GUARDAR · Pulsa GUARDAR BORRADOR.');
    difference.textContent=input.value===''||!input.validity.valid?'—':input.valueAsNumber-expected;
   };
-  return [partLabel(part),total.opening,total.incomes,total.consumptions,total.outgoings||0,expected,input,difference];
+  const name=document.createElement('span');name.textContent=partLabel(part);
+  name.insertAdjacentHTML('beforeend',window.SKSpareGroups.aliasLine(part,countFields.search.value));
+  return [name,total.opening,total.incomes,total.consumptions,total.outgoings||0,expected,input,difference];
  });
  table.tBodies[0].replaceChildren(...rows.map(values=>{
   const tr=document.createElement('tr');

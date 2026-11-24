@@ -402,7 +402,7 @@
   }
   return indexedItems;
  }
- function stockRows(query){
+ function stockRows(query,matchLines){
   const values=new Map();
   const items=criteria().filter(row=>{
    const cells=[[itemLabel(row),row.isYtSpare&&row.sparePartCode].filter(Boolean).join(' · '),row.unit||'Unidad',balance(row)];
@@ -417,7 +417,9 @@
    if(entry.item){
     const cells=values.get(entry.item.id);
     rows.push(cells);
-    if(++commonCount<=250)display.push(cells);else truncated=true;
+    if(++commonCount<=250){
+     display.push(cells);matchLines.set(cells,spareGroups.aliasLine(entry.item,query));
+    }else truncated=true;
    }else{
     const expanded=stockExpanded.get(entry.type)??Boolean(query);
     display.push({type:entry.type,label:entry.label,expanded});
@@ -426,7 +428,8 @@
      rows.push(cells);
      if(!expanded)continue;
      if(index>=250){truncated=true;continue;}
-     display.push([[spareGroups.partName(part),part.spareApplication||part.application||part.ubicacionAplicacion,part.sparePartCode].filter(Boolean).join(' · '),...cells.slice(1)]);
+     const visibleCells=[[spareGroups.partName(part),part.spareApplication||part.application||part.ubicacionAplicacion,part.sparePartCode].filter(Boolean).join(' · '),...cells.slice(1)];
+     display.push(visibleCells);matchLines.set(visibleCells,spareGroups.aliasLine(part,query));
     }
    }
   }
@@ -461,17 +464,19 @@
   if(view==='history'){
    exportRows=[];find('thead').replaceChildren();find('tbody').replaceChildren();return;
   }
-  const historyQuery=historyQueries.get(view);
+  const historyQuery=historyQueries.get(view),matchLines=new Map();
   const query=find('#warehouseFilters').hidden?'':norm(find('#warehouseSearch').value).trim();let headers,rows,display,truncated;
   if(view==='stock'){
    headers=['ELEMENTO','UNIDAD','DISPONIBLE','IMAGEN-FICHA'];
-   ({rows,display,truncated}=stockRows(query));
+   ({rows,display,truncated}=stockRows(query,matchLines));
   }else if(view==='loans'||historyQuery?.loanFilter){
    headers=['FECHA','HORA REGISTRO','ELEMENTO / ACTIVO','QUIÉN RECIBIÓ','PRESTADO','PENDIENTE','ESTADO'];
    const filter=historyQuery?.loanFilter||find('#warehouseLoanFilter').value;
    rows=loans().filter(row=>filter==='all'||(filter==='pending'?row.left>0:row.left<=0)).flatMap(row=>{
     const cells=[displayDate(row.fechaISO),registrationHour(row),row.label,row.borrower,row.quantity,row.left,row.left>0?'PENDIENTE':'DEVUELTO'];
-    return matchesQuery(cells,row.itemId,query)?[cells]:[];
+    if(!matchesQuery(cells,row.itemId,query))return [];
+    if(query)matchLines.set(cells,spareGroups.aliasLine(criteriaById().get(row.itemId),query));
+    return [cells];
    });
   }else{
    headers=['FECHA','HORA REGISTRO','MOVIMIENTO','ELEMENTO / ACTIVO','CANTIDAD','FUNCIONARIO','BODEGUERO/A DE TURNO','REGISTRADO POR','DESTINO','ESTADO'];
@@ -481,7 +486,9 @@
     const amount=kind==='quantity_adjustment'?row.balanceBefore+' → '+row.balanceAfter:
      kind==='opening'&&row.kind==='quantity_adjustment'?row.balanceAfter:row.quantity;
     const cells=[displayDate(row.fechaISO),registrationHour(row),kinds[kind]||kind,row.assetLabel||row.itemName,amount,row.personName||'—',row.shiftKeeperName||'—',row.recordedByName||row.recordedBy||'—',row.destination||'—',row.syncRejected?'REQUIERE REVISIÓN':row.pending?'PENDIENTE':'CONFIRMADO'];
-    return matchesQuery(cells,row.itemId,query)?[cells]:[];
+    if(!matchesQuery(cells,row.itemId,query))return [];
+    if(query)matchLines.set(cells,spareGroups.aliasLine(criteriaById().get(row.itemId),query));
+    return [cells];
    });
   }
   exportRows=[headers,...rows];
@@ -493,6 +500,7 @@
   }
   find('thead').replaceChildren(head);
   const body=find('tbody'),visible=display||rows.slice(0,250);
+  const nameColumn=view==='stock'?0:headers.indexOf('ELEMENTO / ACTIVO');
   body.replaceChildren(...visible.map(entry=>{
    const tr=el('tr');
    if(Array.isArray(entry)){
@@ -500,6 +508,7 @@
      const cell=el('td');
      if(view==='stock'&&index===3)cell.append(window.SKInventoryReference.link(value,entry[0]));
      else cell.textContent=value??'';
+     if(index===nameColumn&&matchLines.get(entry))cell.insertAdjacentHTML('beforeend',matchLines.get(entry));
      tr.append(cell);
     });
     return tr;

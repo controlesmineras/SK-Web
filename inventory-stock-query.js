@@ -10,9 +10,11 @@
  function draw(){
   const query=norm(search.value.trim()),rows=items.filter(row=>row.search.includes(query));
   count.textContent=rows.length+' elementos';
-  body.replaceChildren(...rows.map(({name,unit,quantity,referenceUrl})=>{
+  body.replaceChildren(...rows.map(({item,name,unit,quantity,referenceUrl})=>{
    const tr=document.createElement('tr');
-   for(const value of [name,unit,quantity])tr.insertCell().textContent=value;
+   const label=tr.insertCell();label.textContent=name;
+   label.insertAdjacentHTML('beforeend',window.SKSpareGroups.aliasLine(item,query));
+   for(const value of [unit,quantity])tr.insertCell().textContent=value;
    tr.insertCell().append(reference.link(referenceUrl,name));return tr;
   }));
  }
@@ -29,9 +31,9 @@
   const assets=active.some(fixedCriterion)?await all('assets'):[];
   const result=await Promise.all(active.map(async item=>{
    const name=item.name||item.nombre||item.elemento||item.CI_ELEMENTO||'Sin nombre';
-   return {name,unit:item.unit||item.unidadMedida||item.CI_UNIDAD_MEDIDA||'',
+   return {item,name,unit:item.unit||item.unidadMedida||item.CI_UNIDAD_MEDIDA||'',
     quantity:fixedCriterion(item)?await availableFixedQuantity(item,'plaza',assets):stockById.get(item.id)??0,
-    referenceUrl:item.referenceUrl,search:norm([name,item.secondaryName,item.tertiaryName,item.sparePartCode].filter(Boolean).join(' '))};
+    referenceUrl:item.referenceUrl,search:norm([name,...window.SKSpareGroups.aliases(item),item.sparePartCode].filter(Boolean).join(' '))};
   }));
   if(revision!==version)return;
   items=result.sort((a,b)=>a.name.localeCompare(b.name,'es',{numeric:true}));draw();
