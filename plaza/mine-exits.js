@@ -22,6 +22,8 @@
     let selectedId = '', saving = false;
     const selectedDestination = () => choices.querySelector('input:checked')?.value || '';
     const assetById = id => (api.getData().assets || []).find(row => row.id === id);
+    const carrier = () => (api.getData().personal || []).find(person =>
+      person.id && person.id === fields.carrierId.value && !person.deleted && person.active !== false);
     const available = asset => eligible(asset) && Boolean(owner(asset)) && api.assetAvailableForDelivery(asset);
     function showNotice(title, message) {
       dialog.querySelector('h3').textContent = title;
@@ -68,7 +70,7 @@
       const asset = assetById(selectedId), mine = selectedDestination();
       if (asset && !available(asset)) {explainBlocked(asset); return false;}
       const mismatch = fields.operation.value === 'RETORNO' && asset && mine && mineKey(owner(asset)) !== mineKey(mine);
-      submit.disabled = saving || !asset || Boolean(mismatch);
+      submit.disabled = saving || !asset || !carrier() || !fields.operation.value || Boolean(mismatch);
       if (!asset) return true;
       if (mismatch) {
         const message = 'El activo pertenece a ' + owner(asset) + '. No se puede registrar su retorno a ' + mine + '.';
@@ -114,6 +116,7 @@
       validateReturn();
     });
     for (const radio of fields.operation) radio.addEventListener('change', () => validateReturn());
+    fields.carrierId.addEventListener('change', () => validateReturn(false));
     fields.assetSearch.addEventListener('focus', () => { if (!selectedId) draw(); });
     fields.assetSearch.addEventListener('input', () => {selectedId = ''; status.textContent = ''; submit.disabled = true; draw();});
     fields.assetSearch.addEventListener('keydown', event => {
@@ -141,13 +144,18 @@
         return;
       }
       if (!validateReturn()) return;
+      const responsible = carrier();
+      if (!responsible) {
+        fields.carrierId.value = ''; status.textContent = 'Busca y selecciona en Personal a quien transporta el activo.';
+        fields.carrierSearch.focus(); return;
+      }
       saving = true; submit.disabled = true;
       try {
         const shift = api.movementShift(), next = structuredClone(data), target = next.assets.find(row => row.id === selectedId);
         const criterion = (data.inventoryCriteria || []).find(row => !row.deleted && api.isFixedItem(row) && normalize(api.itemName(row)) === normalize(asset.clase));
         const id = api.uuid(), times = api.movementTimes(form), user = api.getUser(), destination = mine === 'Segovia' ? mine : 'Mina ' + mine;
         const row = {id, syncEventId:id, exitKind:'mine', destinationMine:mine, deliveryType:operation, destination,
-          ownerMineBefore:owner(asset),
+          ownerMineBefore:owner(asset), recipientId:responsible.id, ...api.recipientSnapshot(responsible.id), recipientCompany:responsible.empresa || '',
           itemId:asset.criteriaId || criterion?.id || asset.id, itemName:asset.clase, assetId:asset.id, assetLabel:api.assetLabel(asset),
           quantity:1, unit:'Unidad', notes:fields.notes.value.trim(), ...shift, operatorId:user.id,
           operatorName:user.nombre, operatorDocument:user.documento, ...times, syncState:'pending'};

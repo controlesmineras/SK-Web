@@ -47,6 +47,22 @@ test('la salida a reparación a Segovia cambia la ubicación y conserva la propi
     assert.equal(f.send([row]).acknowledgements.blendingDeliveries[0].status,'already-applied');
   }
 });
+test('la salida a reparación sincroniza y conserva quién transporta, independientemente del bodeguero',()=>{
+  const f=fixture('Carla');
+  f.ctx.verifyToken_=()=>({document:'operator',role:'plaza_supervisor'});
+  f.data().personal[0].documento='456';
+  f.data().personal.push({id:'keeper',nombre:'Bodeguera',documento:'789'});
+  const row=movement('SALIDA A REPARACIÓN',{destinationMine:'Segovia',ownerMineBefore:'Carla',operatorDocument:'operator',shiftKeeperId:'keeper',
+    recipientId:'p',recipientName:'Operador',recipientDocument:'456',shiftKeeperName:'Bodeguera',shiftKeeperDocument:'789'});
+  const result=f.send([row]);
+  assert.equal(result.acknowledgements.blendingDeliveries[0].status,'accepted',result.acknowledgements.blendingDeliveries[0].error);
+  const event=history.timeline(result.data,'a')[0];
+  assert.equal(event.responsible.id,'p');assert.equal(event.responsible.document,'456');assert.equal(event.responsible.name,'Operador');
+  assert.equal(event.raw.shiftKeeperName,'Bodeguera');assert.equal(event.raw.shiftKeeperDocument,'789');
+  assert.equal(event.raw.operatorDocument,'operator');assert.equal(event.raw.destinationMine,'Segovia');
+  assert.equal(f.send([row]).acknowledgements.blendingDeliveries[0].status,'already-applied');
+  assert.equal(f.data().blendingDeliveries.length,1);
+});
 test('Segovia rechaza traslado, préstamo y retorno sin mover el activo, incluso con solicitudes pendientes antiguas',()=>{
   for(const op of ['TRASLADO','PRÉSTAMO','RETORNO']){
     const f=fixture('Carla'),row=movement(op,{destinationMine:'Segovia',ownerMineBefore:'Carla'});
