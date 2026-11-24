@@ -105,7 +105,7 @@ async function open(scope){
    if(row.role!=='owner'){
     const actions=scope==='labor'?document.createElement('div'):card;
     if(scope==='labor'){actions.className='laborCardActions';card.append(actions)}
-    actions.append(button(row.pending?'Renovar enlace':'Restablecer acceso',()=>generate(row,scope==='production'?productionSelection(row):row.role)),button('Gestionar accesos',()=>choose(row,true)));
+    actions.append(button(row.pending?'Renovar enlace':row.role==='admin'||row.roles?.includes('admin')?'Restablecer acceso':'Activar otro dispositivo',()=>generate(row,scope==='production'?productionSelection(row):row.role)),button('Gestionar accesos',()=>choose(row,true)));
     if(scope==='labor')actions.append(button(row.pending?'Cancelar invitación':'Quitar acceso',()=>disable(row)));
    }
    active.append(card);
