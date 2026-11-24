@@ -19,3 +19,8 @@ a.inventoryReferenceLink{display:inline-block;padding:.25rem .4rem;color:#165775
 #queryStockSummary:not([hidden]){display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:stretch;gap:.4rem;margin:.8rem 0}
 #queryStockSummary #queryStockBalance{margin:0;align-content:center}
 @media(max-width:480px){#queryStockReference:not([hidden]){max-width:10.5rem;padding:.5rem;gap:.2rem}}
+
+.inventoryReferenceResult{display:flex;align-items:center;gap:4px;min-width:0}
+.inventoryReferenceResult>button{flex:1;min-width:0}
+.inventoryReferenceResult>a.inventoryReferenceLink{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;min-width:44px;min-height:44px;padding:0 .35rem;color:#165775;font-size:.8rem;font-weight:700}
+.inventoryReferenceResult>a:focus-visible{outline:2px solid #165775;outline-offset:-2px;border-radius:5px}

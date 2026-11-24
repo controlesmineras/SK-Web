@@ -52,13 +52,25 @@
   info.setAttribute('aria-haspopup','dialog');info.addEventListener('click',showHelp);
   group.append(title,info);return group;
  }
- function link(value,name){
+ function referenceLink(value,name){
   const href=url(value);
-  if(!href)return document.createTextNode('—');
+  if(!href)return null;
   const a=document.createElement('a');
   a.href=href;a.target='_blank';a.rel='noopener noreferrer';a.className='inventoryReferenceLink';
   a.textContent='Ver';a.setAttribute('aria-label','Ver imagen o ficha técnica de '+name+' (abre en otra pestaña)');
   return a;
  }
- window.SKInventoryReference={url,heading,link};
+ function link(value,name){
+  return referenceLink(value,name)||document.createTextNode('—');
+ }
+ function searchResult(button,value,name){
+  const reference=referenceLink(value,name);
+  if(!reference)return button;
+  const row=document.createElement('div');
+  row.className='inventoryReferenceResult';
+  reference.textContent='VER';
+  row.append(reference,button);
+  return row;
+ }
+ window.SKInventoryReference={url,heading,link,searchResult};
 })();
