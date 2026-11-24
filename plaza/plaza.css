@@ -135,41 +135,52 @@
 @media(forced-colors:active){.exitInfo::before{forced-color-adjust:none;background:ButtonText}}
 #mineExit [hidden],.exitChoices [hidden]{display:none}
 #mineExit h2{margin:0 0 1rem}
-.exitOperations{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.375rem;min-width:0;margin:0;padding:.35rem .5rem .5rem;border:1px solid #bccbd4;border-radius:.6rem}
-.exitOperations legend{padding:0 .25rem;font-size:.86rem;font-weight:750}
-.exitOperations label{flex-direction:row;align-items:center;justify-content:center;gap:.4rem;min-width:0;min-height:44px;padding:.35rem .5rem;line-height:1.15;text-align:center;border:1px solid #bccbd4;border-radius:.4rem;cursor:pointer}
-.exitOperations input[type=radio]{flex:0 0 15px;width:15px;height:15px;min-height:0;margin:0;padding:0;accent-color:#173d59}
-.exitOperations label:has(:checked){background:#e1eff8;border-color:#173d59}
-.exitOperations label:has(input:disabled){color:#67747d;background:#eef1f3;border-color:#d2d8dc;cursor:not-allowed}
-.exitOperations label:has(:focus-visible){outline:2px solid #397497;outline-offset:1px}
-.mineDestinations{min-width:0;margin:0;padding:0;border:0}
-.mineDestinations legend,.mineElementType span{padding:0;font-size:.86rem;font-weight:750}
-#mineDestinationChoices{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem}
-#mineDestinationChoices label{position:relative}
-#mineDestinationChoices input{position:absolute;inset:0;width:100%;height:100%;min-height:0;margin:0;padding:0;opacity:0;cursor:pointer}
-#mineDestinationChoices span{display:grid;place-items:center;min-height:44px;padding:.4rem .9rem;border:1px solid #b9cbd6;border-radius:.45rem;color:#173d59;text-align:center}
-#mineDestinationChoices input:checked+span{background:#173d59;border-color:#173d59;color:white}
-#mineDestinationChoices input:focus-visible+span{outline:2px solid #397497;outline-offset:2px}
-.mineElementType{display:grid;gap:.4rem}
+.mineDestinations,.exitOperations{min-width:0;margin:0;padding:0;border:0}
+.mineDestinations legend,.exitOperations legend,.mineElementType span{padding:0;font-size:.86rem;font-weight:750}
+.mineDestinations legend,.exitOperations legend{margin-bottom:.4rem}
+.exitOperations legend{display:flex;align-items:center;gap:.35rem}
+#mineExit .exitOperations .exitInfo{width:2rem;height:2rem}
+.mineChoices{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));grid-auto-rows:1fr;gap:.5rem}
+.mineChoices label{
+  display:grid;grid-template-columns:1rem minmax(0,1fr);align-items:center;gap:.5rem;
+  min-width:0;min-height:3rem;padding:.375rem .625rem;line-height:1.2;overflow-wrap:anywhere;
+  color:#173d59;background:#f7fafc;border:1px solid #91a8b7;border-radius:.5rem;
+  box-shadow:0 2px 0 #d1dde4;cursor:pointer;
+}
+.mineChoices input[type=radio]{width:1rem;height:1rem;min-height:0;margin:0;padding:0;accent-color:#173d59;cursor:inherit}
+@media(hover:hover){.mineChoices label:has(:enabled:not(:checked)):hover{background:#e9f2f7;border-color:#397497}}
+.mineChoices label:has(:checked){background:#173d59;color:white;border-color:#173d59;box-shadow:0 2px 0 #0e293c}
+.mineChoices label:has(:checked) input{accent-color:#fff}
+.mineChoices label:has(:disabled){background:#eff2f4;color:#65727c;border-color:#d1d9de;box-shadow:none;cursor:not-allowed}
+.mineChoices label:has(:focus-visible){outline:3px solid #397497;outline-offset:2px}
+.mineElementType{display:grid;gap:.4rem;align-content:start}
 .mineElementType strong{font-size:.92rem;color:#173d59}
 .mineSearchGroup>label{margin-bottom:6px}
 .mineSearchGroup>.exitWithInfo{font-size:.86rem;font-weight:750}
 #mineAssetStatus:empty{display:none}
 #mineExit button[type=submit]:disabled{opacity:.5;cursor:not-allowed}
+@media(min-width:521px) and (max-width:959px){
+  .mineChoices{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:520px){
+  .mineChoices label{gap:.375rem;padding-inline:.375rem}
+}
 @media(min-width:960px){
   main:has(#mineExit.active){width:100%;max-width:1380px;padding-inline:clamp(24px,3vw,48px)}
   #app #mineExit.view.active,#app:has(#mineExit.active) #plazaNavigation{width:100%;max-width:none}
-  #mineExitForm{grid-template-columns:minmax(0,2fr) minmax(14rem,1fr);align-items:start;gap:1rem 1.5rem}
+  #mineExit .exitInfo{height:36px;width:36px}
+  #mineExitForm{grid-template-columns:repeat(5,minmax(0,13rem)) minmax(0,1fr);column-gap:.5rem;align-items:start}
   #mineExitFields:not([hidden]){display:contents}
-  .mineDestinations,.mineSearchGroup{grid-column:1/-1}
-  #mineDestinationChoices span{min-height:36px;min-width:7rem}
-  .mineOperationGroup{grid-column:1}
-  .mineElementGroup{grid-column:2}
+  .mineDestinations{grid-column:1/span 5}
+  #mineDestinationChoices{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .mineOperationGroup{grid-column:1/span 4}
+  .exitOperations .mineChoices{grid-template-columns:repeat(4,minmax(0,1fr))}
+  .mineElementGroup{grid-column:5/-1}
+  .mineElementType span{display:flex;align-items:center;min-height:2rem}
+  .mineElementType strong{display:flex;align-items:center;min-height:3rem}
+  .mineSearchGroup{grid-column:1/-1}
   #mineExitFields>label,#mineExitFields>button[type=submit]{grid-column:1/-1}
   #mineExitFields>button[type=submit]{justify-self:start;padding-inline:1.5rem}
-  .exitOperations{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.5fr)}
-  .exitOperations label{min-height:36px}
-  #mineExit .exitInfo{height:36px;width:36px}
 }
 .mineOperationGroup.repairOnly #mineOperationHelp p:not(.repairHelp){display:none}
 .mineAssetResults{display:grid;gap:.35rem;max-height:20rem;overflow:auto}
