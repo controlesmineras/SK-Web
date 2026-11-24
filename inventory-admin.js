@@ -505,7 +505,11 @@ async function openQuantities(options={}){
    #inventoryQuantities [hidden]{display:none!important}
    #inventoryQuantities output{font-size:1.35rem;font-weight:700}
    #inventoryQuantities .status:empty{margin:0;padding:0;border:0;min-height:0}
-   #inventoryQuantities .quantityWarehouseLogo{display:block;width:clamp(8rem,40vw,12rem);max-width:100%;height:auto;object-fit:contain;margin:clamp(1rem,4vw,2rem) auto .25rem}
+   #quantityWarehouseSwitch{display:grid;justify-items:center;gap:.25rem;width:fit-content;max-width:100%;margin:clamp(1rem,4vw,2rem) auto .25rem;padding:.35rem .75rem;background:transparent;color:#e7f0f5;border:1px solid transparent;border-radius:12px}
+   #quantityWarehouseSwitch:not(:disabled):hover{background:#183c50;border-color:#7391a2}
+   #quantityWarehouseSwitch:focus-visible{outline:2px solid #f4cb56;outline-offset:2px}
+   #quantityWarehouseSwitch:disabled{opacity:1;cursor:default}
+   #quantityWarehouseSwitch .quantityWarehouseLogo{display:block;width:clamp(8rem,40vw,12rem);max-width:100%;height:auto;object-fit:contain}
   </style><div class="sectionHead"><h2>Editar cantidades</h2></div>
 
    <form><div class="quantityPicker">
@@ -518,7 +522,7 @@ async function openQuantities(options={}){
     <div class="formActions"><button type="submit" disabled>Guardar cantidad</button>
      <button type="button" id="backFromQuantities" class="adminFormCancel">Volver</button></div>
    </form><p class="status" role="status" aria-live="polite"></p>
-   <img class="quantityWarehouseLogo" width="192" height="192" alt="">`;
+   <button id="quantityWarehouseSwitch" type="button" disabled><img class="quantityWarehouseLogo" width="192" height="192" alt=""><span class="quantitySwitchLabel"></span></button>`;
   document.querySelector('main').append(section);
   section.querySelector('#backFromQuantities').onclick=()=>window.SKAdminNav?.back();
   const picker=section.querySelector('.quantityPicker'),choices=section.querySelector('#quantityItems');
@@ -543,8 +547,14 @@ async function openQuantities(options={}){
  const view=++quantityViewVersion;
  section.querySelector('h2').textContent='Cantidades · '+warehouseName;
  const logo=section.querySelector('.quantityWarehouseLogo');
- logo.alt='Logo de '+warehouseName;
+ const warehouseSwitch=section.querySelector('#quantityWarehouseSwitch'),switchLabel=section.querySelector('.quantitySwitchLabel');
+ const nextWarehouse=production?'plaza':'production';
+ const canSwitch=window.SKAdminAuth.isAdmin()&&window.SKAdminAuth.canView('inventoryQuantities');
+ logo.alt=canSwitch?'':'Logo de '+warehouseName;
  logo.src=production?'./produccion/produccion-perforadora-512.png':'./plaza/icon-volqueta.svg';
+ switchLabel.textContent=canSwitch?'Cambiar a '+(production?'Plaza Blending':'Producción'):'';
+ switchLabel.hidden=!canSwitch;
+ warehouseSwitch.disabled=true;warehouseSwitch.onclick=null;
  form.reset();delete button.dataset.saving;search.disabled=true;menu.hidden=true;quantity.disabled=button.disabled=true;
  status.textContent='';section._refreshQuantity=null;form.onsubmit=null;
  if(typeof db==='undefined'||!db){status.textContent='El almacenamiento local todavía está cargando. Vuelve a abrir el módulo.';return}
@@ -565,7 +575,7 @@ async function openQuantities(options={}){
    if(options.catalogKind==='spare'&&(!quantityFlag(row.isYtSpare)||row.spareEquipment!==options.spareType))return false;
    const reason=quantityRestriction(row,balances.get(row.id),warehouse);
    if(reason)restrictions.set(row.id,reason);
-   return production||!reason;
+   return production||!reason||(options.fromWarehouseSwitch&&row.id===options.itemId);
   });
   criteria.sort((a,b)=>{
    if(restrictions.has(a.id)!==restrictions.has(b.id))return restrictions.has(a.id)?1:-1;
@@ -585,7 +595,7 @@ async function openQuantities(options={}){
    else status.textContent=balances.size||adjustmentsByItem.size?'':'Elige un elemento del catálogo para ingresar su saldo inicial.';
   }
  }
- try{await loadList()}catch(error){status.textContent='No se pudo leer el inventario local: '+error.message;return}
+ try{await loadList()}catch(error){if(view===quantityViewVersion)status.textContent='No se pudo leer el inventario local: '+error.message;return}
  if(view!==quantityViewVersion)return;
  function drawItems(){
   const query=selected?'':search.value.trim();
@@ -621,13 +631,16 @@ async function openQuantities(options={}){
   if(!matches.length)menu.textContent='No hay elementos que coincidan.';
   menu.hidden=false;
  }
+ function hasQuantityEdit(){
+  return !quantity.disabled&&(quantity.validity?.badInput||quantity.value!==String(stock?.quantity??(production?'':0)));
+ }
  async function readSelected(keepInput=false){
   const id=selected?.id,version=++selectionVersion;
   if(!id||button.dataset.saving==='1')return;
   const [currentItems,currentStocks,adjustments]=await Promise.all([all('inventoryCriteria'),all(table),all(quantityAdjustments)]);
   if(view!==quantityViewVersion||version!==selectionVersion)return;
   const wasPending=pending,current=currentStocks.find(row=>row.itemId===id);
-  const dirty=!quantity.disabled&&quantity.value!==(stock?String(stock.quantity):production?'':'0');
+  const dirty=hasQuantityEdit();
   pending=adjustments.find(row=>row.itemId===id&&(row.warehouse||'plaza')===warehouse);
   const item=currentItems.find(row=>row.id===id);
   const restriction=isQuantityCriterion(item)?quantityRestriction(item,current,warehouse):'El criterio ya no permite editar la cantidad.';
@@ -658,7 +671,7 @@ async function openQuantities(options={}){
   else if(production&&!current)status.textContent='Sincroniza SK Web Admin para consultar el saldo de este repuesto en Producción.';
   else status.textContent='';
  }
- function report(error){status.textContent=error.message}
+ function report(error){if(view===quantityViewVersion)status.textContent=error.message}
  search.disabled=false;
  search.onfocus=search.onclick=drawItems;
  function clearSelection(){
@@ -679,7 +692,7 @@ async function openQuantities(options={}){
    else menu.querySelector('button:not(:disabled)')?.click();
   }
  };
- async function selectItem(item){
+ async function selectItem(item,focusQuantity=true){
   if(!item)return;
   lastSavedItem=null;selected=item;search.value=itemName(item);menu.hidden=true;
   showFixedCount(fixedCriterion(item));countOutput.textContent='';status.textContent='';
@@ -687,7 +700,7 @@ async function openQuantities(options={}){
   quantity.step=quantityFlag(item.isYtSpare)||production&&!quantityFlag(item.fractionable)?'1':'any';
   await readSelected();
   if(view!==quantityViewVersion||selected!==item)return;
-  if(!quantity.disabled&&section.classList.contains('active'))quantity.focus();
+  if(focusQuantity&&!quantity.disabled&&section.classList.contains('active'))quantity.focus();
  }
  menu.onclick=event=>{
   const option=event.target.closest('[data-item-id]');
@@ -703,7 +716,7 @@ async function openQuantities(options={}){
   const id=selected?.id,value=quantity.valueAsNumber;
   if(!id||!Number.isFinite(value)||value<0)return;
   const observed=stock;
-  selectionVersion++;button.dataset.saving='1';search.disabled=quantity.disabled=button.disabled=true;menu.hidden=true;
+  selectionVersion++;button.dataset.saving='1';warehouseSwitch.disabled=search.disabled=quantity.disabled=button.disabled=true;menu.hidden=true;
   try{
    await queueQuantity(warehouse,id,value,observed,opening);
   }catch(error){
@@ -712,6 +725,7 @@ async function openQuantities(options={}){
    try{await readSelected()}catch(readError){error=new Error(error.message+' '+readError.message)}
    if(view!==quantityViewVersion)return;
    search.disabled=false;
+   warehouseSwitch.disabled=!canSwitch;
    if(!quantity.disabled)quantity.value=String(value);
    report(error);
    if(stock&&stock.quantity!==observed?.quantity)status.textContent+=' Saldo actualizado: '+stock.quantity+'.';
@@ -720,17 +734,27 @@ async function openQuantities(options={}){
   if(view===quantityViewVersion){
    lastSavedItem=selected;clearSelection();search.value='';
    delete button.dataset.saving;search.disabled=false;
+   warehouseSwitch.disabled=!canSwitch;
    status.textContent='Guardado en este equipo · pendiente de sincronizar con '+warehouseName+'.';
   }
   window.dispatchEvent(new Event('skweb-local-change'));
  };
  const item=options.itemId&&criteria.find(row=>String(row.id)===String(options.itemId));
- if(item&&matchesCatalogItem(item,options.query))await selectItem(item).catch(report);
- else if(production&&options.query){
+ if(item&&matchesCatalogItem(item,options.query))await selectItem(item,!options.fromWarehouseSwitch).catch(report);
+ else if(options.query){
   const matches=criteria.filter(row=>matchesCatalogItem(row,options.query));
-  if(matches.length===1)await selectItem(matches[0]);
+  if(matches.length===1&&!options.fromWarehouseSwitch)await selectItem(matches[0]);
   else {search.value=options.query;drawItems()}
  }else if(options.itemId)status.textContent='Este elemento se controla por ficha o no admite ajuste de cantidad en '+warehouseName+'.';
+ if(view!==quantityViewVersion||!canSwitch)return;
+ warehouseSwitch.disabled=false;
+ warehouseSwitch.onclick=async()=>{
+  if(warehouseSwitch.disabled||!window.SKAdminAuth.isAdmin()||!window.SKAdminAuth.canView('inventoryQuantities'))return;
+  if(hasQuantityEdit()&&!window.confirm('Hay una cantidad sin guardar en '+warehouseName+'. ¿Descartar ese cambio y pasar a la otra bodega?'))return;
+  const itemId=(selected||lastSavedItem)?.id;
+  await openQuantities({...options,warehouse:nextWarehouse,itemId,query:itemId?'':search.value.trim(),fromWarehouseSwitch:true});
+  if(document.activeElement===document.body&&section.classList.contains('active'))warehouseSwitch.focus({preventScroll:true});
+ };
 }
 window.SKInventoryAdmin={mount,render,openKind,openQuantities,syncQuantities,fixedCriterion,availableFixedQuantity};window.addEventListener('load',()=>setTimeout(mount,120));
 })();
