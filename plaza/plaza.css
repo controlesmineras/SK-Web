@@ -142,6 +142,8 @@
 #mineDestinationChoices input:focus-visible+span{outline:2px solid #397497;outline-offset:2px}
 .mineElementType{display:grid;gap:.4rem}
 .mineElementType strong{font-size:.92rem;color:#173d59}
+.mineSearchGroup>label{margin-bottom:6px}
+.mineSearchGroup>.exitWithInfo{font-size:.86rem;font-weight:750}
 #mineAssetStatus:empty{display:none}
 #mineExit button[type=submit]:disabled{opacity:.5;cursor:not-allowed}
 @media(min-width:960px){
