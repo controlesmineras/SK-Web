@@ -122,7 +122,16 @@
 .exitChoices,#mineExitForm,#mineExitFields{display:grid;gap:1rem}
 .exitWithInfo{display:grid;grid-template-columns:minmax(0,1fr) auto;align-items:center;gap:.6rem}
 .exitChoices button:disabled{opacity:.47;cursor:not-allowed}
-.exitInfo{width:2.75rem;height:2.75rem;padding:0;border-radius:50%;font: bold 1.2rem Georgia,serif}
+.exitInfo{display:grid;place-items:center;width:2.75rem;height:2.75rem;padding:0;border:0;border-radius:50%;background:transparent;cursor:pointer}
+.exitInfo::before{
+  content:"";width:1.7rem;height:1.7rem;
+  background:linear-gradient(145deg,#657078,#a3acb3 38%,#707a82 68%,#56616b);
+  -webkit-mask:url("./icono-informacion.png") center/contain no-repeat;
+  mask:url("./icono-informacion.png") center/contain no-repeat;
+}
+.exitInfo:hover,.exitInfo[aria-expanded="true"]{background:#edf0f2}
+.exitInfo:focus-visible{outline:2px solid #687681;outline-offset:2px}
+@media(forced-colors:active){.exitInfo::before{forced-color-adjust:none;background:ButtonText}}
 #mineExit [hidden],.exitChoices [hidden]{display:none}
 #mineExit h2{margin:0 0 1rem}
 .exitOperations{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.375rem;min-width:0;margin:0;padding:.35rem .5rem .5rem;border:1px solid #bccbd4;border-radius:.6rem}
