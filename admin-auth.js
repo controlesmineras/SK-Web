@@ -190,7 +190,7 @@ window.SKAdminAuth={waitForLoginRenewal,renewForSync,token:()=>token,user:()=>us
   if(button)return;
   button=document.createElement('button');button.id='entryPrincipalSettings';button.type='button';button.className='homeAccessBtn';
   button.innerHTML='<span class="principalShield" aria-hidden="true"><span class="principalShieldFace"></span></span><span>CONFIGURAR USUARIO ADMIN</span>';
-  host.append(button);
+  host.prepend(button);
   button.onclick=()=>{
    const dialog=document.createElement('dialog');dialog.id='entryPrincipalDialog';dialog.className='entryDialog';
    dialog.setAttribute('aria-labelledby','entryPrincipalTitle');
