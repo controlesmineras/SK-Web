@@ -1,7 +1,10 @@
 // Salidas de activos a otra mina. La ficha y su movimiento se guardan juntos.
 (() => {
   const normalize = value => String(value || '').trim().normalize('NFD').replace(/\p{M}/gu, '').toLowerCase();
-  const owner = asset => String(asset.mina || asset.minaOrigen || '').trim();
+  function owner(asset) {
+    const mine = String(asset?.mina || '').trim();
+    return ['sin registrar', 'sin asignar'].includes(normalize(mine)) ? '' : mine;
+  }
   const mineKey = value => normalize(value).replace(/[.\s-]/g, '');
   const eligible = asset => asset && !asset.deleted && !/auto[\s-]*r{1,2}escatador/.test(normalize(asset.clase)) &&
     !/dad[oa](?:\/a)? de baja|retirad[oa]|desechad[oa]/.test(normalize([asset.estado, asset.ubicacion].join(' ')));
@@ -19,14 +22,39 @@
     let selectedId = '', saving = false;
     const selectedDestination = () => choices.querySelector('input:checked')?.value || '';
     const assetById = id => (api.getData().assets || []).find(row => row.id === id);
-    const available = asset => eligible(asset) && api.assetAvailableForDelivery(asset);
+    const available = asset => eligible(asset) && Boolean(owner(asset)) && api.assetAvailableForDelivery(asset);
+    function showNotice(title, message) {
+      dialog.querySelector('h3').textContent = title;
+      document.querySelector('#mineMismatchText').textContent = message;
+      if (!dialog.open) dialog.showModal();
+    }
+    function explainBlocked(asset) {
+      selectedId = ''; submit.disabled = true;
+      const reasons = [];
+      if (eligible(asset)) {
+        if (!api.assetAvailableForDelivery(asset)) {
+          const {asset: current, events} = window.SKAssetHistory.project(asset, api.getData());
+          const hadEntry = events.some(e => (e.kind === 'income' || e.kind === 'return') &&
+            !e.reversed && !e.raw.reversalOf && normalize(e.raw.movementType) !== 'reversion');
+          if (!eligible(current)) reasons.push('Este activo ya no está habilitado para salidas fuera de mina.');
+          else if (!hadEntry) reasons.push('No puedes darle salida porque no tiene un ingreso. Debes darle ingreso primero a Plaza Blending.');
+          else reasons.push('El activo está fuera de Plaza Blending.' +
+            (current.ubicacion ? ' Ubicación registrada: ' + current.ubicacion + '.' : '') +
+            ' Debes darle ingreso primero a Plaza Blending.');
+        }
+        if (!owner(asset)) reasons.push('El activo no tiene mina propietaria. Comunícate con el administrador.');
+      } else reasons.push('Este activo ya no está disponible para registrar una salida.');
+      const message = reasons.join('\n\n');
+      status.textContent = message;
+      showNotice('Salida no disponible', message);
+    }
     function draw() {
       const query = window.SKAssetSearch.query(fields.assetSearch.value), data = api.getData();
       const hits = query.rows((data.assets || []).filter(eligible), asset => [api.assetLabel(asset), api.assetSelectionLabel(asset)]);
       results.innerHTML = hits.map(({asset, lines, detail}) => {
         const ok = available(asset);
-        const message = ok ? (window.SKAssetHistory.damaged(asset) ? 'Disponible para salida · ' + asset.estado : 'Disponible para entrega') : 'No se le ha dado ingreso a Plaza Blending.';
-        return '<button type="button" data-asset="' + api.esc(asset.id) + '"' + (ok ? '' : ' disabled') + '><strong>' +
+        const message = ok ? (window.SKAssetHistory.damaged(asset) ? 'Disponible para salida · ' + asset.estado : 'Disponible para entrega') : 'Salida bloqueada · Ver motivo';
+        return '<button type="button" data-asset="' + api.esc(asset.id) + '"' + (ok ? '' : ' aria-haspopup="dialog"') + '><strong>' +
           query.html(lines[0]) + '</strong><span>' + query.html(lines[1]) + '</span>' + (detail ? '<small>' + query.html(detail) + '</small>' : '') +
           '<small>' + api.esc(message) + '</small></button>';
       }).join('') || '<p>Sin coincidencias.</p>';
@@ -34,22 +62,18 @@
     }
     function clearAsset() {
       selectedId = ''; fields.assetSearch.value = ''; status.textContent = ''; results.hidden = true;
-      submit.disabled = saving;
+      submit.disabled = true;
     }
     function validateReturn(showAlert = true) {
       const asset = assetById(selectedId), mine = selectedDestination();
+      if (asset && !available(asset)) {explainBlocked(asset); return false;}
       const mismatch = fields.operation.value === 'RETORNO' && asset && mine && mineKey(owner(asset)) !== mineKey(mine);
-      submit.disabled = saving || Boolean(mismatch);
+      submit.disabled = saving || !asset || Boolean(mismatch);
       if (!asset) return true;
       if (mismatch) {
-        const message = owner(asset)
-          ? 'El activo pertenece a ' + owner(asset) + '. No se puede registrar su retorno a ' + mine + '.'
-          : 'Falta registrar la mina propietaria de este activo antes de retornarlo.';
+        const message = 'El activo pertenece a ' + owner(asset) + '. No se puede registrar su retorno a ' + mine + '.';
         status.textContent = message;
-        if (showAlert && !dialog.open) {
-          document.querySelector('#mineMismatchText').textContent = message;
-          dialog.showModal();
-        }
+        if (showAlert) showNotice('Retorno a la mina propietaria', message);
         return false;
       }
       status.textContent = 'Mina propietaria: ' + (owner(asset) || 'Sin registrar') + ' · ' + (asset.estado || 'En bodega');
@@ -91,14 +115,16 @@
     });
     for (const radio of fields.operation) radio.addEventListener('change', () => validateReturn());
     fields.assetSearch.addEventListener('focus', () => { if (!selectedId) draw(); });
-    fields.assetSearch.addEventListener('input', () => {selectedId = ''; status.textContent = ''; submit.disabled = saving; draw();});
+    fields.assetSearch.addEventListener('input', () => {selectedId = ''; status.textContent = ''; submit.disabled = true; draw();});
     fields.assetSearch.addEventListener('keydown', event => {
       if (event.key === 'Escape') results.hidden = true;
       if (event.key === 'Enter' && !results.hidden) {event.preventDefault(); results.querySelector('button:not(:disabled)')?.focus();}
     });
     results.addEventListener('click', event => {
-      const button = event.target.closest('[data-asset]'), asset = assetById(button?.dataset.asset);
-      if (!available(asset)) return;
+      const button = event.target.closest('[data-asset]');
+      if (!button || saving) return;
+      const asset = assetById(button.dataset.asset);
+      if (!available(asset)) {explainBlocked(asset); return;}
       selectedId = asset.id; fields.assetSearch.value = api.assetLabel(asset);
       results.hidden = true; validateReturn();
     });
@@ -106,7 +132,8 @@
       event.preventDefault();
       if (saving) return;
       const data = api.getData(), asset = assetById(selectedId), mine = selectedDestination(), operation = fields.operation.value;
-      if (!available(asset)) {clearAsset(); status.textContent = 'Busca y selecciona un activo disponible en Plaza Blending.'; return;}
+      if (selectedId && !available(asset)) {explainBlocked(asset); return;}
+      if (!asset) {submit.disabled = true; status.textContent = 'Busca y selecciona un activo disponible en Plaza Blending.'; return;}
       if (!destinations(data).includes(mine) || !operation) return;
       if (!operationAllowed(mine, operation)) {
         updateOperations();
