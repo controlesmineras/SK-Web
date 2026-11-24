@@ -19,13 +19,13 @@ function fixture(owner = 'Sandra K') {
 const movement = (op,extra={}) => ({id:'exit',exitKind:'mine',assetId:'a',itemId:'tool',quantity:1,deliveryType:op,
   destinationMine:'Providencia',ownerMineBefore:'Sandra K',createdAt:when,updatedAt:when,syncState:'pending',...extra});
 for (const [op,owner,after] of [['TRASLADO','Sandra K','Providencia'],['PRÉSTAMO','Sandra K','Sandra K'],
-  ['RETORNO','Providencia','Providencia'],['SALIDA A REPARACIÓN','Sandra K','Sandra K']]) {
+  ['RETORNO','Providencia','Providencia']]) {
   test(op+' conserva el movimiento y aplica su efecto una sola vez',()=>{
     const f=fixture(owner),row=movement(op,{ownerMineBefore:owner});
     const first=f.send([row]);
     assert.equal(first.acknowledgements.blendingDeliveries[0].status,'accepted');
     assert.equal(first.data.assets[0].mina,after);assert.equal(first.data.assets[0].ubicacion,'Mina Providencia');
-    assert.equal(first.data.assets[0].estado,op==='SALIDA A REPARACIÓN'?'En reparación':'Operativo');
+    assert.equal(first.data.assets[0].estado,'Operativo');
     assert.equal(history.timeline(first.data,'a')[0].title,op+' · Providencia');
     assert.equal(f.send([row]).acknowledgements.blendingDeliveries[0].status,'already-applied');
     assert.equal(f.data().blendingDeliveries.length,1);
@@ -53,6 +53,19 @@ test('Segovia rechaza traslado, préstamo y retorno sin mover el activo, incluso
     const receipt=f.send([row]).acknowledgements.blendingDeliveries[0];
     assert.equal(receipt.status,'rejected');assert.match(receipt.error,/solo se puede registrar una salida a reparación/);
     assert.equal(f.data().blendingDeliveries.length,0);assert.equal(f.data().assets[0].ubicacion,'Bodega de Superficie');
+  }
+});
+test('ninguna de las cuatro minas admite salidas a reparación, incluso si el movimiento estaba en cola',()=>{
+  for(const mine of ['Providencia','El Silencio','Carla','Alianza']){
+    const f=fixture();
+    const row=movement('SALIDA A REPARACIÓN',{destinationMine:mine});
+    const before=structuredClone(f.data().assets[0]);
+    const result=f.send([row]);
+    assert.equal(result.capabilities.mineRepairDestinationV1,true);
+    assert.equal(result.acknowledgements.blendingDeliveries[0].status,'rejected');
+    assert.match(result.acknowledgements.blendingDeliveries[0].error,/exclusiva de Segovia/);
+    assert.deepEqual(f.data().assets[0],before);
+    assert.equal(f.data().blendingDeliveries.length,0);
   }
 });
 test('un retorno solo se sincroniza si la mina de destino es la propietaria vigente',()=>{
