@@ -465,7 +465,10 @@ function matchesItemSearch(text,number,query){
       const loanRow=row=>row.movementType==='DEVOLUCIÓN'||norm(row.deliveryType)==='prestamo';
       if(sent.blendingDeliveries.some(row=>row.exitKind==='mine'||loanRow(row))){
         const probe=await post({action:'plazaSync',token,data:{}});
-        const held=sent.blendingDeliveries.filter(row=>row.exitKind==='mine'?probe.capabilities?.mineReturnOwnerV2!==true:loanRow(row)&&probe.capabilities?.inventoryLoansV1!==true);
+        const held=sent.blendingDeliveries.filter(row=>{
+          if(row.exitKind!=='mine')return loanRow(row)&&probe.capabilities?.inventoryLoansV1!==true;
+          return probe.capabilities?.mineReturnOwnerV2!==true||row.destinationMine==='Segovia'&&probe.capabilities?.mineSegoviaV1!==true;
+        });
         if(held.length){
           loanServiceError=held.some(row=>row.exitKind==='mine')?'Salida guardada. Falta actualizar el servicio central para sincronizar Fuera de mina.':'El registro está guardado. Falta actualizar el servicio central para sincronizar préstamos y retornos.';
           const heldAssets=new Set(held.map(row=>row.assetId).filter(Boolean)),heldIds=new Set(held.map(row=>row.id));
