@@ -212,6 +212,9 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
 }
 
 #entryPrincipalSettings {
+ grid-column:1/-1!important;
+ justify-self:center;
+ width:calc((100% - 18px)/2);
  justify-content:center;
  gap:clamp(10px,1.5vw,18px);
  padding:8px clamp(12px,2vw,24px);
@@ -221,6 +224,9 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
  box-shadow:inset 0 0 0 1px #ffffffba,inset 0 -2px 3px #576b7d33,0 2px 5px #0c243535;
  font-weight:750;
  text-align:center;
+}
+@media(max-width:620px) {
+ #entryPrincipalSettings {width:100%}
 }
 #entryPrincipalSettings:hover {border-color:#566e80;box-shadow:inset 0 0 0 1px #fff,0 3px 9px #0c243549}
 #entryPrincipalSettings:focus-visible {outline:3px solid #ffc34a;outline-offset:3px}
