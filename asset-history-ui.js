@@ -36,11 +36,84 @@
   const current=document.querySelector(target==='asset'?'#assetForm [name="id"]':'#novAsset')?.value;if(current!==id)return;
   const asset=assets.find(row=>row.id===id&&!row.deleted);show(target,asset,window.SKAssetHistory.timeline(data,id),actas);
  }
+ function historyAssetPicker(select){
+  const host=document.querySelector('#novFilterPicker'),input=host.querySelector('input'),menu=host.querySelector('[role=listbox]');
+  host.querySelector('label').htmlFor=input.id;
+  select.hidden=true;input.hidden=false;
+  const title=asset=>window.SKAssetRules.label(asset)||label(asset);
+  const order=new Intl.Collator('es',{numeric:true,sensitivity:'base'});
+  let assets=[],editing=false,active=-1;
+  function caption(){return select.value?select.selectedOptions[0].textContent:''}
+  function close(){
+   editing=false;active=-1;menu.hidden=true;input.value=caption();
+   input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');
+  }
+  function draw(){
+   const term=editing?input.value.trim():'',query=window.SKAssetSearch.query(term);
+   const hits=query.rows(assets,asset=>[title(asset),
+    [asset.fabricante||asset.marcaComercial,asset.modelo,asset.mina,asset.estado].filter(Boolean).join(' · ')]);
+   const options=hits.map(({asset,lines,detail})=>{
+    const button=document.createElement('button');
+    button.dataset.assetId=asset.id;
+    button.innerHTML='<strong>'+query.html(lines[0])+'</strong>'+[lines[1],detail].filter(Boolean).map(line=>'<small>'+query.html(line)+'</small>').join('');
+    return button;
+   });
+   if(!term){
+    const all=document.createElement('button');all.dataset.assetId='';all.textContent='Todos los activos';options.unshift(all);
+   }
+   options.forEach((button,index)=>{
+    button.type='button';button.tabIndex=-1;button.id='novFilterOption-'+index;
+    button.setAttribute('role','option');button.setAttribute('aria-selected',String(button.dataset.assetId===select.value));
+   });
+   menu.replaceChildren(...options);
+   if(!options.length){
+    const message=document.createElement('p');message.setAttribute('role','status');message.textContent='No hay activos que coincidan.';menu.append(message);
+   }
+   active=-1;menu.hidden=false;input.setAttribute('aria-expanded','true');input.removeAttribute('aria-activedescendant');
+  }
+  function apply(id){
+   const changed=id!==select.value;select.value=id;
+   if(changed)select.dispatchEvent(new Event('change',{bubbles:true}));
+  }
+  function choose(button){apply(button.dataset.assetId);input.focus();close()}
+  input.addEventListener('focus',()=>{if(select.value)input.select();draw()});
+  input.addEventListener('click',()=>{if(menu.hidden){if(select.value)input.select();draw()}});
+  input.addEventListener('input',()=>{editing=true;if(!input.value.trim())apply('');draw()});
+  input.addEventListener('keydown',event=>{
+   if(event.key==='Escape'){event.preventDefault();close();return}
+   if(event.key==='Tab'){close();return}
+   if(event.key!=='ArrowDown'&&event.key!=='ArrowUp'&&event.key!=='Enter')return;
+   event.preventDefault();if(menu.hidden)draw();
+   const options=menu.querySelectorAll('[role=option]');if(!options.length)return;
+   if(event.key==='Enter'){
+    const option=options[active]||(options.length===1&&options[0]);if(option)choose(option);return;
+   }
+   const step=event.key==='ArrowDown'?1:-1;
+   options[active]?.classList.remove('isActive');
+   active=active<0?(step>0?0:options.length-1):(active+step+options.length)%options.length;
+   const option=options[active];option.classList.add('isActive');
+   input.setAttribute('aria-activedescendant',option.id);option.scrollIntoView({block:'nearest'});
+  });
+  menu.addEventListener('mousedown',event=>event.preventDefault());
+  menu.addEventListener('click',event=>{const button=event.target.closest('[role=option]');if(button)choose(button)});
+  document.addEventListener('click',event=>{if(!menu.hidden&&!host.contains(event.target))close()});
+  document.querySelector('#novFilterClear').addEventListener('click',()=>{select.value='';close()});
+  return function update(rows){
+   const id=select.value;
+   assets=rows.slice().sort((a,b)=>order.compare(title(a),title(b)));
+   select.replaceChildren(new Option('Todos los activos',''),...assets.map(asset=>new Option(title(asset),asset.id)));
+   select.value=id;
+   if(!editing)input.value=caption();
+   if(!menu.hidden)draw();
+  };
+ }
+ let updateAssetFilter;
  async function renderList(rows,assets){
   const [data,actas]=await Promise.all([read(),all('actas')]);data.novelties=rows;
   const list=document.querySelector('#noveltyList');if(!list)return;
-  const from=document.querySelector('#novFilterFrom')?.value||'',to=document.querySelector('#novFilterTo')?.value||'',select=document.querySelector('#novFilterAsset'),assetId=select?.value||'',assetMap=new Map(assets.map(row=>[row.id,row])),actaMap=new Map(actas.map(row=>[row.id,row]));
-  if(select){select.replaceChildren(new Option('Todos los activos',''),...assets.slice().sort((a,b)=>label(a).localeCompare(label(b),'es',{numeric:true})).map(asset=>new Option(label(asset),asset.id)));select.value=assetId;}
+  const from=document.querySelector('#novFilterFrom')?.value||'',to=document.querySelector('#novFilterTo')?.value||'',select=document.querySelector('#novFilterAsset'),assetMap=new Map(assets.map(row=>[row.id,row])),actaMap=new Map(actas.map(row=>[row.id,row]));
+  if(select){updateAssetFilter??=historyAssetPicker(select);updateAssetFilter(assets);}
+  const assetId=select?.value||'';
   const events=window.SKAssetHistory.timeline(data).filter(entry=>(!from||entry.date>=from)&&(!to||entry.date<=to)&&(!assetId||entry.assetId===assetId));
   list.innerHTML=events.slice(0,100).map(entry=>`<div class="assetHistoryResult">${eventHTML(entry,assetMap.get(entry.assetId),actaMap.get(entry.raw.actaId),true)}<button type="button" data-history-asset="${escape(entry.assetId)}">Ver historial del activo</button></div>`).join('')||'<p class="hint">No hay novedades que coincidan con los filtros.</p>';
   const counter=document.querySelector('#nCount');if(counter)counter.textContent=window.SKAssetHistory.timeline(data).filter(entry=>!entry.reversed).length;

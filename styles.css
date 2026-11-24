@@ -248,3 +248,14 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
  clip-path:polygon(50% 0,62% 33%,98% 35%,70% 58%,79% 94%,50% 74%,21% 94%,30% 58%,2% 35%,38% 33%);
  background:conic-gradient(from 18deg,#fff1aa,#efb43f 21%,#ffe18c 34%,#c88b25 52%,#ffd371 68%,#fff5bc 86%,#deb04b);
 }
+
+#novFilterPicker{position:relative;min-width:0}
+#novelties .noveltyFilters label{color:#f1f5f8}
+#novFilterPicker input[hidden],#novFilterPicker select[hidden]{display:none}
+#novFilterResults{position:static;max-height:min(320px,40vh)}
+#novFilterResults button{grid-template-columns:minmax(0,1fr);gap:2px;min-height:44px;white-space:normal}
+#novFilterResults button.isActive{background:#eaf1f6;outline:2px solid #397696;outline-offset:-2px}
+#novFilterResults strong{font-size:.95rem;color:#193e56}
+#novFilterResults small,#novFilterResults p{font-size:.84rem;font-weight:400;color:#526977}
+#novFilterResults p{margin:8px}
+#novFilterResults mark{background:#ffe39a;color:#172f40;border-radius:2px}
