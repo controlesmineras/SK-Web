@@ -3,11 +3,28 @@
  'use strict';
  const title='IMAGEN-FICHA';
  const help='Míralo en una imagen o consulta su ficha técnica, requiere conexión a internet.';
+ const catalog='https://controlesmineras.github.io/Catalogo-minero/';
+ function catalogLink(parsed){
+  const path=parsed.pathname;
+  let file;
+  switch(parsed.hostname){
+   case 'controlesmineras.github.io':
+    file=/^\/Catalogo-minero\/([^/]+)$/i.exec(path)?.[1];break;
+   case 'github.com':
+    file=/^\/controlesmineras\/Catalogo-minero\/(?:blob|raw)\/(?:refs\/heads\/)?main\/([^/]+)$/i.exec(path)?.[1];break;
+   case 'raw.githubusercontent.com':
+    file=/^\/controlesmineras\/Catalogo-minero\/(?:refs\/heads\/)?main\/([^/]+)$/i.exec(path)?.[1];break;
+  }
+  if(!file)return parsed.href;
+  if(/^[\w.-]+\.(?:jpe?g|png|webp)$/i.test(file))return catalog+'?foto='+encodeURIComponent(file);
+  if(/^[\w-]+\.md$/i.test(file))return catalog+file.slice(0,-3)+'.html';
+  return parsed.href;
+ }
  function url(value){
   if(typeof value!=='string'||!/^https?:\/\//i.test(value.trim()))return '';
   try{
    const parsed=new URL(value.trim());
-   return parsed.hostname&&!parsed.username&&!parsed.password?parsed.href:'';
+   return parsed.hostname&&!parsed.username&&!parsed.password?catalogLink(parsed):'';
   }catch{return ''}
  }
  function showHelp(){
