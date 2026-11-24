@@ -57,15 +57,16 @@
     }
     const operationGroup = form.querySelector('.mineOperationGroup');
     const repairOperation = 'SALIDA A REPARACIÓN';
+    function operationAllowed(mine, operation) {
+      return mine === 'Segovia' ? operation === repairOperation : operation !== repairOperation;
+    }
     function updateOperations() {
-      const repairOnly = selectedDestination() === 'Segovia';
-      const leavingSegovia = !repairOnly && operationGroup.classList.contains('repairOnly');
+      const mine = selectedDestination(), repairOnly = mine === 'Segovia';
       operationGroup.classList.toggle('repairOnly', repairOnly);
       for (const radio of fields.operation) {
-        radio.disabled = repairOnly && radio.value !== repairOperation;
-        radio.closest('label').hidden = radio.disabled;
-        if (repairOnly) radio.checked = radio.value === repairOperation;
-        else if (leavingSegovia) radio.checked = false;
+        radio.disabled = !operationAllowed(mine, radio.value);
+        if (radio.disabled) radio.checked = false;
+        else if (repairOnly) radio.checked = true;
       }
     }
     function reset() {
@@ -106,12 +107,13 @@
       if (saving) return;
       const data = api.getData(), asset = assetById(selectedId), mine = selectedDestination(), operation = fields.operation.value;
       if (!available(asset)) {clearAsset(); status.textContent = 'Busca y selecciona un activo disponible en Plaza Blending.'; return;}
-      if (!destinations(data).includes(mine) || !operation || !validateReturn()) return;
-      if (mine === 'Segovia' && operation !== repairOperation) {
+      if (!destinations(data).includes(mine) || !operation) return;
+      if (!operationAllowed(mine, operation)) {
         updateOperations();
-        status.textContent = 'Para Segovia, registra una salida a reparación.';
+        status.textContent = 'La salida a reparación es exclusiva de Segovia.';
         return;
       }
+      if (!validateReturn()) return;
       saving = true; submit.disabled = true;
       try {
         const shift = api.movementShift(), next = structuredClone(data), target = next.assets.find(row => row.id === selectedId);
