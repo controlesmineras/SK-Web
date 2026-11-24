@@ -8,6 +8,10 @@
   const path=parsed.pathname;
   let file;
   switch(parsed.hostname){
+   case 'mitalner.com':
+   case 'www.mitalner.com':
+    if(path==='/wp-content/uploads/2024/04/p15.webp')return catalog+'adaptador-split-set.html';
+    break;
    case 'controlesmineras.github.io':
     file=/^\/Catalogo-minero\/([^/]+)$/i.exec(path)?.[1];break;
    case 'github.com':
