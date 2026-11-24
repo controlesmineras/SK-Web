@@ -33,6 +33,9 @@
 
 const deviceAccess=createDeviceAccess('sk-plaza');
   let token=sessionStorage.getItem('skPlazaToken')||'',user=JSON.parse(sessionStorage.getItem('skPlazaUser')||'null'),data={},deliveryMode='assignment',deliveryDraft=[],incomeDraft=[],currentView='home',navigationRoute='home',syncRunning=false,syncQueued=false,retryTimer=0,retryAttempts=0,deliverySaving=false,incomeSaving=false,pendingDeliveryAfterCollaborator=false;
+  if(token&&window.SKEntry&&!window.SKEntry.validLocal({token})){
+    token='';user=null;sessionStorage.removeItem('skPlazaToken');sessionStorage.removeItem('skPlazaUser');
+  }
   async function post(body){
     if(!api())throw new Error('El servicio central todavía no está configurado.');
     const controller=new AbortController();let timeout;
@@ -630,8 +633,7 @@ function matchesItemSearch(text,number,query){
   function logout(){sessionStorage.removeItem('skPlazaToken');sessionStorage.removeItem('skPlazaUser');location.reload()}
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   async function loginWithRetry(body){const delays=[0,1500,4000];let lastError;for(let attempt=0;attempt<delays.length;attempt++){if(delays[attempt]){const status=$('#loginStatus');status.classList.remove('status');status.textContent='Conexión inestable. Reintentando automáticamente…';await wait(delays[attempt])}try{return await post(body)}catch(error){lastError=error;if(!/servicio central no está disponible|no fue posible conectar/i.test(error.message))throw error}}throw lastError}
-  window.SKEntry?.setup($('#loginForm'),'plaza','document','pin');
-  $('#loginForm').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;const fields=new FormData(form);try{$('#loginStatus').classList.remove('status');$('#loginStatus').textContent='Verificando…';const document=String(fields.get('document')),pin=window.SKEntry.secret('plaza',document,fields.get('pin')),cached=await deviceAccess.verify(document,pin);if(cached&&window.SKEntry.validLocal(cached)&&!(navigator.onLine&&(pin.startsWith('sk2.')||document.trim().toLowerCase()==='admin'))){await acceptLogin(cached,true);if(navigator.onLine)void renewLogin(document,pin,cached.token);}else{if(!navigator.onLine)throw new Error('El primer acceso de esta cuenta en este dispositivo requiere conexión.');const result=await loginWithRetry({action:'plazaLogin',document,pin});await acceptLogin(result,true);await deviceAccess.remember(document,pin,result)}}catch(error){$('#loginStatus').classList.add('status');$('#loginStatus').textContent=authMessage(error.message)}finally{button.disabled=false}});
+  $('#loginForm').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;const fields=new FormData(form);try{$('#loginStatus').classList.remove('status');$('#loginStatus').textContent='Verificando…';const document=String(fields.get('document')),pin=String(fields.get('pin')||''),cached=await deviceAccess.verify(document,pin);if(cached&&window.SKEntry.validLocal(cached)&&!(navigator.onLine&&document.trim().toLowerCase()==='admin')){await acceptLogin(cached,true);if(navigator.onLine)void renewLogin(document,pin,cached.token);}else{if(!navigator.onLine)throw new Error('El primer acceso de esta cuenta en este dispositivo requiere conexión.');const result=await loginWithRetry({action:'plazaLogin',document,pin});await acceptLogin(result,true);await deviceAccess.remember(document,pin,result)}}catch(error){$('#loginStatus').classList.add('status');$('#loginStatus').textContent=authMessage(error.message)}finally{button.disabled=false}});
   function requireShiftAtHome(){
     if(selectedShiftPerson())return true;
     showView('home');

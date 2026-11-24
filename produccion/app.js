@@ -34,7 +34,7 @@ const db=true;
 async function all(name){return name==='consumptions'?window.SKConsumptionReports.consumptionMovements(state):state[name]||[]}
 let syncFailed=false,syncConnectionFailed=false;
 let session=null,state={},draft=[],syncing=false,saving=false;
-try{session=JSON.parse(localStorage.getItem(sessionKey)||'null');if(!window.SKEntry.validLocal(session))session=null;}catch{}
+try{session=JSON.parse(localStorage.getItem(sessionKey)||'null');if(session&&!window.SKEntry.validLocal(session)){session=null;localStorage.removeItem(sessionKey);}}catch{}
 if(session&&Number(session.expiresAt)<=Date.now()){
  session=navigator.onLine?null:deviceAccess.byToken(session.token);
 }
@@ -1214,10 +1214,8 @@ function submitAccess(id,handler){
   try{await handler(values);feedback.textContent=''}catch(error){feedback.textContent=error.message}finally{button.disabled=false}
  };
 }
-window.SKEntry.setup(byId('login'),'production','document','password');
 submitAccess('login',async values=>{
- const document=values.document,entry=globalThis.SKEntry;
- const password=entry?entry.secret('production',document,values.password):values.password;values.password=password;
+ const {document,password}=values,entry=globalThis.SKEntry;
  let nextSession,offlineAccess=false;
  try{
   const data=await api('productionLogin',values);
@@ -1240,13 +1238,10 @@ byId('login').querySelector('button').disabled=false;
 byId('accessStatus').textContent='';
 setInterval(refreshShift,15000);
 window.addEventListener('focus',refreshShift);
-let activateWithDocument=false;
 submitAccess('activate',async values=>{
- const result=await api('accessInvitationAccept',{...values,invitation,expectedScope:'production',activateDevice:activateWithDocument});
- if(activateWithDocument)window.SKEntry.save('production',values.document,result.deviceKey);
- history.replaceState(null,'',location.pathname);
+ await api('accessInvitationAccept',{...values,invitation,expectedScope:'production'});history.replaceState(null,'',location.pathname);
  byId('activate').reset();byId('activate').hidden=true;byId('login').hidden=false;byId('login').elements.document.value=values.document;
- status(activateWithDocument?'Equipo activado. Ingresa con tu documento.':'Acceso activado. Ingresa con tu nueva contraseña.');
+ status('Acceso activado. Ingresa con tu nueva contraseña.');
 });
 byId('logout').onclick=()=>{
  if(countSaving)return;
@@ -1329,10 +1324,6 @@ if(invitation){
  byId('login').hidden=true;
  api('accessInvitationInfo',{invitation}).then(info=>{
   if(info.scope!=='production')throw new Error('Esta invitación corresponde a otra aplicación');
-  activateWithDocument=info.documentAccess===true;
-  if(activateWithDocument){
-   const form=byId('activate'),pw=form.elements.password;pw.disabled=true;pw.closest('label').style.display='none';form.querySelector('h3').textContent='Activar documento en este equipo';
-  }
   byId('activate').elements.document.value=info.document;byId('activate').hidden=false;
  }).catch(error=>{status(error.message);byId('login').hidden=false});
 }else if(document.readyState!=='complete')document.addEventListener('DOMContentLoaded',()=>openWorkspace().catch(error=>status(error.message)),{once:true});
