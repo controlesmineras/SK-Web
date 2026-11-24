@@ -247,11 +247,13 @@ async function enter(s){
   $('login').hidden=true;$('workspace').hidden=false;$('sessionActions').hidden=false;showAccount(s);
   $('sync').disabled=false;message('loginMessage','');message('syncMessage',navigator.onLine?'':offlineStatus());message('notice','');reset();tab(false);restoreUpdateDraft(s);render();void sync();
 }
+window.SKEntry.setup(login,'labor','identity','password');
 login.onsubmit=async event=>{
   event.preventDefault();const b=login.querySelector('button');if(b.disabled)return;b.disabled=true;
-  const id=login.elements.identity.value.trim(),pw=login.elements.password.value,key=offlineKey(id);
+  const id=login.elements.identity.value.trim(),key=offlineKey(id);
   message('loginMessage','Verificando acceso…');
   try{
+    const pw=window.SKEntry.secret('labor',id,login.elements.password.value);
     let s;
     if(navigator.onLine){
       try{
@@ -259,11 +261,11 @@ login.onsubmit=async event=>{
         if(!result.user?.documento||!result.token||result.scope!=='labor')throw new Error('Respuesta de acceso incompleta.');
         s={access:'labor',user:result.user,token:result.token,expiresAt:result.expiresAt,loginId:id};
         const salt=stamp();localStorage.setItem(key,JSON.stringify({salt,hash:await verifier(pw,salt),session:s}));
-      }catch(error){if(error.central){if(/incorrect|no habilitad|desactiv|revocad/i.test(error.message))localStorage.removeItem(key);throw error;}}
+      }catch(error){if(error.central){if(/incorrect|no habilitad|no tiene acceso|desactiv|revocad/i.test(error.message))localStorage.removeItem(key);throw error;}}
     }
     if(!s){
       const cached=JSON.parse(localStorage.getItem(key)||'null');
-      if(!cached||!cached.session||cached.session.access!=='labor'||await verifier(pw,cached.salt)!==cached.hash)throw new Error('No se pudo validar el acceso local. El primer ingreso en este dispositivo requiere conexión y una cuenta habilitada.');
+      if(!cached||!window.SKEntry.validLocal(cached.session)||cached.session.access!=='labor'||await verifier(pw,cached.salt)!==cached.hash)throw new Error('No se pudo validar el acceso local. El primer ingreso en este dispositivo requiere conexión y una cuenta habilitada.');
       s=cached.session;
     }
     login.elements.password.value='';await enter(s);
@@ -307,7 +309,7 @@ function sync(){
   const task=navigator.locks?navigator.locks.request('sk-frentes-sync:'+owner(s),{signal:ctrl.signal},()=>synchronize(s,ctrl.signal)):synchronize(s,ctrl.signal);
   running=task.catch(error=>{
     if(session!==s)return;
-    if(/cuenta ya no tiene acceso|usuario no habilitado/i.test(error.message)){
+    if(/no tiene acceso|usuario no habilitado/i.test(error.message)){
       localStorage.removeItem(offlineKey(s.loginId));logout();message('loginMessage','Esta cuenta ya no tiene acceso.');return;
     }
     message('syncMessage',/sesión.*(venció|válida)|inicia sesión/i.test(error.message)?'Vuelve a ingresar para renovar la sesión. Los pendientes se conservan.':error.message);
@@ -416,4 +418,4 @@ $('updateLabor').onclick=async event=>{
     button.disabled=false;button.removeAttribute('aria-busy');
   }
 };
-try{const s=JSON.parse(sessionStorage.getItem(sessionKey)||'null');if(s?.access==='labor'&&s.user?.documento&&s.token)enter(s).catch(error=>message('loginMessage',error.message));else sessionStorage.removeItem(sessionKey);}catch{sessionStorage.removeItem(sessionKey);}
+try{const s=JSON.parse(sessionStorage.getItem(sessionKey)||'null');if(s?.access==='labor'&&s.user?.documento&&s.token&&window.SKEntry.validLocal(s))enter(s).catch(error=>message('loginMessage',error.message));else sessionStorage.removeItem(sessionKey);}catch{sessionStorage.removeItem(sessionKey);}

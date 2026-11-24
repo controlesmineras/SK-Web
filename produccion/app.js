@@ -34,7 +34,7 @@ const db=true;
 async function all(name){return name==='consumptions'?window.SKConsumptionReports.consumptionMovements(state):state[name]||[]}
 let syncFailed=false,syncConnectionFailed=false;
 let session=null,state={},draft=[],syncing=false,saving=false;
-try{session=JSON.parse(localStorage.getItem(sessionKey)||'null')}catch{}
+try{session=JSON.parse(localStorage.getItem(sessionKey)||'null');if(!window.SKEntry.validLocal(session))session=null;}catch{}
 if(session&&Number(session.expiresAt)<=Date.now()){
  session=navigator.onLine?null:deviceAccess.byToken(session.token);
 }
@@ -791,7 +791,7 @@ async function performSync(){
   }while(session===active&&navigator.onLine&&again);
  }catch(error){
   syncError=error.message;
-  if(error.centralResponse&&/revocada|sesión no válida|inicia sesión/i.test(error.message)){
+  if(error.centralResponse&&/revocada|sesión no válida|inicia sesión|no tiene acceso operativo|(?:cuenta|equipo) ya no tiene acceso/i.test(error.message)){
    deviceAccess.revokeToken(active.token);
    if(session===active){byId('logout').click();byId('accessStatus').textContent=error.message+'. Los registros pendientes siguen guardados.';}
   }
@@ -1214,8 +1214,10 @@ function submitAccess(id,handler){
   try{await handler(values);feedback.textContent=''}catch(error){feedback.textContent=error.message}finally{button.disabled=false}
  };
 }
+window.SKEntry.setup(byId('login'),'production','document','password');
 submitAccess('login',async values=>{
- const {document,password}=values;
+ const document=values.document,entry=globalThis.SKEntry;
+ const password=entry?entry.secret('production',document,values.password):values.password;values.password=password;
  let nextSession,offlineAccess=false;
  try{
   const data=await api('productionLogin',values);
@@ -1223,12 +1225,12 @@ submitAccess('login',async values=>{
   await deviceAccess.remember(document,password,nextSession);
  }catch(error){
   if(error.centralResponse){
-   if(/documento o contraseña incorrectos|colaborador no disponible/i.test(error.message))deviceAccess.remove(document);
+   if(/documento o contraseña incorrectos|usuario o contraseña incorrectos|colaborador no disponible|no tiene acceso/i.test(error.message))deviceAccess.remove(document);
    throw error;
   }
   nextSession=await deviceAccess.verify(document,password);
   offlineAccess=true;
-  if(!nextSession)throw new Error(navigator.onLine?error.message:'Acceso local no disponible. Verifica la contraseña o inicia sesión con internet en este dispositivo.');
+  if(!nextSession||!(entry?entry.validLocal(nextSession):!nextSession.token.startsWith('sk2.')))throw new Error(navigator.onLine?error.message:'Acceso local no disponible. Verifica la contraseña o inicia sesión con internet en este dispositivo.');
  }
  session=nextSession;
  localStorage.setItem(sessionKey,JSON.stringify(session));
@@ -1238,10 +1240,13 @@ byId('login').querySelector('button').disabled=false;
 byId('accessStatus').textContent='';
 setInterval(refreshShift,15000);
 window.addEventListener('focus',refreshShift);
+let activateWithDocument=false;
 submitAccess('activate',async values=>{
- await api('accessInvitationAccept',{...values,invitation});history.replaceState(null,'',location.pathname);
+ const result=await api('accessInvitationAccept',{...values,invitation,expectedScope:'production',activateDevice:activateWithDocument});
+ if(activateWithDocument)window.SKEntry.save('production',values.document,result.deviceKey);
+ history.replaceState(null,'',location.pathname);
  byId('activate').reset();byId('activate').hidden=true;byId('login').hidden=false;byId('login').elements.document.value=values.document;
- status('Acceso activado. Ingresa con tu nueva contraseña.');
+ status(activateWithDocument?'Equipo activado. Ingresa con tu documento.':'Acceso activado. Ingresa con tu nueva contraseña.');
 });
 byId('logout').onclick=()=>{
  if(countSaving)return;
@@ -1305,9 +1310,9 @@ byId('refreshOfflineData').onclick=async event=>{
  if(!navigator.onLine){feedback.textContent='Todavía no hay conexión. Puedes continuar con los datos guardados.';paintOfflineEntry();return;}
  if(!canSync()){
   byId('logout').click();
-  byId('login').elements.document.value=active.user.document;
+  byId('login').elements.document.value=active.user.username||active.user.document;
   byId('accessStatus').textContent='Inicia sesión con conexión para renovar el acceso y obtener datos recientes.';
-  byId('login').elements.password.focus();return;
+  byId('login').elements.document.dispatchEvent(new Event('input'));byId('login').elements.document.focus();return;
  }
  button.disabled=true;feedback.textContent='Actualizando los datos…';
  try{
@@ -1324,6 +1329,10 @@ if(invitation){
  byId('login').hidden=true;
  api('accessInvitationInfo',{invitation}).then(info=>{
   if(info.scope!=='production')throw new Error('Esta invitación corresponde a otra aplicación');
+  activateWithDocument=info.documentAccess===true;
+  if(activateWithDocument){
+   const form=byId('activate'),pw=form.elements.password;pw.disabled=true;pw.closest('label').style.display='none';form.querySelector('h3').textContent='Activar documento en este equipo';
+  }
   byId('activate').elements.document.value=info.document;byId('activate').hidden=false;
  }).catch(error=>{status(error.message);byId('login').hidden=false});
 }else if(document.readyState!=='complete')document.addEventListener('DOMContentLoaded',()=>openWorkspace().catch(error=>status(error.message)),{once:true});
