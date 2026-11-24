@@ -467,6 +467,7 @@ function matchesItemSearch(text,number,query){
         const probe=await post({action:'plazaSync',token,data:{}});
         const held=sent.blendingDeliveries.filter(row=>{
           if(row.exitKind!=='mine')return loanRow(row)&&probe.capabilities?.inventoryLoansV1!==true;
+          if(row.destinationMine==='Segovia'&&row.deliveryType!=='SALIDA A REPARACIÓN')return probe.capabilities?.mineSegoviaRepairOnly!==true;
           return probe.capabilities?.mineReturnOwnerV2!==true||row.destinationMine==='Segovia'&&probe.capabilities?.mineSegoviaV1!==true;
         });
         if(held.length){

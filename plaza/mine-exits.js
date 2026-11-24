@@ -55,6 +55,19 @@
       status.textContent = 'Mina propietaria: ' + (owner(asset) || 'Sin registrar') + ' · ' + (asset.estado || 'En bodega');
       return true;
     }
+    const operationGroup = form.querySelector('.mineOperationGroup');
+    const repairOperation = 'SALIDA A REPARACIÓN';
+    function updateOperations() {
+      const repairOnly = selectedDestination() === 'Segovia';
+      const leavingSegovia = !repairOnly && operationGroup.classList.contains('repairOnly');
+      operationGroup.classList.toggle('repairOnly', repairOnly);
+      for (const radio of fields.operation) {
+        radio.disabled = repairOnly && radio.value !== repairOperation;
+        radio.closest('label').hidden = radio.disabled;
+        if (repairOnly) radio.checked = radio.value === repairOperation;
+        else if (leavingSegovia) radio.checked = false;
+      }
+    }
     function reset() {
       form.reset(); clearAsset(); details.hidden = true;
       choices.replaceChildren(...destinations(api.getData()).map(destination => {
@@ -64,11 +77,13 @@
         label.append(radio, caption);
         return label;
       }));
+      updateOperations();
       form.querySelectorAll('[data-exit-help]').forEach(button => {
         button.setAttribute('aria-expanded','false'); document.getElementById(button.dataset.exitHelp).hidden = true;
       });
     }
     choices.addEventListener('change', () => {
+      updateOperations();
       details.hidden = !selectedDestination();
       if (details.hidden) {clearAsset(); return;}
       validateReturn();
@@ -92,6 +107,11 @@
       const data = api.getData(), asset = assetById(selectedId), mine = selectedDestination(), operation = fields.operation.value;
       if (!available(asset)) {clearAsset(); status.textContent = 'Busca y selecciona un activo disponible en Plaza Blending.'; return;}
       if (!destinations(data).includes(mine) || !operation || !validateReturn()) return;
+      if (mine === 'Segovia' && operation !== repairOperation) {
+        updateOperations();
+        status.textContent = 'Para Segovia, registra una salida a reparación.';
+        return;
+      }
       saving = true; submit.disabled = true;
       try {
         const shift = api.movementShift(), next = structuredClone(data), target = next.assets.find(row => row.id === selectedId);
