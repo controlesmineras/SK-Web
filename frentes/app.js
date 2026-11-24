@@ -222,9 +222,29 @@ function offlineStatus(){
   const stamp=state.lastSync?new Date(state.lastSync).toLocaleString('es-CO',{timeZone:'America/Bogota'}):'sin descarga previa';
   return 'Sin conexión · Personal en este dispositivo: '+stamp+'.';
 }
+function showAccount(s){
+  const admin=s.user.role==='admin';
+  const name=s.user.nombre||s.user.name||s.user.username||s.user.documento;
+  message('account',name+' · '+(admin?'Administrador':'Registro de reportes'));
+  $('laborRoles').hidden=!admin;
+  if(!admin){$('laborRoles').open=false;$('laborRoleList').replaceChildren();}
+}
+$('laborRoles').ontoggle=async()=>{
+  const s=session,panel=$('laborRoles'),list=$('laborRoleList');
+  if(!panel.open||s?.user.role!=='admin')return;
+  list.textContent='Consultando accesos…';
+  try{
+    const result=await post({action:'laborRoleDirectory',token:s.token});
+    if(session!==s||s.user.role!=='admin'||!panel.open)return;
+    if(result.scope!=='labor'||!Array.isArray(result.users))throw new Error('El servicio central no confirmó los accesos de Labor.');
+    list.replaceChildren(...result.users.sort((a,b)=>a.name.localeCompare(b.name,'es')).map(row=>{
+      const li=document.createElement('li');li.textContent=row.name+' · '+(row.role==='admin'?'Administrador':'Registro de reportes');return li;
+    }));
+  }catch(error){if(session===s&&panel.open)list.textContent=error.message;}
+};
 async function enter(s){
   const data=await access(owner(s));session=s;generation++;state=data;sessionStorage.setItem(sessionKey,JSON.stringify(s));
-  $('login').hidden=true;$('workspace').hidden=false;$('sessionActions').hidden=false;message('account',s.user.nombre||s.user.name||s.user.username||s.user.documento);
+  $('login').hidden=true;$('workspace').hidden=false;$('sessionActions').hidden=false;showAccount(s);
   $('sync').disabled=false;message('loginMessage','');message('syncMessage',navigator.onLine?'':offlineStatus());message('notice','');reset();tab(false);restoreUpdateDraft(s);render();void sync();
 }
 login.onsubmit=async event=>{
@@ -251,7 +271,7 @@ login.onsubmit=async event=>{
 };
 function logout(){
   activeRequest?.abort();generation++;session=null;running=null;sessionStorage.removeItem(sessionKey);sessionStorage.removeItem(updateDraftKey);
-  state=FrontStore.empty();reset();$('rows').replaceChildren();message('account','');
+  state=FrontStore.empty();reset();$('rows').replaceChildren();message('account','');$('laborRoles').open=false;$('laborRoles').hidden=true;$('laborRoleList').replaceChildren();
   $('sessionActions').hidden=$('workspace').hidden=true;$('login').hidden=false;login.elements.password.value='';message('loginMessage','');
 }
 $('logout').onclick=logout;
@@ -264,6 +284,12 @@ async function synchronize(s,signal){
     const result=await post({action:'workFrontSync',access:'labor',token:s.token,reports:sent},signal);
     current=await access(account,local=>FrontStore.apply(local,result,sent));
     if(session!==s)return;
+    const role=result.sessionRole??'reporter';
+    if(['admin','reporter'].includes(role)&&s.user.role!==role){
+      s.user.role=role;sessionStorage.setItem(sessionKey,JSON.stringify(s));showAccount(s);
+      const key=offlineKey(s.loginId),cached=JSON.parse(localStorage.getItem(key)||'null');
+      if(cached?.session?.token===s.token)localStorage.setItem(key,JSON.stringify({...cached,session:s}));
+    }
     state=current;catalogs();render();
     if(!current.reports.some(r=>r.status==='pending'))break;
   }

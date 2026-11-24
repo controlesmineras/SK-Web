@@ -1,4 +1,4 @@
-const VERSION='identidad-labor-1';
+const VERSION='20261124-administradores-apps';
 const CACHE='sk-frentes-'+VERSION;
 const scope=self.registration.scope;
 const indexUrl=new URL('./index.html?v='+VERSION,scope).href;

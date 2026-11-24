@@ -184,13 +184,17 @@ test('al corregir un acceso activo se conservan la contraseña y la identidad, i
   assert.equal(person.pinHash,'existente');
   assert.equal(ctx.plazaAccount_(cloud,{document:'123',role:'plaza_operator'}).role,'plaza_assistant');
   assert.throws(()=>ctx.plazaChangeActiveRole_({...request,previousRole:'supervisor',role:'operator'}),/rol cambió/);
+  assert.equal(ctx.plazaChangeActiveRole_({...request,previousRole:'assistant',role:'admin'}).plazaRole,'admin');
+  assert.equal(ctx.plazaAccount_(cloud,{document:'123',role:'plaza_operator'}).role,'plaza_admin');
+  assert.equal(person.pinHash,'existente');
   person.plazaEnabled=false;
   assert.throws(()=>ctx.plazaChangeActiveRole_(request),/no está activa/);
 });
 test('el permiso de fecha se obtiene del rol asignado en Plaza, incluidos nombres anteriores',()=>{
   const ctx=vm.createContext({});
   vm.runInContext(read('backend/apps-script/Code.gs'),ctx);
-  for(const role of ['supervisor','Administrador','plaza_supervisor'])assert.equal(ctx.plazaSessionRole_({plazaRole:role}),'plaza_supervisor');
+  for(const role of ['supervisor','plaza_supervisor'])assert.equal(ctx.plazaSessionRole_({plazaRole:role}),'plaza_supervisor');
+  for(const role of ['admin','Administrador','plaza_admin'])assert.equal(ctx.plazaSessionRole_({plazaRole:role}),'plaza_admin');
   assert.equal(ctx.plazaSessionRole_({plazaRole:'Auxiliar'}),'plaza_assistant');
   assert.equal(ctx.plazaSessionRole_({cargo:'Supervisor',plazaRole:'operator'}),'plaza_operator');
   assert.equal(ctx.plazaSessionRole_({cargo:'Supervisor'}),'plaza_operator');

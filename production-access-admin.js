@@ -14,9 +14,9 @@ function mount(){
 }
 
 const apps={
- labor:{name:'Labor',roles:{reporter:'Registro de reportes'}},
+ labor:{name:'Labor',roles:{reporter:'Registro de reportes',admin:'Administrador'}},
  admin:{name:'SK Web Admin',roles:{assistant:'Auxiliar administrativo',admin:'Administrador'}},
- plaza:{name:'Plaza Blending',roles:{assistant:'Auxiliar',operator:'Bodeguero/a',supervisor:'Supervisor/a'}},
+ plaza:{name:'Plaza Blending',roles:{assistant:'Auxiliar',operator:'Bodeguero/a',admin:'Administrador',supervisor:'Supervisor/a'}},
  production:{name:'Producción',roles:{mechanic:'Mecánico',warehouse:'Bodeguero/a',mechanic_warehouse:'Mecánico y bodeguero/a',assistant:'Auxiliar',admin:'Administrador'}}
 };
 const normalize=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();
@@ -99,7 +99,7 @@ async function open(scope){
    const card=document.createElement('div');
    card.className='plazaAccessPeople';
    const name=document.createElement('b'),roles=document.createElement('p');
-   name.textContent=identity(row);roles.textContent=row.pending?'Invitación pendiente de activar':[...new Set(rolesFor(row))].join(' · ');
+   name.textContent=identity(row);roles.textContent=row.pending?'Invitación pendiente de activar · '+labels(scope,row):[...new Set(rolesFor(row))].join(' · ');
    card.append(name,roles);
    if(scope==='labor')card.classList.add(row.pending?'laborInviteCard':'laborUserCard');
    if(row.role!=='owner'){
@@ -127,6 +127,28 @@ async function open(scope){
   }
   showResults(document.activeElement===search);
  }
+ function addRoleLookup(row){
+  if(!row.personId)return;
+  const result=document.createElement('div');
+  result.setAttribute('data-role-report','');result.setAttribute('aria-live','polite');
+  manage.append(button('Ver roles en las cuatro apps',()=>run('Consultando roles…',async()=>{
+   result.replaceChildren();
+   const data=await request('appRolesForPerson',{personId:row.personId});
+   if(!current()||selected!==row)return;
+   if(data.personId!==row.personId||!Object.keys(apps).every(key=>Array.isArray(data.roles?.[key])))throw new Error('Actualiza la implementación de Code.gs para consultar los roles.');
+   for(const [key,app] of Object.entries(apps)){
+    const entry=document.createElement('p'),roles=data.roles[key];
+    entry.textContent=app.name+' · '+(roles.length?roles.map(role=>labels(key,{role})).join(' + '):'Sin acceso activo vinculado a este documento');
+    result.append(entry);
+   }
+   if(!data.roles.admin.length){
+    const hint=document.createElement('p');hint.className='hint';
+    hint.textContent='Las cuentas principales creadas con un nombre de usuario se consultan en Usuarios de Web Admin.';
+    result.append(hint);
+   }
+   status.textContent='Roles confirmados por la base central.';
+  })),result);
+ }
  function choose(row,existing){
   if(busy)return;
   selected=row;showPerson(row);clearInvite();status.textContent='';manage.hidden=false;
@@ -134,7 +156,11 @@ async function open(scope){
   title.textContent=(existing?'Gestionar accesos de ':'Nuevo acceso para ')+identity(row);
   manage.replaceChildren(title);
   if(scope==='labor'){
-   const invite=button('Generar enlace de Labor',()=>generate(row));
+   const role=document.createElement('select'),label=document.createElement('label');
+   label.textContent='Rol en Labor';
+   for(const [key,name] of Object.entries(app.roles))role.add(new Option(name,key));
+   role.value=row.role||'reporter';label.append(role);manage.append(label);
+   const invite=button('Generar enlace de Labor',()=>generate(row,role.value));
    invite.disabled=!access.labor;
    manage.append(invite);
    if(invite.disabled){
@@ -142,12 +168,26 @@ async function open(scope){
     note.textContent='Para generar el enlace, primero hay que verificar los accesos de Labor.';
     manage.append(note);
    }
+   if(existing&&!row.pending){
+    const save=button('Guardar rol',()=>run('Guardando rol…',async()=>{
+     const requested=role.value;
+     const result=await request('laborChangeActiveRole',{document:doc(row),personId:row.personId,previousRole:row.role,role:requested});
+     if(!current()||selected!==row)return;
+     if(result.personId!==row.personId||result.scope!=='labor'||result.role!==requested)throw new Error('La base central no confirmó el rol de Labor. Revisa la implementación de Code.gs.');
+     manage.querySelector('[data-role-report]')?.replaceChildren();
+     row.role=requested;role.value=requested;save.hidden=true;clearInvite();renderActive();
+     status.textContent='Rol guardado. Sincroniza Labor para aplicarlo en la sesión abierta.';
+    }));
+    role.onchange=()=>{save.hidden=role.value===row.role};
+    save.hidden=true;manage.append(save);
+   }
    if(existing)manage.append(button(row.pending?'Cancelar invitación':'Quitar acceso a Labor',()=>disable(row)));
+   addRoleLookup(row);
    if(!invite.disabled)invite.focus({preventScroll:true});manage.scrollIntoView({block:'nearest'});return;
   }
   const role=document.createElement('select'),label=document.createElement('label');
   label.textContent='Rol en '+app.name;
-  for(const key of scope==='plaza'?['assistant','operator']:Object.keys(app.roles))role.add(new Option(app.roles[key],key));
+  for(const key of scope==='plaza'?['assistant','operator','admin']:Object.keys(app.roles))role.add(new Option(app.roles[key],key));
   if(scope==='plaza'&&row.role==='supervisor')role.add(new Option(app.roles.supervisor,'supervisor'));
   role.value=(scope==='production'?productionSelection(row):row.role)||'assistant';label.append(role);manage.append(label);
   if(scope==='admin'&&!adminRoles.includes('admin')){
@@ -158,15 +198,31 @@ async function open(scope){
     const person=people.find(p=>p.id===row.personId),updated=await window.SKPlazaAccess.changeActiveRole(person,role.value);
     Object.assign(person,updated);Object.assign(row,{plazaRole:updated.plazaRole,role:updated.plazaRole});
     if(!current())return;
-    clearInvite();renderActive();saveRole.hidden=role.value===row.role;
+    manage.querySelector('[data-role-report]')?.replaceChildren();
+    clearInvite();renderActive();role.value=row.role;saveRole.hidden=true;
     status.textContent='Rol guardado. Sincroniza Plaza Blending para aplicarlo en la sesión abierta.';
    }));
    saveRole.hidden=true;
    role.onchange=()=>{saveRole.hidden=role.value===row.role};
    manage.append(saveRole);
   }
+  if(existing&&row.personId&&['admin','production'].includes(scope)){
+   const previous=()=>scope==='production'?productionSelection(row):row.role;
+   const save=button('Guardar rol',()=>run('Guardando rol…',async()=>{
+    const requested=role.value;
+    const result=await request('changeAppActiveRole',{scope,personId:row.personId,userId:row.id,role:requested,previousRole:previous()});
+    if(!current()||selected!==row)return;
+    const confirmed=scope==='production'?productionSelection(result):result.role;
+    if(result.personId!==row.personId||result.scope!==scope||confirmed!==requested)throw new Error('La base central no confirmó el rol. Revisa la implementación de Code.gs.');
+    manage.querySelector('[data-role-report]')?.replaceChildren();
+    Object.assign(row,{role:result.role,roles:result.roles});role.value=confirmed;save.hidden=true;clearInvite();renderActive();
+    status.textContent='Rol guardado. Vuelve a ingresar a '+app.name+' con la misma contraseña.';
+   }));
+   role.onchange=()=>{save.hidden=role.value===previous()};save.hidden=true;manage.append(save);
+  }
   manage.append(button(existing?'Generar enlace con el rol seleccionado':'Generar enlace',()=>generate(row,role?.value||row.role)));
   if(existing)manage.append(button('Quitar acceso',()=>disable(row)));
+  addRoleLookup(row);
   role.focus({preventScroll:true});
   manage.scrollIntoView({block:'nearest'});
  }
@@ -182,6 +238,7 @@ async function open(scope){
   if(!row.personId){status.textContent='Esta cuenta no está vinculada a un colaborador de Personal.';return}
   run('Generando invitación para '+identity(row)+'…',async()=>{
    const data={scope,personId:row.personId};
+   if(scope==='labor')data.laborRole=role||'reporter';
    if(scope==='admin')data.adminRole=role||'assistant';
    if(scope==='plaza')data.plazaRole=role;
    if(scope==='production'){data.productionRoles=role==='mechanic_warehouse'?['mechanic','warehouse']:[role];data.productionRole=role==='mechanic_warehouse'?'mechanic':role;if(!warehouseV1&&data.productionRoles.includes('warehouse'))throw new Error('Actualiza Code.gs para habilitar Bodega y los roles combinados.');}
@@ -205,6 +262,7 @@ async function open(scope){
    }
    if(!current())return;
    if(scope==='labor'&&result.scope!=='labor')throw new Error('El servicio central no confirmó una invitación de Labor.');
+   if(scope==='labor'&&(result.laborRole??'reporter')!==data.laborRole)throw new Error('El servicio no confirmó el rol de Labor. Actualiza la implementación de Code.gs.');
    if(scope==='admin'&&((result.adminRole&&result.adminRole!==data.adminRole)||(data.adminRole==='admin'&&result.adminRole!=='admin')))throw new Error('El servicio no confirmó el rol seleccionado. Actualiza Code.gs y su implementación.');
    if(scope==='plaza'&&result.plazaRole!==role)throw new Error('El servicio devolvió un rol distinto. Revisa la versión de Code.gs.');
    if(scope==='production'&&(result.productionRole!==data.productionRole||(data.productionRoles.includes('warehouse')&&JSON.stringify(result.productionRoles)!==JSON.stringify(data.productionRoles))))throw new Error('Actualiza y despliega Code.gs para asignar roles de Producción.');
@@ -214,9 +272,12 @@ async function open(scope){
    else url.searchParams.set('invite',result.token);
    if(scope==='labor'){
     url.searchParams.set('app','labor');
-    if(!access.labor.some(account=>same(account,row))){
-     access.labor.push({...row,role:'reporter',pending:true});renderActive();
+    const account=access.labor.find(other=>same(other,row));
+    if(!account){
+     access.labor.push({...row,role:data.laborRole,pending:true});renderActive();
      clearLaborSelection();
+    }else if(account.pending){
+     account.role=data.laborRole;renderActive();
     }
    }
    inviteUrl=url.href;

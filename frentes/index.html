@@ -1,10 +1,10 @@
 <!doctype html>
-<html lang="es-CO" data-labor-version="identidad-labor-1"><head>
+<html lang="es-CO" data-labor-version="20261124-administradores-apps"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Labor · SK 3.7</title><meta name="theme-color" content="#10283a">
 <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="./labor-192.png"><link rel="apple-touch-icon" href="./labor-180.png">
-<link rel="stylesheet" href="app.css?v=identidad-labor-1"><link rel="stylesheet" href="../date-calendar.css">
-<script defer src="../sync-config.js"></script><script defer src="../date-calendar.js"></script><script defer data-options-only src="../form-option-catalog.js"></script><script defer src="store.js?v=identidad-labor-1"></script><script defer src="app.js?v=identidad-labor-1"></script>
+<link rel="stylesheet" href="app.css?v=20261124-administradores-apps"><link rel="stylesheet" href="../date-calendar.css">
+<script defer src="../sync-config.js"></script><script defer src="../date-calendar.js"></script><script defer data-options-only src="../form-option-catalog.js"></script><script defer src="store.js?v=20261124-administradores-apps"></script><script defer src="app.js?v=20261124-administradores-apps"></script>
 </head><body>
 <header><div class="bar"><div class="brand"><img src="./labor.svg" alt="" width="48" height="48"><span>ASOCIACIÓN MINERA<strong>SK 3.7</strong></span></div><div id="sessionActions" hidden><button type="button" id="logout">Salir</button></div></div></header>
 <main>
@@ -16,6 +16,7 @@
 <button class="primary">Ingresar</button><p id="loginMessage" role="status"></p></form></section>
 <section id="workspace" hidden>
 <div class="accountBar"><button id="updateLabor" type="button" aria-label="Actualizar app" title="Actualizar app"><svg aria-hidden="true" width="42" height="42" viewBox="-3 -3 34 34" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path stroke="#214b63" stroke-width="2.1" d="M14 0a14 14 0 0 0-14 14m0 0-1.5-4m1.5 4 4-2.8m11 16a14 14 0 0 0 14-14m0 0-4 2.8m4-2.8 1.5 4"/><path fill="#416a89" d="M12 5h4l.5 2.4 1.6.9 2.4-.8 2 3.5-1.8 1.7v2.6l1.8 1.7-2 3.5-2.4-.8-1.6.9-.5 2.4h-4l-.5-2.4-1.6-.9-2.4.8-2-3.5 1.8-1.7v-2.6L5.5 11l2-3.5 2.4.8 1.6-.9z"/><circle cx="14" cy="14" r="4" fill="#eef4f8" stroke="#214b63"/></svg></button><p class="sectionLabel" id="account"></p><button id="sync" type="button">Sincronizar</button></div>
+<details id="laborRoles" class="card" hidden><summary>Consultar roles de Labor</summary><ul id="laborRoleList" aria-live="polite"></ul></details>
 <div class="pageTitle"><h1>Labor</h1><span id="connection" class="pill"></span></div>
 <nav aria-label="Reportes"><button id="newTab" aria-current="page">Nuevo reporte</button><button id="historyTab">Mis reportes <span id="badge"></span></button></nav>
 <p id="syncMessage" role="status"></p><p id="notice" role="status"></p>
