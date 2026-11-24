@@ -296,25 +296,35 @@ function matchesItemSearch(text,number,query){
   function showLastSync(value){const el=$('#headerLastSync');if(!el)return;const stamp=value||localStorage.getItem('skPlazaLastSync');if(!stamp){el.textContent='SIN SINCRONIZAR';return}const date=new Date(stamp);el.textContent=Number.isNaN(date.getTime())?'SIN SINCRONIZAR':`Sinc. ${date.getDate()}/${date.getMonth()+1} ${date.toLocaleTimeString('es-CO',{hour:'numeric',minute:'2-digit'})}`}
 
   // El calendario usa la hora de la operación en Colombia, independiente del dispositivo.
-  function movementClockValue(stamp){
-    const {date,time}=window.SKAssetHistory.localTime(stamp);
-    return date+'T'+time;
+  function canEditMovementTime(){
+    return user?.role==='plaza_assistant'||user?.role==='plaza_supervisor';
+  }
+  function movementTimeChanged(form){
+    const {movementDay, movementHour}=form.elements;
+    return movementDay.value!==movementDay.defaultValue || movementHour.value!==movementHour.defaultValue;
   }
   function resetMovementTime(form){
-    const input=form.elements.movementAt, allowed=user?.role==='plaza_assistant';
-    input.disabled=!allowed;
-    input.closest('label').hidden=!allowed;
-    input.defaultValue=allowed?movementClockValue(new Date()):'';
-    input.value=input.defaultValue;
+    const {movementDay, movementHour}=form.elements;
+    const {date,time}=window.SKAssetHistory.localTime(new Date());
+    const locked=!canEditMovementTime();
+    movementDay.disabled=movementHour.disabled=locked;
+    movementDay.defaultValue=movementDay.value=date;
+    movementHour.defaultValue=movementHour.value=time;
+  }
+  function refreshMovementTimeAccess(){
+    for(const day of document.querySelectorAll('input[name="movementDay"]')){
+      if(!day.defaultValue || day.disabled===canEditMovementTime())resetMovementTime(day.form);
+    }
   }
   function movementTimes(form, now=new Date()){
-    const recordedAt=now.toISOString(), input=form.elements.movementAt;
+    const recordedAt=now.toISOString();
     let createdAt=recordedAt;
-    if(user?.role==='plaza_assistant' && input.value!==input.defaultValue){
-      const value=input.value;
-      const occurred=new Date(value+'-05:00');
-      if(!Number.isFinite(occurred.getTime()) || movementClockValue(occurred)!==value)
-        throw new Error('Completa la fecha y la hora del movimiento.');
+    if(canEditMovementTime() && movementTimeChanged(form)){
+      const day=form.elements.movementDay.value, hour=form.elements.movementHour.value;
+      const occurred=new Date(day+'T'+hour+'-05:00');
+      if(!Number.isFinite(occurred.getTime()))throw new Error('Completa la fecha y la hora del movimiento.');
+      const {date,time}=window.SKAssetHistory.localTime(occurred);
+      if(date!==day || time!==hour)throw new Error('Revisa la fecha y la hora del movimiento.');
       if(occurred>now)throw new Error('La fecha y la hora del movimiento no pueden ser futuras.');
       createdAt=occurred.toISOString();
     }
@@ -506,8 +516,16 @@ function matchesItemSearch(text,number,query){
           if(!syncStores.some(name=>sent[name].length))throw new Error(loanServiceError);
         }
       }
-      const result=await post({action:'plazaSync',token,syncProtocol:'plaza-receipts-v1',since:silent&&collaboratorRevisionApi&&collaboratorRevisionApi===api()?(localStorage.getItem('skPlazaServerUpdatedAt')||''):'',data:sent});
+      const syncToken=token;
+      const result=await post({action:'plazaSync',token:syncToken,syncProtocol:'plaza-receipts-v1',since:silent&&collaboratorRevisionApi&&collaboratorRevisionApi===api()?(localStorage.getItem('skPlazaServerUpdatedAt')||''):'',data:sent});
       if(!result||result.ok!==true)throw new Error('No se recibió confirmación de la base central.');
+      if(syncToken===token && ['plaza_operator','plaza_assistant','plaza_supervisor'].includes(result.sessionRole) && result.sessionRole!==user?.role){
+        user={...user,role:result.sessionRole};
+        sessionStorage.setItem('skPlazaUser',JSON.stringify(user));
+        const cached=deviceAccess.byToken(token);
+        if(cached)deviceAccess.refresh(token,{...cached,user});
+        refreshMovementTimeAccess();
+      }
       if(result.notModified){
         if(syncStores.some(name=>sent[name].length))throw new Error('La base central no confirmó los registros enviados. Se conservaron pendientes.');
         data.capabilities=result.capabilities||data.capabilities||{};
@@ -576,10 +594,7 @@ function matchesItemSearch(text,number,query){
   }
   function readLocalData(){return window.SKPlazaLocal.read()}
   async function openApp(showGreeting=false){
-    const allowed=user?.role==='plaza_assistant';
-    for(const input of document.querySelectorAll('input[name="movementAt"]')){
-      if(input.disabled===allowed)resetMovementTime(input.form);
-    }
+    refreshMovementTimeAccess();
     appReady=false;data=await readLocalData();appReady=true;$('#login').hidden=true;$('#app').hidden=false;$('#syncBtn').hidden=false;$('#logoutBtn').hidden=false;render();sync(true);if(showGreeting)showWelcomeMessage();
   }
   const welcomeMessages=['TU TRABAJO MANTIENE TODO EN MOVIMIENTO.','CADA REGISTRO PRECISO HACE LA DIFERENCIA.','ORDEN, COMPROMISO Y SEGURIDAD EN CADA TAREA.','HOY ES UNA NUEVA OPORTUNIDAD PARA HACERLO BIEN.','GRACIAS POR CUIDAR LOS RECURSOS QUE ESTÁN EN TUS MANOS.','RESPIRA: VAS MEJOR DE LO QUE CREES.','QUE HOY TE PASE ALGO BONITO.','CONFÍA EN TI; HAS SUPERADO DÍAS MÁS DIFÍCILES.','UN PASO A LA VEZ TAMBIÉN TE LLEVA LEJOS.','HOY TAMBIÉN CUENTA PARA EMPEZAR DE NUEVO.','NO OLVIDES REGALARTE UN MOMENTO DE CALMA.','TU SONRISA TAMBIÉN PUEDE CAMBIAR EL DÍA.','QUE TENGAS UN DÍA TRANQUILO Y LLENO DE COSAS BUENAS.'];
@@ -603,13 +618,12 @@ function matchesItemSearch(text,number,query){
     return false;
   }
   function showView(view){if(['income','delivery','loan','assetReturns','exits','warehouses','productionTransfer','mineExit'].includes(view)&&!requireShiftAtHome())return;if(view!==navigationRoute){$('#plazaShiftHelp').hidden=true;$('#plazaShiftInfo').setAttribute('aria-expanded','false')}if(view==='stockQuery'&&currentView!=='stockQuery'){stockGroup='';stockRootFilter='';$('#stockSearch').value=''}navigationRoute=view;if(view==='recentDeliveries'){const allOption=$('#deliveryCategoryFilter input[value="all"]');if(allOption)allOption.checked=true}const returnsQuery=view==='loanHistory';if(returnsQuery||view==='assetReturns'){window.SKPlazaReturns?.setReadOnly(returnsQuery);view='assetReturns'}if(view==='mineExit')mineExitForm.reset();if(['loan','delivery','productionTransfer'].includes(view)){openDeliveryMode(view==='loan'?'loan':view==='productionTransfer'?'warehouse':'assignment');view='delivery'}if((view==='income'||view==='delivery') && currentView!==view){
-      const form=$('#'+view+'Form'), input=form.elements.movementAt;
-      if(input.value===input.defaultValue)resetMovementTime(form);
+      const form=$('#'+view+'Form');
+      if(!movementTimeChanged(form))resetMovementTime(form);
     }currentView=view;const nav=$('nav'),queryViews=['contacts','recentDeliveries','recentIncomes','stockQuery','personHistory',...(returnsQuery?['assetReturns']:[])],homeButton=$('#plazaHeaderHome'),atHome=view==='home';renderShiftStatus();nav.hidden=atHome;if(homeButton){homeButton.disabled=atHome;homeButton.classList.toggle('isCurrent',atHome);homeButton.setAttribute('aria-label',atHome?'Ubicación actual: Inicio':'Volver a Inicio');homeButton.title=atHome?'':'Volver a Inicio'}document.querySelectorAll('nav button').forEach(button=>{const isHome=button.dataset.view==='home',isCurrent=button.dataset.view===view||(button.dataset.view==='contacts'&&queryViews.includes(view));button.style.display=view==='home'||isHome||isCurrent?'':'none';button.disabled=isCurrent&&!isHome;button.classList.toggle('active',isCurrent);button.classList.toggle('moduleIndicator',isCurrent&&!isHome)});document.querySelectorAll('.view').forEach(section=>section.classList.toggle('active',section.id===view));if(['home','contacts','personal','delivery','income'].includes(view))refreshSharedData();if(queryViews.includes(view)&&view!=='stockQuery')renderRecentQueries();if(view==='stockQuery'||view==='personHistory')renderInventoryQueries();if(view==='assetReturns')window.SKPlazaReturns?.refresh();refreshSyncedView();const scrollTop=$('#deliveryScrollTop');if(scrollTop)scrollTop.hidden=!(view==='recentDeliveries'&&window.scrollY>480);paintPlazaNavigation()}
   function hasUnsavedData(){
     if(['mineExit','income','delivery'].includes(currentView)){
-      const input=$('#'+currentView+'Form').elements.movementAt;
-      if(!input.disabled && input.value!==input.defaultValue)return true;
+      if(canEditMovementTime() && movementTimeChanged($('#'+currentView+'Form')))return true;
     }
     if(currentView==='mineExit')return mineExitForm.dirty();if(currentView==='assetReturns')return window.SKPlazaReturns?.hasUnsaved()||false;if(currentView==='delivery'){const form=$('#deliveryForm');return Boolean(form.elements.recipientCompany.value||deliveryDraft.length||form.elements.itemId.closest('label')._hasItemSearchDraft?.()||form.elements.itemId.value||form.elements.recipientId.value||(deliveryMode!=='warehouse'&&form.elements.destination.value)||form.elements.notes.value||(String(form.elements.quantity.value||'').trim()&&!['0','1'].includes(String(form.elements.quantity.value))))}if(currentView==='income'){const form=$('#incomeForm');return Boolean(incomeDraft.length||form.elements.itemId.closest('label')._hasItemSearchDraft?.()||form.elements.itemId.value||form.elements.notes.value||$('#incomeCollaboratorSearch')?.value.trim()||(String(form.elements.quantity.value||'').trim()&&!['0','1'].includes(String(form.elements.quantity.value))))}return false}
   function discardDeliveryForm(){deliveryDraft=[];const form=$('#deliveryForm');form.reset();resetMovementTime(form);delete form.elements.destination.dataset.manualArea;clearItemSearch(form);$('#recipientSearch').value='';$('#recipientId').value='';const info=$('#recipientInfo');if(info)info.hidden=true;const results=$('#recipientResults');if(results)results.hidden=true;const noMatch=$('#recipientNoMatch');if(noMatch)noMatch.hidden=true;const register=$('#newRecipientBtn');if(register)register.hidden=true;const edit=$('#editRecipientBtn');if(edit){edit.hidden=true;edit.disabled=true}renderDeliveryDraft();updateDeliveryFields()}

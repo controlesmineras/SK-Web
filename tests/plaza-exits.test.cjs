@@ -119,7 +119,7 @@ test('fechas extemporáneas por rol de Plaza, con registro offline y reintento',
     f.data().personal[0].documento='operator';
     f.ctx.verifyToken_=()=>({document:'operator',role});
     const result=f.send([row]).acknowledgements.blendingDeliveries[0];
-    if(role==='plaza_assistant'){
+    if(role==='plaza_assistant'||role==='plaza_supervisor'){
       assert.equal(result.status,'accepted');
       assert.equal(f.send([row]).acknowledgements.blendingDeliveries[0].status,'already-applied');
       assert.equal(f.data().blendingDeliveries.length,1);
@@ -127,9 +127,31 @@ test('fechas extemporáneas por rol de Plaza, con registro offline y reintento',
       assert.equal(f.data().blendingDeliveries[0].recordedAt,recordedAt);
     }else{
       assert.equal(result.status,'rejected');
-      assert.match(result.error,/Solo un auxiliar/);
+      assert.match(result.error,/roles Auxiliar y Supervisor/);
       assert.equal(f.data().assets[0].ubicacion,'Bodega de Superficie');
       assert.equal(f.send([{...row,createdAt:recordedAt}]).acknowledgements.blendingDeliveries[0].status,'accepted');
     }
   }
+});
+
+test('el supervisor sincroniza la entrega extemporánea con su propio rol y otro bodeguero de turno',()=>{
+  const f=fixture();
+  f.data().personal.push({id:'keeper',documento:'001',nombre:'Bodeguera'});
+  f.ctx.verifyToken_=()=>({document:'operator',role:'plaza_supervisor'});
+  const row={id:'backdated',exitKind:'delivery',itemId:'bolt',recipientId:'p',quantity:2,
+    operatorDocument:'operator',shiftKeeperDocument:'001',createdAt:'2026-10-02T04:00:00.000Z',
+    recordedAt:'2026-10-06T18:00:00.000Z',updatedAt:'2026-10-06T18:00:00.000Z',syncState:'pending'};
+  const result=f.send([row]);
+  assert.equal(result.acknowledgements.blendingDeliveries[0].status,'accepted');
+  assert.equal(result.sessionRole,'plaza_supervisor');
+  const stored=result.data.blendingDeliveries[0];
+  assert.equal(stored.createdAt,row.createdAt);
+  assert.equal(stored.recordedAt,row.recordedAt);
+  assert.equal(stored.shiftKeeperId,'keeper');
+  assert.equal(stored.actorRole,'plaza_supervisor');
+  assert.equal(f.send([row]).acknowledgements.blendingDeliveries[0].status,'already-applied');
+  assert.equal(f.data().inventoryStock[0].quantity,6);
+  const refreshed=f.ctx.plazaSync_({since:f.data().updatedAt,data:{}});
+  assert.equal(refreshed.notModified,true);
+  assert.equal(refreshed.sessionRole,'plaza_supervisor');
 });

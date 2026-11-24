@@ -1065,10 +1065,10 @@ function plazaSync_(q){
     // No se emite ningún recibo de éxito antes de confirmar la escritura central.
     if(changed)writeFile_(id,merged);
     const receipt=protocol?{syncProtocol:'plaza-receipts-v1',acknowledgements:acknowledgements}:{};
-    if(!hasPending&&!changed&&q.since&&merged.updatedAt===q.since)return json_(Object.assign({ok:true,notModified:true,updatedAt:merged.updatedAt,capabilities:plazaIncomeCapabilities_()},receipt));
+    if(!hasPending&&!changed&&q.since&&merged.updatedAt===q.since)return json_(Object.assign({ok:true,notModified:true,updatedAt:merged.updatedAt,sessionRole:auth.role,capabilities:plazaIncomeCapabilities_()},receipt));
     const view={schema:merged.schema,updatedAt:merged.updatedAt};
     PLAZA_READ.forEach(name=>view[name]=Array.isArray(merged[name])?merged[name]:[]);view.personal=view.personal.map(row=>publicPerson_(row));
-    return json_(Object.assign({ok:true,data:view,updatedAt:merged.updatedAt,capabilities:plazaIncomeCapabilities_()},receipt));
+    return json_(Object.assign({ok:true,data:view,updatedAt:merged.updatedAt,sessionRole:auth.role,capabilities:plazaIncomeCapabilities_()},receipt));
   }finally{lock.releaseLock()}
 }
 
@@ -1078,8 +1078,8 @@ function validatePlazaMovementTime_(row,auth){
   const recorded=Date.parse(row.recordedAt), occurred=Date.parse(row.createdAt);
   if(!Number.isFinite(recorded)||!Number.isFinite(occurred)||occurred>recorded||recorded>Date.now()+300000)
     throw new Error('Fecha y hora del movimiento no válidas.');
-  if(occurred!==recorded&&auth.role!=='plaza_assistant')
-    throw new Error('Solo un auxiliar de Plaza Blending puede cambiar la fecha y la hora del movimiento.');
+  if(occurred!==recorded&&!['plaza_assistant','plaza_supervisor'].includes(auth.role))
+    throw new Error('Solo los roles Auxiliar y Supervisor de Plaza Blending pueden cambiar la fecha y la hora del movimiento.');
   if(row.movementType==='DEVOLUCIÓN'&&Date.parse(row.returnedAt)!==occurred)
     throw new Error('La fecha y la hora de devolución deben coincidir con las del movimiento.');
 }
