@@ -247,13 +247,12 @@ async function enter(s){
   $('login').hidden=true;$('workspace').hidden=false;$('sessionActions').hidden=false;showAccount(s);
   $('sync').disabled=false;message('loginMessage','');message('syncMessage',navigator.onLine?'':offlineStatus());message('notice','');reset();tab(false);restoreUpdateDraft(s);render();void sync();
 }
-window.SKEntry.setup(login,'labor','identity','password');
 login.onsubmit=async event=>{
   event.preventDefault();const b=login.querySelector('button');if(b.disabled)return;b.disabled=true;
   const id=login.elements.identity.value.trim(),key=offlineKey(id);
   message('loginMessage','Verificando acceso…');
   try{
-    const pw=window.SKEntry.secret('labor',id,login.elements.password.value);
+    const pw=login.elements.password.value;
     let s;
     if(navigator.onLine){
       try{

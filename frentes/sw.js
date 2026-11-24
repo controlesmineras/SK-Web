@@ -1,4 +1,4 @@
-const VERSION='20261124-entrada-admin-documento';
+const VERSION='20261124-ingreso-simple';
 const CACHE='sk-frentes-'+VERSION;
 const scope=self.registration.scope;
 const indexUrl=new URL('./index.html?v='+VERSION,scope).href;

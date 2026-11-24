@@ -14,7 +14,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='entryAuthorizeTablet')return entryAuthorizeTablet_(q);if(q.action==='laborLogin')return laborLogin_(q);if(q.action==='laborRoleDirectory')return laborRoleDirectory_(q);if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='entryConfigure')return entryConfigure_(q,auth);if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role,...(auth.document?{document:auth.document}:{})}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='changeAppActiveRole'){requireAdmin_(auth);return changeAppActiveRole_(q)}if(q.action==='appRolesForPerson'){requireAdmin_(auth);return appRolesForPerson_(q)}if(q.action==='laborChangeActiveRole'){requireAdmin_(auth);return laborChangeActiveRole_(q)}if(q.action==='laborUsers'||q.action==='laborDisable'){requireAdmin_(auth);return laborAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='plazaChangeActiveRole'){requireAdmin_(auth);return plazaChangeActiveRole_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth,q.productionBalanceVersions)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='laborLogin')return laborLogin_(q);if(q.action==='laborRoleDirectory')return laborRoleDirectory_(q);if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='entryConfigure')return entryConfigure_(q,auth);if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role,...(auth.document?{document:auth.document}:{})}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='changeAppActiveRole'){requireAdmin_(auth);return changeAppActiveRole_(q)}if(q.action==='appRolesForPerson'){requireAdmin_(auth);return appRolesForPerson_(q)}if(q.action==='laborChangeActiveRole'){requireAdmin_(auth);return laborChangeActiveRole_(q)}if(q.action==='laborUsers'||q.action==='laborDisable'){requireAdmin_(auth);return laborAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='plazaChangeActiveRole'){requireAdmin_(auth);return plazaChangeActiveRole_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth,q.productionBalanceVersions)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Frentes de trabajo: la ficha nueva y su reporte se confirman en la misma escritura.
 function frontDocument_(value){
@@ -100,7 +100,7 @@ function laborAccount_(document){
  const raw=PropertiesService.getScriptProperties().getProperty(laborAccessKey_(document));
  return raw?JSON.parse(raw):null;
 }
-// Acceso principal y equipos habilitados para ingresar con documento.
+// La cuenta titular establece la contraseña común desde SK Web Admin.
 function entryPrincipal_(){
  const raw=PropertiesService.getScriptProperties().getProperty('SK_ENTRY_PRINCIPAL');
  return raw?JSON.parse(raw):null;
@@ -148,88 +148,27 @@ function entryPrincipalAccount_(config,cloud){
  if(!p)throw new Error('La cuenta principal no tiene acceso. Revisa el documento en Personal.');
  return {document:config.document,personId:p.id,name:p.nombre||config.document,username:'admin',role:'admin',roles:['admin'],principal:true};
 }
-function entryNormalAccount_(scope,document,cloud){
- const p=entryPerson_(cloud,document);
- if(!p)return null;
- let role,roles,proof,username=document;
- if(scope==='plaza'&&p.plazaEnabled&&p.pinHash){role=plazaAccessRole_(p.plazaRole);proof=p.pinHash;}
- if(scope==='labor'||scope==='production'){
-  const a=scope==='labor'?laborAccount_(document):productionAccess_(document);
-  if(a?.personId===p.id&&a.passwordHash){
-   roles=scope==='production'?productionRoles_(a):[laborRole_(a.role)];role=scope==='production'?productionPrimaryRole_(roles):roles[0];proof=a.passwordHash+'|'+(a.revision||'');
-  }
- }
- if(scope==='admin'){
-  const a=adminUsers_().find(u=>u.enabled!==false&&u.role!=='owner'&&(u.personId?u.personId===p.id:u.document===document));
-  if(a){role=a.role;proof=a.passwordHash;username=a.username;}
- }
- if(!role||!proof)return null;
- return {document,personId:p.id,name:p.nombre||document,username,role,roles:roles||[role],binding:sign_(JSON.stringify(['equipo',scope,p.id,document,proof]))};
+function entryVerifySession_(token,scope,cloud){
+ const claims=entryRead_(token,scope);
+ if(claims.type!=='session'||claims.kind!=='principal'||!Number.isFinite(claims.expiresAt)||claims.expiresAt<=Date.now())throw new Error('La sesión venció.');
+ const settings=entryPrincipal_();
+ if(!settings||settings.revision!==claims.binding||settings.document!==claims.document)throw new Error('La cuenta ya no tiene acceso.');
+ const account=entryPrincipalAccount_(settings,cloud||readFile_(findFile_()));
+ return {...account,role:scope==='plaza'?'plaza_admin':scope==='admin'?'owner':'admin'};
 }
-function entrySession_(scope,a,kind,binding){
- const expiresAt=Date.now()+12*60*60*1000;
- const token=entrySeal_({type:'session',kind,scope,document:a.document,binding,expiresAt});
+function entryLogin_(scope,password){
+ const settings=entryPrincipal_();
+ if(!settings&&scope==='admin')return null;
+ if(!settings||!password||!safeEqual_(settings.passwordHash,hashPin_('principal:admin',String(password))))throw new Error('Usuario o contraseña incorrectos.');
+ const account=entryPrincipalAccount_(settings,readFile_(findFile_()));
+ const expiresAt=Date.now()+12*60*60*1000,document=account.document;
+ const token=entrySeal_({type:'session',kind:'principal',scope,document,binding:settings.revision,expiresAt});
  let user;
- if(scope==='admin')user={username:a.username,name:a.name,role:a.principal?'owner':a.role,personId:a.personId,document:a.document};
- else if(scope==='production')user={document:a.document,personId:a.personId,name:a.name,role:a.role,roles:a.roles};
- else user={id:a.personId,nombre:a.name,documento:a.document,role:scope==='plaza'?'plaza_'+a.role:a.role};
- if(a.principal)user.username='admin';
+ if(scope==='admin')user={username:'admin',name:account.name,role:'owner',personId:account.personId,document};
+ else if(scope==='production')user={username:'admin',name:account.name,role:'admin',roles:['admin'],personId:account.personId,document};
+ else user={username:'admin',nombre:account.name,role:scope==='plaza'?'plaza_admin':'admin',id:account.personId,documento:document};
  return json_({ok:true,scope,user,token,expiresAt,warehouseV1:scope==='production'});
 }
-function entryDeviceKey_(scope,account){
- return entrySeal_({type:'personal',scope,document:account.document,binding:account.binding});
-}
-function entryVerifyAccount_(claims,cloud){
- if(claims.kind==='principal'||claims.kind==='tablet'){
-  const settings=entryPrincipal_();
-  if(!settings||settings.revision!==claims.binding)throw new Error('La cuenta o el equipo ya no tiene acceso.');
-  const owner=entryPrincipalAccount_(settings,cloud);
-  if(claims.kind==='principal'){
-   if(claims.document!==owner.document)throw new Error('La cuenta ya no tiene acceso.');
-   return owner;
-  }
- }else if(claims.kind!=='personal')throw new Error('Acceso no válido.');
- const account=entryNormalAccount_(claims.scope,claims.document,cloud);
- if(!account||account.roles.includes('admin')||(claims.kind==='personal'&&account.binding!==claims.binding))throw new Error('El documento no tiene acceso operativo en esta aplicación. Para un acceso administrativo usa tu contraseña.');
- return account;
-}
-function entryVerifySession_(token,scope,cloud){
- const c=entryRead_(token,scope);
- if(c.type!=='session'||!Number.isFinite(c.expiresAt)||c.expiresAt<=Date.now())throw new Error('La sesión venció.');
- const a=entryVerifyAccount_(c,cloud||readFile_(findFile_()));
- return {...a,role:scope==='plaza'?'plaza_'+a.role:scope==='admin'&&a.principal?'owner':a.role};
-}
-function entryLogin_(scope,identity,password){
- const document=String(identity||'').trim(),secret=String(password||'');
- if(document.toLowerCase()==='admin'){
-  const settings=entryPrincipal_();
-  if(!settings){if(scope==='admin')return null;throw new Error('Configura el usuario admin desde la cuenta principal de SK Web Admin.');}
-  if(!secret||!safeEqual_(settings.passwordHash,hashPin_('principal:admin',secret)))throw new Error('Usuario o contraseña incorrectos.');
-  return entrySession_(scope,entryPrincipalAccount_(settings,readFile_(findFile_())),'principal',settings.revision);
- }
- if(!secret.startsWith('sk2.'))return null;
- const c=entryRead_(secret,scope);
- if(!['personal','tablet'].includes(c.type)||(c.type==='personal'&&c.document!==document))throw new Error('Este documento no está activado en este equipo.');
- const a=entryVerifyAccount_({scope,document,kind:c.type,binding:c.binding},readFile_(findFile_()));
- return entrySession_(scope,a,c.type,c.binding);
-}
-function entryAuthorizeTablet_(q){
- const scope=q.scope;
- if(!['admin','plaza','labor','production'].includes(scope))throw new Error('Aplicación no válida.');
- const settings=entryPrincipal_();
- if(!settings||!q.password||!safeEqual_(settings.passwordHash,hashPin_('principal:admin',String(q.password))))throw new Error('Usuario o contraseña incorrectos.');
- entryPrincipalAccount_(settings,readFile_(findFile_()));
- const deviceKeys={};
- for(const app of ['admin','plaza','labor','production'])deviceKeys[app]=entrySeal_({type:'tablet',scope:app,binding:settings.revision});
- return json_({ok:true,scope,deviceKey:deviceKeys[scope],deviceKeys});
-}
-function entryNormalInvitation_(r){
- if(r.scope==='admin')return (r.adminRole||'assistant')==='assistant';
- if(r.scope==='production')return !(r.productionRoles||[r.productionRole]).includes('admin');
- if(r.scope==='labor')return laborRole_(r.laborRole)!=='admin';
- return r.scope==='plaza'&&plazaAccessRole_(r.plazaRole)!=='admin';
-}
-
 function laborRole_(role){return role==='admin'?'admin':'reporter'}
 function assignableLaborRole_(role){
  if(!['reporter','admin'].includes(role))throw new Error('Selecciona un rol de Labor válido.');
@@ -334,7 +273,7 @@ function laborAccessAdmin_(q){
  return json_({ok:true,scope:'labor',users:[...users.values()]});
 }
 function laborLogin_(q){
- if(String(q.document||'').trim().toLowerCase()==='admin'||String(q.password||'').startsWith('sk2.')){const result=entryLogin_('labor',q.document,q.password);if(result)return result;}
+ if(String(q.document||'').trim().toLowerCase()==='admin')return entryLogin_('labor',q.password);
 
  const document=String(q.document||'').trim(),account=laborAccount_(document);
  if(!account||!safeEqual_(account.passwordHash,hashPin_(document,String(q.password||''))))throw new Error('Documento o contraseña incorrectos para Labor.');
@@ -393,23 +332,11 @@ function accessInvitationCreate_(q){
 }
 function revokeInvitations_(scope,document){const props=PropertiesService.getScriptProperties();Object.keys(props.getProperties()).filter(k=>k.indexOf('SK_INVITE_')===0).forEach(k=>{try{const row=JSON.parse(props.getProperty(k));if(row.scope===scope&&row.document===document)props.deleteProperty(k)}catch(_){props.deleteProperty(k)}})}
 function invitationRecord_(q){const token=String(q.invitation||'');if(!/^[a-f0-9]{96}$/.test(token))throw new Error('Enlace de invitación no válido');const key=invitationKey_(token),raw=PropertiesService.getScriptProperties().getProperty(key);if(!raw)throw new Error('El enlace ya se usó o dejó de ser válido');const row=JSON.parse(raw);if(row.expires<Date.now())throw new Error('El enlace venció. Solicita uno nuevo');return{key:key,row:row}}
-function accessInvitationInfo_(q){const invite=invitationRecord_(q),row=invite.row;return json_({ok:true,scope:row.scope,document:row.document,documentAccess:entryNormalInvitation_(row),expiresAt:new Date(row.expires).toISOString()})}
-function accessInvitationAccept_(q){const device=q.activateDevice===true,password=device?Utilities.getUuid()+Utilities.getUuid():String(q.password||'');if(password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');const lock=LockService.getScriptLock();lock.waitLock(30000);
+function accessInvitationInfo_(q){const invite=invitationRecord_(q),row=invite.row;return json_({ok:true,scope:row.scope,document:row.document,expiresAt:new Date(row.expires).toISOString()})}
+function accessInvitationAccept_(q){const password=String(q.password||'');if(password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');const lock=LockService.getScriptLock();lock.waitLock(30000);
  try{const invite=invitationRecord_(q),row=invite.row,document=String(q.document||'').trim();if(q.expectedScope&&q.expectedScope!==row.scope)throw new Error('El enlace no corresponde a esta aplicación.');if(document!==row.document)throw new Error('El documento no corresponde a la invitación');
   const fileId=findFile_(),cloud=fileId?readFile_(fileId,lock):{},person=(cloud.personal||[]).find(x=>x&&x.id===row.personId&&!x.deleted&&String(x.documento||'').trim()===document);
   if(!person)throw new Error('El colaborador ya no está disponible en Personal');const now=new Date().toISOString();
-  if(device&&person.active===false)throw new Error('El colaborador está inactivo.');
-  if(device&&!entryNormalInvitation_(row))throw new Error('La cuenta administrativa requiere una contraseña.');
-  if(device){
-   const existing=entryNormalAccount_(row.scope,document,cloud);
-   const intended=row.scope==='production'?productionRoles_({roles:row.productionRoles,role:row.productionRole}):
-    [row.scope==='plaza'?plazaAccessRole_(row.plazaRole):row.scope==='labor'?laborRole_(row.laborRole):row.adminRole||'assistant'];
-   if(existing&&existing.personId===person.id&&existing.roles.length===intended.length&&intended.every(role=>existing.roles.includes(role))){
-    const key=entryDeviceKey_(row.scope,existing);
-    PropertiesService.getScriptProperties().deleteProperty(invite.key);
-    return json_({ok:true,scope:row.scope,deviceKey:key});
-   }
-  }
   if(row.scope==='plaza'){(cloud.personal||[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()===document).forEach(x=>{x.pinHash=hashPin_(document,password);x.plazaEnabled=true;x.plazaRole=['assistant','supervisor','admin'].includes(row.plazaRole)?row.plazaRole:'operator';x.updatedAt=now});cloud.updatedAt=nextRevision_(cloud.updatedAt);writeFile_(fileId,cloud)}
   else if(row.scope==='labor'){
    if(person.active===false)throw new Error('El funcionario está inactivo.');
@@ -418,9 +345,7 @@ function accessInvitationAccept_(q){const device=q.activateDevice===true,passwor
   }
   else if(row.scope==='production'){saveProductionAccess_(person,hashPin_(document,password),row.productionRoles||row.productionRole)}
   else if(row.scope==='admin'){const area=String(person.area||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').trim().toLowerCase().replace(/\s+/g,' ');if(area!=='seguridad fisica')throw new Error('El colaborador ya no pertenece a Seguridad física');const users=adminUsers_();if(users.some(x=>x.role==='owner'&&(x.personId===person.id||x.document===document||x.username===document)))throw new Error('No se puede reemplazar el acceso principal');const adminRole=assignableAdminRole_(row.adminRole??'assistant');let user=users.find(x=>x.role!=='owner'&&(x.personId===person.id||x.document===document));if(!user){if(users.some(x=>x.username===document))throw new Error('El documento ya está registrado como otro usuario');user={id:'ADMIN-'+Utilities.getUuid(),createdAt:now};users.push(user)}user.personId=person.id;user.document=document;user.username=document;user.name=person.nombre||document;user.role=adminRole;user.enabled=true;user.passwordHash=hashPin_(document,password);user.updatedAt=now;saveAdminUsers_(users)}
-  else throw new Error('Aplicación no válida');
-  const deviceKey=device?entryDeviceKey_(row.scope,entryNormalAccount_(row.scope,document,cloud)):null;
-  PropertiesService.getScriptProperties().deleteProperty(invite.key);return json_({ok:true,scope:row.scope,...(deviceKey?{deviceKey}:{})});
+  else throw new Error('Aplicación no válida');PropertiesService.getScriptProperties().deleteProperty(invite.key);return json_({ok:true,scope:row.scope});
  }finally{lock.releaseLock()}}
 function adminUsers_(){const raw=PropertiesService.getScriptProperties().getProperty('SK_ADMIN_USERS');if(!raw)return[];try{const rows=JSON.parse(raw);return Array.isArray(rows)?rows:[]}catch(e){throw new Error('La configuración de usuarios Web Admin está dañada')}}
 function saveAdminUsers_(rows){PropertiesService.getScriptProperties().setProperty('SK_ADMIN_USERS',JSON.stringify(rows))}
@@ -429,8 +354,12 @@ function adminStatus_(){return json_({ok:true,configured:adminUsers_().length>0}
 function validAdminUsername_(value){const username=String(value||'').trim().toLowerCase();if(!/^[a-z0-9._-]{4,40}$/.test(username))throw new Error('El usuario debe tener entre 4 y 40 caracteres y usar solo letras, números, punto, guion o guion bajo');return username}
 function adminBootstrap_(q){const lock=LockService.getScriptLock();lock.waitLock(30000);try{if(adminUsers_().length)throw new Error('El administrador principal ya fue creado');const username=validAdminUsername_(q.username),password=String(q.password||''),name=String(q.name||'').trim();if(password.length<8)throw new Error('La contraseña debe tener al menos 8 caracteres');if(!name)throw new Error('Escribe el nombre del administrador');const now=new Date().toISOString(),user={id:'ADMIN-'+Utilities.getUuid(),username:username,name:name,role:'owner',enabled:true,passwordHash:hashPin_(username,password),createdAt:now,updatedAt:now};saveAdminUsers_([user]);return adminSession_(user)}finally{lock.releaseLock()}}
 function adminLogin_(q){
- if(String(q.username||'').trim().toLowerCase()==='admin'||String(q.password||'').startsWith('sk2.')){const result=entryLogin_('admin',q.username,q.password);if(result)return result;}
-const username=validAdminUsername_(q.username),password=String(q.password||''),user=adminUsers_().find(x=>x.username===username&&x.enabled!==false);if(!user||!safeEqual_(String(user.passwordHash||''),hashPin_(username,password)))throw new Error('Usuario o contraseña incorrectos');return adminSession_(user)}
+ if(String(q.username||'').trim().toLowerCase()==='admin'){const session=entryLogin_('admin',q.password);if(session)return session;}
+ const identity=String(q.username||'').trim().toLowerCase(),password=String(q.password||''),users=adminUsers_();
+ const user=users.find(u=>u.username===identity)||users.find(u=>u.role!=='owner'&&identity&&String(u.document||'').trim()===identity);
+ if(!user||user.enabled===false||!password||!safeEqual_(String(user.passwordHash||''),hashPin_(user.username,password)))throw new Error('Usuario o contraseña incorrectos.');
+ return adminSession_(user);
+}
 function adminSession_(user){const expires=Date.now()+12*60*60*1000,payload=[user.username,['owner','admin'].includes(user.role)?user.role:'assistant',expires].join('|'),token=Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload);return json_({ok:true,token:token,user:publicAdminUser_(user),expiresAt:new Date(expires).toISOString()})}
 function verifyAdminToken_(token){
  if(String(token||'').startsWith('sk2.'))return entryVerifySession_(token,'admin');
@@ -1146,7 +1075,7 @@ function plazaAccount_(cloud,auth){
   return {...auth,role:plazaSessionRole_(person)};
 }
 function plazaLogin_(q){
- if(String(q.document||'').trim().toLowerCase()==='admin'||String(q.pin||'').startsWith('sk2.')){const result=entryLogin_('plaza',q.document,q.pin);if(result)return result;}
+ if(String(q.document||'').trim().toLowerCase()==='admin')return entryLogin_('plaza',q.pin);
 const document=String(q.document||'').trim(),pin=String(q.pin||'');if(!document||!pin)throw new Error('Documento y contraseña son obligatorios');const id=findFile_(),cloud=id?readFile_(id):{},person=(cloud.personal||[]).find(x=>String(x.documento||'').trim()===document&&!x.deleted);if(!person||person.plazaEnabled!==true||!person.pinHash)throw new Error('Usuario no habilitado para Plaza Blending');if(!safeEqual_(String(person.pinHash),hashPin_(document,pin)))throw new Error('Contraseña incorrecta');const role=plazaSessionRole_(person),expires=Date.now()+12*60*60*1000,payload=[document,role,expires].join('|'),token=Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload);return json_({ok:true,token,user:{id:person.id,documento:document,nombre:person.nombre||'',role:role},expiresAt:new Date(expires).toISOString()})}
 function applyPlazaLoanReturn_(row,asset,movements,cloud,auth){
   const valid=entry=>entry&&!entry.deleted&&!entry.reversed&&!entry.reversado;
@@ -1411,7 +1340,7 @@ function productionAccessAdmin_(q){
  return json_({ok:true,warehouseV1:true,warehouseSettings:productionWarehouseSettings_(),users:Object.keys(values).filter(key=>key.startsWith('SK_PROD_USER_')).map(key=>{const row=JSON.parse(values[key]);return {document:row.document,personId:row.personId,role:productionRole_(row.role),roles:productionRoles_(row)}})});
 }
 function productionLogin_(q){
- if(String(q.document||'').trim().toLowerCase()==='admin'||String(q.password||'').startsWith('sk2.')){const result=entryLogin_('production',q.document,q.password);if(result)return result;}
+ if(String(q.document||'').trim().toLowerCase()==='admin')return entryLogin_('production',q.password);
 
  const document=String(q.document||'').trim(),user=productionAccess_(document);
  if(!user||!safeEqual_(user.passwordHash,hashPin_(document,String(q.password||''))))throw new Error('Documento o contraseña incorrectos');
