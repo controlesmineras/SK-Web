@@ -1,7 +1,7 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),vm=require('node:vm');
-const source=fs.readFileSync(require('node:path').join(__dirname,'../production-access-admin.js'),'utf8');
+const source=['plaza-admin.js','production-access-admin.js'].map(name=>fs.readFileSync(require('node:path').join(__dirname,'..',name),'utf8')).join('\n');
 const tick=()=>new Promise(resolve=>setImmediate(resolve));
 const seed=[
  {id:'ana',nombre:'Ana María',documento:'123',empresa:'SK',area:'Seguridad física'},
@@ -38,10 +38,11 @@ function app(scope='plaza',{owner=true,failAccess=false,adminRoles=['assistant',
   requests.push({action,data});
   if(action==='adminUsersList'){if(failAccess)throw Error('Offline');return {users:[],adminRoles}}
   if(action==='productionUsers')return productionUsers();
+  if(action==='plazaChangeActiveRole')return {personId:data.personId,plazaRole:data.role,updatedAt:'2026-11-24'};
   if(action==='accessInvitationCreate')return createInvite?createInvite(data):{token:'test-token',plazaRole:data.plazaRole,productionRole:data.productionRole,adminRole:data.adminRole};
   throw Error('Unexpected request: '+action);
  }}};
- vm.runInNewContext(source,{document,window,console,all:async()=>structuredClone(seed),URL,location:{href:'https://example.test/SK-Web/'},queueMicrotask,
+ vm.runInNewContext(source,{document,window,console,all:async()=>structuredClone(seed),put:async()=>{},URL,location:{href:'https://example.test/SK-Web/'},queueMicrotask,
   Option:class{constructor(text,value){this.textContent=text;this.value=value}},navigator:{clipboard:{writeText:async()=>{}}},confirm:()=>false});
  const trigger={id:scope==='admin'?'adminUsersBtn':scope==='production'?'productionUsersBtn':''};
  const open=async()=>{click({target:{closest:()=>trigger},preventDefault(){},stopImmediatePropagation(){}});await tick()};
@@ -185,4 +186,19 @@ test('si vence la sesión al generar, permite renovarla y reintentar con el mism
  await s.generate();
  assert.equal(s.requests.at(-1).data.personId,'jose1');assert.equal(s.requests.at(-1).data.plazaRole,'operator');
  assert.ok(s.nodes['[data-copy]'].children.some(node=>node.textContent==='Copiar enlace'));
+});
+
+test('un administrador puede corregir el rol de una cuenta de Plaza activa sin generar una invitación',async()=>{
+ const s=app();await s.open();
+ s.nodes['[data-active]'].children[0].children.find(n=>n.textContent==='Gestionar accesos').onclick();
+ const controls=s.nodes['[data-manage]'].children,select=controls.flatMap(node=>node.children).find(n=>n.tag==='select');
+ const save=controls.find(n=>n.textContent==='Guardar rol');
+ assert.equal(save.hidden,true);
+ select.value='assistant';select.onchange();
+ assert.equal(save.hidden,false);await save.onclick();await tick();
+ assert.equal(s.requests.at(-1).action,'plazaChangeActiveRole');
+ assert.equal(s.requests.at(-1).data.previousRole,'operator');
+ assert.equal(s.requests.at(-1).data.role,'assistant');
+ assert.equal(s.requests.some(r=>r.action==='accessInvitationCreate'),false);
+ assert.match(s.nodes['[role=status]'].textContent,/Rol guardado/);
 });
