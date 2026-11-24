@@ -2079,8 +2079,12 @@ function createAssetHistory(){
   const found=(document&&people.find(p=>text(p.documento)===document))||people.find(p=>id&&text(p.id)===text(id)&&(!document||text(p.documento)===document));
   return {id:text(id||found?.id),document:document||text(found?.documento),name:name||text(found?.nombre),area:text(area||found?.area),cargo:text(cargo||found?.cargo)};
  }
- function warehouse(row,people,manual=false){
-  if(manual)return person(people,row.bodegueroId,row.documentoBodeguero,row.bodegueroNombre||row.nombreBodeguero);
+ function warehouse(row,people,manual){
+  if(!manual&&(row.shiftKeeperId||row.shiftKeeperDocument||row.shiftKeeperName))
+   return person(people,row.shiftKeeperId,row.shiftKeeperDocument,row.shiftKeeperName);
+  return person(people,row.bodegueroId,row.documentoBodeguero,row.bodegueroNombre||row.nombreBodeguero);
+ }
+ function registeredBy(row,people){
   const doc=text(row.actorDocument||row.operatorDocument),mismatch=row.actorDocument&&row.operatorDocument&&text(row.actorDocument)!==text(row.operatorDocument);
   return person(people,mismatch?'':row.operatorId,doc,mismatch?'':row.operatorName);
  }
@@ -2094,7 +2098,7 @@ function createAssetHistory(){
    const responsible=manual?person(people,row.responsableId,row.documentoResponsable,row.responsableNombre||row.nombreResponsable):income?person(people,row.broughtById,row.broughtByDocument,row.broughtByName):back?person(people,row.returnedById,row.returnedByDocument,row.returnedByName):person(people,row.recipientId,row.recipientDocument,row.recipientName,row.recipientArea,row.recipientCargo);
    const title=manual?(row.descripcion||'Novedad'):income?'Ingreso a bodega':back?'Devolución de préstamo':kind==='mineExit'?row.deliveryType+' · '+row.destinationMine:kind==='transfer'?'Traslado a bodega':kind==='loan'?'Préstamo':'Asignación';
    const key=source+':'+(row.id||[row.assetId,at,row.recipientId,row.broughtById,row.descripcion].join('|'));
-   const entry={key,order:++order,assetId:row.assetId,source,kind,title,at,epoch:millis(at),...localTime(at),responsible,warehouse:warehouse(row,people,manual),location:manual?row.ubicacion||'':income||back?'Bodega de Superficie':row.destination||'Operación',state:manual?row.estado||'':'',reversed:reversed(row),pending:row.syncState==='pending',raw:row};
+   const entry={key,order:++order,assetId:row.assetId,source,kind,title,at,epoch:millis(at),...localTime(at),responsible,warehouse:warehouse(row,people,manual),registeredBy:manual?null:registeredBy(row,people),location:manual?row.ubicacion||'':income||back?'Bodega de Superficie':row.destination||'Operación',state:manual?row.estado||'':'',reversed:reversed(row),pending:row.syncState==='pending',raw:row};
    const previous=entries.get(key);
    if(!previous||millis(row.updatedAt)>=millis(previous.raw.updatedAt))entries.set(key,entry);
   }

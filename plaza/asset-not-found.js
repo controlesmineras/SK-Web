@@ -6,9 +6,9 @@ const clean=value=>String(value||'').trim();
 // La llegada inicial usa el día en Colombia, aunque el dispositivo tenga otra zona horaria.
 const arrivalDateFormat=new Intl.DateTimeFormat('en-US',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit'});
 const initialArrivalDate=timestamp=>{const parts=Object.fromEntries(arrivalDateFormat.formatToParts(new Date(timestamp)).map(part=>[part.type,part.value]));return `${parts.year}-${parts.month}-${parts.day}`};
-function initialArrivalDetails(timestamp,person,user){
+function initialArrivalDetails(timestamp,person,shift){
  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Bogota',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(timestamp)).map(part=>[part.type,part.value]));
- return {fechaNovedad:initialArrivalDate(timestamp),horaNovedad:`${parts.hour}:${parts.minute}`,descripcionNovedad:'Llegada a mina',documentoResponsable:person?.documento||'',nombreResponsable:person?.nombre||'',documentoBodeguero:user?.documento||user?.document||'',nombreBodeguero:user?.nombre||''};
+ return {fechaNovedad:initialArrivalDate(timestamp),horaNovedad:`${parts.hour}:${parts.minute}`,descripcionNovedad:'Llegada a mina',documentoResponsable:person?.documento||'',nombreResponsable:person?.nombre||'',documentoBodeguero:shift?.shiftKeeperDocument||'',nombreBodeguero:shift?.shiftKeeperName||''};
 }
 const uuid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`;
 const itemName=item=>clean(item?.name||item?.element||item?.nombre||item?.elemento||item?.CI_ELEMENTO);
@@ -198,9 +198,9 @@ function mountIncome(){
   const issue=newAssetIssue(item,asset);
   if(issue)throw new Error(issue.message);
  };
- const commit=(draft,timestamp,person,snapshot,recordedAt=timestamp)=>{
+ const commit=(draft,timestamp,person,snapshot,recordedAt=timestamp,shift)=>{
   const data=snapshot||window.SKPlaza?.getData?.(),user=window.SKPlaza?.getUser?.();if(!data)return null;
-  let asset;if(draft.assetCandidate){checkDraft(draft,data,data.assets||[]);if(duplicate(data.assets||[],draft.assetCandidate))throw new Error('El activo ya fue registrado. Selecciónalo como ACTIVO REGISTRADO.');asset={id:uuid(),mina:'Sandra K',...draft.assetCandidate,...initialArrivalDetails(timestamp,person,user),criteriaId:draft.itemId,ubicacion:'Bodega de Superficie',estado:'Operativo/a',disponibleEntrega:'Sí',fechaIngreso:initialArrivalDate(timestamp),createdAt:timestamp,recordedAt,updatedAt:recordedAt,syncState:'pending',registeredFrom:'plaza-income',registeredBy:user?.documento||''};if(asset.areaAsignada)asset.areaAsignadaRevision={value:asset.areaAsignada,at:asset.createdAt};Object.assign(asset,window.SKAssetMarking.prepare(asset));(data.assets||(data.assets=[])).push(asset)}else asset=(data.assets||[]).find(row=>row.id===draft.assetId);
+  let asset;if(draft.assetCandidate){checkDraft(draft,data,data.assets||[]);if(duplicate(data.assets||[],draft.assetCandidate))throw new Error('El activo ya fue registrado. Selecciónalo como ACTIVO REGISTRADO.');asset={id:uuid(),mina:'Sandra K',...draft.assetCandidate,...initialArrivalDetails(timestamp,person,shift),criteriaId:draft.itemId,ubicacion:'Bodega de Superficie',estado:'Operativo/a',disponibleEntrega:'Sí',fechaIngreso:initialArrivalDate(timestamp),createdAt:timestamp,recordedAt,updatedAt:recordedAt,syncState:'pending',registeredFrom:'plaza-income',registeredBy:user?.documento||''};if(asset.areaAsignada)asset.areaAsignadaRevision={value:asset.areaAsignada,at:asset.createdAt};Object.assign(asset,window.SKAssetMarking.prepare(asset));(data.assets||(data.assets=[])).push(asset)}else asset=(data.assets||[]).find(row=>row.id===draft.assetId);
   if(asset){asset.ubicacion='Bodega de Superficie';asset.updatedAt=recordedAt;asset.syncState='pending';if(draft.incomeType){asset.ultimoTipoIngreso=draft.incomeType;asset.ultimaMinaOrigen=draft.originMine;if(!asset.minaOrigen)asset.minaOrigen=draft.originMine;if(draft.incomeType==='TRASLADO')asset.mina='Sandra K';else if(!asset.mina)asset.mina=draft.originMine;asset.activoExterno=!isSandraK(asset.mina);asset.ingresoTemporal=draft.incomeType==='REPARACIÓN'&&!isSandraK(asset.mina||asset.minaOrigen);if(draft.incomeType==='REPARACIÓN'){asset.estado='En reparación';asset.disponibleEntrega='No'}}}
   return asset||null;
  };

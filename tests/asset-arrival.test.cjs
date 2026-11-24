@@ -4,12 +4,13 @@ function frontend(file,exports){const context=vm.createContext({Intl,Date,consol
 const plaza=frontend('plaza/asset-not-found.js','initialArrivalDetails'),admin=frontend('asset-admin-ui.js','arrivalDetails,restoreAssetValue');
 const plain=value=>JSON.parse(JSON.stringify(value));
 test('la llegada inicial toma fecha/hora de Colombia y las personas del ingreso',()=>{
- const result=plain(plaza.initialArrivalDetails('2026-10-06T02:15:00Z',{documento:'123',nombre:'Quien trae'},{documento:'456',nombre:'Bodeguera'}));
+ const result=plain(plaza.initialArrivalDetails('2026-10-06T02:15:00Z',{documento:'123',nombre:'Quien trae'},{shiftKeeperDocument:'456',shiftKeeperName:'Bodeguera'}));
  assert.deepEqual(result,{fechaNovedad:'2026-10-05',horaNovedad:'21:15',descripcionNovedad:'Llegada a mina',documentoResponsable:'123',nombreResponsable:'Quien trae',documentoBodeguero:'456',nombreBodeguero:'Bodeguera'});
 });
 test('la consulta reconstruye la llegada desde el ingreso y no reemplaza una novedad posterior',()=>{
- const income={createdAt:'2026-10-06T02:15:00Z',broughtByName:'Quien trae',broughtByDocument:'123',operatorDocument:'456',operatorName:'Bodeguera'};
+ const income={createdAt:'2026-10-06T02:15:00Z',broughtByName:'Quien trae',broughtByDocument:'123',shiftKeeperDocument:'456',shiftKeeperName:'Bodeguera',operatorDocument:'789',operatorName:'Auxiliar'};
  assert.equal(admin.arrivalDetails({},income).mina,'Sandra K');
+ assert.equal(admin.arrivalDetails({},income).documentoBodeguero,'456');
  assert.equal(admin.arrivalDetails({},income).documentoResponsable,'123');
  assert.deepEqual(plain(admin.arrivalDetails({descripcionNovedad:'Reparación',fechaNovedad:'2026-10-06'},income)),{});
  assert.equal(admin.arrivalDetails({mina:'Providencia'},income).mina,'Providencia');
@@ -27,7 +28,7 @@ test('la sincronización central conserva modelo, fabricante, propiedad y llegad
  let cloud={assets:[],inventoryCriteria:[{id:'pul',name:'Pulidora 7"',isFixedAsset:true,usesModel:true,usesManufacturer:true,usesSerial:true}]};
  const ctx=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}});vm.runInContext(read('backend/apps-script/Code.gs'),ctx);
  ctx.findFile_=()=> 'file';ctx.readFile_=()=>plain(cloud);ctx.writeFile_=(_,data)=>{cloud=plain(data)};ctx.json_=plain;ctx.verifyToken_=()=>({document:'456',role:'plaza_operator'});
- const timestamp='2026-10-06T02:15:00Z',details=plain(plaza.initialArrivalDetails(timestamp,{documento:'123',nombre:'Quien trae'},{documento:'456',nombre:'Bodeguera'}));
+ const timestamp='2026-10-06T02:15:00Z',details=plain(plaza.initialArrivalDetails(timestamp,{documento:'123',nombre:'Quien trae'},{shiftKeeperDocument:'456',shiftKeeperName:'Bodeguera'}));
  const asset={id:'pul-1',criteriaId:'pul',clase:'Pulidora 7"',numeroClase:'1',numeroYT:'1',serial:'10647',modelo:'DWE491-B3 / 7"',fabricante:'DeWalt',mina:'Sandra K',fechaIngreso:'2026-10-05',...details,createdAt:timestamp,updatedAt:timestamp,syncState:'pending'};
  ctx.plazaSync_({token:'test',data:{assets:[asset],blendingIncomes:[{id:'ingreso',syncEventId:'ingreso',assetId:asset.id,itemId:'pul',quantity:1,broughtById:'123',broughtByDocument:'123',broughtByName:'Quien trae',createdAt:timestamp,updatedAt:timestamp,syncState:'pending'}]}});
  for(const key of ['modelo','fabricante','mina','fechaIngreso',...Object.keys(details)])assert.equal(cloud.assets[0][key],asset[key],key);

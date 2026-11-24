@@ -2,7 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const history=require('../asset-history.js');
 const asset={id:'saw27',clase:'Motosierra',numeroClase:'27',marcaInterna:'AAE',serial:'DEMO-27',ubicacion:'Operación',estado:'Operativo/a'};
 const people=[{id:'receiver',documento:'10001',nombre:'Operador de prueba',area:'Desmin - Obras civiles',cargo:'Operador minero'},{id:'warehouse',documento:'warehouse-doc',nombre:'Bodeguera de prueba'}];
-const delivery={id:'delivery',assetId:asset.id,recipientId:'receiver',operatorId:'warehouse',operatorDocument:'warehouse-doc',operatorName:'Bodeguera de prueba',actorDocument:'warehouse-doc',deliveryType:'ASIGNACIÓN',destination:'Operación',createdAt:'2026-10-18T21:06:00Z',syncState:'synced'};
+const delivery={id:'delivery',assetId:asset.id,recipientId:'receiver',shiftKeeperId:'warehouse',shiftKeeperDocument:'warehouse-doc',operatorId:'warehouse',operatorDocument:'warehouse-doc',operatorName:'Bodeguera de prueba',actorDocument:'warehouse-doc',deliveryType:'ASIGNACIÓN',destination:'Operación',createdAt:'2026-10-18T21:06:00Z',syncState:'synced'};
 const seed=()=>({personal:structuredClone(people),blendingDeliveries:[structuredClone(delivery)],blendingIncomes:[],novelties:[]});
 test('la entrega ya registrada en Plaza completa última novedad, bodeguera y receptor sin escribir ni duplicar',()=>{
  const data=seed(),before=JSON.stringify({asset,data}),result=history.project(asset,data);
@@ -54,7 +54,7 @@ test('revertir una entrega también actualiza una ficha cuyo último movimiento 
 });
 test('snapshots mantienen nombres históricos y el actor autenticado tiene precedencia sobre operador contradictorio',()=>{
  const data=seed();Object.assign(data.blendingDeliveries[0],{recipientName:'Nombre al entregar',recipientDocument:'10001',operatorName:'Nombre equivocado',operatorDocument:'otro'});
- const result=history.project(asset,data);assert.equal(result.asset.nombreResponsable,'Nombre al entregar');assert.equal(result.asset.nombreBodeguero,people[1].nombre);
+ const result=history.project(asset,data);assert.equal(result.asset.nombreResponsable,'Nombre al entregar');assert.equal(result.events[0].registeredBy.name,people[1].nombre);
  data.personal=[];const missing=history.project(asset,data);assert.equal(missing.asset.nombreResponsable,'Nombre al entregar');assert.equal(missing.asset.nombreBodeguero,'');assert.equal(missing.asset.documentoBodeguero,'warehouse-doc');
 });
 test('últimas diez por activo, eventos del mismo lote preservados y reintentos deduplicados por id',()=>{
@@ -62,4 +62,23 @@ test('últimas diez por activo, eventos del mismo lote preservados y reintentos 
  data.novelties=Array.from({length:14},(_,i)=>({id:'n'+i,assetId:asset.id,descripcion:'Novedad '+i,createdAt:new Date(Date.UTC(2026,9,1+i,12)).toISOString(),syncEventId:'same-batch'}));
  data.novelties.push({...data.novelties[13]},{id:'other',assetId:'another',createdAt:'2026-12-01T12:00:00Z'},{id:'deleted',assetId:asset.id,deleted:true,createdAt:'2026-12-01T12:00:00Z'});
  const events=history.timeline(data,asset.id);assert.equal(events.length,14);assert.equal(events.slice(0,10).length,10);assert.equal(events[0].raw.id,'n13');assert.equal(events[9].raw.id,'n4');
+});
+
+test('bodeguero, responsable y autor se leen del movimiento incluso al reabrir una ficha histórica',()=>{
+ const data=seed(),row=data.blendingDeliveries[0];
+ Object.assign(row,{exitKind:'mine',deliveryType:'SALIDA A REPARACIÓN',destination:'Segovia',destinationMine:'Segovia',
+  shiftKeeperDocument:'',operatorId:'assistant',operatorName:'Auxiliar',operatorDocument:'333',actorDocument:'333',actorRole:'plaza_assistant'});
+ const stored={...asset,fechaNovedad:'2026-10-18',horaNovedad:'16:06',descripcionNovedad:'SALIDA A REPARACIÓN · Segovia',nombreBodeguero:'Auxiliar',documentoBodeguero:'333'};
+ for(const keeper of [{shiftKeeperId:'warehouse'}, {shiftKeeperDocument:'warehouse-doc'}, {shiftKeeperName:'Bodeguera al entregar'}]){
+  Object.assign(row,{shiftKeeperId:'',shiftKeeperName:'',shiftKeeperDocument:''},keeper);
+  const result=history.project(stored,data),entry=result.events[0];
+  assert.equal(result.asset.nombreBodeguero,keeper.shiftKeeperName||people[1].nombre);
+  assert.equal(entry.warehouse.name,result.asset.nombreBodeguero);
+  assert.equal(result.asset.nombreResponsable,people[0].nombre);
+  assert.equal(entry.registeredBy.name,'Auxiliar');
+ }
+ delete row.shiftKeeperName;delete row.recipientId;
+ const missing=history.project(stored,data);
+ assert.equal(missing.asset.nombreBodeguero,'');assert.equal(missing.asset.documentoBodeguero,'');
+ assert.equal(missing.events[0].responsible.name,'');assert.equal(missing.events[0].registeredBy.document,'333');
 });
