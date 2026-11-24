@@ -70,7 +70,7 @@
       }
     }
     function reset() {
-      form.reset(); clearAsset(); details.hidden = true;
+      form.reset(); api.resetMovementTime(form); clearAsset(); details.hidden = true;
       choices.replaceChildren(...destinations(api.getData()).map(destination => {
         const label = document.createElement('label'), radio = document.createElement('input'), caption = document.createElement('span');
         radio.type = 'radio'; radio.name = 'destinationMine'; radio.value = destination; radio.required = true;
@@ -118,16 +118,16 @@
       try {
         const shift = api.movementShift(), next = structuredClone(data), target = next.assets.find(row => row.id === selectedId);
         const criterion = (data.inventoryCriteria || []).find(row => !row.deleted && api.isFixedItem(row) && normalize(api.itemName(row)) === normalize(asset.clase));
-        const id = api.uuid(), time = new Date().toISOString(), user = api.getUser(), destination = mine === 'Segovia' ? mine : 'Mina ' + mine;
+        const id = api.uuid(), times = api.movementTimes(form), user = api.getUser(), destination = mine === 'Segovia' ? mine : 'Mina ' + mine;
         const row = {id, syncEventId:id, exitKind:'mine', destinationMine:mine, deliveryType:operation, destination,
           ownerMineBefore:owner(asset),
           itemId:asset.criteriaId || criterion?.id || asset.id, itemName:asset.clase, assetId:asset.id, assetLabel:api.assetLabel(asset),
           quantity:1, unit:'Unidad', notes:fields.notes.value.trim(), ...shift, operatorId:user.id,
-          operatorName:user.nombre, operatorDocument:user.documento, createdAt:time, updatedAt:time, syncState:'pending'};
+          operatorName:user.nombre, operatorDocument:user.documento, ...times, syncState:'pending'};
         if (operation === 'TRASLADO' && mine !== 'Segovia') {target.mina = mine; target.activoExterno = true;}
         if (operation === 'SALIDA A REPARACIÓN') target.estado = 'En reparación';
         target.ingresoTemporal = false; target.ubicacion = destination; target.asignadaId = ''; target.areaAsignada = '';
-        target.updatedAt = time; target.syncState = 'pending';
+        target.updatedAt = times.recordedAt; target.syncState = 'pending';
         (next.blendingDeliveries ||= []).push(row);
         await api.saveData(next); reset(); api.updatePendingBadge(); api.renderRecentQueries(); window.SKPlazaReturns?.refresh();
         alert(operation + ' · ' + mine + '\n\nSalida registrada en este dispositivo y pendiente de sincronización.');

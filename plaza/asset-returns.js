@@ -19,7 +19,6 @@
   function loans(data) {
     return (data.blendingDeliveries || []).filter(row => active(row) && !isReturn(row) && norm(row.deliveryType) === 'prestamo');
   }
-  const localTime = date => new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
   const personLabel = person => [person.documento, person.nombre].filter(Boolean).join(' · ');
   const dateLabel = value => value ? new Date(value).toLocaleString('es-CO') : 'No informada';
   let selectedId = '', saving = false, syncError = '', readOnly = false;
@@ -93,7 +92,7 @@
     $('#assetReturnPeople').innerHTML = people.map(person => `<option value="${esc(personLabel(person))}"></option>`).join('');
     const borrower = people.find(row => row.id === loan.recipientId);
     form.elements.returnedBy.value = borrower ? personLabel(borrower) : '';
-    form.elements.returnedAt.value = localTime(new Date());
+    window.SKPlaza.resetMovementTime(form);
     form.scrollIntoView({behavior:'smooth', block:'start'});
   }
   async function save(event) {
@@ -106,7 +105,8 @@
       const app = window.SKPlaza, data = app.getData();
       const person = (data.personal || []).find(row => !row.deleted && personLabel(row) === form.elements.returnedBy.value.trim());
       const shift = app.movementShift();
-      const row = {...createReturn(data, selectedId, {returnedById:person?.id, returnedAt:form.elements.returnedAt.value, notes:form.elements.notes.value}, app.getUser()), ...shift};
+      const times = app.movementTimes(form);
+      const row = {...createReturn(data, selectedId, {returnedById:person?.id, returnedAt:times.createdAt, notes:form.elements.notes.value}, app.getUser(), new Date(times.recordedAt)), ...times, ...shift};
       const next = JSON.parse(JSON.stringify(data));
       next.blendingDeliveries.push(row);
       if (row.assetId) {
@@ -131,7 +131,7 @@
     if (!window.SKPlaza || $('#assetReturns')) return;
     const section = document.createElement('section');
     section.id = 'assetReturns'; section.className = 'view recentMovements';
-    section.innerHTML = `<h2 id="assetReturnsTitle">RETORNO DE ELEMENTOS</h2><p id="assetReturnsHint">Busca el préstamo y registra el regreso a bodega de los elementos prestados.</p><div class="assetReturnFilters"><label>BUSCAR ELEMENTO O COLABORADOR<input id="assetReturnSearch" type="search" placeholder="Clase, marca, serial, nombre o documento…"></label><fieldset id="assetReturnFilter" class="assetReturnState"><legend>ESTADO</legend><div class="assetReturnStateOptions"><label><input type="radio" name="assetReturnState" value="TODOS"><span>TODOS</span></label><label><input type="radio" name="assetReturnState" value="PENDIENTE" checked><span>PENDIENTES</span></label><label><input type="radio" name="assetReturnState" value="DEVUELTO"><span>DEVUELTOS</span></label></div></fieldset></div><p id="assetReturnCount" class="permission" aria-live="polite"></p><form id="assetReturnForm" hidden><h3>REGISTRAR RETORNO</h3><b id="assetReturnSelected"></b><label>QUIÉN DEVUELVE<input name="returnedBy" type="search" list="assetReturnPeople" autocomplete="off" required placeholder="Buscar nombre o documento…"></label><datalist id="assetReturnPeople"></datalist><label>FECHA Y HORA DE DEVOLUCIÓN<input name="returnedAt" type="datetime-local" required></label><label>OBSERVACIONES<textarea name="notes"></textarea></label><div class="deliveryFormActions"><button type="submit">REGISTRAR RETORNO</button><button type="button" id="cancelAssetReturn">CANCELAR</button></div></form><div id="assetReturnList" class="recentMovementList"></div>`;
+    section.innerHTML = `<h2 id="assetReturnsTitle">RETORNO DE ELEMENTOS</h2><p id="assetReturnsHint">Busca el préstamo y registra el regreso a bodega de los elementos prestados.</p><div class="assetReturnFilters"><label>BUSCAR ELEMENTO O COLABORADOR<input id="assetReturnSearch" type="search" placeholder="Clase, marca, serial, nombre o documento…"></label><fieldset id="assetReturnFilter" class="assetReturnState"><legend>ESTADO</legend><div class="assetReturnStateOptions"><label><input type="radio" name="assetReturnState" value="TODOS"><span>TODOS</span></label><label><input type="radio" name="assetReturnState" value="PENDIENTE" checked><span>PENDIENTES</span></label><label><input type="radio" name="assetReturnState" value="DEVUELTO"><span>DEVUELTOS</span></label></div></fieldset></div><p id="assetReturnCount" class="permission" aria-live="polite"></p><form id="assetReturnForm" hidden><h3>REGISTRAR RETORNO</h3><b id="assetReturnSelected"></b><label>QUIÉN DEVUELVE<input name="returnedBy" type="search" list="assetReturnPeople" autocomplete="off" required placeholder="Buscar nombre o documento…"></label><datalist id="assetReturnPeople"></datalist><label class="plazaMovementTime" hidden>FECHA Y HORA DE DEVOLUCIÓN<input type="datetime-local" name="movementAt" required disabled></label><label>OBSERVACIONES<textarea name="notes"></textarea></label><div class="deliveryFormActions"><button type="submit">REGISTRAR RETORNO</button><button type="button" id="cancelAssetReturn">CANCELAR</button></div></form><div id="assetReturnList" class="recentMovementList"></div>`;
     $('#contacts').after(section);
     $('#assetReturnSearch').addEventListener('input', refresh);
     $('#assetReturnFilter').addEventListener('change', refresh);

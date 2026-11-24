@@ -925,7 +925,10 @@ function plazaPendingGroups_(incoming){
   assets.filter(asset=>!attached.has(asset.id)).forEach(asset=>groups.set('asset:'+asset.id,{assets:[asset],blendingIncomes:[],blendingDeliveries:[]}));
   const ordered=Array.from(groups.values());
   if(ordered.some(group=>group.blendingDeliveries.some(row=>row.exitKind==='mine'))){
-    const time=group=>Date.parse((group.blendingDeliveries[0]||group.blendingIncomes[0]||group.assets[0]).createdAt)||0;
+    const time=group=>{
+      const row=group.blendingDeliveries[0]||group.blendingIncomes[0]||group.assets[0];
+      return Date.parse(row.recordedAt||row.createdAt)||0;
+    };
     ordered.sort((left,right)=>time(left)-time(right));
     // El alta y su primera salida pueden sincronizarse juntas con la ficha local ya trasladada.
     const mineAssets=new Set(ordered.flatMap(group=>group.blendingDeliveries.filter(row=>row.exitKind==='mine').map(row=>row.assetId)));
@@ -989,6 +992,7 @@ function applyPlazaChanges_(cloud,incoming,auth){
         return true;
       }).map(x=>{
         const row=stampActor_(x,auth),qty=Number(row.quantity);
+        validatePlazaMovementTime_(row,auth);
         stampPlazaShift_(row,cloud,auth);
         if(row.movementType==='REVERSIÓN'||row.reversalOf)throw new Error('Las reversiones se registran desde SK Web Admin');
         delete row.syncError;
@@ -1068,6 +1072,17 @@ function plazaSync_(q){
   }finally{lock.releaseLock()}
 }
 
+function validatePlazaMovementTime_(row,auth){
+  // Las colas anteriores a la fecha editable solo tienen createdAt.
+  if(row.recordedAt===undefined)return;
+  const recorded=Date.parse(row.recordedAt), occurred=Date.parse(row.createdAt);
+  if(!Number.isFinite(recorded)||!Number.isFinite(occurred)||occurred>recorded||recorded>Date.now()+300000)
+    throw new Error('Fecha y hora del movimiento no válidas.');
+  if(occurred!==recorded&&auth.role!=='plaza_assistant')
+    throw new Error('Solo un auxiliar de Plaza Blending puede cambiar la fecha y la hora del movimiento.');
+  if(row.movementType==='DEVOLUCIÓN'&&Date.parse(row.returnedAt)!==occurred)
+    throw new Error('La fecha y la hora de devolución deben coincidir con las del movimiento.');
+}
 function stampPlazaShift_(row,cloud,auth){
   const keeperDocument=String(row.shiftKeeperDocument||'').trim();
   if(!keeperDocument&&auth.role!=='plaza_assistant'&&!row.shiftKeeperId&&!row.shiftKeeperName)return;
