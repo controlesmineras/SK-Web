@@ -127,16 +127,27 @@
 .exitOperations input[type=radio]{flex:0 0 15px;width:15px;height:15px;min-height:0;margin:0;padding:0;accent-color:#173d59}
 .exitOperations label:has(:checked){background:#e1eff8;border-color:#173d59}
 .exitOperations label:has(:focus-visible){outline:2px solid #397497;outline-offset:1px}
+.mineDestinations{min-width:0;margin:0;padding:0;border:0}
+.mineDestinations legend,.mineElementType span{padding:0;font-size:.86rem;font-weight:750}
+#mineDestinationChoices{display:flex;flex-wrap:wrap;gap:.4rem;margin-top:.4rem}
+#mineDestinationChoices label{position:relative}
+#mineDestinationChoices input{position:absolute;inset:0;width:100%;height:100%;min-height:0;margin:0;padding:0;opacity:0;cursor:pointer}
+#mineDestinationChoices span{display:grid;place-items:center;min-height:44px;padding:.4rem .9rem;border:1px solid #b9cbd6;border-radius:.45rem;color:#173d59;text-align:center}
+#mineDestinationChoices input:checked+span{background:#173d59;border-color:#173d59;color:white}
+#mineDestinationChoices input:focus-visible+span{outline:2px solid #397497;outline-offset:2px}
+.mineElementType{display:grid;gap:.4rem}
+.mineElementType strong{font-size:.92rem;color:#173d59}
 #mineAssetStatus:empty{display:none}
 #mineExit button[type=submit]:disabled{opacity:.5;cursor:not-allowed}
 @media(min-width:960px){
   main:has(#mineExit.active){width:100%;max-width:1380px;padding-inline:clamp(24px,3vw,48px)}
   #app #mineExit.view.active,#app:has(#mineExit.active) #plazaNavigation{width:100%;max-width:none}
-  #mineExitForm{grid-template-columns:minmax(14rem,1fr) minmax(0,2fr);align-items:start;gap:1rem 1.5rem}
+  #mineExitForm{grid-template-columns:minmax(0,2fr) minmax(14rem,1fr);align-items:start;gap:1rem 1.5rem}
   #mineExitFields:not([hidden]){display:contents}
-  .mineOperationGroup{grid-column:2}
-  .mineElementGroup{grid-column:1}
-  .mineSearchGroup{grid-column:2}
+  .mineDestinations,.mineSearchGroup{grid-column:1/-1}
+  #mineDestinationChoices span{min-height:36px;min-width:7rem}
+  .mineOperationGroup{grid-column:1}
+  .mineElementGroup{grid-column:2}
   #mineExitFields>label,#mineExitFields>button[type=submit]{grid-column:1/-1}
   #mineExitFields>button[type=submit]{justify-self:start;padding-inline:1.5rem}
   .exitOperations{grid-template-columns:repeat(3,minmax(0,1fr)) minmax(0,1.5fr)}

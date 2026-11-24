@@ -250,7 +250,7 @@ function sandraKMine_(value){return cargoNorm_(value).replace(/[.\s-]/g,'')==='s
 function externalMinePrefix_(mine){const prefixes={'providencia':'P','el silencio':'S','carla':'C','alianza':'L'};return prefixes[cargoNorm_(mine)]||''}
 function collaboratorSyncCapabilities_(){return{collaboratorRevisionsV1:true}}
 function nextRevision_(previous){return new Date(Math.max(Date.now(),(Date.parse(previous)||0)+1)).toISOString()}
-function plazaIncomeCapabilities_(){return{collaboratorRevisionsV1:true,movementReceiptsV1:true,independentMovementGroupsV1:true,inventoryLoansV1:true,loanReturnsV1:true,externalIncomeV1:true,mineExitsV1:true,mineReturnOwnerV2:true,externalMarkSeparator:'-',minePrefixes:{'Providencia':'P','El Silencio':'S','Carla':'C','Alianza':'L'}}}
+function plazaIncomeCapabilities_(){return{collaboratorRevisionsV1:true,movementReceiptsV1:true,independentMovementGroupsV1:true,inventoryLoansV1:true,loanReturnsV1:true,externalIncomeV1:true,mineExitsV1:true,mineReturnOwnerV2:true,mineSegoviaV1:true,externalMarkSeparator:'-',minePrefixes:{'Providencia':'P','El Silencio':'S','Carla':'C','Alianza':'L'}}}
 function validatePlazaIncomeContext_(row,asset){
  if(!row.incomeType&&!row.originMine)return false; // Compatibilidad con registros anteriores.
  if(!repairIncomeClass_(asset.clase))throw new Error('El tipo de ingreso especial solo corresponde a YT y columnas');
@@ -961,12 +961,12 @@ function validatePlazaExit_(row,name,cloud,asset){
  const options=(cloud.inventoryCriteria||[]).find(entry=>entry.id==='SYSTEM-FORM-OPTIONS-V1'||entry.recordType==='formOptions');
  const mines=options?.options?.['asset.owner']||['Sandra K','Providencia','El Silencio','Carla','Alianza'];
  const mine=row.destinationMine,owner=String(asset.mina||asset.minaOrigen||'').trim(),key=value=>cargoNorm_(value).replace(/[.\s-]/g,'');
- if(!mines.includes(mine)||sandraKMine_(mine)||row.destinationWarehouseId||
-    !['TRASLADO','PRÉSTAMO','RETORNO','SALIDA A REPARACIÓN'].includes(row.deliveryType))throw new Error('Selecciona una mina de destino y un tipo de operación válido.');
+ if((mine!=='Segovia'&&!mines.includes(mine))||sandraKMine_(mine)||row.destinationWarehouseId||
+    !['TRASLADO','PRÉSTAMO','RETORNO','SALIDA A REPARACIÓN'].includes(row.deliveryType))throw new Error('Selecciona un destino y un tipo de operación válido.');
  if(row.deliveryType==='RETORNO'&&key(owner)!==key(mine))throw new Error(owner?'Solo puedes retornar este activo a su mina propietaria: '+owner+'.':'Falta registrar la mina propietaria de este activo antes de retornarlo.');
  if(cargoNorm_(asset.ubicacion)!=='bodega de superficie')throw new Error('No se le ha dado ingreso a Plaza Blending.');
- row.destination='Mina '+mine;row.ownerMineBefore=owner;
- if(row.deliveryType==='TRASLADO'){asset.mina=mine;asset.activoExterno=true;}
+ row.destination=mine==='Segovia'?mine:'Mina '+mine;row.ownerMineBefore=owner;
+ if(row.deliveryType==='TRASLADO'&&mine!=='Segovia'){asset.mina=mine;asset.activoExterno=true;}
  if(row.deliveryType==='SALIDA A REPARACIÓN')asset.estado='En reparación';
  asset.ingresoTemporal=false;asset.asignadaId='';asset.areaAsignada='';
 }
