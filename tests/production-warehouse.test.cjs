@@ -386,3 +386,47 @@ test('Bodega distingue las aperturas nativas y de Admin de los ingresos y los aj
  assert.deepEqual(ids('deliveryHistory'),['out']);
  assert.deepEqual(ids('pendingLoanHistory'),[]);assert.deepEqual(ids('completedLoanHistory'),[]);
 });
+
+test('Plaza recibe directamente un activo de Producción y puede enviarlo después a reparación',()=>{
+ for(const ubicacion of ['Inventario de Producción','Bodega de Producción-N. 4','Producción · Nivel 4']){
+  const asset={...level4,mina:'Sandra K',marcaActual:'TST',serial:'QA-123',ubicacion};
+  const r=runtime({central:{assets:[asset],inventoryCriteria:[hammer]}});
+  r.c.verifyToken_=()=>({document:'doc',role:'plaza_assistant'});
+  const stamp=new Date().toISOString();
+  const income={id:'ingreso-local',syncEventId:'ingreso-local',assetId:asset.id,itemId:hammer.id,quantity:1,
+   operatorDocument:'doc',shiftKeeperDocument:'doc',broughtById:'person',createdAt:stamp,recordedAt:stamp,updatedAt:stamp,
+   syncState:'pending',syncError:'Registra el traslado de este activo desde Bodega de Producción'};
+  const localAsset={...asset,ubicacion:'Bodega de Superficie',syncState:'pending'};
+  const send=data=>r.c.plazaSync_({token:'plaza',syncProtocol:'plaza-receipts-v1',data}).acknowledgements;
+  const packet={assets:[localAsset],blendingIncomes:[income]};
+  const first=send(packet);
+  assert.equal(first.blendingIncomes[0].status,'accepted',first.blendingIncomes[0].error);
+  assert.equal(first.assets[0].status,'already-applied');
+  assert.equal(r.central.blendingIncomes.length,1);
+  const saved=r.central.blendingIncomes[0];
+  assert.equal(saved.receivedFromProduction,ubicacion);assert.equal(saved.createdAt,stamp);
+  assert.equal(saved.broughtById,'person');assert.equal(saved.syncError,undefined);
+  assert.equal(r.central.assets[0].ubicacion,'Bodega de Superficie');
+  const production=r.sync();assert.equal(production.balances[0].quantity,0);
+  assert.equal(production.catalog.assets[0].inWarehouse,false);
+  assert.equal(r.sync([moveHammer('transfer_out')]).receipts[0].status,'rejected');
+  assert.equal(send(packet).blendingIncomes[0].status,'already-applied');
+  const exit={...income,id:'reparacion',syncEventId:'reparacion',exitKind:'mine',deliveryType:'SALIDA A REPARACIÓN',
+   destinationMine:'Segovia',recipientId:'person'};
+  const sent=send({blendingDeliveries:[exit]});assert.equal(sent.blendingDeliveries[0].status,'accepted',sent.blendingDeliveries[0].error);
+  assert.equal(r.central.assets[0].ubicacion,'Segovia');assert.equal(r.central.assets[0].estado,'En reparación');
+  assert.equal(r.central.assets[0].mina,'Sandra K');assert.equal(r.central.assets[0].serial,'QA-123');
+  assert.equal(send(packet).blendingIncomes[0].status,'already-applied');assert.equal(r.central.assets[0].ubicacion,'Segovia');
+  assert.equal(r.central.blendingIncomes.length,1);
+ }
+});
+
+test('un traslado enviado desde Producción antes del ingreso manual conserva una sola recepción en Plaza',()=>{
+ const r=runtime({central:{assets:[level4],inventoryCriteria:[hammer]}});
+ assert.equal(r.sync([moveHammer('transfer_out')]).receipts[0].status,'accepted');
+ const row={id:'otro-ingreso',assetId:level4.id,itemId:hammer.id,quantity:1,createdAt:new Date().toISOString(),syncState:'pending'};
+ const result=r.c.plazaSync_({token:'plaza',data:{blendingIncomes:[row]},syncProtocol:'plaza-receipts-v1'});
+ assert.equal(result.acknowledgements.blendingIncomes[0].status,'rejected');
+ assert.match(result.acknowledgements.blendingIncomes[0].error,/Ya existe un ingreso/);
+ assert.equal(r.central.blendingIncomes.length,1);
+});
