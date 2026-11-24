@@ -42,7 +42,8 @@
 .loanMenuActions button:focus-visible{outline:3px solid #e7ac27;outline-offset:3px}
 .loanMenuActions button:active{box-shadow:0 2px 6px #173d5926}
 #plazaRegisterMenu [data-register-view="income"]{border:2px solid #4f765e}
-#plazaRegisterMenu [data-register-view="exits"]{border:2px solid #526f84}
+#plazaRegisterMenu [data-register-view="exits"],
+#exits [data-exit-view]{border:2px solid #526f84}
 #plazaRegisterMenu [data-close-register]{border:2px solid #0e3047}
 #plazaRegisterMenu :is(.registerMenuGrid button,[data-close-register]):focus-visible{outline:3px solid #396687;outline-offset:3px}
 #plazaRegisterMenu .registerMenu{max-height:calc(100dvh - 36px);overflow:auto}
