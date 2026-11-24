@@ -76,15 +76,19 @@ function injectStyle(){if(document.querySelector('#inventoryAdminStyle'))return;
  }
 }
 #inventoryItemForm{container-type:inline-size}
+#inventoryItemForm>label,#inventoryItemForm .invContainerUnit{
+ min-width:0;gap:4px;color:#465d6d;font-size:.875rem;font-weight:500;
+ line-height:1.3;letter-spacing:normal;text-transform:none
+}
+#inventoryItemForm label:not(.invSwitchRow)>:is(input,select,textarea){
+ min-width:0;min-height:44px;margin-block-start:auto;font-size:1rem;font-weight:600;
+ line-height:1.4;color:#172f40;background-color:#f4f8fa
+}
+#inventoryItemForm label>select:invalid,#inventoryItemForm label>::placeholder{color:#536879;font-weight:400;opacity:1}
 #inventoryItems[data-catalog-kind="spare"] #inventoryItemForm{
  grid-template-columns:repeat(4,minmax(0,1fr));gap:8px 10px;padding:12px
 }
-#inventoryItems[data-catalog-kind="spare"] #inventoryItemForm>label{
- grid-column:span 2;min-width:0;gap:3px;font-size:.875rem;line-height:1.25
-}
-#inventoryItems[data-catalog-kind="spare"] #inventoryItemForm>label :is(input,select,textarea){
- min-width:0;font-size:1rem
-}
+#inventoryItems[data-catalog-kind="spare"] #inventoryItemForm>label{grid-column:span 2;gap:3px}
 #inventoryItems[data-catalog-kind="spare"] .invInitialNote{margin:0}
 #inventoryItems[data-catalog-kind="spare"] #inventoryItemForm>:is(.invPartName,.invSpareApplication){grid-column:1/-1}
 #inventoryItems[data-catalog-kind="spare"] .invSpareApplication textarea{field-sizing:content;max-height:10rem;resize:vertical}
@@ -196,16 +200,16 @@ function mount(){if(document.querySelector('#inventoryItems'))return;injectStyle
 <p id="inventoryCatalogHelp" class="hint" hidden>Elige primero Elemento común o Repuesto YT o Columna. Los repuestos quedan disponibles en Plaza Blending y en Consumo de Producción según su tipo. En Plaza Blending se agrupan automáticamente; cada ítem conserva su existencia.</p><div id="spareCatalogFilter" class="invSpareFilters" role="group" aria-label="Tipo de repuesto" hidden><button type="button" data-spare-filter="YT 29" aria-pressed="false">YT29</button><button type="button" data-spare-filter="YT 28" aria-pressed="false">YT28</button><button type="button" data-spare-filter="Columna 29" aria-pressed="false">COLUMNA 29</button><button type="button" data-spare-filter="Columna 28" aria-pressed="false">COLUMNA 28</button></div><div class="invToolbar"><input id="inventoryItemSearch" type="search" aria-label="Buscar elemento" placeholder="Buscar elemento…" autocomplete="off"><span id="inventoryItemCount" class="invBadge"></span></div><div class="invGrid"><div id="inventoryItemList" class="invList"></div><form id="inventoryItemForm" novalidate><input type="hidden" name="id"><div class="invFormHeading"><h3 id="inventoryFormTitle">Datos del elemento</h3><button type="button" id="newInventoryItem">Limpiar formulario</button></div><p id="inventoryValidationSummary" class="invValidationSummary" role="alert" hidden></p><input name="itemKind" type="hidden" value="common"><input name="isYtSpare" type="checkbox" hidden><input type="hidden" name="spareEquipment" value="YT 29" disabled>
 <div class="invPerms invClassification">${sw('isFixedAsset','ES ACTIVO FIJO','aria-controls="inventoryRequiredInfo"')}${sw('isEpp','ES EPP')}</div>
 <div id="inventoryRequiredInfo" role="group" aria-labelledby="inventoryRequiredHeading" hidden><h3 id="inventoryRequiredHeading">Información requerida</h3><div class="invPerms">${sw('allowAccessories','Permite registrar accesorios')}${sw('usesSerial','Serial')}${sw('usesLength','Largo (ft)')}${sw('usesModel','Modelo')}${sw('usesManufacturer','Fabricante / marca comercial')}${sw('requiresInternalMark','Marca interna')}</div></div>
-<label class="invCompactField" hidden># DE ÍTEM<input name="spareItemNumber" disabled autocomplete="off"></label>
-<label class="invCompactField" hidden>CÓDIGO DE ELEMENTO<input name="sparePartCode" disabled autocomplete="off"></label>
-<label class="invPartName" hidden>NOMBRE DEL ÍTEM<input name="spareItemName" disabled autocomplete="off"></label>
-<label>NOMBRE DEL ELEMENTO<input name="name" required autocomplete="off"></label>
-<label class="invAliasField">NOMBRE SECUNDARIO<input name="secondaryName"></label>
-<label class="invAliasField">NOMBRE TERCIARIO<input name="tertiaryName"></label>
-<label class="invCompactField">UNIDAD DE MEDIDA<select name="unit" required><option value="">Seleccionar…</option>${INVENTORY_UNITS.map(x=>`<option value="${x}">${x}</option>`).join('')}</select></label>
-<label class="invSpareApplication" hidden>UBICACIÓN O APLICACIÓN<textarea name="spareApplication" rows="1" placeholder="Opcional. Ej.: Va con el pin de ajuste del cabezal" disabled></textarea></label>
-<label class="invReferenceField">ENLACE A IMAGEN O FICHA TÉCNICA (OPCIONAL)<input name="referenceUrl" type="url" placeholder="https://…" autocomplete="off"></label>
-<h3>¿Qué operaciones permite?</h3><div class="invPerms">${sw('allowAssignment','Asignaciones','checked')}${sw('allowLoan','Préstamos')}${sw('allowTransfer','Traslados','checked')}${sw('allowRemission','Remisiones','checked')}${sw('fractionable','Permite entrega fraccionada')}<label class="invContainerUnit" hidden>UNIDAD CONTENEDORA<input name="containerUnit" placeholder="Rollo, carrete, galón…" disabled></label></div><div class="invActions"><button type="submit" id="inventoryItemSave">Guardar elemento</button><button type="button" id="inventoryItemDeactivate" class="invDanger" hidden>Retirar elemento</button><button type="button" id="inventoryItemCancel" class="adminFormCancel">CANCELAR</button></div><p id="inventoryItemStatus" class="status" hidden></p></form></div>`;main.append(sec);bind();syncSwitchText(sec);syncFractionableField(sec);syncFixedAssetFields(sec);syncSpareFields(sec.querySelector("form"));render()}
+<label class="invCompactField" hidden># de ítem<input name="spareItemNumber" disabled autocomplete="off"></label>
+<label class="invCompactField" hidden>Código de elemento<input name="sparePartCode" disabled autocomplete="off"></label>
+<label class="invPartName" hidden>Nombre del ítem<input name="spareItemName" disabled autocomplete="off"></label>
+<label>Nombre del elemento<input name="name" required autocomplete="off"></label>
+<label class="invAliasField">Nombre secundario<input name="secondaryName"></label>
+<label class="invAliasField">Nombre terciario<input name="tertiaryName"></label>
+<label class="invCompactField">Unidad de medida<select name="unit" required><option value="">Seleccionar…</option>${INVENTORY_UNITS.map(x=>`<option value="${x}">${x}</option>`).join('')}</select></label>
+<label class="invSpareApplication" hidden>Ubicación o aplicación<textarea name="spareApplication" rows="1" placeholder="Opcional. Ej.: Va con el pin de ajuste del cabezal" disabled></textarea></label>
+<label class="invReferenceField">Enlace a imagen o ficha técnica (opcional)<input name="referenceUrl" type="url" placeholder="https://…" autocomplete="off"></label>
+<h3>¿Qué operaciones permite?</h3><div class="invPerms">${sw('allowAssignment','Asignaciones','checked')}${sw('allowLoan','Préstamos')}${sw('allowTransfer','Traslados','checked')}${sw('allowRemission','Remisiones','checked')}${sw('fractionable','Permite entrega fraccionada')}<label class="invContainerUnit" hidden>Unidad contenedora<input name="containerUnit" placeholder="Rollo, carrete, galón…" disabled></label></div><div class="invActions"><button type="submit" id="inventoryItemSave">Guardar elemento</button><button type="button" id="inventoryItemDeactivate" class="invDanger" hidden>Retirar elemento</button><button type="button" id="inventoryItemCancel" class="adminFormCancel">CANCELAR</button></div><p id="inventoryItemStatus" class="status" hidden></p></form></div>`;main.append(sec);bind();syncSwitchText(sec);syncFractionableField(sec);syncFixedAssetFields(sec);syncSpareFields(sec.querySelector("form"));render()}
 let renderVersion=0;
 async function render(){
  const form=document.querySelector('#inventoryItemForm');
