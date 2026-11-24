@@ -56,7 +56,9 @@ test('la salida a reparación sincroniza y conserva quién transporta, independi
     recipientId:'p',recipientName:'Operador',recipientDocument:'456',shiftKeeperName:'Bodeguera',shiftKeeperDocument:'789'});
   const result=f.send([row]);
   assert.equal(result.acknowledgements.blendingDeliveries[0].status,'accepted',result.acknowledgements.blendingDeliveries[0].error);
-  const event=history.timeline(result.data,'a')[0];
+  const projection=history.project(result.data.assets[0],result.data),event=projection.events[0];
+  assert.equal(projection.asset.nombreBodeguero,'Bodeguera');assert.equal(event.warehouse.document,'789');
+  assert.equal(projection.asset.nombreResponsable,'Operador');assert.equal(event.registeredBy.document,'operator');
   assert.equal(event.responsible.id,'p');assert.equal(event.responsible.document,'456');assert.equal(event.responsible.name,'Operador');
   assert.equal(event.raw.shiftKeeperName,'Bodeguera');assert.equal(event.raw.shiftKeeperDocument,'789');
   assert.equal(event.raw.operatorDocument,'operator');assert.equal(event.raw.destinationMine,'Segovia');
