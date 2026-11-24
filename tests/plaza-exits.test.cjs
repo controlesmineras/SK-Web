@@ -114,12 +114,12 @@ test('una ficha recién ingresada sin conexión se crea con la propiedad origina
 test('fechas extemporáneas por rol de Plaza, con registro offline y reintento',()=>{
   const recordedAt='2026-10-06T12:51:34.023Z',createdAt='2026-10-01T05:09:00.000Z';
   const row=movement('TRASLADO',{createdAt,recordedAt,updatedAt:recordedAt,operatorDocument:'operator',shiftKeeperDocument:'operator'});
-  for(const role of ['plaza_operator','plaza_supervisor','plaza_assistant']){
+  for(const role of ['plaza_operator','plaza_supervisor','plaza_assistant','plaza_admin']){
     const f=fixture();
     f.data().personal[0].documento='operator';
     f.ctx.verifyToken_=()=>({document:'operator',role});
     const result=f.send([row]).acknowledgements.blendingDeliveries[0];
-    if(role==='plaza_assistant'||role==='plaza_supervisor'){
+    if(role!=='plaza_operator'){
       assert.equal(result.status,'accepted');
       assert.equal(f.send([row]).acknowledgements.blendingDeliveries[0].status,'already-applied');
       assert.equal(f.data().blendingDeliveries.length,1);
@@ -127,7 +127,7 @@ test('fechas extemporáneas por rol de Plaza, con registro offline y reintento',
       assert.equal(f.data().blendingDeliveries[0].recordedAt,recordedAt);
     }else{
       assert.equal(result.status,'rejected');
-      assert.match(result.error,/roles Auxiliar y Supervisor/);
+      assert.match(result.error,/roles Auxiliar, Supervisor y Administrador/);
       assert.equal(f.data().assets[0].ubicacion,'Bodega de Superficie');
       assert.equal(f.send([{...row,createdAt:recordedAt}]).acknowledgements.blendingDeliveries[0].status,'accepted');
     }

@@ -14,7 +14,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='laborLogin')return laborLogin_(q);if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='laborUsers'||q.action==='laborDisable'){requireAdmin_(auth);return laborAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='plazaChangeActiveRole'){requireAdmin_(auth);return plazaChangeActiveRole_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth,q.productionBalanceVersions)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='laborLogin')return laborLogin_(q);if(q.action==='laborRoleDirectory')return laborRoleDirectory_(q);if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='changeAppActiveRole'){requireAdmin_(auth);return changeAppActiveRole_(q)}if(q.action==='appRolesForPerson'){requireAdmin_(auth);return appRolesForPerson_(q)}if(q.action==='laborChangeActiveRole'){requireAdmin_(auth);return laborChangeActiveRole_(q)}if(q.action==='laborUsers'||q.action==='laborDisable'){requireAdmin_(auth);return laborAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='plazaChangeActiveRole'){requireAdmin_(auth);return plazaChangeActiveRole_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth,q.productionBalanceVersions)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Frentes de trabajo: la ficha nueva y su reporte se confirman en la misma escritura.
 function frontDocument_(value){
@@ -76,7 +76,7 @@ function workFrontSync_(q){
   lock.waitLock(30000);
   try{
     const id=findFile_(), cloud=id ? readFile_(id,lock) : {};
-    const actor='labor:'+verifyLaborToken_(q.token,cloud).document;
+    const account=verifyLaborToken_(q.token,cloud),actor='labor:'+account.document;
     const now=nextRevision_(cloud.updatedAt);
     let changed=false;
     const receipts=q.reports.map(input=>{
@@ -91,7 +91,7 @@ function workFrontSync_(q){
     const formOptions=(cloud.inventoryCriteria||[]).find(row=>row.id==='SYSTEM-FORM-OPTIONS-V1');
     const options={};
     for(const key of ['personal.company','personal.area','personal.role'])if(Array.isArray(formOptions?.options?.[key]))options[key]=formOptions.options[key];
-    return json_({ok:true,protocol:'work-front-v1',personal:directory,options,receipts,updatedAt:cloud.updatedAt||''});
+    return json_({ok:true,protocol:'work-front-v1',sessionRole:laborRole_(account.role),personal:directory,options,receipts,updatedAt:cloud.updatedAt||''});
   }finally{lock.releaseLock();}
 }
 
@@ -99,6 +99,82 @@ function laborAccessKey_(document){return 'SK_LABOR_USER_'+invitationKey_(docume
 function laborAccount_(document){
  const raw=PropertiesService.getScriptProperties().getProperty(laborAccessKey_(document));
  return raw?JSON.parse(raw):null;
+}
+function laborRole_(role){return role==='admin'?'admin':'reporter'}
+function assignableLaborRole_(role){
+ if(!['reporter','admin'].includes(role))throw new Error('Selecciona un rol de Labor válido.');
+ return role;
+}
+function laborChangeActiveRole_(q){
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const role=assignableLaborRole_(q.role),document=String(q.document||'').trim();
+  const account=laborAccount_(document),cloud=readFile_(findFile_(),lock);
+  if(!account||account.personId!==q.personId||!laborPerson_(account,cloud))throw new Error('La cuenta ya no está activa en Labor.');
+  const previous=laborRole_(account.role);
+  if(previous!==role){
+   if(previous!==q.previousRole)throw new Error('El rol de Labor cambió. Vuelve a consultar los accesos.');
+   revokeInvitations_('labor',document);
+   account.role=role;
+   PropertiesService.getScriptProperties().setProperty(laborAccessKey_(document),JSON.stringify(account));
+  }
+  return json_({ok:true,scope:'labor',personId:account.personId,role});
+ }finally{lock.releaseLock()}
+}
+function laborRoleDirectory_(q){
+ const cloud=readFile_(findFile_()),account=verifyLaborToken_(q.token,cloud);
+ if(laborRole_(account.role)!=='admin')throw new Error('Se requiere el rol Administrador de Labor.');
+ const users=[];
+ for(const [key,raw] of Object.entries(PropertiesService.getScriptProperties().getProperties())){
+  if(!key.startsWith('SK_LABOR_USER_'))continue;
+  const entry=JSON.parse(raw),person=laborPerson_(entry,cloud);
+  if(person)users.push({name:person.nombre||entry.document,role:laborRole_(entry.role)});
+ }
+ return json_({ok:true,scope:'labor',users});
+}
+function changeAppActiveRole_(q){
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const cloud=readFile_(findFile_(),lock),person=(cloud.personal||[]).find(p=>p.id===q.personId&&!p.deleted);
+  const document=String(person?.documento||'').trim();
+  if(!document)throw new Error('Selecciona un colaborador sincronizado con documento.');
+  if(q.scope==='admin'){
+   const users=adminUsers_(),user=users.find(u=>u.id===q.userId&&u.enabled!==false);
+   if(!user||user.role==='owner'||(user.personId?user.personId!==person.id:user.document!==document))throw new Error('Selecciona una cuenta administrativa vinculada a este colaborador.');
+   if(cargoNorm_(person.area)!=='seguridad fisica')throw new Error('Web Admin requiere personal de Seguridad física.');
+   const role=assignableAdminRole_(q.role);
+   if(user.role!==role){
+    if(user.role!==q.previousRole)throw new Error('El rol cambió. Vuelve a consultar los accesos.');
+    revokeInvitations_('admin',document);
+    user.role=role;user.updatedAt=new Date().toISOString();saveAdminUsers_(users);
+   }
+   return json_({ok:true,scope:'admin',personId:person.id,role});
+  }
+  if(q.scope!=='production')throw new Error('Aplicación no válida.');
+  const user=productionAccess_(document);
+  if(!user||user.personId!==person.id||!user.passwordHash)throw new Error('La cuenta ya no está activa en Producción.');
+  const selection=role=>role==='mechanic_warehouse'?['mechanic','warehouse']:productionRoles_({roles:[role]});
+  const roles=selection(q.role),previous=productionRoles_(user);
+  const match=(a,b)=>a.length===b.length&&a.every(role=>b.includes(role));
+  if(!match(previous,roles)){
+   if(!match(previous,selection(q.previousRole)))throw new Error('El rol cambió. Vuelve a consultar los accesos.');
+   revokeInvitations_('production',document);
+   saveProductionAccess_(person,user.passwordHash,roles);
+  }
+  return json_({ok:true,scope:'production',personId:person.id,role:productionPrimaryRole_(roles),roles});
+ }finally{lock.releaseLock()}
+}
+function appRolesForPerson_(q){
+ const cloud=readFile_(findFile_()),person=(cloud.personal||[]).find(p=>p.id===q.personId&&!p.deleted);
+ if(!person||!String(person.documento||'').trim())throw new Error('Selecciona un colaborador sincronizado con documento.');
+ const document=String(person.documento).trim(),labor=laborAccount_(document),production=productionAccess_(document);
+ const web=adminUsers_().find(u=>u.enabled!==false&&(u.personId?u.personId===person.id:u.document===document||u.username===document));
+ const plaza=(cloud.personal||[]).find(p=>!p.deleted&&String(p.documento||'').trim()===document&&p.plazaEnabled===true&&p.pinHash);
+ return json_({ok:true,personId:person.id,roles:{
+  admin:web?[publicAdminUser_(web).role]:[],plaza:plaza?[plazaAccessRole_(plaza.plazaRole)]:[],
+  production:production&&production.personId===person.id?productionRoles_(production):[],
+  labor:labor&&laborPerson_(labor,cloud)?[laborRole_(labor.role)]:[]
+ }});
 }
 function laborPerson_(account,cloud){
  return (cloud.personal||[]).find(p=>p.id===account.personId&&!p.deleted&&p.active!==false&&String(p.documento||'').trim()===account.document);
@@ -115,15 +191,15 @@ function laborAccessAdmin_(q){
  const users=new Map(),pending=[];
  for(const [key,raw] of Object.entries(props.getProperties())){
   if(key.startsWith('SK_LABOR_USER_')){
-   const {personId,document}=JSON.parse(raw);
-   users.set(document,{personId,document,role:'reporter'});
+   const {personId,document,role}=JSON.parse(raw);
+   users.set(document,{personId,document,role:laborRole_(role)});
   }else if(key.startsWith('SK_INVITE_')){
    const invite=JSON.parse(raw);
    if(invite.scope==='labor'&&invite.expires>Date.now())pending.push(invite);
   }
  }
- for(const {personId,document} of pending){
-  if(!users.has(document))users.set(document,{personId,document,role:'reporter',pending:true});
+ for(const {personId,document,laborRole} of pending){
+  if(!users.has(document))users.set(document,{personId,document,role:laborRole_(laborRole),pending:true});
  }
  return json_({ok:true,scope:'labor',users:[...users.values()]});
 }
@@ -135,7 +211,7 @@ function laborLogin_(q){
  const expiresAt=Date.now()+12*60*60*1000;
  const payload=JSON.stringify(['labor',document,account.revision,expiresAt]);
  return json_({ok:true,scope:'labor',expiresAt,token:Utilities.base64EncodeWebSafe(payload)+'.'+sign_(payload),
-  user:{id:person.id,documento:document,nombre:person.nombre||document,role:'reporter'}});
+  user:{id:person.id,documento:document,nombre:person.nombre||document,role:laborRole_(account.role)}});
 }
 function verifyLaborToken_(token,cloud){
  const bits=String(token||'').split('.');
@@ -169,15 +245,16 @@ function accessInvitationCreate_(q){
   const currentAdmin=scope==='admin'?adminUsers_().find(x=>x.personId===person.id||x.document===String(person.documento).trim()):null;
   const adminAccess=scope==='admin'?{adminRole:assignableAdminRole_(q.adminRole??currentAdmin?.role??'assistant')}:{};
   const document=String(person.documento).trim(),props=PropertiesService.getScriptProperties(),old=props.getProperties();
+  const laborAccess=scope==='labor'?{laborRole:assignableLaborRole_(q.laborRole??laborRole_(laborAccount_(document)?.role))}:{};
   Object.keys(old).filter(k=>k.indexOf('SK_INVITE_')===0).forEach(k=>{try{const v=JSON.parse(old[k]);if(v.expires<Date.now()||(v.scope===scope&&v.document===document))props.deleteProperty(k)}catch(_){props.deleteProperty(k)}});
   const secret=[Utilities.getUuid(),Utilities.getUuid(),Utilities.getUuid()].join('').replace(/-/g,'');
   const expires=Date.now()+24*60*60*1000;
-  const plazaRole=q.plazaRole==='supervisor'&&person.plazaEnabled&&plazaAccessRole_(person.plazaRole)==='supervisor'?'supervisor':q.plazaRole==='assistant'?'assistant':'operator';
+  const plazaRole=q.plazaRole==='supervisor'&&person.plazaEnabled&&plazaAccessRole_(person.plazaRole)==='supervisor'?'supervisor':['assistant','admin'].includes(q.plazaRole)?q.plazaRole:'operator';
   const plazaAccess=scope==='plaza'?{plazaRole}:{};
   const productionRoles=scope==='production'?productionRoles_({roles:q.productionRoles,role:q.productionRole||productionAccess_(document)?.role}):[];
   const productionAccess=scope==='production'?{productionRole:productionPrimaryRole_(productionRoles),productionRoles}:{};
-  props.setProperty(invitationKey_(secret),JSON.stringify({scope:scope,personId:person.id,document:document,expires:expires,...plazaAccess,...productionAccess,...adminAccess}));
-  return json_({ok:true,scope,token:secret,document:document,name:person.nombre||'',...plazaAccess,...productionAccess,...adminAccess,expiresAt:new Date(expires).toISOString()});
+  props.setProperty(invitationKey_(secret),JSON.stringify({scope:scope,personId:person.id,document:document,expires:expires,...plazaAccess,...productionAccess,...adminAccess,...laborAccess}));
+  return json_({ok:true,scope,token:secret,document:document,name:person.nombre||'',...plazaAccess,...productionAccess,...adminAccess,...laborAccess,expiresAt:new Date(expires).toISOString()});
  }finally{lock.releaseLock()}
 }
 function revokeInvitations_(scope,document){const props=PropertiesService.getScriptProperties();Object.keys(props.getProperties()).filter(k=>k.indexOf('SK_INVITE_')===0).forEach(k=>{try{const row=JSON.parse(props.getProperty(k));if(row.scope===scope&&row.document===document)props.deleteProperty(k)}catch(_){props.deleteProperty(k)}})}
@@ -187,10 +264,10 @@ function accessInvitationAccept_(q){const password=String(q.password||'');if(pas
  try{const invite=invitationRecord_(q),row=invite.row,document=String(q.document||'').trim();if(q.expectedScope&&q.expectedScope!==row.scope)throw new Error('El enlace no corresponde a esta aplicación.');if(document!==row.document)throw new Error('El documento no corresponde a la invitación');
   const fileId=findFile_(),cloud=fileId?readFile_(fileId,lock):{},person=(cloud.personal||[]).find(x=>x&&x.id===row.personId&&!x.deleted&&String(x.documento||'').trim()===document);
   if(!person)throw new Error('El colaborador ya no está disponible en Personal');const now=new Date().toISOString();
-  if(row.scope==='plaza'){(cloud.personal||[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()===document).forEach(x=>{x.pinHash=hashPin_(document,password);x.plazaEnabled=true;x.plazaRole=['assistant','supervisor'].includes(row.plazaRole)?row.plazaRole:'operator';x.updatedAt=now});cloud.updatedAt=nextRevision_(cloud.updatedAt);writeFile_(fileId,cloud)}
+  if(row.scope==='plaza'){(cloud.personal||[]).filter(x=>x&&!x.deleted&&String(x.documento||'').trim()===document).forEach(x=>{x.pinHash=hashPin_(document,password);x.plazaEnabled=true;x.plazaRole=['assistant','supervisor','admin'].includes(row.plazaRole)?row.plazaRole:'operator';x.updatedAt=now});cloud.updatedAt=nextRevision_(cloud.updatedAt);writeFile_(fileId,cloud)}
   else if(row.scope==='labor'){
    if(person.active===false)throw new Error('El funcionario está inactivo.');
-   const account={document,personId:person.id,passwordHash:hashPin_(document,password),revision:Utilities.getUuid()};
+   const account={document,personId:person.id,role:laborRole_(row.laborRole),passwordHash:hashPin_(document,password),revision:Utilities.getUuid()};
    PropertiesService.getScriptProperties().setProperty(laborAccessKey_(document),JSON.stringify(account));
   }
   else if(row.scope==='production'){saveProductionAccess_(person,hashPin_(document,password),row.productionRoles||row.productionRole)}
@@ -884,13 +961,14 @@ function adminDeleteMovement_(){throw new Error('Los movimientos se conservan en
 function plazaAccessRole_(role){
   switch(String(role||'').trim().toLowerCase().replace(/^plaza_/,'')){
     case 'assistant': case 'auxiliar': return 'assistant';
-    case 'supervisor': case 'supervisor/a': case 'admin': case 'administrador': return 'supervisor';
+    case 'supervisor': case 'supervisor/a': return 'supervisor';
+    case 'admin': case 'administrador': return 'admin';
     default: return 'operator';
   }
 }
 function plazaSessionRole_(person){return 'plaza_'+plazaAccessRole_(person.plazaRole)}
 function plazaChangeActiveRole_(q){
-  if(!['operator','assistant'].includes(q.role))throw new Error('Selecciona un rol de Plaza válido.');
+  if(!['operator','assistant','admin'].includes(q.role))throw new Error('Selecciona un rol de Plaza válido.');
   const lock=LockService.getScriptLock();lock.waitLock(30000);
   try{
     const file=findFile_(),cloud=readFile_(file,lock);
@@ -1106,8 +1184,8 @@ function validatePlazaMovementTime_(row,auth){
   const recorded=Date.parse(row.recordedAt), occurred=Date.parse(row.createdAt);
   if(!Number.isFinite(recorded)||!Number.isFinite(occurred)||occurred>recorded||recorded>Date.now()+300000)
     throw new Error('Fecha y hora del movimiento no válidas.');
-  if(occurred!==recorded&&!['plaza_assistant','plaza_supervisor'].includes(auth.role))
-    throw new Error('Solo los roles Auxiliar y Supervisor de Plaza Blending pueden cambiar la fecha y la hora del movimiento.');
+  if(occurred!==recorded&&!['plaza_assistant','plaza_supervisor','plaza_admin'].includes(auth.role))
+    throw new Error('Solo los roles Auxiliar, Supervisor y Administrador de Plaza Blending pueden cambiar la fecha y la hora del movimiento.');
   if(row.movementType==='DEVOLUCIÓN'&&Date.parse(row.returnedAt)!==occurred)
     throw new Error('La fecha y la hora de devolución deben coincidir con las del movimiento.');
 }
@@ -1132,7 +1210,7 @@ function stampActor_(x,auth){if(!x||!x.id)throw new Error('Movimiento sin identi
 function truthy_(value){return value===true||['true','si','sí','1','yes'].indexOf(String(value||'').trim().toLowerCase())>=0}
 function hashPin_(document,pin){const salt=PropertiesService.getScriptProperties().getProperty('SK_AUTH_SALT');if(!salt)throw new Error('Falta configurar SK_AUTH_SALT');return hex_(Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256,document+'|'+pin+'|'+salt,Utilities.Charset.UTF_8))}
 function sign_(payload){const secret=PropertiesService.getScriptProperties().getProperty('SK_AUTH_SECRET');if(!secret)throw new Error('Falta configurar SK_AUTH_SECRET');return Utilities.base64EncodeWebSafe(Utilities.computeHmacSha256Signature(payload,secret))}
-function verifyToken_(token,cloud){const bits=String(token||'').split('.');if(bits.length!==2)throw new Error('Sesión no válida');const payload=Utilities.newBlob(Utilities.base64DecodeWebSafe(bits[0])).getDataAsString(),parts=payload.split('|');if(parts.length!==3||!safeEqual_(bits[1],sign_(payload))||Number(parts[2])<Date.now())throw new Error('La sesión venció');if(!['plaza_operator','plaza_supervisor','plaza_assistant'].includes(parts[1]))throw new Error('Permiso no válido');return plazaAccount_(cloud,{document:parts[0],role:parts[1]})}
+function verifyToken_(token,cloud){const bits=String(token||'').split('.');if(bits.length!==2)throw new Error('Sesión no válida');const payload=Utilities.newBlob(Utilities.base64DecodeWebSafe(bits[0])).getDataAsString(),parts=payload.split('|');if(parts.length!==3||!safeEqual_(bits[1],sign_(payload))||Number(parts[2])<Date.now())throw new Error('La sesión venció');if(!['plaza_operator','plaza_supervisor','plaza_assistant','plaza_admin'].includes(parts[1]))throw new Error('Permiso no válido');return plazaAccount_(cloud,{document:parts[0],role:parts[1]})}
 function safeEqual_(a,b){a=String(a);b=String(b);if(a.length!==b.length)return false;let n=0;for(let i=0;i<a.length;i++)n|=a.charCodeAt(i)^b.charCodeAt(i);return n===0}
 function hex_(bytes){return bytes.map(x=>(x<0?x+256:x).toString(16).padStart(2,'0')).join('')}
 function enablePlazaUser(document,pin,role){document=String(document||'').trim();pin=String(pin||'');if(!document||!pin)throw new Error('Documento y contraseña son obligatorios');const lock=LockService.getScriptLock();lock.waitLock(30000);try{const id=findFile_(),cloud=id?readFile_(id,lock):{},matches=(cloud.personal||[]).filter(x=>String(x.documento||'').trim()===document&&!x.deleted),person=matches[0];if(!person)throw new Error('El documento no existe en Personal');const now=nextRevision_(cloud.updatedAt),pinHash=hashPin_(document,pin),plazaRole=plazaAccessRole_(role??person.plazaRole);matches.forEach(x=>{x.plazaEnabled=true;x.plazaRole=plazaRole;x.pinHash=pinHash;x.updatedAt=now});cloud.personal=dedupePersonal_(cloud.personal||[]);cloud.updatedAt=now;writeFile_(id,cloud);return 'Usuario de Plaza Blending habilitado: '+document}finally{lock.releaseLock()}}

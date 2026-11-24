@@ -297,7 +297,7 @@ function matchesItemSearch(text,number,query){
 
   // El calendario usa la hora de la operación en Colombia, independiente del dispositivo.
   function canEditMovementTime(){
-    return user?.role==='plaza_assistant'||user?.role==='plaza_supervisor';
+    return ['plaza_assistant','plaza_supervisor','plaza_admin'].includes(user?.role);
   }
   function movementTimeChanged(form){
     const {movementDay, movementHour}=form.elements;
@@ -432,7 +432,7 @@ function matchesItemSearch(text,number,query){
     help.hidden=!help.hidden;
     $('#plazaShiftInfo').setAttribute('aria-expanded',String(!help.hidden));
   });
-  function render(){showLastSync();renderShiftStatus();const incomeId=$('#incomeForm').elements.itemId.value,deliveryId=$('#deliveryForm').elements.itemId.value;const criteria=(data.inventoryCriteria||[]).filter(item=>!item.deleted&&item.active!==false);$('#incomeForm').elements.itemId.innerHTML=options(criteria,item=>itemName(item)||'Elemento');$('#deliveryForm').elements.itemId.innerHTML=options(deliveryCatalog(),item=>itemName(item)||'Elemento');$('#incomeForm').elements.itemId.value=incomeId;$('#deliveryForm').elements.itemId.value=deliveryId;refreshRecentItemFilters();refreshItemSearches();renderIncomeDraft();window.SKPlaza?.renderRecipients?.();const collaborator=(data.personal||[]).find(person=>person.id===user?.id||String(person.documento||'')===String(user?.documento||''));$('#userName').textContent=collaborator?.nombre||user?.nombre||user?.documento||'';$('#homeUserRole').textContent='Rol en Plaza: '+({plaza_assistant:'Auxiliar',plaza_supervisor:'Supervisor/a',plaza_operator:'Bodeguero/a'}[user?.role]||'Sin confirmar');updateDeliveryFields();updatePendingBadge();renderRecentQueries();renderInventoryQueries();window.SKPlazaReturns?.refresh()}
+  function render(){showLastSync();renderShiftStatus();const incomeId=$('#incomeForm').elements.itemId.value,deliveryId=$('#deliveryForm').elements.itemId.value;const criteria=(data.inventoryCriteria||[]).filter(item=>!item.deleted&&item.active!==false);$('#incomeForm').elements.itemId.innerHTML=options(criteria,item=>itemName(item)||'Elemento');$('#deliveryForm').elements.itemId.innerHTML=options(deliveryCatalog(),item=>itemName(item)||'Elemento');$('#incomeForm').elements.itemId.value=incomeId;$('#deliveryForm').elements.itemId.value=deliveryId;refreshRecentItemFilters();refreshItemSearches();renderIncomeDraft();window.SKPlaza?.renderRecipients?.();const collaborator=(data.personal||[]).find(person=>person.id===user?.id||String(person.documento||'')===String(user?.documento||''));$('#userName').textContent=collaborator?.nombre||user?.nombre||user?.documento||'';$('#homeUserRole').textContent='Rol en Plaza: '+({plaza_assistant:'Auxiliar',plaza_admin:'Administrador',plaza_supervisor:'Supervisor/a',plaza_operator:'Bodeguero/a'}[user?.role]||'Sin confirmar');updateDeliveryFields();updatePendingBadge();renderRecentQueries();renderInventoryQueries();window.SKPlazaReturns?.refresh()}
   function overlayPendingStock(snapshot){
     const stocks=snapshot.inventoryStock||(snapshot.inventoryStock=[]);
     const changes=[...(snapshot.blendingIncomes||[]).map(row=>({row,sign:1})),...(snapshot.blendingDeliveries||[]).map(row=>({row,sign:row.movementType==='DEVOLUCIÓN'?1:-1}))];
@@ -540,7 +540,7 @@ function matchesItemSearch(text,number,query){
       const syncToken=token;
       const result=await post({action:'plazaSync',token:syncToken,syncProtocol:'plaza-receipts-v1',since:silent&&collaboratorRevisionApi&&collaboratorRevisionApi===api()?(localStorage.getItem('skPlazaServerUpdatedAt')||''):'',data:sent});
       if(!result||result.ok!==true)throw new Error('No se recibió confirmación de la base central.');
-      if(syncToken===token && ['plaza_operator','plaza_assistant','plaza_supervisor'].includes(result.sessionRole) && result.sessionRole!==user?.role){
+      if(syncToken===token && ['plaza_operator','plaza_assistant','plaza_supervisor','plaza_admin'].includes(result.sessionRole) && result.sessionRole!==user?.role){
         user={...user,role:result.sessionRole};
         sessionStorage.setItem('skPlazaUser',JSON.stringify(user));
         const cached=deviceAccess.byToken(token);

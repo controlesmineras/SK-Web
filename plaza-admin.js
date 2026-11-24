@@ -8,10 +8,11 @@
   function accessRole(person){
     const role=String(person.plazaRole||'').trim().toLowerCase().replace(/^plaza_/,'');
     if(['assistant','auxiliar'].includes(role))return 'assistant';
-    if(['supervisor','supervisor/a','admin','administrador'].includes(role))return 'supervisor';
+    if(['admin','administrador'].includes(role))return 'admin';
+    if(['supervisor','supervisor/a'].includes(role))return 'supervisor';
     return 'operator';
   }
-  const roleLabel=person=>({assistant:'Auxiliar',supervisor:'Supervisor/a',operator:'Bodeguero/a'}[accessRole(person)]);
+  const roleLabel=person=>({assistant:'Auxiliar',admin:'Administrador',supervisor:'Supervisor/a',operator:'Bodeguero/a'}[accessRole(person)]);
   function roleChanged(){return selected?.plazaEnabled&&el('#plazaAccessForm').elements.plazaRole.value!==accessRole(selected)}
   function updateSubmit(){el('#plazaEnableBtn').textContent=roleChanged()?'GUARDAR ROL':'GENERAR ENLACE DE ACCESO'}
   async function render(){const q=(el('#plazaUserSearch')?.value||'').trim().toLowerCase(),rows=(await people()).filter(x=>!q||[x.nombre,x.documento,x.cargo,x.area].join(' ').toLowerCase().includes(q));el('#plazaUserCount').textContent=`${rows.length} colaboradores`;el('#plazaUserList').innerHTML=rows.sort((a,b)=>(a.nombre||'').localeCompare(b.nombre||'','es')).map(x=>`<button type="button" class="plazaUserRow ${selected?.id===x.id?'active':''}" data-plaza-person="${clean(x.id)}"><span><b>${clean(x.nombre||'Sin nombre')}</b><small>${clean(x.documento||'Sin documento')} · ${clean(x.cargo||'Sin cargo')}</small></span><span class="plazaAccessBadge ${x.plazaEnabled?'enabled':''}">${x.plazaEnabled?roleLabel(x):'Sin acceso'}</span></button>`).join('')||'<p class="hint">No hay colaboradores que coincidan.</p>'}
