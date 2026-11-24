@@ -1164,6 +1164,22 @@ function validatePlazaExit_(row,name,cloud,asset){
  if(row.deliveryType==='SALIDA A REPARACIÓN')asset.estado='En reparación';
  asset.ingresoTemporal=false;asset.asignadaId='';asset.areaAsignada='';
 }
+function receivePlazaAsset_(row,asset,cloud){
+  const location=String(asset.ubicacion||'').trim();
+  delete row.receivedFromProduction;
+  if(productionWarehouseLocation_(location)||/^(?:inventario de |bodega de )?produccion ·/.test(cargoNorm_(location))){
+    row.receivedFromProduction=location;
+  }else if(cargoNorm_(location)==='bodega de superficie'){
+    // Un traslado enviado desde Producción ya tiene su propio ingreso o devolución en Plaza.
+    const last=createAssetHistory().timeline(cloud,asset.id).find(event=>!event.reversed&&
+      (event.kind!=='novelty'||(!event.raw.historyOnly&&event.raw.ubicacion)));
+    if(last&&(last.raw.receivedFromProduction||(last.raw.sourceWarehouseId==='production'&&last.raw.sourceMovementId))){
+      throw new Error('Ya existe un ingreso de este activo desde Producción. Revisa su historial en Plaza antes de registrar otro.');
+    }
+  }
+  applyPlazaIncomeContext_(row,asset);
+  asset.ubicacion='Bodega de Superficie';
+}
 function applyPlazaChanges_(cloud,incoming,auth){
     const allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)])),cloudAssets=Array.isArray(cloud.assets)?cloud.assets:[],pendingAssets=(Array.isArray(incoming.assets)?incoming.assets:[]).filter(x=>x&&x.id&&x.syncState==='pending'),assetIds=new Set(cloudAssets.map(x=>x.id).filter(Boolean)),acceptedAssets=[];
     pendingAssets.forEach(input=>{if(assetIds.has(input.id)){const existing=cloudAssets.find(asset=>asset.id===input.id);if(existing&&existing.markingPolicy==='letters-v1'&&existing.markStatus==='pending'&&usesAutomaticAssetMark_(existing))acceptedAssets.push(Object.assign({},existing));return;}const asset=stampActor_(input,auth);if(asset.classNumberPolicy==='auto-v1'&&automaticClassNumberEligible_(asset.clase)){asset.numeroClase=automaticClassNumber_(cloudAssets.concat(acceptedAssets),asset);asset.numeroYT=asset.numeroClase;}const criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===asset.criteriaId&&!item.deleted&&item.active!==false);if(!criterion||!truthy_(criterion.isFixedAsset??criterion.esActivoFijo??criterion.CI_ES_A_FIJO))throw new Error('La clase seleccionada no está configurada como activo fijo');preparePlazaIncomeAsset_(asset);if(!hasAssetIdentity_(asset,criterion))throw new Error('Ingresa el SERIAL real, «No trae» o «No visible». La marca anterior no reemplaza el serial.');const required=[['usesSerial','serial','serial'],['usesLength','largo','largo'],['usesModel','modelo','modelo'],['usesManufacturer','fabricante','fabricante'],['requiresInternalMark','marcaInterna','marca interna']];if(!String(asset.numeroClase||asset.numeroYT||'').trim())throw new Error('Falta el número de clase del activo');required.forEach(rule=>{if(!['serial','marcaInterna'].includes(rule[1])&&truthy_(criterion[rule[0]])&&!(rule[1]==='marcaInterna'&&asset.markingPolicy==='letters-v1'&&usesAutomaticAssetMark_(asset))&&!String(asset[rule[1]]||'').trim())throw new Error('Falta '+rule[2]+' del activo')});const className=String(asset.clase||'').trim().toLowerCase(),number=String(asset.numeroClase||asset.numeroYT||'').trim().toLowerCase(),serial=assetUniqueSerialKey_(asset.serial),mark=String(asset.marcaInterna||asset.marcaActual||'').trim().toLowerCase(),duplicate=cloudAssets.concat(acceptedAssets).find(row=>row&&!row.deleted&&String(row.clase||'').trim().toLowerCase()===className&&((serial&&assetUniqueSerialKey_(row.serial)===serial)||(number&&String(row.numeroClase||row.numeroYT||'').trim().toLowerCase()===number)||(mark&&String(row.marcaInterna||row.marcaActual||'').trim().toLowerCase()===mark)));if(duplicate)throw new Error('El activo ya existe en la tabla de Activos fijos');asset.ubicacion='Bodega de Superficie';asset.syncState='synced';acceptedAssets.push(asset);assetIds.add(asset.id)});
@@ -1215,7 +1231,11 @@ function applyPlazaChanges_(cloud,incoming,auth){
           if(!asset)throw new Error('El activo seleccionado no existe');
           row.assetLabel=[asset.clase,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.marcaActual||asset.marcaInterna,asset.serial&&'Serial '+asset.serial,asset.minaOrigen&&'Origen: '+asset.minaOrigen].filter(Boolean).join(' · ');
           if(isReturn)asset.ubicacion='Bodega de Superficie';
-          else if(name==='blendingDeliveries'){if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');asset.ubicacion=row.destination||'Operación'}else{if(productionWarehouseSettings_().enabled&&(productionWarehouseLocation_(asset.ubicacion)||/^(?:inventario de |bodega de )?produccion ·/.test(cargoNorm_(asset.ubicacion))))throw new Error('Registra el traslado de este activo desde Bodega de Producción; su ingreso en Plaza será automático.');asset.ubicacion='Bodega de Superficie';applyPlazaIncomeContext_(row,asset)}asset.updatedAt=new Date().toISOString();
+          else if(name==='blendingDeliveries'){
+            if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');
+            asset.ubicacion=row.destination||'Operación';
+          }else receivePlazaAsset_(row,asset,cloud);
+          asset.updatedAt=new Date().toISOString();
         }else{
           const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},balanceBefore=Number(current.quantity)||0,next=balanceBefore+(name==='blendingIncomes'||isReturn?qty:-qty);row.balanceBefore=balanceBefore;row.balanceAfter=next;
           if(next<0)throw new Error('La cantidad ingresada supera la disponibilidad');
