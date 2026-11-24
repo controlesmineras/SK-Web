@@ -178,5 +178,6 @@
 #mineMismatch{width:min(90vw,28rem);border:0;border-radius:.75rem;padding:1.25rem;color:#173d59}#mineMismatch::backdrop{background:#10253680}
 #mineMismatch form{display:flex;gap:.65rem}
 
-.plazaMovementTime { grid-column: 1 / -1; min-width: 0; }
-.plazaMovementTime[hidden] { display: none !important; }
+.plazaMovementTime{grid-column:1/-1;display:grid;grid-template-columns:minmax(0,1.3fr) minmax(0,1fr);gap:.75rem;max-width:32rem;width:100%;min-width:0}
+.plazaMovementTime label,.plazaMovementTime input{min-width:0}
+@media(max-width:360px){.plazaMovementTime{grid-template-columns:minmax(0,1fr)}}
