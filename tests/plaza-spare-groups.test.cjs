@@ -61,6 +61,7 @@ function picker(delivery=true,config={}){
  const form=new Node('form');form.id=delivery?'deliveryForm':'incomeForm';const label=new Node('label'),select=new Node('select');label.append(select);form.append(label);form.elements={itemId:select};
  const document={createElement:tag=>new Node(tag),addEventListener(){}};
  const window={},ctx={window,document,Event:class{constructor(type){this.type=type}},Option:class extends Node{constructor(text,value){super('option');this.textContent=text;this.value=value}}};
+ ctx.URL=URL;vm.runInNewContext(read('inventory-reference.js'),ctx);
  vm.runInNewContext(read('asset-search.js'),ctx);vm.runInNewContext(read('spare-groups.js'),ctx);vm.runInNewContext(read('plaza/spare-picker.js'),ctx);
  let items=fixtures(),changes=0,quantity=5,loan=false;select.addEventListener('change',()=>changes++);
  const api=window.SKSparePicker.mount(form,{title:'ELEMENTO',isDelivery:delivery,items:()=>items,fixed:()=>false,availability:()=>quantity,aliases:()=>[],loan:()=>loan,badge:n=>({className:'available',text:String(n)}),...config});
@@ -169,4 +170,17 @@ test('la coincidencia del selector explica el nombre alternativo y conserva el I
   c.type(query,c.main);
   assert.equal(c.main.menu.children[0].children[0].innerHTML,undefined);
  }
+});
+
+test('VER remains available for a linked zero-stock item and never selects it',()=>{
+ const ui=picker(),url='https://catalogo.example/ficha.html';
+ ui.setItems([{id:'empty',name:'Sin saldo',referenceUrl:url},{id:'plain',name:'Sin enlace'},{id:'invalid',name:'Enlace inválido',referenceUrl:'javascript:void(0)'}]);
+ ui.setQuantity(0);ui.main.open();
+ const wrapper=ui.main.menu.children.find(node=>node.className==='inventoryReferenceResult');
+ const [link,button]=wrapper.children;
+ assert.equal(link.tag,'a');assert.equal(link.href,url);assert.equal(link.target,'_blank');assert.equal(link.textContent,'VER');
+ assert.equal(button.disabled,true);assert.equal(button.dataset.itemId,'empty');
+ assert.equal(ui.main.menu.children.filter(node=>node.tag==='button').length,2);
+ ui.main.menu.dispatchEvent({type:'click',target:link});
+ assert.equal(ui.select.value,'');assert.equal(ui.main.menu.hidden,false);assert.equal(ui.changes(),0);
 });

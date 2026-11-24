@@ -22,13 +22,16 @@
       const open=()=>{if(input.disabled)return;draw(menu,input);active=-1;input.removeAttribute('aria-activedescendant');menu.hidden=false;host.classList.add('isOpen');input.setAttribute('aria-expanded','true')};
       input.addEventListener('focus',open);input.addEventListener('click',open);
       input.addEventListener('keydown',event=>{
-        if(event.key==='Escape'||event.key==='Tab'){close();return}
+        if(event.key==='Escape'||(event.key==='Tab'&&(event.shiftKey||!menu.querySelector('a')))){close();return}
         if(event.key==='Enter'&&!menu.hidden){event.preventDefault();const options=[...menu.querySelectorAll('button:not(:disabled)')];if(active>=0)choose(options[active]);else if(options.length===1)choose(options[0]);return}
         if(!['ArrowDown','ArrowUp'].includes(event.key))return;
         event.preventDefault();const opening=menu.hidden;if(opening)open();const options=[...menu.querySelectorAll('button:not(:disabled)')];if(!options.length)return;
         active=active<0?(event.key==='ArrowDown'?0:options.length-1):(active+(event.key==='ArrowDown'?1:-1)+options.length)%options.length;
         menu.querySelectorAll('button').forEach(button=>button.setAttribute('aria-selected',String(button===options[active])));
         input.setAttribute('aria-activedescendant',options[active].id);options[active].scrollIntoView({block:'nearest'});
+      });
+      menu.addEventListener('keydown',event=>{
+        if(event.key==='Escape'){event.preventDefault();input.focus();close()}
       });
       menu.addEventListener('click',event=>{const button=event.target.closest('button');if(button&&!button.disabled){event.stopPropagation();choose(button)}});
       host.addEventListener('focusout',event=>{if(event.relatedTarget&&!host.contains(event.relatedTarget))close()});
@@ -37,7 +40,7 @@
     }
     function itemButton(item,index,prefix,query,short=false){
       const button=document.createElement('button'),names=document.createElement('span'),strong=document.createElement('strong'),stock=document.createElement('span');
-      button.type='button';button.id=form.id+prefix+index;button.dataset.itemId=item.id;button.setAttribute('role','option');button.setAttribute('aria-selected',String(select.value===item.id));button.disabled=disabled(item);
+      button.type='button';button.tabIndex=-1;button.id=form.id+prefix+index;button.dataset.itemId=item.id;button.setAttribute('role','option');button.setAttribute('aria-selected',String(select.value===item.id));button.disabled=disabled(item);
       names.className='itemSearchNames';strong.textContent=short?groups.partName(item):groups.recordName(item);names.append(strong);
       const match=groups.aliasLine(item,query);
       if(match)names.insertAdjacentHTML('beforeend',match);
@@ -50,7 +53,8 @@
         const span=document.createElement('span');span.textContent=detail;names.append(span);
       }
       const quantity=api.availability(item),badge=api.fixed(item)&&quantity<=0?{className:'empty',text:'SIN ACTIVOS REGISTRADOS'}:api.badge(quantity);
-      stock.className='itemStock '+badge.className;stock.textContent=badge.text;button.append(names,stock);return button;
+      stock.className='itemStock '+badge.className;stock.textContent=badge.text;button.append(names,stock);
+      return window.SKInventoryReference.searchResult(button,item.referenceUrl,strong.textContent);
     }
     function empty(menu){if(!menu.children.length){const message=document.createElement('p');message.textContent='No hay elementos que coincidan.';menu.append(message)}}
     const main=picker(label,'ItemSearch','Ej.: Repuestos de YT29, guantes…',(menu,input)=>{
@@ -60,7 +64,7 @@
       menu.replaceChildren(...entries.map((entry,index)=>{
         if(entry.item)return itemButton(entry.item,index,'ItemOption',query);
         const button=document.createElement('button'),names=document.createElement('span'),strong=document.createElement('strong'),detail=document.createElement('span');
-        button.type='button';button.id=form.id+'GroupOption'+index;button.dataset.spareGroup=entry.type;button.setAttribute('role','option');button.setAttribute('aria-selected',String(selectedGroup===entry.type));
+        button.type='button';button.tabIndex=-1;button.id=form.id+'GroupOption'+index;button.dataset.spareGroup=entry.type;button.setAttribute('role','option');button.setAttribute('aria-selected',String(selectedGroup===entry.type));
         names.className='itemSearchNames';strong.textContent=entry.label;
         if(entry.type==='YT 29'||entry.type==='Columna 29'){
           const folder=document.createElement('span');folder.className='spareGroupIcon';folder.textContent='📂';folder.setAttribute('aria-hidden','true');

@@ -132,6 +132,7 @@ function setupPicker(input,container,open,close){
   if(event.key==='Escape')input.blur();
  };
  input.closest('.productionField').onfocusout=event=>{
+  if(!event.relatedTarget&&event.target.closest('a.inventoryReferenceLink'))return;
   if(!event.currentTarget.contains(event.relatedTarget))close();
  };
  container.onpointerdown=event=>{
@@ -571,7 +572,7 @@ function paintPartCards(container,rows,origin,query,choose){
    quantity.textContent='Existencia: '+stockFor(row,origin);button.append(quantity);
   }
   button.onclick=()=>{if(!saving)choose(row)};
-  return button;
+  return window.SKInventoryReference.searchResult(button,row.referenceUrl,partLabel(row));
  }));
  if(!rows.length)container.textContent='No hay repuestos que coincidan.';
 }
