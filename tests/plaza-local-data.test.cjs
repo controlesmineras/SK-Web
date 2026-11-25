@@ -86,7 +86,7 @@ function client(){
   Object.assign(c.ctx,{document:{hidden:false,querySelector(s){if(!nodes.has(s))nodes.set(s,node());return nodes.get(s)}},sessionStorage:{getItem:k=>k==='skPlazaToken'?'test':k==='skPlazaUser'?JSON.stringify({documento:'operator'}):null},console,crypto:require('node:crypto').webcrypto,alert:msg=>alerts.push(msg),setTimeout(){return 1},clearTimeout(){},Event:class{},navigator:{onLine:true},localStorage:{...c.localStorage,setItem:(k,v)=>{if(k==='skPlazaData')throw new Error('legacy storage write');c.rows.set(k,v)}}});
   Object.assign(c.ctx.window,{alert:msg=>alerts.push(msg),addEventListener(){},dispatchEvent(){},SK_SYNC_CONFIG:{apiUrl:'test'}});
   const source=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
-  vm.runInContext(source+'\nrender=()=>{};window.audit={sync,get:()=>data,set:value=>{data=value;appReady=true},post:fn=>{post=fn},saveDeliveryBatch,saveIncomeBatch,prepareDelivery:rows=>{deliveryDraft=rows;validateDeliveryRecipient=()=>true;movementShift=()=>({});discardDeliveryForm=()=>{};renderRecentQueries=()=>{}},prepareIncome:rows=>{incomeDraft=rows;validateIncomeCollaborator=()=>true;movementShift=()=>({});discardIncomeForm=()=>{};renderRecentQueries=()=>{}}};})();',c.ctx);
+  vm.runInContext(source+'\nrender=()=>{};window.audit={sync,get:()=>data,set:value=>{data=value;appReady=true},post:fn=>{post=fn},saveDeliveryBatch,saveIncomeBatch,prepareDelivery:rows=>{deliveryDraft=rows;validateDeliveryRecipient=()=>true;movementShift=()=>({});discardDeliveryForm=()=>{};renderRecentQueries=()=>{}},incomeSupplier,validateIncomeCollaborator,prepareIncome:rows=>{incomeDraft=rows;movementShift=()=>({});discardIncomeForm=()=>{};renderRecentQueries=()=>{}}};})();',c.ctx);
   return{...c,nodes,alerts,audit:c.ctx.window.audit};
 }
 const snapshot=()=>({personal:[],inventoryCriteria:[],inventoryStock:[],assets:[],blendingIncomes:[],blendingDeliveries:[]});
@@ -118,7 +118,7 @@ test('offline sync retains pending data without a server request',async()=>{
   assert.equal(await c.audit.sync(false),false);assert.equal(calls,0);
   assert.deepEqual(clone(await c.api.read()),pending);
 });
-const formSeed=()=>({...snapshot(),personal:[{id:'person',nombre:'Colaborador',documento:'123'}],inventoryCriteria:[{id:'gloves',name:'Guantes'}],inventoryStock:[{id:'stock',itemId:'gloves',quantity:10}]});
+const formSeed=()=>({...snapshot(),personal:[{id:'person',nombre:'Colaborador',documento:'123',empresa:'SK',area:'Producción',cargo:'Operario'}],inventoryCriteria:[{id:'gloves',name:'Guantes'}],inventoryStock:[{id:'stock',itemId:'gloves',quantity:10}]});
 const draft={itemId:'gloves',itemName:'Guantes',quantity:2,deliveryType:'ASIGNACIÓN'};
 function batchForm(income=false){const button={disabled:false};return{button,elements:{recipientCompany:{value:'SK'},recipientId:{value:'person'},broughtById:{value:'person'},itemId:{value:''}},querySelector:()=>button}}
 test('delivery confirms only after the offline transaction commits; a failed save can retry without duplicates',async()=>{
@@ -155,6 +155,22 @@ test('income is available offline only after its local commit, with draft preser
   c.api.write=write;assert.equal(await c.audit.saveIncomeBatch(form),true);
   assert.equal((await c.api.read()).blendingIncomes[0].syncState,'pending');
   assert.ok(c.alerts.some(message=>message.startsWith('INGRESO REGISTRADO')));
+});
+test('un ingreso de proveedor sin personal se guarda sin conexión y conserva el nombre en cada renglón',async()=>{
+  const c=client(),seed={...formSeed(),personal:[]};
+  await c.api.read();await c.api.write(seed);c.audit.set(clone(seed));
+  c.ctx.navigator.onLine=false;c.ctx.window.SKAssetMarking={saved:()=>false};
+  c.audit.prepareIncome([clone(draft),{...draft,quantity:1}]);
+  const form=batchForm(true);
+  form.elements.broughtById.value=c.audit.incomeSupplier.id;
+  assert.equal(c.audit.validateIncomeCollaborator('desconocido',{announce:false}),false);
+  assert.equal(await c.audit.saveIncomeBatch(form),true);
+  const saved=await c.api.read();
+  assert.equal(saved.personal.length,0);assert.equal(saved.blendingIncomes.length,2);
+  for(const row of saved.blendingIncomes){
+    assert.equal(row.broughtByName,'Proveedor - Vendedor');assert.equal(row.broughtById,'');
+    assert.equal(row.broughtByDocument,'');assert.equal(row.syncState,'pending');
+  }
 });
 test('late legacy movements are imported once, keeping stock and confirmed rows consistent',async()=>{
   const seed={...formSeed(),blendingDeliveries:[{id:'confirmed',itemId:'gloves',quantity:1,syncState:'synced',updatedAt:'2026-11-06T20:00:00Z'}]};

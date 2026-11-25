@@ -24,6 +24,16 @@ test('proteccion: reintentar el mismo ingreso no duplica filas ni existencias',(
  const b=backend(),r=row('first');b.sync({blendingIncomes:[r]});b.sync({blendingIncomes:[r]});
  assert.equal(b.cloud().blendingIncomes.length,1);assert.equal(b.cloud().inventoryStock[0].quantity,102);
 });
+test('Plaza conserva Proveedor - Vendedor al sincronizar y reintentar un ingreso externo',()=>{
+ const b=backend(),income=row('external-income',{broughtById:'',broughtByDocument:'',broughtByName:'Proveedor - Vendedor'});
+ b.sync({blendingIncomes:[income]});b.sync({blendingIncomes:[income]});
+ const saved=b.cloud();
+ assert.equal(saved.blendingIncomes.length,1);
+ assert.equal(saved.blendingIncomes[0].broughtByName,'Proveedor - Vendedor');
+ assert.equal(saved.blendingIncomes[0].broughtById,'');
+ assert.equal(saved.inventoryStock[0].quantity,102);
+ assert.equal(saved.personal.length,1);
+});
 test('dos ingresos legítimos en 10 segundos se confirman individualmente',async()=>{
  const b=backend(),c=client(),r1=row('one',{broughtById:'person-A',notes:'Primera remision'}),r2=row('two',{broughtById:'person-B',notes:'Segunda remision',createdAt:'2026-10-14T07:00:10.000Z'});
  c.api.set(snapshot([r1,r2]));c.api.post(async q=>b.sync(q.data));
