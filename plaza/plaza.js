@@ -130,14 +130,14 @@ const deviceAccess=createDeviceAccess('sk-plaza');
       const item=findItem(form.elements.itemId.value),asset=availableAssets(item).find(row=>row.id===id);
       if(!asset){refresh();draw();return}
       if(!Array.from(select.options).some(option=>option.value===id))select.add(new Option(assetSelectionLabel(asset),id));
-      select.value=id;editing=false;select.dispatchEvent(new Event('change',{bubbles:true}));input.focus();close();
+      select.value=id;editing=false;select.dispatchEvent(new Event('change',{bubbles:true}));if(form.dataset.assetStep!=='selected')input.focus();close();
     };
     input.addEventListener('focus',()=>{if(select.value)input.select();draw()});input.addEventListener('click',draw);
     input.addEventListener('input',()=>{editing=true;select.value='';typing=true;try{select.dispatchEvent(new Event('change',{bubbles:true}))}finally{typing=false}draw()});
     select.addEventListener('change',()=>{if(!typing)editing=false;refresh();if(!typing)close()});
     input.addEventListener('keydown',event=>{
       if(event.key==='Escape'){event.preventDefault();close();return}
-      if(event.key==='Tab'){close();return}
+      if(event.key==='Tab'){if(form.dataset.assetStep!=='search')close();return}
       if(event.key==='Enter'&&!menu.hidden){event.preventDefault();if(activeIndex>=0)choose(visibleRows[activeIndex].id);else if(visibleRows.length===1)choose(visibleRows[0].id);return}
       if(!['ArrowDown','ArrowUp'].includes(event.key))return;
       event.preventDefault();const opening=menu.hidden;if(opening)draw();if(!visibleRows.length)return;
@@ -146,7 +146,7 @@ const deviceAccess=createDeviceAccess('sk-plaza');
       const button=menu.querySelector(`#deliveryAssetOption-${activeIndex}`);input.setAttribute('aria-activedescendant',button.id);button.scrollIntoView({block:'nearest'});
     });
     menu.addEventListener('click',event=>{const button=event.target.closest('[data-asset-id]');if(button)choose(button.dataset.assetId)});
-    document.addEventListener('click',event=>{if(!field.contains(event.target))close()});
+    document.addEventListener('click',event=>{if(form.dataset.assetStep!=='search'&&!field.contains(event.target))close()});
     field._refreshAssetSearch=refresh;refresh();
   }
   function injectItemSearchStyle(){if(document.querySelector('#itemSearchStyle'))return;const style=document.createElement('style');style.id='itemSearchStyle';style.textContent='.itemSearchField{position:relative}.itemSearchBalance{font-weight:600;letter-spacing:normal}.itemSearchField>select[hidden]{display:none}.itemSearchMenu{position:absolute;z-index:30;left:0;right:0;top:100%;max-height:360px;overflow:auto;margin-top:4px;padding:5px;background:#fff;border:1px solid #b9c6d1;border-radius:9px;box-shadow:0 12px 28px rgba(23,61,89,.18)}.itemSearchMenu[hidden]{display:none}.itemSearchMenu button{display:grid;width:100%;grid-template-columns:minmax(0,1fr) auto;gap:3px 12px;padding:11px 12px;border-radius:7px;background:#fff;color:#21344b;text-align:left;font-weight:600}.itemSearchMenu button:hover,.itemSearchMenu button:focus{background:#eaf1f6}.itemSearchMenu button:disabled{opacity:.72;cursor:not-allowed;background:#fff7f7}.itemSearchNames{display:grid;gap:2px;min-width:0}.itemSearchNames strong{font-size:.86rem}.itemSearchNames strong,.itemSearchNames span{overflow:hidden;text-overflow:ellipsis}.itemSearchNames span{font-size:.82rem;color:#7a8792;font-weight:500}.itemSearchNames mark{padding:0 2px;border-radius:3px;background:#ffe58a;color:#243746;font-weight:850}.itemStock{grid-column:2;grid-row:1/4;align-self:center;white-space:nowrap;font-size:.86rem;font-weight:850}.itemStock:before{content:"";display:inline-block;width:9px;height:9px;margin-right:5px;border-radius:50%;background:currentColor}.itemStock.available{color:#258653}.itemStock.low{color:#dc7924}.itemStock.empty{color:#c52c32}.itemSearchMenu p{margin:8px;color:#667085;font-weight:500}.itemSearchField.isOpen .itemSearchInput{border-color:#397497;box-shadow:0 0 0 3px rgba(57,116,151,.14)}';document.head.append(style)}
@@ -257,6 +257,7 @@ function matchesItemSearch(text,number,query){
     $('#deliveryAssetField')._refreshAssetSearch?.();
   }
   function openDeliveryMode(mode){
+    $('#deliveryForm').dataset.deliveryMode=mode;
     if(deliveryMode!==mode){
       discardDeliveryForm();deliveryMode=mode;
       const form=$('#deliveryForm'),company=form.elements.recipientCompany[0].closest('fieldset');
@@ -673,6 +674,8 @@ function matchesItemSearch(text,number,query){
     $('#plazaBreadcrumb').textContent=['Inicio',...(['register','query'].includes(parent)?[parent==='register'?'Hacer registros':'Hacer consultas']:parent==='contacts'?['Hacer consultas','Personal']:parent==='exits'?['Hacer registros','Registrar salidas']:parent==='warehouses'?['Hacer registros','Registrar salidas','Traslado a bodegas']:[]),titles[navigationRoute]||'',navigationRoute==='stockQuery'&&stockGroup?window.SKSpareGroups.groupName(stockGroup):''].filter(Boolean).join(' / ');
   }
   function goBackPlaza(){
+    const cancelAsset=$('.view.active form[data-asset-step="search"] .assetSearchBar button');
+    if(cancelAsset){cancelAsset.click();return}
     if(currentView==='stockQuery'&&stockGroup){changeStockGroup('');return}
     const returning=currentView==='assetReturns'&&window.SKPlazaReturns?.hasUnsaved();
     if(!leavePlazaScreen())return;
@@ -1157,7 +1160,7 @@ function matchesItemSearch(text,number,query){
   }
 
   injectItemSearchStyle();setupDeliveryForm();setupDeliveryAssetSearch();setupIncomeForm();setupItemSearch($('#deliveryForm'),'Buscar elemento a entregar');setupItemSearch($('#incomeForm'),'Buscar elemento a ingresar');renderDeliveryDraft();renderIncomeDraft();setupRegisterMenu();setupQueryMenu();setupInventoryQueries();setupSessionHeader();$('#sessionWelcomeStart').addEventListener('click',closeWelcomeMessage);$('#sessionWelcome').addEventListener('click',event=>{if(event.target.id==='sessionWelcome')closeWelcomeMessage()});
-  window.SKPlaza={incomeSupplier,openPersonHistory,recipientDestinationChanged,post,getData:()=>data,getUser:()=>user,movementShift,movementTimes,resetMovementTime,saveData:persistLocalChange,sync,renderRecentQueries,refreshDelivery:updateDeliveryFields,updatePendingBadge,renderRecipients:null,validateDeliveryRecipient,validateIncomeCollaborator,resumeDeliveryAfterCollaborator:async()=>{if(!pendingDeliveryAfterCollaborator)return false;pendingDeliveryAfterCollaborator=false;return saveDeliveryBatch($('#deliveryForm'))}};
+  window.SKPlaza={incomeSupplier,incomeHasAsset:id=>incomeDraft.some(row=>row.assetId===id),openPersonHistory,recipientDestinationChanged,post,getData:()=>data,getUser:()=>user,movementShift,movementTimes,resetMovementTime,saveData:persistLocalChange,sync,renderRecentQueries,refreshDelivery:updateDeliveryFields,updatePendingBadge,renderRecipients:null,validateDeliveryRecipient,validateIncomeCollaborator,resumeDeliveryAfterCollaborator:async()=>{if(!pendingDeliveryAfterCollaborator)return false;pendingDeliveryAfterCollaborator=false;return saveDeliveryBatch($('#deliveryForm'))}};
   const mineExitForm=window.SKPlazaMineExits.mount({...window.SKPlaza,uuid,esc,isFixedItem,itemName,assetLabel,assetSelectionLabel,assetAvailableForDelivery,recipientSnapshot});
   $('#app').addEventListener('click',event=>{
     const action=event.target.closest('[data-exit-view]'),info=event.target.closest('[data-exit-help]');

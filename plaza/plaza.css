@@ -232,3 +232,29 @@
  :is(#deliveryForm,#incomeForm) .skCalendarEditor{text-align:center}
  :is(#deliveryForm,#incomeForm) .itemSearchMenu{text-align:start}
 }
+
+/* Una búsqueda de activo ocupa su propio paso dentro del movimiento. */
+.view:has(form[data-asset-step="search"])>h2,
+form[data-asset-step="search"]>:not(.assetSearchBar,#deliveryAssetField,#assetNotFoundBtn,#incomeAssetPanel),
+#incomeForm[data-asset-step="search"] #incomeAssetPanel>:not(.incomeAssetMode,.incomeAssetSearchField,#incomeAssetSearchStatus,#incomeAssetResults),
+form[data-asset-step="selected"]>:is(#deliveryItemField,#deliveryAssetField,#incomeItemField,.spareItemField),
+#incomeForm[data-asset-step="selected"] #incomeAssetPanel>:is(h3,.incomeAssetMode,.incomeAssetSearchField),
+form[data-asset-step="selected"] :is(#incomeDraft,#deliveryDraft):has(>.permission:only-child),
+#incomeForm[data-asset-step="selected"] #incomeDraft>.permission{display:none!important}
+.assetSearchBar:not([hidden]){display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+.assetSearchBar h2{margin:0;min-width:0;font-size:1.2rem;overflow-wrap:anywhere}
+.assetSearchBar button{min-height:44px;flex:none}
+#deliveryForm[data-asset-step="search"] #deliveryAssetSearchMenu:not([hidden]){
+ position:static;max-height:min(52dvh,28rem);margin:0;box-shadow:none;
+}
+#incomeForm[data-asset-step] #incomeAssetPanel{border:0;padding:0;background:transparent}
+#incomeForm[data-asset-step="search"] #incomeAssetResults{max-height:min(52dvh,28rem)}
+form[data-asset-step="selected"] .selectedAssetSummary{position:relative;padding-inline-end:3rem}
+.removeSelectedAsset:not([hidden]){
+ position:absolute;inset-block-start:0;inset-inline-end:0;display:grid;place-items:center;
+ width:44px;height:44px;padding:0;background:transparent;color:#173d59;font-size:1.5rem;cursor:pointer
+}
+.removeSelectedAsset:focus-visible{outline:2px solid #397497;outline-offset:-3px}
+#incomeForm[data-asset-step="search"] .incomeAssetMode{order:1;display:block;padding:0;background:none}
+#incomeForm[data-asset-step="search"] [data-income-mode="registered"]{display:none}
+#incomeForm[data-asset-step="search"] [data-income-mode="new"]{width:100%;min-height:44px;background:#eef3f7;border:1px solid #b9c8d3}

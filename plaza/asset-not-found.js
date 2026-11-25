@@ -88,6 +88,42 @@ function createAssetSummary(id){
  title.id=id+'Title';card.setAttribute('aria-labelledby',title.id);
  return card;
 }
+// El paso de búsqueda conserva el mismo formulario, el borrador y sus controles de movimiento.
+function mountAssetSelection(form,card,search){
+ const bar=document.createElement('div');
+ bar.className='assetSearchBar';bar.hidden=true;
+ bar.innerHTML='<h2></h2><button type="button" class="secondaryAction">CANCELAR</button>';
+ form.prepend(bar);
+ const remove=document.createElement('button');
+ remove.type='button';remove.className='removeSelectedAsset';remove.textContent='×';remove.hidden=true;
+ remove.setAttribute('aria-label','Quitar activo seleccionado');remove.title='Quitar activo';
+ card.tabIndex=-1;card.append(remove);
+ function clear(){
+  const item=form.elements.itemId,label=item.closest('label');
+  label._clearItemSearch();form.elements.notes.value='';
+  item.dispatchEvent(new Event('change',{bubbles:true}));
+  label.querySelector('.itemSearchInput')?.focus();
+ }
+ remove.addEventListener('click',clear);
+ bar.querySelector('button').addEventListener('click',clear);
+ form.addEventListener('keydown',event=>{
+  if(form.dataset.assetStep==='search'&&event.key==='Escape'){
+   event.preventDefault();clear();
+  }
+ });
+ form.addEventListener('submit',event=>{
+  if(form.dataset.assetStep==='search'){event.preventDefault();event.stopImmediatePropagation()}
+ },true);
+ return (active,item,asset)=>{
+  const previous=form.dataset.assetStep,step=active?(asset?'selected':'search'):'';
+  if(step)form.dataset.assetStep=step;else delete form.dataset.assetStep;
+  bar.hidden=step!=='search';remove.hidden=step!=='selected';
+  if(step==='search')bar.querySelector('h2').textContent='Seleccionar '+itemName(item);
+  if(step===previous||!form.closest('.view.active'))return;
+  if(step==='search')search.focus();
+  if(step==='selected')card.focus();
+ };
+}
 function renderSelectedAsset(card,item,asset,originMine=''){
  const fields=visibleFields(item),mark=clean(asset.nuevaMarca||asset.marcaActual||asset.marcaInterna);
  const previous=clean(asset.marcaPrevia||asset.marcaAnterior||asset.numeroMarcaActual);
@@ -122,12 +158,18 @@ function mount(){
  button.type='button';button.id='assetNotFoundBtn';button.className='secondaryAction';button.textContent='NO LO ENCONTRÉ';button.hidden=true;
  panel.id='deliveryAssetDetails';panel.className='deliveryAssetDetails';panel.hidden=true;panel.disabled=true;panel.innerHTML=`<h3>DATOS DEL ACTIVO</h3><p class="assetRegisterHint"></p><label class="assetClassNumberField" data-asset-field="numeroYT">NÚMERO DE CLASE<button type="button" class="assetFieldInfo" data-class-number-info aria-label="¿Qué es el número de clase?">i</button><input name="numeroYT" autocomplete="off"></label><label data-asset-field="modelo">MODELO<input name="modelo" autocomplete="off"></label><label data-asset-field="marcaPrevia">MARCA ANTERIOR<input name="marcaPrevia" autocomplete="off"></label><label data-asset-field="serial">SERIAL<input name="serial" autocomplete="off"></label><label data-asset-field="largo">LARGO FT<input name="largo" type="number" min="0" step="any"></label><label data-asset-field="fabricante">MARCA COMERCIAL / FABRICANTE<input name="fabricante" autocomplete="off"></label><label data-asset-field="marcaInterna">MARCA INTERNA<input name="marcaInterna" autocomplete="off"></label><label data-asset-area>DESTINADO A<select name="areaAsignada"></select></label><div class="assetRegisterActions"><button type="button" data-save-new-asset>REGISTRAR ACTIVO</button><button type="button" data-cancel-new-asset>CANCELAR</button></div>`;
  assetField.after(summary,button,panel);
+ const updateSelection=mountAssetSelection(form,summary,assetField.querySelector('#deliveryAssetSearch'));
+ const warning=assetField.querySelector('[role="status"]');
  const refresh=()=>{
   const item=selectedItem(),fixed=isFixed(item);
   const asset=fixed&&select.value&&(window.SKPlaza.getData().assets||[]).find(row=>row.id===select.value);
   if(!fixed||asset||panel.dataset.itemId!==item.id){panel.hidden=true;panel.disabled=true}
   summary.hidden=!asset;
   if(asset)renderSelectedAsset(summary,item,asset);
+  const warehouse=form.dataset.deliveryMode==='warehouse';
+  const warningHost=warehouse&&asset?summary:assetField;
+  if(warning&&warning.parentElement!==warningHost)warningHost.append(warning);
+  updateSelection(warehouse&&fixed&&panel.hidden,item,asset);
   button.hidden=!fixed||Boolean(asset)||!panel.hidden;
   button.textContent=Array.from(select.options).some(option=>option.value)?'¿NO LO ENCONTRASTE?':'NO LO ENCONTRÉ';
  };
@@ -135,7 +177,7 @@ function mount(){
   const item=selectedItem();
   if(!isFixed(item))return;
   select.value='';select.dispatchEvent(new Event('change',{bubbles:true}));
-  panel.dataset.itemId=item.id;panel.hidden=false;panel.disabled=false;button.hidden=true;
+  panel.dataset.itemId=item.id;panel.hidden=false;panel.disabled=false;button.hidden=true;updateSelection(false,item,null);
   panel.querySelector('h3').textContent='REGISTRAR '+itemName(item).toUpperCase();
   panel.querySelector('.assetRegisterHint').textContent=newAssetHint(item)+' El activo también quedará registrado en Ingresos.';
   const automatic=automaticClassNumber(itemName(item));
@@ -151,7 +193,7 @@ function mount(){
   panel.scrollIntoView({behavior:'smooth',block:'nearest'});
   panel.querySelector('label:not([hidden]) input:enabled')?.focus();
  };
- const cancelNew=()=>{panel.hidden=true;panel.disabled=true;refresh();button.focus()};
+ const cancelNew=()=>{panel.hidden=true;panel.disabled=true;refresh();if(form.dataset.assetStep!=='search')button.focus()};
  let savingNew=false;
  const saveNew=async()=>{if(savingNew)return;savingNew=true;try{const item=selectedItem(),data=JSON.parse(JSON.stringify(window.SKPlaza?.getData?.()||null)),user=window.SKPlaza?.getUser?.();if(!item||!data||!isFixed(item))return;const getInput=name=>field(panel,name);
  if(automaticClassNumber(itemName(item)))getInput('numeroYT').value=nextClassNumber(itemName(item));
@@ -187,9 +229,10 @@ function mountIncome(){
  quantityField.after(panel);
  const style=document.createElement('style');style.textContent=`#incomeAssetPanel .incomeAssetMode,#incomeAssetPanel .incomeAssetSearchField,#incomeAssetSearchStatus,#incomeAssetResults{grid-column:1/-1}#incomeAssetPanel [hidden]{display:none!important}.incomeAssetMode{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#e1e9ef;padding:4px;border-radius:12px}.incomeAssetMode button{min-width:0;padding:12px 8px;background:transparent;color:#36556c;border-radius:9px;font-size:.85rem;white-space:normal}.incomeAssetMode button[aria-pressed="true"]{background:#173d59;color:#fff;box-shadow:0 2px 5px #173d5926}.incomeAssetMode button:focus-visible{outline:3px solid #e7b45a;outline-offset:1px}#incomeAssetSearchStatus{margin:0;font-size:.9rem;color:#52687a;overflow-wrap:anywhere}#incomeAssetResults{display:grid;gap:8px;max-height:260px;overflow:auto}#incomeAssetResults button{text-align:left;background:#fff;color:#173d59;border:1px solid #c8d6df;display:grid;gap:5px;overflow-wrap:anywhere}#incomeAssetResults button small{color:#52687a}#incomeAssetResults button:disabled{opacity:.75;cursor:default}#incomeAssetResults button:focus-visible{outline:3px solid #e7b45a;outline-offset:1px}`;document.head.append(style);
  const select=panel.querySelector('#incomeAssetId'),search=panel.querySelector('#incomeAssetSearch'),results=panel.querySelector('#incomeAssetResults'),status=panel.querySelector('#incomeAssetSearchStatus'),incomeType=panel.querySelector('#incomeType'),originMine=panel.querySelector('#incomeOriginMine'),originHint=panel.querySelector('#incomeOriginHint');
+ const updateSelection=mountAssetSelection(form,summary,search);
  let mode='registered',lastItemId='',newValues={},registeredId='';
  const input=name=>panel.querySelector(`[data-income-asset-input="${name}"]`),currentItem=()=>{const data=window.SKPlaza?.getData?.()||{};return(data.inventoryCriteria||[]).find(item=>item.id===form.elements.itemId.value)},selectedAsset=()=> (window.SKPlaza?.getData?.().assets||[]).find(row=>row.id===registeredId);
- const classAssets=item=>{const type=norm(itemName(item));return(window.SKPlaza?.getData?.().assets||[]).filter(asset=>!asset.deleted&&!/dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`)&&norm(asset.clase)===type).sort((a,b)=>assetNumber(a).localeCompare(assetNumber(b),'es',{numeric:true}))};
+ const classAssets=item=>{const type=norm(itemName(item));return(window.SKPlaza?.getData?.().assets||[]).filter(asset=>!window.SKPlaza.incomeHasAsset(asset.id)&&!asset.deleted&&!/dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`)&&norm(asset.clase)===type).sort((a,b)=>assetNumber(a).localeCompare(assetNumber(b),'es',{numeric:true}))};
  const blockedReason=asset=>/dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`)?'Este activo está dado de baja o retirado.':norm(asset.ubicacion)==='bodega de superficie'?'Este activo ya está en Bodega de Superficie. No necesita otro ingreso.':'';
  const matches=query=>query.rows(classAssets(currentItem()),asset=>[
   assetLabel(asset),blockedReason(asset)||[asset.ubicacion||'Sin ubicación registrada',asset.minaOrigen&&'Origen: '+asset.minaOrigen].filter(Boolean).join(' · ')
@@ -224,6 +267,7 @@ function mountIncome(){
   originMine.closest('label').hidden=originMine.disabled;
   summary.hidden=!fixed||!asset;
   if(!summary.hidden)renderSelectedAsset(summary,item,asset,special?registeredMine:'');
+  updateSelection(fixed&&!isNew,item,asset);
   originHint.hidden=!special;
   const context=markingContext(),markSeparator=window.SKPlaza?.getData?.().capabilities?.externalMarkSeparator==='-'?'-':'';
   originHint.textContent=!special?'':incomeType.value==='TRASLADO'?'El activo quedará asignado a Sandra K. '+(isNew&&context.incomeMarking?'Recibirá una marca de la secuencia de tres letras de Sandra K.':'Se conserva su identificación.'):incomeType.value==='REPARACIÓN'?'Ingreso para reparación; se conserva la mina propietaria. '+(isNew&&context.activoExterno?(context.incomeMarking?`La marca llevará el prefijo ${prefixFor(originMine.value)||'de la mina'}${markSeparator?', un guion':''} y dos letras únicas (ej.: ${prefixFor(originMine.value)||'P'}${markSeparator}AA). Se conservará cuando regrese.`:'Conserva la marca de origen del equipo.'):''):'Indica si llega asignado a Sandra K o para reparación.';
@@ -232,7 +276,7 @@ function mountIncome(){
   hint.textContent=isNew?newAssetHint(item):'Busca y selecciona un activo existente. Si aún no está registrado, elige ACTIVO NUEVO.';
   select.replaceChildren(new Option('Seleccionar…',''));if(fixed&&(isNew||asset)){select.add(new Option(isNew?'Nuevo activo':assetLabel(asset),isNew?'__new__':asset.id));select.value=isNew?'__new__':asset.id}
  };
- const choose=asset=>{if(blockedReason(asset))return;registeredId=asset.id;search.value=window.SKAssetRules.isColumn(asset)?(window.SKAssetRules.columnIdentity(asset).number||window.SKAssetRules.columnIdentity(asset).mark):(asset.serial||asset.marcaActual||asset.marcaInterna||assetNumber(asset));const mine=clean(asset.mina||asset.minaOrigen);if(mine){if(!Array.from(originMine.options).some(option=>option.value===mine))originMine.add(new Option(mine,mine));originMine.value=mine}configure();search.focus()};
+ const choose=asset=>{if(blockedReason(asset))return;registeredId=asset.id;search.value=window.SKAssetRules.isColumn(asset)?(window.SKAssetRules.columnIdentity(asset).number||window.SKAssetRules.columnIdentity(asset).mark):(asset.serial||asset.marcaActual||asset.marcaInterna||assetNumber(asset));const mine=clean(asset.mina||asset.minaOrigen);if(mine){if(!Array.from(originMine.options).some(option=>option.value===mine))originMine.add(new Option(mine,mine));originMine.value=mine}configure()};
  const renderSearch=()=>{
   const item=currentItem();if(!isFixed(item)||mode!=='registered')return;
   const query=clean(search.value),matcher=window.SKAssetSearch.query(query),rows=matches(matcher);results.replaceChildren();results.hidden=false;
@@ -289,6 +333,6 @@ function mountIncome(){
  };
  window.SKPlazaIncomeAsset={captureCurrent,commit,validateBatch};refresh();
 }
-window.addEventListener('load',()=>setTimeout(()=>{mount();mountIncome()},300));
+window.addEventListener('DOMContentLoaded',()=>{mount();mountIncome()},{once:true});
 })();
 
