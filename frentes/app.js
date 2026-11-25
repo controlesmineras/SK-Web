@@ -7,6 +7,7 @@ const stamp=()=>crypto.randomUUID();
 const sessionKey='sk-frentes:session';
 const updateDraftKey='sk-frentes:update-draft';
 let session=null,state=FrontStore.empty(),editing=null,manualShift=false,running=null,generation=0;
+const sessionPolicy=window.SKEntry.sessionPolicy('labor',()=>session?.token,text=>{logout();message('loginMessage',text);});
 const selected=[];
 let activeRequest,savingReport=null;
 const owner=s=>'labor:'+s.user.documento;
@@ -189,6 +190,7 @@ report.onsubmit=async event=>{
     }));
     const previous=editing?.rev;$('save').disabled=true;
     savingReport=access(common.owner,local=>{
+      sessionPolicy.requireActive(s.token);
       for(const row of rows)FrontStore.save(local,row,previous);
     });
     const saved=await savingReport;
@@ -207,7 +209,7 @@ async function post(body,signal){
     const response=await fetch(window.SK_SYNC_CONFIG.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=UTF-8'},body:JSON.stringify(body),redirect:'follow',credentials:'omit',cache:'no-store',signal:ctrl.signal});
     if(!response.ok)throw new Error('El servicio central respondió '+response.status+'.');
     const data=await response.json();
-    if(!data?.ok){const error=new Error(data?.error||'Solicitud rechazada.');error.central=true;throw error;}
+    if(!data?.ok){const error=new Error(data?.error||'Solicitud rechazada.');error.central=true;if(window.SKEntry.rejected(error.message))sessionPolicy.reject(body.token);throw error;}
     return data;
   }catch(error){if(error.central)throw error;throw new Error('No se pudo conectar con la base central. Los pendientes se conservan.');}
   finally{clearTimeout(timer);signal?.removeEventListener('abort',abort);}
@@ -243,7 +245,7 @@ $('laborRoles').ontoggle=async()=>{
   }catch(error){if(session===s&&panel.open)list.textContent=error.message;}
 };
 async function enter(s){
-  const data=await access(owner(s));session=s;generation++;state=data;sessionStorage.setItem(sessionKey,JSON.stringify(s));
+  const data=await access(owner(s));if(!sessionPolicy.allows(s.token))throw new Error(sessionPolicy.loginMessage);session=s;sessionPolicy.check();generation++;state=data;sessionStorage.setItem(sessionKey,JSON.stringify(s));
   $('login').hidden=true;$('workspace').hidden=false;$('sessionActions').hidden=false;showAccount(s);
   $('sync').disabled=false;message('loginMessage','');message('syncMessage',navigator.onLine?'':offlineStatus());message('notice','');reset();tab(false);restoreUpdateDraft(s);render();void sync();
 }
@@ -259,12 +261,14 @@ login.onsubmit=async event=>{
         const result=await post({action:'laborLogin',document:id,password:pw});
         if(!result.user?.documento||!result.token||result.scope!=='labor')throw new Error('Respuesta de acceso incompleta.');
         s={access:'labor',user:result.user,token:result.token,expiresAt:result.expiresAt,loginId:id};
+        sessionPolicy.signedIn(s.token);
         const salt=stamp();localStorage.setItem(key,JSON.stringify({salt,hash:await verifier(pw,salt),session:s}));
       }catch(error){if(error.central){if(/incorrect|no habilitad|no tiene acceso|desactiv|revocad/i.test(error.message))localStorage.removeItem(key);throw error;}}
     }
     if(!s){
       const cached=JSON.parse(localStorage.getItem(key)||'null');
-      if(!cached||!window.SKEntry.validLocal(cached.session)||cached.session.access!=='labor'||await verifier(pw,cached.salt)!==cached.hash)throw new Error('No se pudo validar el acceso local. El primer ingreso en este dispositivo requiere conexión y una cuenta habilitada.');
+      if(!cached||cached.session.access!=='labor'||await verifier(pw,cached.salt)!==cached.hash)throw new Error('No se pudo validar el acceso local. El primer ingreso en este dispositivo requiere conexión y una cuenta habilitada.');
+      if(!sessionPolicy.allows(cached.session.token))throw new Error(sessionPolicy.loginMessage);
       s=cached.session;
     }
     login.elements.password.value='';await enter(s);
@@ -296,11 +300,12 @@ async function synchronize(s,signal){
   }
   if(session===s){
     const count=state.reports.filter(r=>r.status==='review').length;
+    if(!count)sessionPolicy.synced(s.token);
     message('syncMessage',count?'Revisa tus reportes. Hay '+count+' por revisar en Mis reportes.':'Sincronizado · '+new Date(state.lastSync).toLocaleString('es-CO',{timeZone:'America/Bogota'}));
   }
 }
 function sync(){
-  if(!session)return;
+  if(!session||!sessionPolicy.check())return;
   if(!navigator.onLine){message('syncMessage',offlineStatus());render();return;}
   if(running)return running;
   const s=session,gen=generation,ctrl=new AbortController();activeRequest=ctrl;
@@ -417,4 +422,4 @@ $('updateLabor').onclick=async event=>{
     button.disabled=false;button.removeAttribute('aria-busy');
   }
 };
-try{const s=JSON.parse(sessionStorage.getItem(sessionKey)||'null');if(s?.access==='labor'&&s.user?.documento&&s.token&&window.SKEntry.validLocal(s))enter(s).catch(error=>message('loginMessage',error.message));else sessionStorage.removeItem(sessionKey);}catch{sessionStorage.removeItem(sessionKey);}
+try{const s=JSON.parse(sessionStorage.getItem(sessionKey)||'null');if(s?.access==='labor'&&s.user?.documento&&s.token)enter(s).catch(error=>{sessionStorage.removeItem(sessionKey);message('loginMessage',error.message);});else {sessionStorage.removeItem(sessionKey);message('loginMessage',sessionPolicy.notice());}}catch{sessionStorage.removeItem(sessionKey);}

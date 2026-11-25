@@ -1,3 +1,4 @@
+const {entry}=require('./session-fixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8'),clone=x=>JSON.parse(JSON.stringify(x));
@@ -9,7 +10,7 @@ function client(){
  form.elements.quantity.value='1';form.elements.recipientId.value='person';form.elements.recipientCompany.value='SK';
  form.elements.bringsReplacement={get value(){return inputs.find(input=>input.checked)?.value||''}};
  nodes.set('#deliveryForm',form);nodes.set('#deliveryReplacementField',field);
- const ctx=vm.createContext({Blob,console,crypto:require('node:crypto').webcrypto,document:{querySelectorAll:()=>[],querySelector:key=>{if(!nodes.has(key))nodes.set(key,{value:'',hidden:false,textContent:'',addEventListener(){}});return nodes.get(key)}},alert:message=>alerts.push(message),window:{alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},setTimeout(){},clearTimeout(){}});
+ const ctx=vm.createContext({Blob,console,crypto:require('node:crypto').webcrypto,document:{querySelectorAll:()=>[],querySelector:key=>{if(!nodes.has(key))nodes.set(key,{value:'',hidden:false,textContent:'',addEventListener(){}});return nodes.get(key)}},alert:message=>alerts.push(message),window:{SKEntry:entry,alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},setTimeout(){},clearTimeout(){}});
  const start=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
  vm.runInContext(read('asset-record-rules.js'),ctx);vm.runInContext(read('asset-history.js'),ctx);
  vm.runInContext(start+`\nmovementShift=()=>({});validateDeliveryRecipient=()=>true;renderRecentQueries=()=>{};updatePendingBadge=()=>{};discardDeliveryForm=()=>{};sync=()=>{};clearItemSearch=form=>{form.elements.itemId.value=''};updateDeliveryFields=()=>updateDeliveryReplacementField(findItem($('#deliveryForm').elements.itemId.value));downloadBlob=(blob,name)=>window.lastDownload={blob,name};window.audit={mode:value=>{deliveryMode=value},catalog:deliveryCatalog,get:()=>data,set:value=>{data=value},draft:()=>deliveryDraft,prepare:rows=>{deliveryDraft=rows},update:()=>updateDeliveryFields(),capture:currentDeliveryItem,add:addDeliveryItem,save:()=>saveDeliveryBatch($('#deliveryForm')),label:deliveryReplacementLabel,report:deliveryReportRow,card:queryMovementCard,excel:exportDeliveriesExcel,pdf:exportDeliveriesPdf};})();`,ctx);

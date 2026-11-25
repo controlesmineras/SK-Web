@@ -34,6 +34,7 @@
   return changes;
  }
  async function applyDeletion(changes){
+  window.SKAdminAuth?.requireActive?.();
   await new Promise((resolve,reject)=>{const tx=db.transaction(deletionStores,'readwrite');for(const store of deletionStores)for(const row of changes[store]||[])tx.objectStore(store).put(row);tx.oncomplete=resolve;tx.onerror=()=>reject(tx.error);tx.onabort=()=>reject(tx.error||new Error('No se pudo eliminar el repuesto'))});
  }
  let cleaning=false;

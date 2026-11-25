@@ -114,6 +114,7 @@ async function save(event){
     novelty.datedNovelty=true;
     for(const field of Object.keys(data))if(!String(data[field]??'').trim())delete novelty[field];
     // Solo la novedad entra en la cola. El servidor compara con su propia ficha.
+    window.SKAdminAuth?.requireActive?.();
     const tx=db.transaction(assetProfileTables,'readwrite');
     const committed=new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||new Error('No se pudo guardar la novedad.'));});
     const saveRow=async()=>{

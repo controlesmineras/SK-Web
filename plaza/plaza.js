@@ -33,9 +33,8 @@
 
 const deviceAccess=createDeviceAccess('sk-plaza');
   let token=sessionStorage.getItem('skPlazaToken')||'',user=JSON.parse(sessionStorage.getItem('skPlazaUser')||'null'),data={},deliveryMode='assignment',deliveryDraft=[],incomeDraft=[],currentView='home',navigationRoute='home',syncRunning=false,syncQueued=false,retryTimer=0,retryAttempts=0,deliverySaving=false,incomeSaving=false,pendingDeliveryAfterCollaborator=false;
-  if(token&&window.SKEntry&&!window.SKEntry.validLocal({token})){
-    token='';user=null;sessionStorage.removeItem('skPlazaToken');sessionStorage.removeItem('skPlazaUser');
-  }
+  const sessionPolicy=window.SKEntry.sessionPolicy('plaza',()=>token,()=>logout());
+  if(token)sessionPolicy.check();else if(sessionPolicy.notice())$('#loginStatus').textContent=sessionPolicy.notice();
   async function post(body){
     if(!api())throw new Error('El servicio central todavía no está configurado.');
     const controller=new AbortController();let timeout;
@@ -46,7 +45,7 @@ const deviceAccess=createDeviceAccess('sk-plaza');
         const text=await response.text();let result;
         try{result=JSON.parse(text)}catch{throw new Error('El servicio central devolvió una respuesta incompleta. Se reintentará automáticamente.')}
         if(!response.ok)throw new Error(result.error||`El servicio respondió ${response.status}`);
-        if(!result.ok)throw new Error(result.error||'Solicitud rechazada');return result;
+        if(!result.ok){if(window.SKEntry.rejected(result.error))sessionPolicy.reject(body.token);throw new Error(result.error||'Solicitud rechazada');}return result;
       })();
       return await Promise.race([exchange,expired]);
     }finally{clearTimeout(timeout)}
@@ -511,7 +510,7 @@ function matchesItemSearch(text,number,query){
     }
   }
   async function sync(silent=false){
-    if(!appReady||!token||!user)return false;
+    if(!appReady||!token||!user||!sessionPolicy.check())return false;
     if(syncRunning){syncQueued=true;return false}
     if(!navigator.onLine){scheduleRetry();return false}
     const syncButton=$('#syncBtn'),ownsButton=Boolean(syncButton&&syncButton.dataset.busy!=='true');
@@ -578,12 +577,12 @@ function matchesItemSearch(text,number,query){
         if(!silent&&firstError)alert($('#syncStatus').textContent);
         return false;
       }
-      const syncedAt=new Date().toISOString();localStorage.setItem('skPlazaLastSync',syncedAt);retryAttempts=0;
+      sessionPolicy.synced(syncToken);const syncedAt=new Date().toISOString();localStorage.setItem('skPlazaLastSync',syncedAt);retryAttempts=0;
       updatePendingBadge();showLastSync(syncedAt);$('#syncStatus').textContent=`Sincronizado${result.notModified?' · sin cambios':''} · ${new Date().toLocaleString('es-CO')}`;
       return true;
     }catch(error){
       if(/no tiene acceso (?:a Plaza Blending|operativo)|(?:cuenta|equipo) ya no tiene acceso/i.test(error.message)){deviceAccess.revokeToken(token);logout();return false}
-      if(/sesión venció|sesión no válida/i.test(error.message)){if(silent){scheduleRetry();$('#syncStatus').textContent='Sesión pendiente de validar · registros guardados en este dispositivo';return false}logout();return false}
+      if(window.SKEntry.rejected(error.message))return false;
       scheduleRetry();$('#syncStatus').textContent='Sincronización pendiente · '+String(error.message||error);
       const hasReturns=(data.blendingDeliveries||[]).some(row=>row.syncState==='pending'&&(row.movementType==='DEVOLUCIÓN'||norm(row.deliveryType)==='prestamo'));
       if(hasReturns)window.SKPlazaReturns?.setSyncError?.(error.message);
@@ -612,6 +611,7 @@ function matchesItemSearch(text,number,query){
 
   async function syncDataAndApp(){const button=$('#syncBtn');if(button?.dataset.busy==='true')return;if(button){button.dataset.busy='true';button.disabled=true;button.classList.add('isSyncing');setSyncButtonText('☁ SINCRONIZANDO')}let dataOk=false,appOk=false;try{dataOk=await sync(false);if(button)setSyncButtonText('↻ ACTUALIZANDO APP');if(window.SKPlazaInstall?.updateApp){await window.SKPlazaInstall.updateApp();appOk=true}else appOk=true;if(dataOk&&appOk){$('#syncStatus').textContent=`Datos y aplicación actualizados · ${new Date().toLocaleString('es-CO')}`;updatePendingBadge()}}catch(error){console.error('Actualización de Plaza:',error);if(dataOk)alert('Los datos se sincronizaron, pero la aplicación no pudo comprobar actualizaciones. Se intentará nuevamente al abrirla.')}finally{if(button){button.dataset.busy='false';button.disabled=false;button.classList.remove('isSyncing');setSyncButtonText('☁ SINCRONIZAR')}}}
   async function persistLocalChange(next){
+    sessionPolicy.requireActive(token);
     if(localSaveTask)throw new Error('Hay un registro guardándose. Espera a que termine y vuelve a intentar.');
     const task=(async()=>{await window.SKPlazaLocal.write(next);data=next})();
     localSaveTask=task;
@@ -620,7 +620,7 @@ function matchesItemSearch(text,number,query){
   function readLocalData(){return window.SKPlazaLocal.read()}
   async function openApp(showGreeting=false){
     refreshMovementTimeAccess();
-    appReady=false;data=await readLocalData();appReady=true;$('#login').hidden=true;$('#app').hidden=false;$('#syncBtn').hidden=false;$('#logoutBtn').hidden=false;render();sync(true);if(showGreeting)showWelcomeMessage();
+    const openingToken=token;appReady=false;data=await readLocalData();if(token!==openingToken||!sessionPolicy.check())return;appReady=true;$('#login').hidden=true;$('#app').hidden=false;$('#syncBtn').hidden=false;$('#logoutBtn').hidden=false;render();sync(true);if(showGreeting)showWelcomeMessage();
   }
   const welcomeMessages=['TU TRABAJO MANTIENE TODO EN MOVIMIENTO.','CADA REGISTRO PRECISO HACE LA DIFERENCIA.','ORDEN, COMPROMISO Y SEGURIDAD EN CADA TAREA.','HOY ES UNA NUEVA OPORTUNIDAD PARA HACERLO BIEN.','GRACIAS POR CUIDAR LOS RECURSOS QUE ESTÁN EN TUS MANOS.','RESPIRA: VAS MEJOR DE LO QUE CREES.','QUE HOY TE PASE ALGO BONITO.','CONFÍA EN TI; HAS SUPERADO DÍAS MÁS DIFÍCILES.','UN PASO A LA VEZ TAMBIÉN TE LLEVA LEJOS.','HOY TAMBIÉN CUENTA PARA EMPEZAR DE NUEVO.','NO OLVIDES REGALARTE UN MOMENTO DE CALMA.','TU SONRISA TAMBIÉN PUEDE CAMBIAR EL DÍA.','QUE TENGAS UN DÍA TRANQUILO Y LLENO DE COSAS BUENAS.'];
   function showWelcomeMessage(){const dialog=$('#sessionWelcome');if(!dialog)return;const firstName=String(user?.nombre||'').trim().split(/\s+/)[0];$('#sessionWelcomeTitle').textContent=firstName?`¡HOLA, ${firstName.toUpperCase()}!`:'¡HOLA!';$('#sessionWelcomeMessage').textContent=welcomeMessages[Math.floor(Math.random()*welcomeMessages.length)];dialog.hidden=false;requestAnimationFrame(()=>dialog.classList.add('visible'))}
@@ -629,12 +629,12 @@ function matchesItemSearch(text,number,query){
   function setupRecordConfirmation(){if($('#recordConfirmation'))return;const overlay=document.createElement('section');overlay.id='recordConfirmation';overlay.className='recordConfirmation';overlay.hidden=true;overlay.setAttribute('role','status');overlay.setAttribute('aria-live','assertive');overlay.innerHTML='<div class="recordConfirmationCard"><div class="recordConfirmationCheck" aria-hidden="true">✓</div><h2>REGISTRO GUARDADO</h2><p>Ya tenemos tu registro.<br>No necesitas volver a ingresarlo.</p><strong id="recordConfirmationCount"></strong><small>Toca cualquier lugar para continuar</small></div>';const close=()=>{clearTimeout(recordConfirmationTimer);overlay.classList.remove('visible');setTimeout(()=>{overlay.hidden=true},180)};overlay.addEventListener('pointerdown',close);overlay.addEventListener('click',close);document.addEventListener('keydown',event=>{if(!overlay.hidden&&(event.key==='Escape'||event.key==='Enter'||event.key===' '))close()});overlay._show=count=>{clearTimeout(recordConfirmationTimer);$('#recordConfirmationCount').textContent=`${count} ${count===1?'elemento guardado correctamente':'elementos guardados correctamente'}`;overlay.hidden=false;requestAnimationFrame(()=>overlay.classList.add('visible'));recordConfirmationTimer=setTimeout(close,3000)};document.body.append(overlay)}
   function showRecordConfirmation(count){setupRecordConfirmation();$('#recordConfirmation')._show(Math.max(1,Number(count)||1))}
   window.alert=message=>{const text=String(message||''),success=/^(INGRESO|ENTREGA) REGISTRAD[AO]/.test(text);if(!success)return nativeAlert(message);const match=text.match(/\n\n(\d+)\s/);showRecordConfirmation(match?Number(match[1]):1)};
-  async function acceptLogin(result,greet=false){token=result.token;user=result.user;if(greet)sessionStorage.removeItem(shiftStorageKey());sessionStorage.setItem('skPlazaToken',token);sessionStorage.setItem('skPlazaUser',JSON.stringify(user));await openApp(greet)}
+  async function acceptLogin(result,greet=false,online=true){if(online)sessionPolicy.signedIn(result.token);else if(!sessionPolicy.allows(result.token))throw new Error(sessionPolicy.loginMessage);token=result.token;user=result.user;if(greet)sessionStorage.removeItem(shiftStorageKey());sessionStorage.setItem('skPlazaToken',token);sessionStorage.setItem('skPlazaUser',JSON.stringify(user));await openApp(greet)}
   async function renewLogin(document,pin,previousToken){try{const result=await loginWithRetry({action:'plazaLogin',document,pin});if(token!==previousToken)return;await acceptLogin(result);await deviceAccess.remember(document,pin,result)}catch(error){if(/contraseña|credenciales|desactiv|no tiene acceso|no habilitado|no autorizado|documento.*incorrect/i.test(error.message)&&token===previousToken){deviceAccess.remove(document);logout()}}}
-  function logout(){sessionStorage.removeItem('skPlazaToken');sessionStorage.removeItem('skPlazaUser');location.reload()}
+  function logout(){token='';user=null;sessionStorage.removeItem('skPlazaToken');sessionStorage.removeItem('skPlazaUser');location.reload()}
   const wait=ms=>new Promise(resolve=>setTimeout(resolve,ms));
   async function loginWithRetry(body){const delays=[0,1500,4000];let lastError;for(let attempt=0;attempt<delays.length;attempt++){if(delays[attempt]){const status=$('#loginStatus');status.classList.remove('status');status.textContent='Conexión inestable. Reintentando automáticamente…';await wait(delays[attempt])}try{return await post(body)}catch(error){lastError=error;if(!/servicio central no está disponible|no fue posible conectar/i.test(error.message))throw error}}throw lastError}
-  $('#loginForm').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;const fields=new FormData(form);try{$('#loginStatus').classList.remove('status');$('#loginStatus').textContent='Verificando…';const document=String(fields.get('document')),pin=String(fields.get('pin')||''),cached=await deviceAccess.verify(document,pin);if(cached&&window.SKEntry.validLocal(cached)&&!(navigator.onLine&&document.trim().toLowerCase()==='admin')){await acceptLogin(cached,true);if(navigator.onLine)void renewLogin(document,pin,cached.token);}else{if(!navigator.onLine)throw new Error('El primer acceso de esta cuenta en este dispositivo requiere conexión.');const result=await loginWithRetry({action:'plazaLogin',document,pin});await acceptLogin(result,true);await deviceAccess.remember(document,pin,result)}}catch(error){$('#loginStatus').classList.add('status');$('#loginStatus').textContent=authMessage(error.message)}finally{button.disabled=false}});
+  $('#loginForm').addEventListener('submit',async event=>{event.preventDefault();const form=event.currentTarget,button=form.querySelector('button');button.disabled=true;const fields=new FormData(form);try{$('#loginStatus').classList.remove('status');$('#loginStatus').textContent='Verificando…';const document=String(fields.get('document')),pin=String(fields.get('pin')||''),cached=await deviceAccess.verify(document,pin);if(cached&&sessionPolicy.allows(cached.token)&&!(navigator.onLine&&document.trim().toLowerCase()==='admin')){await acceptLogin(cached,true,false);if(navigator.onLine)void renewLogin(document,pin,cached.token);}else{if(cached&&!navigator.onLine)throw new Error(sessionPolicy.loginMessage);if(!navigator.onLine)throw new Error('El primer acceso de esta cuenta en este dispositivo requiere conexión.');const result=await loginWithRetry({action:'plazaLogin',document,pin});await acceptLogin(result,true);await deviceAccess.remember(document,pin,result)}}catch(error){$('#loginStatus').classList.add('status');$('#loginStatus').textContent=authMessage(error.message)}finally{button.disabled=false}});
   function requireShiftAtHome(){
     if(selectedShiftPerson())return true;
     showView('home');
@@ -1168,7 +1168,7 @@ function matchesItemSearch(text,number,query){
     if(info){const panel=document.getElementById(info.dataset.exitHelp);panel.hidden=!panel.hidden;info.setAttribute('aria-expanded',String(!panel.hidden))}
   });
   $('#incomeForm').addEventListener('submit',event=>{event.preventDefault();saveIncomeBatch(event.currentTarget)});
-  $('#deliveryForm').addEventListener('submit',event=>{event.preventDefault();saveDeliveryBatch(event.currentTarget)});$('nav').addEventListener('click',event=>{const button=event.target.closest('[data-view]');if(!button)return;if(button.dataset.view==='home'){event.preventDefault();event.stopPropagation();discardAndGoHome()}else if(button.dataset.view==='contacts')window.openPlazaQueryMenu();else showView(button.dataset.view)});$('#home').addEventListener('click',event=>{const button=event.target.closest('[data-home-view]');if(!button)return;if(button.dataset.homeView==='income')window.openPlazaRegisterMenu();else if(button.dataset.homeView==='contacts')window.openPlazaQueryMenu();else showView(button.dataset.homeView)});$('#syncBtn').addEventListener('click',syncDataAndApp);$('#logoutBtn').addEventListener('click',logout);window.addEventListener('online',()=>sync(true));document.addEventListener('visibilitychange',refreshSharedData);window.addEventListener('focus',refreshSharedData);window.addEventListener('pageshow',refreshSharedData);setInterval(periodicSync,300000);setInterval(()=>{if(currentView==='income'||currentView==='delivery')refreshSharedData()},30000);showView('home');if(token&&user&&(window.SKEntry?.validLocal({token})??!token.startsWith('sk2.')))void openApp().catch(error=>{$('#login').hidden=false;$('#app').hidden=true;$('#loginStatus').textContent=error.message});
+  $('#deliveryForm').addEventListener('submit',event=>{event.preventDefault();saveDeliveryBatch(event.currentTarget)});$('nav').addEventListener('click',event=>{const button=event.target.closest('[data-view]');if(!button)return;if(button.dataset.view==='home'){event.preventDefault();event.stopPropagation();discardAndGoHome()}else if(button.dataset.view==='contacts')window.openPlazaQueryMenu();else showView(button.dataset.view)});$('#home').addEventListener('click',event=>{const button=event.target.closest('[data-home-view]');if(!button)return;if(button.dataset.homeView==='income')window.openPlazaRegisterMenu();else if(button.dataset.homeView==='contacts')window.openPlazaQueryMenu();else showView(button.dataset.homeView)});$('#syncBtn').addEventListener('click',syncDataAndApp);$('#logoutBtn').addEventListener('click',logout);window.addEventListener('online',()=>sync(true));document.addEventListener('visibilitychange',refreshSharedData);window.addEventListener('focus',refreshSharedData);window.addEventListener('pageshow',refreshSharedData);setInterval(periodicSync,300000);setInterval(()=>{if(currentView==='income'||currentView==='delivery')refreshSharedData()},30000);showView('home');if(token&&user&&sessionPolicy.check())void openApp().catch(error=>{$('#login').hidden=false;$('#app').hidden=true;$('#loginStatus').textContent=error.message});
 })();
 
 

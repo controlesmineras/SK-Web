@@ -1,3 +1,4 @@
+const {entry}=require('./session-fixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const read=file=>fs.readFileSync(path.join(__dirname,'..',file),'utf8');
@@ -13,7 +14,7 @@ function formClient(){
   fields.assetId=query('#deliveryAssetId');
   fields.itemId.closest=()=>({_clearItemSearch:()=>{fields.itemId.value=''}});
   const form={elements:fields,querySelector:()=>query('#submit')};nodes.set('#deliveryForm',form);
-  const ctx=vm.createContext({document:{querySelector:query},window:{alert:message=>alerts.push(message)},
+  const ctx=vm.createContext({document:{querySelector:query},window:{SKEntry:entry,alert:message=>alerts.push(message)},
     alert:message=>alerts.push(message),sessionStorage:{getItem:()=>null},localStorage:{getItem:()=>null},
     Event:class {constructor(type){this.type=type}},Option:class {constructor(text,value){this.text=text;this.value=value}},console});
   vm.runInContext(read('spare-groups.js'),ctx);vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);

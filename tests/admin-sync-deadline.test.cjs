@@ -1,3 +1,4 @@
+const {entry}=require('./session-fixture.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm');
 const fs=require('node:fs'),path=require('node:path');
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8');
@@ -57,7 +58,7 @@ test('body abort retains its timeout diagnosis instead of reporting malformed JS
 
 function authClient(fetcher){
  const timers=clock(),storage=new Map(),requests=[];
- const window={SK_SYNC_CONFIG:{apiUrl:'https://script.google.com/macros/s/test/exec'},addEventListener(){}};
+ const window={SKEntry:entry,SK_SYNC_CONFIG:{apiUrl:'https://script.google.com/macros/s/test/exec'},addEventListener(){}};
  vm.runInNewContext(read('admin-auth.js'),{window,document:{querySelector:()=>null,addEventListener(){}},
   sessionStorage:{getItem:key=>storage.get(key),removeItem:key=>storage.delete(key)},localStorage:{getItem:()=>null},
   AbortController,...timers,fetch:async(url,options)=>{requests.push(options);return fetcher(options,requests.length)}});

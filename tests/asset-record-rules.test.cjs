@@ -1,3 +1,4 @@
+const {entry}=require('./session-fixture.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm');
 const fs=require('node:fs'),path=require('node:path');
 const window={};vm.runInNewContext(fs.readFileSync(path.join(__dirname,'../asset-record-rules.js'),'utf8'),{window});
@@ -51,7 +52,7 @@ test('criterio sin serial permite identidad interna sin exigir serial ni marca a
 });
 
 function adminPermissions(role,{validated=true,token=true}={}){
- const authWindow={addEventListener(){}},storage={getItem:()=>null,removeItem(){}};
+ const authWindow={SKEntry:entry,addEventListener(){}},storage={getItem:()=>null,removeItem(){}};
  const source=fs.readFileSync(path.join(__dirname,'../admin-auth.js'),'utf8').replace('window.SKAdminAuth={',"window.setTestSession=(role,checked,hasToken)=>{user={role,username:'test',name:'Prueba'};validated=checked;token=hasToken?'test':''};window.SKAdminAuth={");
  vm.runInNewContext(source,{window:authWindow,document:{querySelector:()=>null,addEventListener(){}},sessionStorage:storage,localStorage:storage});
  authWindow.setTestSession(role,validated,token);return authWindow.SKAdminAuth;

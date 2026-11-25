@@ -648,6 +648,7 @@
      if(session!==active)return {ok:false};snapshot=fresh;session.user.roles=result.roles;try{localStorage.setItem(sessionKey,JSON.stringify(session))}catch{}
      again=(fresh.pending||[]).some(row=>!row.syncRejected);
     }while(again&&navigator.onLine);
+    if(!pending().length)sessionPolicy.synced(active.token);
     tell(pending().length?'Datos actualizados. Revisa los movimientos rechazados.':'Bodega sincronizada. Todos los movimientos confirmados.');return {ok:!pending().length};
    }catch(error){
     const message=/Web Admin|Solicitud no válida/i.test(error.message)?'El servidor aún no reconoce Bodega de Producción. Actualiza Code.gs, publica una nueva versión de la implementación y vuelve a sincronizar. Tus registros pendientes se conservan.':error.message;
@@ -688,7 +689,7 @@
    if(view==='transfer_out'&&!confirm('¿Enviar '+quantity+' '+selected.name+' a Plaza Blending? Al sincronizar se descontará en Producción y se registrará el ingreso en Plaza.'))return;
    const row={id:crypto.randomUUID(),kind:view,recordedBy:actor.document,recordedByName:actor.name,shiftKeeperId:keeper.id,shiftKeeperDocument:keeper.documento,shiftKeeperName:keeper.nombre,itemId:selected.id,quantity,fechaISO:date,assetId,personId:f.personId.value,destination:f.destination.value.trim(),loanId:loan?.id||'',sourceLoanId:view==='transfer_out'?f.sourceLoanId.value:'',incomeType:view==='income'?f.incomeType.value:'',notes:f.notes.value.trim(),createdAt:new Date().toISOString(),...(creating?{newAsset:{id:crypto.randomUUID(),serial:f.newSerial.value,modelo:f.newModel.value,marcaComercial:f.newBrand.value,marcaAnterior:f.newMark.value,numeroClase:f.newNumber.value,minaOrigen:f.newMine.value,longitud:f.newLength.value}}:{})};
    savingMovement=true;find('[type=submit]').disabled=true;
-   await store.queue(active.user.document,row);
+   await store.queue(active.user.document,row,()=>sessionPolicy.requireActive(active.token));
    if(session!==active)return;
    snapshot={...snapshot,pending:[...pending(),row]};
    selectedReturnId='';

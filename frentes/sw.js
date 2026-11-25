@@ -1,4 +1,4 @@
-const VERSION='20261124-ingreso-simple';
+const VERSION='20261125-sesion-offline-36h';
 const CACHE='sk-frentes-'+VERSION;
 const scope=self.registration.scope;
 const indexUrl=new URL('./index.html?v='+VERSION,scope).href;

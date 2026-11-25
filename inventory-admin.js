@@ -417,6 +417,7 @@ const stockTable=warehouse=>warehouse==='production'?productionQuantityCache:'in
 // Las claves anteriores de Plaza siguen siendo válidas después de actualizar la app.
 const queueKey=(warehouse,itemId)=>warehouse==='production'?['production',itemId]:itemId;
 function queueQuantity(warehouse,itemId,quantity,observed,opening=false){
+ window.SKAdminAuth?.requireActive?.();
  const table=stockTable(warehouse),id=queueKey(warehouse,itemId);
  return adjustmentTransaction(['inventoryCriteria',table,quantityAdjustments],(tx,abort)=>{
   const queue=tx.objectStore(quantityAdjustments);

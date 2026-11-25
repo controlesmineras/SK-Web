@@ -1,3 +1,4 @@
+const {entry}=require('./session-fixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../plaza/plaza.js'),'utf8').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
@@ -22,7 +23,7 @@ function client(){
   row(kind+'-different-id','b6','2026-10-02T11:00:00',{itemName:'Barreno 4 ft'}),row(kind+'-bad-date','b4','invalid'),
   row(kind+'-epp','epp','2026-10-02T11:00:00'),row(kind+'-asset','asset','2026-10-02T11:00:00')
  ];
- const ctx=vm.createContext({Blob,console,alert:message=>alerts.push(message),document:{querySelector:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input\[value="all"\]$/);return match?radios[match[1]][0]:node(key)},querySelectorAll:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input$/);return match?radios[match[1]]:[]}},window:{alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:()=>null},setTimeout(){},clearTimeout(){},crypto:{}});
+ const ctx=vm.createContext({Blob,console,alert:message=>alerts.push(message),document:{querySelector:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input\[value="all"\]$/);return match?radios[match[1]][0]:node(key)},querySelectorAll:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input$/);return match?radios[match[1]]:[]}},window:{SKEntry:entry,alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:()=>null},setTimeout(){},clearTimeout(){},crypto:{}});
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../asset-record-rules.js'),'utf8'),ctx);
  vm.runInContext(source+`\ndownloadBlob=(blob,name)=>window.capture(blob,name);window.audit={set:value=>{data=value},sort:recentSort,priority:changeRecentPriority,rows:recentQueryRows,render:renderRecentQueries,reset:resetRecentFilters,excel:exportMovementExcel,pdf:exportMovementPdf};})();`,ctx);
  ctx.window.capture=(blob,name)=>downloads.push({blob,name});ctx.window.audit.set(data);

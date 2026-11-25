@@ -34,10 +34,8 @@ const db=true;
 async function all(name){return name==='consumptions'?window.SKConsumptionReports.consumptionMovements(state):state[name]||[]}
 let syncFailed=false,syncConnectionFailed=false;
 let session=null,state={},draft=[],syncing=false,saving=false;
-try{session=JSON.parse(localStorage.getItem(sessionKey)||'null');if(session&&!window.SKEntry.validLocal(session)){session=null;localStorage.removeItem(sessionKey);}}catch{}
-if(session&&Number(session.expiresAt)<=Date.now()){
- session=navigator.onLine?null:deviceAccess.byToken(session.token);
-}
+const sessionPolicy=window.SKEntry.sessionPolicy('production',()=>session?.token,message=>closeSession(true,message));
+try{session=JSON.parse(localStorage.getItem(sessionKey)||'null');}catch{}
 
 const invitation=new URLSearchParams(location.hash.slice(1)).get('invitation');
 const displayDate=value=>value?value.split('-').reverse().join('/'):'';
@@ -73,7 +71,7 @@ function refreshShift(){
 const norm=value=>String(value??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const roleLabels={admin:'Administrador',assistant:'Auxiliar',mechanic:'Mecánico',warehouse:'Bodeguero/a'};
 const ownPerson=()=>session.user.personId||(state.personal||[]).find(row=>String(row.documento).trim()===session.user.document)?.id;
-const canSync=()=>session?.token&&Number(session.expiresAt)>Date.now();
+const canSync=()=>session?.token&&sessionPolicy.check();
 const database=new Promise((resolve,reject)=>{
  const request=indexedDB.open('sk-production',1);
  request.onblocked=()=>reject(new Error('Cierra las otras ventanas de Producción y vuelve a abrir la app.'));
@@ -83,13 +81,14 @@ const database=new Promise((resolve,reject)=>{
 });
 database.catch(()=>{});
 async function changeState(document,update){
+ const writer=session?.token;
  const db=await database;
  return new Promise((resolve,reject)=>{
   const tx=db.transaction('accounts',update?'readwrite':'readonly'),store=tx.objectStore('accounts'),read=store.get(document);
   let next;
   read.onsuccess=()=>{
    next=read.result||{};
-   if(update)try{next=update(next);store.put(next,document)}
+   if(update)try{sessionPolicy.requireActive(writer);next=update(next);store.put(next,document)}
    catch(error){reject(error);tx.abort()}
   };
   tx.oncomplete=()=>resolve(next);tx.onabort=()=>reject(tx.error||new Error('No se pudo guardar en este dispositivo'));
@@ -110,7 +109,7 @@ async function api(action,data={}){
     if(response.ok)result=await response.json();
    }catch(cause){const error=new Error('No se pudo conectar con el servidor de Producción. Los registros pendientes se conservan.');error.connectionFailure=true;throw error;}
    if(!response.ok)throw new Error('Error de conexión ('+response.status+')');
-   if(result?.ok!==true){const error=new Error(result?.error||'No se pudo completar la solicitud');error.centralResponse=true;throw error;}
+   if(result?.ok!==true){const error=new Error(result?.error||'No se pudo completar la solicitud');error.centralResponse=true;if(data.token&&window.SKEntry.rejected(error.message))sessionPolicy.reject(data.token);throw error;}
    return result;
   })();
   return await Promise.race([exchange,deadline]);
@@ -750,7 +749,7 @@ async function sync(){
  }
 }
 async function performSync(){
- if(!session)return {ok:false,error:'Inicia sesión para sincronizar.'};
+ if(!session||!sessionPolicy.check())return {ok:false,error:'Inicia sesión para sincronizar.'};
  if(!navigator.onLine){syncFailed=true;syncConnectionFailed=true;paintSync();return {ok:false,error:'Sin conexión. Los registros siguen guardados.'};}
  if(!canSync()){syncFailed=true;paintSync();const error='Inicia sesión con internet para renovar la sincronización. Tus registros siguen guardados.';status(error);return {ok:false,error};}
  if(window.SKProductionWarehouse&&(window.SKProductionWarehouse.module==='warehouse'||!window.SKProductionWarehouse.permits(session.user,'mechanic')))return window.SKProductionWarehouse.sync();
@@ -779,6 +778,7 @@ async function performSync(){
     if(result.inventoryResult?.count?.status==='closed'&&countSelection===result.inventoryResult.count.id){countReport=result.inventoryResult.count;countSelection='';countValues=new Map();}
     if(!countDirty&&!countSaving&&countSelection){const selected=selectedCount();countValues=new Map((selected?.values||[]).map(row=>[row.partId,row.physical]));countEditRevision=selected?.revision||'';if(!selected)countSelection='';}
     syncFailed=Boolean(fresh.pending.length||fresh.countQueue.length||fresh.incomeChanges.length);
+    if(!syncFailed)sessionPolicy.synced(active.token);
     syncError=fresh.pending.find(row=>row.syncError)?.syncError||fresh.incomeChanges.find(row=>row.syncError)?.syncError||fresh.countSyncError||'';
     const summary=window.SKProductionSync.pendingSummary(fresh);
     status(!syncFailed?'SINCRONIZADO · todos los registros confirmados.':summary.rejected?
@@ -1154,7 +1154,7 @@ function placeInstallControls(container){
  container.append(byId('installProduction'),byId('installProductionHelp'));
 }
 async function openWorkspace({offlineAccess=!navigator.onLine}={}){
- if(!session)return;
+ if(!session||!sessionPolicy.check())return;
  const active=session;
  const stored=await changeState(active.user.document);
  if(session!==active)return;
@@ -1216,11 +1216,12 @@ function submitAccess(id,handler){
  };
 }
 submitAccess('login',async values=>{
- const {document,password}=values,entry=globalThis.SKEntry;
+ const {document,password}=values;
  let nextSession,offlineAccess=false;
  try{
   const data=await api('productionLogin',values);
   nextSession={token:data.token,expiresAt:data.expiresAt,user:data.user};
+  sessionPolicy.signedIn(nextSession.token);
   await deviceAccess.remember(document,password,nextSession);
  }catch(error){
   if(error.centralResponse){
@@ -1229,14 +1230,15 @@ submitAccess('login',async values=>{
   }
   nextSession=await deviceAccess.verify(document,password);
   offlineAccess=true;
-  if(!nextSession||!(entry?entry.validLocal(nextSession):!nextSession.token.startsWith('sk2.')))throw new Error(navigator.onLine?error.message:'Acceso local no disponible. Verifica la contraseña o inicia sesión con internet en este dispositivo.');
+  if(nextSession&&!sessionPolicy.allows(nextSession.token))throw new Error(sessionPolicy.loginMessage);
+  if(!nextSession)throw new Error(navigator.onLine?error.message:'Acceso local no disponible. Verifica la contraseña o inicia sesión con internet en este dispositivo.');
  }
  session=nextSession;
  localStorage.setItem(sessionKey,JSON.stringify(session));
  await openWorkspace({offlineAccess});byId('login').reset();
 });
 byId('login').querySelector('button').disabled=false;
-byId('accessStatus').textContent='';
+byId('accessStatus').textContent=sessionPolicy.notice();
 setInterval(refreshShift,15000);
 window.addEventListener('focus',refreshShift);
 submitAccess('activate',async values=>{
@@ -1244,16 +1246,18 @@ submitAccess('activate',async values=>{
  byId('activate').reset();byId('activate').hidden=true;byId('login').hidden=false;byId('login').elements.document.value=values.document;
  status('Acceso activado. Ingresa con tu nueva contraseña.');
 });
-byId('logout').onclick=()=>{
- if(countSaving)return;
- if(countDirty&&!confirm('El conteo tiene cambios sin guardar. ¿Cerrar la sesión?'))return;
+byId('logout').onclick=()=>closeSession(false);
+function closeSession(forced,message=''){
+ if(!forced&&countSaving)return;
+ if(!forced&&countDirty&&!confirm('El conteo tiene cambios sin guardar. ¿Cerrar la sesión?'))return;
  window.SKProductionWarehouse?.close?.();
  countAccount='';countSelection='';countValues=new Map();countReport=null;countDirty=false;countEditRevision='';
  fields.responsableId.value='';personSearch.value='';responsibleOptions.hidden=true;
  placeInstallControls(byId('installBeforeLogin'));
- session=null;state={};draft=[];fields.assetId.value='';closeParts();closeMachine();localStorage.removeItem(sessionKey);
- byId('offlineEntry').hidden=true;byId('workspace').hidden=true;byId('productionHeader').hidden=true;byId('productionSync').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');
-};
+ try{if(JSON.parse(localStorage.getItem(sessionKey)||'null')?.token===session?.token)localStorage.removeItem(sessionKey);}catch{localStorage.removeItem(sessionKey);}
+ session=null;state={};draft=[];fields.assetId.value='';closeParts();closeMachine();
+ byId('offlineEntry').hidden=true;byId('workspace').hidden=true;byId('productionHeader').hidden=true;byId('productionSync').hidden=true;byId('access').hidden=false;status('Sesión cerrada.');byId('accessStatus').textContent=message;
+}
 window.addEventListener('beforeunload',event=>{if(countDirty||countSaving){event.preventDefault();event.returnValue='';}});
 byId('sync').onclick=()=>{retryAfter=0;sync();};
 for(const radio of fields.tipoEquipo)radio.onchange=()=>{

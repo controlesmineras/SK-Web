@@ -1,3 +1,4 @@
+const {entry}=require('./session-fixture.cjs');
 const test=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),path=require('node:path'),vm=require('node:vm');
 const {IDBFactory,IDBDatabase}=require('fake-indexeddb');
@@ -5,7 +6,7 @@ const read=file=>fs.readFileSync(path.join(__dirname,'..',file),'utf8');
 const clone=value=>JSON.parse(JSON.stringify(value));
 function setup({initial={},factory=new IDBFactory(),rows=new Map(Object.entries(initial))}={}){
   const localStorage={getItem:key=>rows.get(key)??null,setItem(){throw new Error('Snapshot must not be written to localStorage')},removeItem:key=>rows.delete(key)};
-  const ctx=vm.createContext({window:{},indexedDB:factory,localStorage,navigator:{storage:{persist:()=>Promise.resolve(true)}},setTimeout,clearTimeout});
+  const ctx=vm.createContext({window:{SKEntry:entry,},indexedDB:factory,localStorage,navigator:{storage:{persist:()=>Promise.resolve(true)}},setTimeout,clearTimeout});
   vm.runInContext(read('plaza/lz-string.js'),ctx);vm.runInContext(read('plaza/local-data.js'),ctx);
   return{api:ctx.window.SKPlazaLocal,ctx,rows,factory,localStorage};
 }

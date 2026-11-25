@@ -71,10 +71,10 @@ body:not([data-admin-role="owner"]):not([data-admin-role="admin"]) #adminUserMan
 <section id="importData" class="view"><div id="bulkImport"><div class="sectionHead"><h2>Importar datos desde Excel</h2></div><p class="hint">Los datos se revisan antes de guardarse. Los registros existentes no se reemplazan.</p><form id="importForm" class="importForm"><label>TABLA DE DESTINO<select id="importStore" required><option value="">Seleccionar tabla…</option><option value="personal">Colaboradores</option><option value="assets">Activos fijos</option><option value="novelties">Novedades de activos</option><option value="parts">Catálogo de repuestos</option><option value="consumptions">Consumos</option><option value="incomes">Ingresos</option></select></label><label>ARCHIVO EXCEL<input id="importFile" type="file" accept=".xlsx,.xls,.csv,.tsv" required></label><label id="importSheetLabel" hidden>HOJA<select id="importSheet"></select></label><button type="submit">REVISAR ARCHIVO</button></form><div id="importResult" hidden><div class="importSummary" id="importSummary"></div><div class="tableWrap"><table><thead id="importHead"></thead><tbody id="importRows"></tbody></table></div><div class="importActions"><button type="button" id="importCancel">Cancelar</button><button type="button" id="importConfirm">Importar filas válidas</button></div></div></div></section></main>
 <button type="button" id="adminBack" class="adminBackButton" title="Volver" aria-label="Volver a la pantalla anterior" hidden><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true" focusable="false"><path fill="currentColor" d="M10 5 2 12l8 7v-5h3c4.2 0 7 1.8 9 5-.8-6.5-4-10-9-10h-3V5Z"/></svg></button>
 <script src="sync-config.js?v=20260915-2"></script>
-<script src="app-entry.js?v=20261124-ingreso-simple"></script><script src="admin-auth.js?v=20261124-consulta-novedades"></script>
+<script src="app-entry.js?v=20261125-sesion-offline-36h"></script><script src="admin-auth.js?v=20261125-sesion-offline-36h"></script>
 
 <script src="asset-search.js?v=20261124-otros-nombres"></script><script src="asset-record-rules.js?v=20261121-marcas-yt-columna"></script>
-<script src="movement-time.js?v=1"></script><script src="cargo-search.js?v=20260927-2"></script><script src="spare-catalog.js?v=20261116-admin-role-1"></script><script src="asset-history.js?v=20261124-bodeguero-historial"></script><script src="asset-history-ui.js?v=20261124-consulta-novedades"></script><script src="app.js?v=20261122-saldos-offline"></script><script src="admin-install-ui.js?v=20261122-buscar-criterios"></script>
+<script src="movement-time.js?v=1"></script><script src="cargo-search.js?v=20260927-2"></script><script src="spare-catalog.js?v=20261125-sesion-offline-36h"></script><script src="asset-history.js?v=20261124-bodeguero-historial"></script><script src="asset-history-ui.js?v=20261125-sesion-offline-36h"></script><script src="app.js?v=20261125-sesion-offline-36h"></script><script src="admin-install-ui.js?v=20261122-buscar-criterios"></script>
 <script src="duplicate-person-guard.js?v=20261106-person-document-acta-edit-1"></script>
 <script src="active-asset-count.js?v=20260913-1"></script>
 
@@ -90,13 +90,13 @@ body:not([data-admin-role="owner"]):not([data-admin-role="admin"]) #adminUserMan
 <script src="asset-admin-ui.js?v=20261124-bodeguero-historial"></script>
 <script src="asset-novelty-query.js?v=1"></script>
 <script src="asset-query.js?v=20261120-coincidencias-activos-1"></script>
-<script src="novelty-form.js?v=20261121-revertir-novedades"></script>
+<script src="novelty-form.js?v=20261125-sesion-offline-36h"></script>
 <script src="novelty-transport.js?v=20261020-responsible-search-1"></script>
 <script src="offline-navigation.js?v=20261116-admin-role-1"></script>
 <script src="sync-latest.js?v=20261022-mark-integrity-1"></script>
-<script src="sync-api.js?v=20261122-saldos-offline"></script>
+<script src="sync-api.js?v=20261125-sesion-offline-36h"></script>
 <script src="admin-pending-records.js?v=20261122-cantidades-por-bodega"></script>
-<script src="consumption-manual-date.js?v=20261108-production-1"></script>
+<script src="consumption-manual-date.js?v=20261125-sesion-offline-36h"></script>
 <script src="consumption-query-v2.js?v=20261120-compras-1"></script>
 <script src="collaborator-contact-query.js?v=20260913-1"></script>
 <script src="income-module.js?v=20261119-hora-registro"></script>
@@ -107,8 +107,8 @@ body:not([data-admin-role="owner"]):not([data-admin-role="admin"]) #adminUserMan
 <script src="asset-seed-3.js?v=20260908-3"></script>
 <script src="asset-seed.js?v=20261009-assets-1"></script>
 <script src="spare-groups.js?v=20261124-otros-nombres"></script>
-<script src="inventory-admin.js?v=20261124-ver-ficha"></script>
-<script src="production-spares.js?v=20261116-admin-role-1"></script>
+<script src="inventory-admin.js?v=20261125-sesion-offline-36h"></script>
+<script src="production-spares.js?v=20261125-sesion-offline-36h"></script>
 <script src="inventory-stock-query.js?v=20261124-otros-nombres"></script>
 <script src="actas-admin.js?v=20261121-catalogos-por-aplicacion"></script><script src="document-query.js?v=20261106-acta-not-created-4"></script><script src="admin-home-navigation.js?v=20261124-consulta-novedades"></script>
 <script src="form-option-catalog.js?v=20261121-catalogos-por-aplicacion"></script>

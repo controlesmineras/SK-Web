@@ -35,7 +35,7 @@ async function all(name){
  const affected=new Set(pending.filter(row=>(row.datedNovelty&&!row.historyOnly)||row.noveltyAction?.status==='pending').map(row=>row.assetId));
  return Promise.all(rows.map(async asset=>affected.has(asset.id)?currentAssetProfile(tx,asset):asset));
 }
-function countStore(s){return new Promise((ok,no)=>{const r=db.transaction(s).objectStore(s).count();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}function put(s,o){if(s==='personal'&&!String(o?.id??'').trim())o={...o,id:uuid(),createdAt:o?.createdAt||now(),updatedAt:now(),syncState:'pending'};return new Promise((ok,no)=>{
+function countStore(s){return new Promise((ok,no)=>{const r=db.transaction(s).objectStore(s).count();r.onsuccess=()=>ok(r.result);r.onerror=()=>no(r.error)})}function put(s,o){if(s==='personal'&&!String(o?.id??'').trim())o={...o,id:uuid(),createdAt:o?.createdAt||now(),updatedAt:now(),syncState:'pending'};if(o?.syncState==='pending')window.SKAdminAuth?.requireActive?.();return new Promise((ok,no)=>{
  const affectsProfile=s==='assets'||assetEventStores.includes(s);
  const tx=db.transaction(s==='assets'?assetProfileTables:affectsProfile?[s,assetProfileStore]:s,'readwrite'),table=tx.objectStore(s);let failure=null;
  if(affectsProfile&&(s==='assets'||o.assetId))tx.objectStore(assetProfileStore).delete(s==='assets'?o.id:o.assetId);

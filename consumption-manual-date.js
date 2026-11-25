@@ -42,6 +42,7 @@ function mountDraft(){
 }
 function saveBatch(rows){
  return new Promise((resolve,reject)=>{
+  window.SKAdminAuth?.requireActive?.();
   const tx=db.transaction('consumptions','readwrite');
   tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||new Error('No se guardó el consumo'));
   try{for(const row of rows)tx.objectStore('consumptions').put(row)}catch(error){tx.abort();reject(error)}

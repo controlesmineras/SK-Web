@@ -107,21 +107,22 @@
       return await Promise.race([exchange,expired]);
     }finally{clearTimeout(timeout)}
   }
-  function sessionRejected(error){return /sesión.*venció|sesion.*vencio|inicia sesión/i.test(String(error?.message||''))}
-  async function send(snapshot,forceFull=false,allowRenewal=true,versions){
+  function sessionRejected(error){return /sesi[oó]n.*(?:venci[oó]|no v[aá]lida|revocada)|inicia sesi[oó]n/i.test(String(error?.message||''))}
+  async function send(snapshot,forceFull=false,versions){
     let lastError;
     for(let attempt=1;attempt<=2;attempt++){
       const sentToken=window.SKAdminAuth?.token?.()||'';
       try{return await sendOnce(snapshot,attempt,forceFull,versions)}catch(error){
         lastError=error;
+        if(/(?:cuenta|equipo).*no tiene acceso/i.test(error.message))window.SKAdminAuth?.sessionRejected?.(sentToken);
         if(sessionRejected(error)&&attempt===1){
           // Cached login renews its token in the background. Use that result first.
           phase('Comprobando la renovación del acceso…');
           await window.SKAdminAuth?.waitForLoginRenewal?.();
           const currentToken=window.SKAdminAuth?.token?.()||'';
           if(currentToken&&currentToken!==sentToken)continue;
-          if(allowRenewal){phase('Esperando tu contraseña para renovar la sincronización. Puedes seguir trabajando localmente.');if(await window.SKAdminAuth?.renewForSync?.())continue;}
-          throw new Error('Tu sesión necesita renovarse. Pulsa la nube para ingresar tu contraseña y sincronizar. Los pendientes se conservan.');
+          window.SKAdminAuth?.sessionRejected?.(sentToken);
+          throw new Error('Inicia sesión con internet y tu contraseña. Tus pendientes siguen guardados.');
         }
         if(!isTransient(error)||attempt===2)break;
         await wait(1200);
@@ -129,7 +130,7 @@
     }
     throw lastError;
   }
-  async function finishSync(label,detail,versions,balances){
+  async function finishSync(label,detail,versions,balances,sentToken){
     let balanceError;
     if(versions){
       try{await applyProductionBalances(versions,balances);}
@@ -146,7 +147,7 @@
     }
     if(balanceError){if(status)status.textContent='Sincronización parcial · Saldos de Producción pendientes. '+balanceError;ui('error');return false;}
     if(status)status.textContent=`${label} · ${new Date().toLocaleString('es-CO')}`;
-    ui('synced');window.dispatchEvent(new CustomEvent('skweb-synced',{detail:{source:'api',...detail}}));return true;
+    window.SKAdminAuth?.synced?.(sentToken);ui('synced');window.dispatchEvent(new CustomEvent('skweb-synced',{detail:{source:'api',...detail}}));return true;
   }
   function confirmPersonal(snapshot,result){
     if(!snapshot.personal?.length)return;
@@ -162,6 +163,7 @@
     if(requested.some(row=>!central.some(remote=>remote?.id===row.id&&(remote.deleted||String(remote.nuevaMarca||'').trim()))))throw new Error('La base central aún no confirmó la marca solicitada. Actualiza Code.gs y su implementación, y vuelve a sincronizar. La solicitud se conserva pendiente.');
   }
   async function performSync({silent=false,forceFull=false}={}){
+    const sentToken=window.SKAdminAuth?.token?.();
     const b=buttonStart(),s=document.querySelector('#syncStatus');
     try{
       running=true;ui('syncing');phase('Revisando los cambios guardados en este dispositivo…');
@@ -175,16 +177,16 @@
       // Negotiate that guarantee before trusting an unchanged snapshot.
       forceFull=forceFull||!silent||Boolean(snapshot.personal?.length)||(snapshot.assets||[]).some(row=>row.markRequest==='existing-v1'&&row.markStatus==='pending');
       let result;
-      try{result=await send(snapshot,forceFull||dated.length>0||changed.length>0,!silent,versions);}
+      try{result=await send(snapshot,forceFull||dated.length>0||changed.length>0,versions);}
       catch(error){
         if(!(dated.length||changed.length)||!/solicitud no v[aá]lida/i.test(error.message))throw error;
         // El servicio anterior rechaza la acción antes de escribir. El resto de la cola puede avanzar.
         snapshot.novelties=snapshot.novelties.filter(row=>!row.datedNovelty&&!row.noveltyAction);
-        waitingForServer=true;result=await send(snapshot,true,!silent,versions);
+        waitingForServer=true;result=await send(snapshot,true,versions);
       }
       const hasPending=stores.some(store=>snapshot[store]?.length);
       const valid=result=>result&&(result.notModified||result.acknowledged||(result.data&&typeof result.data==='object'&&!Array.isArray(result.data)));
-      if(!valid(result)||(result.notModified&&hasPending)){localStorage.removeItem('skWebServerUpdatedAt');result=await send(snapshot,true,!silent,versions)}
+      if(!valid(result)||(result.notModified&&hasPending)){localStorage.removeItem('skWebServerUpdatedAt');result=await send(snapshot,true,versions)}
       if(!valid(result))throw new Error('El servicio no devolvió la confirmación de sincronización');
       if(result.notModified&&hasPending)throw new Error('El servicio no confirmó los cambios pendientes');
       if(dated.length&&!waitingForServer&&dated.some(row=>!result.data?.novelties?.some(remote=>remote.id===row.id&&remote.datedNovelty&&typeof remote.historyOnly==='boolean')))
@@ -199,13 +201,13 @@
       const serverUpdatedAt=result.updatedAt||result.data?.updatedAt||'';
       if(result.notModified){
         if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
-        return await finishSync('Sincronizado · sin cambios',{notModified:true,waitingForServer},versions,result.productionBalances);
+        return await finishSync('Sincronizado · sin cambios',{notModified:true,waitingForServer},versions,result.productionBalances,sentToken);
       }
       if(result.acknowledged){
         phase('Confirmando los registros guardados…');await markSnapshotSynced(snapshot);phase('Actualizando las listas…');await refresh();window.SKInventoryAdmin?.render?.();
         if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
         window.dispatchEvent(new Event('skweb-inventory-refresh'));
-        return await finishSync('Sincronizado rápidamente',{acknowledged:true,waitingForServer},versions,result.productionBalances);
+        return await finishSync('Sincronizado rápidamente',{acknowledged:true,waitingForServer},versions,result.productionBalances,sentToken);
       }
       const merged=result.data,localAssetIds=new Set((await all('assets')).map(x=>x.id).filter(Boolean)),mergedAssetIds=new Set((merged.assets||[]).map(x=>x.id));
       for(const [store,rows] of Object.entries(merged))if(Array.isArray(rows))merged[store]=rows.map(row=>row?.syncState==='pending'?{...row,syncState:'synced'}:row);
@@ -214,7 +216,7 @@
       phase('Aplicando la respuesta en este dispositivo…');await window.writeSyncedSnapshot(merged,snapshot);await seedParts();phase('Actualizando las listas…');await refresh();window.SKInventoryAdmin?.render?.();
       if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
       window.dispatchEvent(new Event('skweb-inventory-refresh'));
-      return await finishSync('Sincronizado automáticamente',{waitingForServer},versions,result.productionBalances);
+      return await finishSync('Sincronizado automáticamente',{waitingForServer},versions,result.productionBalances,sentToken);
     }catch(e){
       retryAfter=Date.now()+60000;console.error('SK Web automatic sync:',e);ui('error');
       if(s)s.textContent=navigator.onLine?'Sincronización pendiente · '+(e?.message||e):'Sin conexión · cambios seguros en este dispositivo';

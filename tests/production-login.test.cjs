@@ -11,12 +11,18 @@ function context(){
  ctx.deviceAccess=ctx.createDeviceAccess('test-production');
  return ctx;
 }
-const savedSession={token:'previous-online-token',expiresAt:1,user:{document:'123',name:'Prueba',role:'admin'}};
+const productionSession=expires=>Buffer.from(JSON.stringify(['production','123','revision',expires])).toString('base64url')+'.signature';
+const expires=Date.now()+12*3600000-3000;
+const savedSession={token:productionSession(expires),expiresAt:expires,user:{document:'123',name:'Prueba',role:'admin'}};
 function loginContext(){
  const c=context();
  let handler;
  Object.assign(c,{session:null,sessionKey:'session',submitAccess:(id,callback)=>{handler=callback},byId:()=>({reset(){}}),openWorkspace:async options=>{c.opened=options},api:async()=>{throw new Error('Sin conexión')}});
  vm.runInContext(app.slice(app.indexOf("submitAccess('login',"),app.indexOf("byId('login').querySelector('button').disabled=false")),c);
+ c.window=c;c.addEventListener=()=>{};c.document={addEventListener(){}};c.atob=atob;
+ c.sessionStorage={removeItem(){},getItem(){return null},setItem(){}};
+ vm.runInContext(fs.readFileSync('app-entry.js','utf8'),c);
+ c.sessionPolicy=c.SKEntry.sessionPolicy('production',()=>c.session?.token,()=>{c.session=null;});
  c.login=handler;return c;
 }
 test('offline login requires a previous successful login on the same device',async()=>{
@@ -24,11 +30,17 @@ test('offline login requires a previous successful login on the same device',asy
  await assert.rejects(c.login({document:'123',password:'correcta'}),/Acceso local no disponible/);
  assert.equal(c.session,null);assert.equal(c.opened,undefined);
 });
-test('the remembered password permits offline login after the online token expires',async()=>{
+test('the remembered password permits offline login while the online token is valid',async()=>{
  const c=loginContext();
  await c.deviceAccess.remember('123','correcta',savedSession);
  await c.login({document:'123',password:'correcta'});
  assert.equal(c.session.token,savedSession.token);assert.equal(c.opened.offlineAccess,true);
+});
+test('an expired session requires online credentials, even with the remembered password',async()=>{
+ const c=loginContext(),expired=Date.now()-1000;
+ await c.deviceAccess.remember('123','correcta',{...savedSession,token:productionSession(expired),expiresAt:expired});
+ await assert.rejects(c.login({document:'123',password:'correcta'}),/Sesión vencida/);
+ assert.equal(c.opened,undefined);
 });
 test('a wrong password or another account cannot open local records',async()=>{
  const c=loginContext();

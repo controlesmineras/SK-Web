@@ -1,3 +1,4 @@
+const {policy:sessionPolicy}=require('./session-fixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -14,7 +15,7 @@ async function database(){
 }
 async function context(){
  const db=await database();
- const ctx=vm.createContext({database:Promise.resolve(db),window:{addEventListener(){}},document:{addEventListener(){}},setTimeout:()=>1,clearTimeout(){},setInterval(){},scheduleSync(){}});
+ const ctx=vm.createContext({sessionPolicy,session:{token:'local'}, database:Promise.resolve(db),window:{addEventListener(){}},document:{addEventListener(){}},setTimeout:()=>1,clearTimeout(){},setInterval(){},scheduleSync(){}});
  vm.runInContext(fs.readFileSync('produccion/sync-protocol.js','utf8'),ctx);
  vm.runInContext(app.slice(app.indexOf('async function changeState('),app.indexOf('async function api(')),ctx);
  return ctx;

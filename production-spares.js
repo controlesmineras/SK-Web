@@ -42,6 +42,7 @@
    if(!changes.items.length)return;
    // Una transacción evita dejar criterios creados sin sus saldos iniciales.
    await new Promise((resolve,reject)=>{
+    window.SKAdminAuth?.requireActive?.();
     const tx=db.transaction(['inventoryCriteria','inventoryStock'],'readwrite');
     changes.items.forEach(row=>tx.objectStore('inventoryCriteria').put(row));
     changes.balances.forEach(row=>tx.objectStore('inventoryStock').put(row));

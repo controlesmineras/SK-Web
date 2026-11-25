@@ -1,3 +1,4 @@
+const {entry}=require('./session-fixture.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm');
 const {readFileSync}=require('node:fs'),{join}=require('node:path');
 const read=file=>readFileSync(join(__dirname,'..',file),'utf8');
@@ -6,7 +7,7 @@ function harness(){
  const storage=new Map(),alerts=[],errors=[],nodes=new Map();
  const node=()=>({value:'',hidden:false,textContent:'',dataset:{},classList:{add(){},remove(){}},addEventListener(){},setAttribute(){},removeAttribute(){}});
  const document={querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}};
- const ctx=vm.createContext({document,alert:message=>alerts.push(message),window:{alert:message=>alerts.push(message),addEventListener(){},dispatchEvent(){},SKPlazaReturns:{setSyncError:message=>errors.push(message)}},sessionStorage:{getItem(){return null}},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:{},setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
+ const ctx=vm.createContext({document,alert:message=>alerts.push(message),window:{SKEntry:entry,alert:message=>alerts.push(message),addEventListener(){},dispatchEvent(){},SKPlazaReturns:{setSyncError:message=>errors.push(message)}},sessionStorage:{getItem(){return null}},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:{},setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
  const source=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
  vm.runInContext(read('asset-history.js'),ctx);
  vm.runInContext(source+`\nrender=()=>{};window.testing={sync,deliveryCatalog,currentDeliveryItem,setupRegisterMenu,mode:value=>{deliveryMode=value},get:()=>data,set:value=>{data=value},post:fn=>{post=fn},storage:next=>{localStorage.setItem('skPlazaData',JSON.stringify(next));data=next}};})();`,ctx);

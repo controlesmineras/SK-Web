@@ -29,8 +29,8 @@
    tx.oncomplete=()=>resolve(result);tx.onabort=()=>reject(tx.error);tx.onerror=()=>{};
   });
  }
- async function queue(account,row){
-  const db=await database;
+ async function queue(account,row,authorize){
+  const db=await database;authorize?.();
   return new Promise((resolve,reject)=>{
    const tx=db.transaction('pending','readwrite');tx.objectStore('pending').add({...row,account});
    tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error);tx.onerror=()=>{};

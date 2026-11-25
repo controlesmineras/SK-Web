@@ -1,3 +1,4 @@
+const {entry}=require('./session-fixture.cjs');
 const {test}=require('node:test'),assert=require('node:assert/strict'),vm=require('node:vm');
 const fs=require('node:fs'),path=require('node:path');
 const read=name=>fs.readFileSync(path.join(__dirname,'..',name),'utf8'),clone=value=>JSON.parse(JSON.stringify(value));
@@ -84,7 +85,7 @@ test('cancelar o dejar solicitante vacío no envía; un Code.gs anterior muestra
 });
 function plaza(data){
  const nodes=new Map(),node=()=>({value:'',textContent:'',innerHTML:'',elements:{itemId:{value:'gloves'}},addEventListener(){}});
- const ctx=vm.createContext({document:{querySelectorAll:()=>[],querySelector:key=>{if(key==='#deliveryCategoryFilter input:checked')return {value:'all'};if(!nodes.has(key))nodes.set(key,node());return nodes.get(key)}},window:{alert(){},addEventListener(){}},localStorage:{getItem:()=>null},sessionStorage:{getItem:()=>null},navigator:{onLine:true},setTimeout(){},clearTimeout(){},crypto:{},console});
+ const ctx=vm.createContext({document:{querySelectorAll:()=>[],querySelector:key=>{if(key==='#deliveryCategoryFilter input:checked')return {value:'all'};if(!nodes.has(key))nodes.set(key,node());return nodes.get(key)}},window:{SKEntry:entry,alert(){},addEventListener(){}},localStorage:{getItem:()=>null},sessionStorage:{getItem:()=>null},navigator:{onLine:true},setTimeout(){},clearTimeout(){},crypto:{},console});
  vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
  const source=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
  vm.runInContext(source+'\nwindow.audit={set:value=>{data=value},renderRecentQueries,deliveryReportRow,personHistoryRows,queryMovementCard,selectPerson:id=>{historyPersonId=id}};})();',ctx);ctx.window.audit.set(clone(data));return{api:ctx.window.audit,nodes};

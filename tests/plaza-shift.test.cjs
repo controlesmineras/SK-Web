@@ -1,3 +1,4 @@
+const {entry}=require('./session-fixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
@@ -12,7 +13,7 @@ test('Plaza requiere una selección vigente por cuenta y conserva la identidad a
     return nodes.get(key);
   };
   const ctx=vm.createContext({
-    document:{querySelector:node}, window:{alert(){}}, Date:class extends Date{static now(){return now}},
+    document:{querySelector:node}, window:{SKEntry:entry,alert(){}}, Date:class extends Date{static now(){return now}},
     sessionStorage:{getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},localStorage:{getItem:()=>null}
   });
   const source=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
@@ -151,7 +152,7 @@ test('la invitación aplica el rol auxiliar y la invitación anterior conserva s
 
 test('un inicio de sesión explícito pide elegir incluso al repetir cuenta y la renovación conserva esa elección',async()=>{
   const values=new Map(),ctx=vm.createContext({
-    sessionStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},
+    sessionPolicy:entry.sessionPolicy(),sessionStorage:{getItem:key=>values.get(key),setItem:(key,value)=>values.set(key,value),removeItem:key=>values.delete(key)},
     openApp:async()=>{}
   });
   const source=read('plaza/plaza.js');

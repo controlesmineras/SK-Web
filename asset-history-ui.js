@@ -146,6 +146,7 @@
    const title=(original.descripcion||'Novedad')+(when.date?' · '+when.date.split('-').reverse().join('/')+' '+when.time:'');
    const message=kind==='delete'?'¿Eliminar esta novedad del listado y deshacer sus efectos en la ficha?':'¿Revertir esta novedad y recuperar los datos anteriores? El registro quedará marcado como revertido.';
    if(!confirm(message+'\n\n'+title))return false;
+   window.SKAdminAuth?.requireActive?.();
    const tx=db.transaction(['novelties',assetProfileStore],'readwrite'),table=tx.objectStore('novelties');
    const committed=new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||new Error('No se pudo actualizar la novedad.'));});
    const write=async()=>{
