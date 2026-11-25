@@ -71,16 +71,24 @@ function validAssetForm(item,asset,getInput){
 function newAssetHint(item){
  return window.SKAssetRules.requiresSerial({clase:itemName(item)},item)?serialPrompt:'Completa los datos requeridos para esta clase.';
 }
-function incomeManufacturerControl(panel,item,value,existing){
+function incomeManufacturerControl(panel,item){
  const selector='[data-income-asset-input="fabricante"]';let control=panel.querySelector(selector);
  const dropdown=/^motosierras?$/.test(norm(itemName(item)));
  if((control.tagName==='SELECT')!==dropdown){const replacement=document.createElement(dropdown?'select':'input');replacement.dataset.incomeAssetInput='fabricante';if(!dropdown)replacement.autocomplete='off';control.replaceWith(replacement);control=replacement}
  if(!dropdown)recentManufacturerControl(control,itemName(item));
- if(dropdown){const brands=window.SKFormOptions?.values?.('asset.manufacturer.motosierra')||['Makita','Stihl'];control.replaceChildren(new Option('Seleccionar marca…',''),...brands.map(brand=>new Option(brand,brand)));if(existing&&value&&!brands.includes(value))control.add(new Option(value,value))}
+ if(dropdown){const brands=window.SKFormOptions?.values?.('asset.manufacturer.motosierra')||['Makita','Stihl'];control.replaceChildren(new Option('Seleccionar marca…',''),...brands.map(brand=>new Option(brand,brand)))}
 }
 function duplicate(rows,candidate){const identityDuplicate=window.SKAssetRules.duplicateIdentity(rows,candidate);if(identityDuplicate)return identityDuplicate;const type=norm(candidate.clase);return rows.find(asset=>!asset.deleted&&norm(asset.clase)===type&&asset.id!==candidate.id&&((candidate.numeroYT&&norm(assetNumber(asset))===norm(candidate.numeroYT))||(candidate.marcaInterna&&norm(asset.marcaInterna||asset.marcaActual)===norm(candidate.marcaInterna))))}
 function injectStyle(){if(document.querySelector('#plazaNewAssetStyle'))return;const style=document.createElement('style');style.id='plazaNewAssetStyle';style.textContent=`#assetNotFoundBtn{grid-column:1/-1}.deliveryAssetDetails{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;border:1px solid #ccd8e0;border-radius:11px;background:#f7f9fa}.deliveryAssetDetails[hidden]{display:none}.deliveryAssetDetails h3,.deliveryAssetDetails .assetRegisterHint,.deliveryAssetDetails .assetRegisterActions{grid-column:1/-1;margin:0}.deliveryAssetDetails label[hidden]{display:none}.deliveryAssetDetails select:disabled{background:#e9eef2;color:#52687a;opacity:1;cursor:default}.deliveryAssetDetails input[readonly]{background:#e9eef2;color:#52687a}.assetClassNumberField{position:relative}.assetFieldInfo{position:absolute;top:-5px;right:0;width:28px!important;height:28px!important;min-height:28px!important;padding:0!important;border:1px solid #1a4a68!important;border-radius:50%!important;background:#eef6fa!important;color:#173d59!important;font:700 16px/26px system-ui,sans-serif!important;text-align:center!important;box-shadow:none!important}.assetFieldInfo:focus-visible{outline:3px solid #8bc7e8;outline-offset:2px}.assetRegisterActions{display:flex;justify-content:center;gap:10px}.assetRegisterActions button{width:auto}.assetRegisterActions [data-cancel-new-asset]{background:#eef2f5;color:#173d59}@media(max-width:560px){.deliveryAssetDetails{grid-template-columns:1fr}}`;document.head.append(style)}
-function renderSelectedAsset(card,item,asset){
+function createAssetSummary(id){
+ const card=document.createElement('article');
+ card.id=id;card.className='selectedAssetSummary';card.hidden=true;
+ card.innerHTML='<small>ACTIVO SELECCIONADO</small><h3></h3><dl></dl>';
+ const title=card.querySelector('h3');
+ title.id=id+'Title';card.setAttribute('aria-labelledby',title.id);
+ return card;
+}
+function renderSelectedAsset(card,item,asset,originMine=''){
  const fields=visibleFields(item),mark=clean(asset.nuevaMarca||asset.marcaActual||asset.marcaInterna);
  const previous=clean(asset.marcaPrevia||asset.marcaAnterior||asset.numeroMarcaActual);
  const title=card.querySelector('h3'),details=card.querySelector('dl');
@@ -92,7 +100,8 @@ function renderSelectedAsset(card,item,asset){
   ['Marca anterior',previous!==mark&&previous],
   ['Largo (ft)',fields.largo&&asset.largo],
   ['Fabricante',fields.fabricante&&(asset.fabricante||asset.marcaComercial)],
-  ['Destinado a',asset.areaAsignada]
+  ['Destinado a',asset.areaAsignada],
+  ['Mina de origen',originMine]
  ];
  details.replaceChildren();
  for(const [label,value] of values){
@@ -109,9 +118,7 @@ function mount(){
  if(!assetField||!form||document.querySelector('#assetNotFoundBtn'))return;
  injectStyle();
  const select=document.querySelector('#deliveryAssetId'),button=document.createElement('button'),panel=document.createElement('fieldset');
- const summary=document.createElement('article');
- summary.id='deliveryAssetSummary';summary.hidden=true;summary.setAttribute('aria-labelledby','deliveryAssetSummaryTitle');
- summary.innerHTML='<small>ACTIVO SELECCIONADO</small><h3 id="deliveryAssetSummaryTitle"></h3><dl></dl>';
+ const summary=createAssetSummary('deliveryAssetSummary');
  button.type='button';button.id='assetNotFoundBtn';button.className='secondaryAction';button.textContent='NO LO ENCONTRÉ';button.hidden=true;
  panel.id='deliveryAssetDetails';panel.className='deliveryAssetDetails';panel.hidden=true;panel.disabled=true;panel.innerHTML=`<h3>DATOS DEL ACTIVO</h3><p class="assetRegisterHint"></p><label class="assetClassNumberField" data-asset-field="numeroYT">NÚMERO DE CLASE<button type="button" class="assetFieldInfo" data-class-number-info aria-label="¿Qué es el número de clase?">i</button><input name="numeroYT" autocomplete="off"></label><label data-asset-field="modelo">MODELO<input name="modelo" autocomplete="off"></label><label data-asset-field="marcaPrevia">MARCA ANTERIOR<input name="marcaPrevia" autocomplete="off"></label><label data-asset-field="serial">SERIAL<input name="serial" autocomplete="off"></label><label data-asset-field="largo">LARGO FT<input name="largo" type="number" min="0" step="any"></label><label data-asset-field="fabricante">MARCA COMERCIAL / FABRICANTE<input name="fabricante" autocomplete="off"></label><label data-asset-field="marcaInterna">MARCA INTERNA<input name="marcaInterna" autocomplete="off"></label><label data-asset-area>DESTINADO A<select name="areaAsignada"></select></label><div class="assetRegisterActions"><button type="button" data-save-new-asset>REGISTRAR ACTIVO</button><button type="button" data-cancel-new-asset>CANCELAR</button></div>`;
  assetField.after(summary,button,panel);
@@ -175,6 +182,8 @@ function mountIncome(){
  <label id="incomeOriginField">MINA DE ORIGEN<select id="incomeOriginMine"><option value="">Seleccionar…</option></select></label>
  <p id="incomeOriginHint" class="assetRegisterHint"></p>
  <label class="assetClassNumberField" data-income-asset-field="numeroYT">NÚMERO DE CLASE<button type="button" class="assetFieldInfo" data-class-number-info aria-label="¿Qué es el número de clase?">i</button><input data-income-asset-input="numeroYT" autocomplete="off"></label><label data-income-asset-field="fabricante">MARCA COMERCIAL<input data-income-asset-input="fabricante" autocomplete="off"></label><label data-income-asset-field="modelo">MODELO<input data-income-asset-input="modelo" autocomplete="off"></label><label data-income-asset-field="serial">SERIAL<input data-income-asset-input="serial" autocomplete="off"></label><label data-income-asset-field="largo">LARGO FT<input data-income-asset-input="largo" type="number" min="0" step="any"></label><label data-income-asset-field="marcaInterna">MARCA INTERNA<input data-income-asset-input="marcaInterna" autocomplete="off"></label>`;
+ const summary=createAssetSummary('incomeAssetSummary');
+ panel.querySelector('#incomeAssetResults').after(summary);
  quantityField.after(panel);
  const style=document.createElement('style');style.textContent=`#incomeAssetPanel .incomeAssetMode,#incomeAssetPanel .incomeAssetSearchField,#incomeAssetSearchStatus,#incomeAssetResults{grid-column:1/-1}#incomeAssetPanel [hidden]{display:none!important}.incomeAssetMode{display:grid;grid-template-columns:1fr 1fr;gap:4px;background:#e1e9ef;padding:4px;border-radius:12px}.incomeAssetMode button{min-width:0;padding:12px 8px;background:transparent;color:#36556c;border-radius:9px;font-size:.85rem;white-space:normal}.incomeAssetMode button[aria-pressed="true"]{background:#173d59;color:#fff;box-shadow:0 2px 5px #173d5926}.incomeAssetMode button:focus-visible{outline:3px solid #e7b45a;outline-offset:1px}#incomeAssetSearchStatus{margin:0;font-size:.9rem;color:#52687a;overflow-wrap:anywhere}#incomeAssetResults{display:grid;gap:8px;max-height:260px;overflow:auto}#incomeAssetResults button{text-align:left;background:#fff;color:#173d59;border:1px solid #c8d6df;display:grid;gap:5px;overflow-wrap:anywhere}#incomeAssetResults button small{color:#52687a}#incomeAssetResults button:disabled{opacity:.75;cursor:default}#incomeAssetResults button:focus-visible{outline:3px solid #e7b45a;outline-offset:1px}`;document.head.append(style);
  const select=panel.querySelector('#incomeAssetId'),search=panel.querySelector('#incomeAssetSearch'),results=panel.querySelector('#incomeAssetResults'),status=panel.querySelector('#incomeAssetSearchStatus'),incomeType=panel.querySelector('#incomeType'),originMine=panel.querySelector('#incomeOriginMine'),originHint=panel.querySelector('#incomeOriginHint');
@@ -192,23 +201,38 @@ function mountIncome(){
   const item=currentItem(),fixed=isFixed(item),special=fixed&&isRepairClass(itemName(item)),isNew=mode==='new',asset=isNew?null:selectedAsset(),fields=incomeFields(item,isNew,markingContext());
   panel.hidden=!fixed;quantityField.hidden=!!fixed;quantityField.style.display=fixed?'none':'';form.elements.quantity.disabled=!!fixed;form.elements.quantity.required=!fixed;if(fixed)form.elements.quantity.value='1';
   for(const button of panel.querySelectorAll('[data-income-mode]'))button.setAttribute('aria-pressed',String(button.dataset.incomeMode===mode));
-  panel.querySelector('.incomeAssetSearchField').hidden=isNew;search.disabled=!fixed||isNew;status.hidden=isNew;results.hidden=isNew||!!asset;
-  const areaControl=input('areaAsignada');areaControl.closest('label').hidden=!fixed||(!isNew&&!asset);fillAssetArea(areaControl,isNew?newValues.areaAsignada||'':asset?.areaAsignada||'');areaControl.disabled=!fixed||!isNew;
-  incomeManufacturerControl(panel,item,isNew?newValues.fabricante:asset?.fabricante,!isNew);
-  for(const [name,enabled] of Object.entries(fields)){const wrap=panel.querySelector(`[data-income-asset-field="${name}"]`),control=input(name),show=fixed&&(isNew||!!asset)&&enabled;wrap.hidden=!show||(isNew&&name==='numeroYT'&&automaticClassNumber(itemName(item)));control.disabled=!show||(!isNew&&control.tagName==='SELECT');control.readOnly=!isNew;control.required=isNew&&show&&requiredField(name,item);control.value=isNew?(newValues[name]||''):asset?(name==='numeroYT'?assetNumber(asset):clean(asset[name]||asset[name==='marcaInterna'?'marcaActual':''])):''}
+  const editing=fixed&&isNew;
+  panel.querySelector('.incomeAssetSearchField').hidden=isNew;
+  search.disabled=!fixed||isNew;status.hidden=isNew||!!asset;results.hidden=isNew||!!asset;
+  const areaControl=input('areaAsignada');
+  areaControl.closest('label').hidden=!editing;areaControl.disabled=!editing;
+  if(editing){
+   fillAssetArea(areaControl,newValues.areaAsignada||'');
+   incomeManufacturerControl(panel,item);
+  }
+  for(const [name,enabled] of Object.entries(fields)){
+   const control=input(name),show=editing&&enabled;
+   control.closest('label').hidden=!show||(name==='numeroYT'&&automaticClassNumber(itemName(item)));
+   control.disabled=!show;control.required=show&&requiredField(name,item);
+   control.value=editing?(newValues[name]||''):'';
+  }
   if(isNew&&automaticClassNumber(itemName(item)))input('numeroYT').value=nextClassNumber(itemName(item));
   for(const control of [incomeType,originMine]){control.closest('label').hidden=!special;control.disabled=!special;control.required=special}
   const registeredMine=asset?clean(asset.mina||asset.minaOrigen):'';
   if(special&&registeredMine){if(!Array.from(originMine.options).some(option=>option.value===registeredMine))originMine.add(new Option(registeredMine,registeredMine));originMine.value=registeredMine;}
   originMine.disabled=!special||!!registeredMine;
-  originMine.title=registeredMine?'Mina registrada del activo. Se modifica desde SK Admin.':'';
+  originMine.closest('label').hidden=originMine.disabled;
+  summary.hidden=!fixed||!asset;
+  if(!summary.hidden)renderSelectedAsset(summary,item,asset,special?registeredMine:'');
   originHint.hidden=!special;
   const context=markingContext(),markSeparator=window.SKPlaza?.getData?.().capabilities?.externalMarkSeparator==='-'?'-':'';
   originHint.textContent=!special?'':incomeType.value==='TRASLADO'?'El activo quedará asignado a Sandra K. '+(isNew&&context.incomeMarking?'Recibirá una marca de la secuencia de tres letras de Sandra K.':'Se conserva su identificación.'):incomeType.value==='REPARACIÓN'?'Ingreso para reparación; se conserva la mina propietaria. '+(isNew&&context.activoExterno?(context.incomeMarking?`La marca llevará el prefijo ${prefixFor(originMine.value)||'de la mina'}${markSeparator?', un guion':''} y dos letras únicas (ej.: ${prefixFor(originMine.value)||'P'}${markSeparator}AA). Se conservará cuando regrese.`:'Conserva la marca de origen del equipo.'):''):'Indica si llega asignado a Sandra K o para reparación.';
-  panel.querySelector('.assetRegisterHint').textContent=isNew?newAssetHint(item):asset?(window.SKAssetRules.isColumn(asset)?'Columna seleccionada. Se conservarán su identificación, marca y fecha de ingreso inicial.':'Activo seleccionado. Se conservarán su marca, serial y fecha de ingreso inicial.'):'Busca y selecciona un activo existente. Si aún no está registrado, elige ACTIVO NUEVO.';
+  const hint=panel.querySelector('.assetRegisterHint');
+  hint.hidden=!!asset;
+  hint.textContent=isNew?newAssetHint(item):'Busca y selecciona un activo existente. Si aún no está registrado, elige ACTIVO NUEVO.';
   select.replaceChildren(new Option('Seleccionar…',''));if(fixed&&(isNew||asset)){select.add(new Option(isNew?'Nuevo activo':assetLabel(asset),isNew?'__new__':asset.id));select.value=isNew?'__new__':asset.id}
  };
- const choose=asset=>{if(blockedReason(asset))return;registeredId=asset.id;search.value=window.SKAssetRules.isColumn(asset)?(window.SKAssetRules.columnIdentity(asset).number||window.SKAssetRules.columnIdentity(asset).mark):(asset.serial||asset.marcaActual||asset.marcaInterna||assetNumber(asset));const mine=clean(asset.mina||asset.minaOrigen);if(mine){if(!Array.from(originMine.options).some(option=>option.value===mine))originMine.add(new Option(mine,mine));originMine.value=mine}status.textContent='Seleccionado: '+assetLabel(asset);configure()};
+ const choose=asset=>{if(blockedReason(asset))return;registeredId=asset.id;search.value=window.SKAssetRules.isColumn(asset)?(window.SKAssetRules.columnIdentity(asset).number||window.SKAssetRules.columnIdentity(asset).mark):(asset.serial||asset.marcaActual||asset.marcaInterna||assetNumber(asset));const mine=clean(asset.mina||asset.minaOrigen);if(mine){if(!Array.from(originMine.options).some(option=>option.value===mine))originMine.add(new Option(mine,mine));originMine.value=mine}configure();search.focus()};
  const renderSearch=()=>{
   const item=currentItem();if(!isFixed(item)||mode!=='registered')return;
   const query=clean(search.value),matcher=window.SKAssetSearch.query(query),rows=matches(matcher);results.replaceChildren();results.hidden=false;
@@ -223,7 +247,10 @@ function mountIncome(){
  const refresh=()=>{const id=form.elements.itemId.value;if(id!==lastItemId){lastItemId=id;mode='registered';newValues={};registeredId='';search.value='';incomeType.value='';originMine.value=''}fillMines();configure();if(!registeredId)renderSearch()};
  panel.querySelector('[data-class-number-info]').addEventListener('click',()=>alert(CLASS_NUMBER_HELP));
  panel.querySelectorAll('[data-income-mode]').forEach(button=>button.addEventListener('click',()=>{rememberNew();mode=button.dataset.incomeMode;configure();if(mode==='registered'&&!registeredId)renderSearch()}));
- search.addEventListener('input',()=>{registeredId='';configure();renderSearch()});
+ search.addEventListener('input',()=>{
+  if(registeredId&&originMine.disabled)originMine.value='';
+  registeredId='';configure();renderSearch();
+ });
  search.addEventListener('keydown',event=>{if(event.key==='ArrowDown'){const first=results.querySelector('button:not(:disabled)');if(first){event.preventDefault();first.focus()}}if(event.key==='Enter'){event.preventDefault();const rows=matches(window.SKAssetSearch.query(search.value)).filter(({asset})=>!blockedReason(asset));if(rows.length===1)choose(rows[0].asset)}});
  for(const control of [incomeType,originMine])control.addEventListener('change',()=>{rememberNew();configure()});
  panel.addEventListener('focusin',event=>{if(event.target===input('fabricante'))recentManufacturerControl(event.target,itemName(currentItem()))});

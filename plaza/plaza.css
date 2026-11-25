@@ -50,7 +50,7 @@
 #assetReturnSyncError{color:#963c12;background:#fff3e6;padding:12px;border-radius:9px}
 @media(max-width:520px){.assetReturnFilters{grid-template-columns:1fr}#assetReturnForm .deliveryFormActions{grid-template-columns:1fr}}
 
-.recipientNoMatch{display:grid;gap:8px;margin-top:-6px;padding:10px 12px;border:1px solid #d7e0e7;border-radius:9px;background:#f8fafb}.recipientNoMatch[hidden]{display:none}.recipientNoMatch>span{font-size:.78rem;font-weight:850;color:#667085}.recipientNoMatch #newRecipientBtn,.recipientNoMatch #newIncomeCollaborator{width:100%;background:#173d59;color:#fff;text-align:left}.deliveryFormActions{display:grid;grid-template-columns:1fr 1fr;gap:12px}.deliveryFormActions #cancelDeliveryBtn{background:#eef1f3;color:#344b5d;border:1px solid #c8d1da}.deliveryFormActions button{min-height:48px}
+.recipientNoMatch{display:grid;gap:8px;margin-top:-6px;padding:10px 12px;border:1px solid #d7e0e7;border-radius:9px;background:#f8fafb}.recipientNoMatch[hidden]{display:none}.recipientNoMatch>span{font-size:.78rem;font-weight:850;color:#667085}.recipientNoMatch #newRecipientBtn,.recipientNoMatch #newIncomeCollaborator{width:100%;background:#173d59;color:#fff;text-align:left}.deliveryFormActions{display:grid;grid-template-columns:1fr 1fr;gap:12px}.deliveryFormActions :is(#cancelDeliveryBtn,#cancelIncomeBtn){background:#eef1f3;color:#344b5d;border:1px solid #c8d1da}.deliveryFormActions button{min-height:48px}
 
 .headerSync{align-items:flex-end!important}.headerLastSync{font-size:.66rem;line-height:1.1;white-space:nowrap;opacity:.78;margin:0 0 4px;text-align:right;font-weight:650;letter-spacing:.01em}@media(max-width:520px){.headerLastSync{font-size:.58rem}}
 
@@ -91,8 +91,8 @@
 #deliveryForm .recipientCompany label{flex-direction:row;justify-content:center;min-width:0;min-height:44px;padding:8px 12px;gap:8px}
 #deliveryForm .recipientCompany input[type="radio"]{flex:0 0 18px;width:18px;height:18px;min-height:0;margin:0;padding:0;accent-color:#173d59;cursor:pointer}
 #deliveryForm .recipientCompany label:has(input:focus-visible){outline:3px solid #397497;outline-offset:2px}
-#deliveryDraft:has(>.permission:only-child){border:0;border-radius:0;background:transparent;padding:0}
-#deliveryDraft>.permission:only-child{text-align:left;line-height:1.4}
+:is(#deliveryDraft,#incomeDraft):has(>.permission:only-child){border:0;border-radius:0;background:transparent;padding:0}
+:is(#deliveryDraft,#incomeDraft)>.permission:only-child{text-align:left;line-height:1.4}
 
 
 /* Fecha y hora comparten fila en Entregas e Ingresos recientes. */
@@ -198,33 +198,37 @@
 #mineCarrierResults button.isActive{outline:2px solid #397696;outline-offset:-2px;background:#e1eff6}
 #mineCarrierResults small,#mineCarrierResults p{color:#526977;font-size:.84rem;font-weight:400}
 
-/* El buscador y la ficha identifican una sola unidad antes de continuar la salida. */
-#deliveryForm{grid-template-columns:minmax(0,1fr)}
-#deliveryForm>*{min-width:0}
-#deliveryForm .plazaMovementTime{max-width:none}
+/* El buscador y la ficha identifican una sola unidad en el ingreso o la salida. */
+:is(#deliveryForm,#incomeForm){grid-template-columns:minmax(0,1fr)}
+:is(#deliveryForm,#incomeForm)>*{min-width:0}
+:is(#deliveryForm,#incomeForm) .plazaMovementTime{max-width:none}
 #deliveryAssetDetails{margin:0;min-inline-size:0}
-#deliveryAssetSummary:not([hidden]){
+.selectedAssetSummary:not([hidden]){
  display:grid;gap:.2rem;padding:.65rem .85rem;
  background:#edf5f8;border-inline-start:4px solid #397497;border-radius:6px;
  overflow-wrap:anywhere;
 }
-#deliveryAssetSummary small{font-size:.8rem;font-weight:750;color:#36586b}
-#deliveryAssetSummary h3{margin:0;font-size:1.05rem}
-#deliveryAssetSummary dl{display:flex;flex-wrap:wrap;gap:.15rem 1rem;margin:0;font-size:.9rem}
-#deliveryAssetSummary dl:empty{display:none}
-#deliveryAssetSummary dl div{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 .3rem;min-width:0}
-#deliveryAssetSummary dt{color:#435c6c}
-#deliveryAssetSummary dd{margin:0;font-weight:650}
+.selectedAssetSummary small{font-size:.8rem;font-weight:750;color:#36586b}
+.selectedAssetSummary h3{margin:0;font-size:1.05rem}
+.selectedAssetSummary dl{display:flex;flex-wrap:wrap;gap:.15rem 1rem;margin:0;font-size:.9rem}
+.selectedAssetSummary dl:empty{display:none}
+.selectedAssetSummary dl div{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 .3rem;min-width:0}
+.selectedAssetSummary dt{color:#435c6c}
+.selectedAssetSummary dd{margin:0;font-weight:650}
 
+#incomeAssetSummary{grid-column:1/-1}
 @media(max-width:720px){
- main:has(#delivery.active){padding-inline:6px}
- #delivery.view{padding:14px 10px}
- #delivery>h2{margin:0 0 1rem;text-align:center}
- #deliveryForm>label,#deliveryForm .plazaMovementTime label{text-align:center}
+ #incomeAssetPanel{grid-template-columns:minmax(0,1fr);border:0;background:transparent;padding:0}
+ #incomeAssetPanel>label,#incomeAssetPanel>h3{text-align:center}
+ #incomeAssetPanel input[data-income-asset-input]{text-align:center}
+ main:has(:is(#delivery,#income).active){padding-inline:6px}
+ :is(#delivery,#income).view{padding:14px 10px}
+ :is(#delivery,#income)>h2{margin:0 0 1rem;text-align:center}
+ :is(#deliveryForm,#incomeForm)>label,:is(#deliveryForm,#incomeForm) .plazaMovementTime label{text-align:center}
  #deliveryForm .recipientCompany legend{margin-inline:auto}
- #deliveryForm :is(input[type=search],input[type=time],input[type=number],select){text-align:center;max-width:100%}
- #deliveryForm .plazaMovementTime input[type=time]{appearance:none;height:46px}
- #deliveryForm .skCalendarMirror{justify-content:center}
- #deliveryForm .skCalendarEditor{text-align:center}
- #deliveryForm .itemSearchMenu{text-align:start}
+ :is(#deliveryForm,#incomeForm) :is(input[type=search],input[type=time],input[type=number],select){text-align:center;max-width:100%}
+ :is(#deliveryForm,#incomeForm) .plazaMovementTime input[type=time]{appearance:none;height:46px}
+ :is(#deliveryForm,#incomeForm) .skCalendarMirror{justify-content:center}
+ :is(#deliveryForm,#incomeForm) .skCalendarEditor{text-align:center}
+ :is(#deliveryForm,#incomeForm) .itemSearchMenu{text-align:start}
 }
