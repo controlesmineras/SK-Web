@@ -265,7 +265,7 @@ function matchesItemSearch(text,number,query){
         item.before(company);
         $('#editRecipientBtn').after(quantity,replacement);
       }else{
-        $('#deliveryAssetField').after(quantity,replacement,company);
+        ($('#deliveryAssetDetails')||$('#deliveryAssetField')).after(quantity,replacement,company);
       }
       clearItemSearch(form);
     }

@@ -80,27 +80,79 @@ function incomeManufacturerControl(panel,item,value,existing){
 }
 function duplicate(rows,candidate){const identityDuplicate=window.SKAssetRules.duplicateIdentity(rows,candidate);if(identityDuplicate)return identityDuplicate;const type=norm(candidate.clase);return rows.find(asset=>!asset.deleted&&norm(asset.clase)===type&&asset.id!==candidate.id&&((candidate.numeroYT&&norm(assetNumber(asset))===norm(candidate.numeroYT))||(candidate.marcaInterna&&norm(asset.marcaInterna||asset.marcaActual)===norm(candidate.marcaInterna))))}
 function injectStyle(){if(document.querySelector('#plazaNewAssetStyle'))return;const style=document.createElement('style');style.id='plazaNewAssetStyle';style.textContent=`#assetNotFoundBtn{grid-column:1/-1}.deliveryAssetDetails{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;border:1px solid #ccd8e0;border-radius:11px;background:#f7f9fa}.deliveryAssetDetails[hidden]{display:none}.deliveryAssetDetails h3,.deliveryAssetDetails .assetRegisterHint,.deliveryAssetDetails .assetRegisterActions{grid-column:1/-1;margin:0}.deliveryAssetDetails label[hidden]{display:none}.deliveryAssetDetails select:disabled{background:#e9eef2;color:#52687a;opacity:1;cursor:default}.deliveryAssetDetails input[readonly]{background:#e9eef2;color:#52687a}.assetClassNumberField{position:relative}.assetFieldInfo{position:absolute;top:-5px;right:0;width:28px!important;height:28px!important;min-height:28px!important;padding:0!important;border:1px solid #1a4a68!important;border-radius:50%!important;background:#eef6fa!important;color:#173d59!important;font:700 16px/26px system-ui,sans-serif!important;text-align:center!important;box-shadow:none!important}.assetFieldInfo:focus-visible{outline:3px solid #8bc7e8;outline-offset:2px}.assetRegisterActions{display:flex;justify-content:center;gap:10px}.assetRegisterActions button{width:auto}.assetRegisterActions [data-cancel-new-asset]{background:#eef2f5;color:#173d59}@media(max-width:560px){.deliveryAssetDetails{grid-template-columns:1fr}}`;document.head.append(style)}
+function renderSelectedAsset(card,item,asset){
+ const fields=visibleFields(item),mark=clean(asset.nuevaMarca||asset.marcaActual||asset.marcaInterna);
+ const previous=clean(asset.marcaPrevia||asset.marcaAnterior||asset.numeroMarcaActual);
+ const title=card.querySelector('h3'),details=card.querySelector('dl');
+ title.textContent=[clean(asset.clase)||itemName(item),mark].filter(Boolean).join(' · ');
+ const values=[
+  ['Serial',fields.serial&&asset.serial],
+  ['Modelo',fields.modelo&&asset.modelo],
+  ['N.º de clase',assetNumber(asset)],
+  ['Marca anterior',previous!==mark&&previous],
+  ['Largo (ft)',fields.largo&&asset.largo],
+  ['Fabricante',fields.fabricante&&(asset.fabricante||asset.marcaComercial)],
+  ['Destinado a',asset.areaAsignada]
+ ];
+ details.replaceChildren();
+ for(const [label,value] of values){
+  if(!clean(value)||norm(value)==='no aplica')continue;
+  const pair=document.createElement('div'),term=document.createElement('dt'),description=document.createElement('dd');
+  term.textContent=label;
+  description.textContent=value;
+  pair.append(term,description);
+  details.append(pair);
+ }
+}
 function mount(){
  const assetField=document.querySelector('#deliveryAssetField'),form=document.querySelector('#deliveryForm');
  if(!assetField||!form||document.querySelector('#assetNotFoundBtn'))return;
  injectStyle();
- const select=document.querySelector('#deliveryAssetId'),button=document.createElement('button'),panel=document.createElement('div');
+ const select=document.querySelector('#deliveryAssetId'),button=document.createElement('button'),panel=document.createElement('fieldset');
+ const summary=document.createElement('article');
+ summary.id='deliveryAssetSummary';summary.hidden=true;summary.setAttribute('aria-labelledby','deliveryAssetSummaryTitle');
+ summary.innerHTML='<small>ACTIVO SELECCIONADO</small><h3 id="deliveryAssetSummaryTitle"></h3><dl></dl>';
  button.type='button';button.id='assetNotFoundBtn';button.className='secondaryAction';button.textContent='NO LO ENCONTRÉ';button.hidden=true;
- panel.id='deliveryAssetDetails';panel.className='deliveryAssetDetails';panel.hidden=true;panel.innerHTML=`<h3>DATOS DEL ACTIVO</h3><p class="assetRegisterHint"></p><label class="assetClassNumberField" data-asset-field="numeroYT">NÚMERO DE CLASE<button type="button" class="assetFieldInfo" data-class-number-info aria-label="¿Qué es el número de clase?">i</button><input name="numeroYT" autocomplete="off"></label><label data-asset-field="modelo">MODELO<input name="modelo" autocomplete="off"></label><label data-asset-field="marcaPrevia">MARCA ANTERIOR<input name="marcaPrevia" autocomplete="off"></label><label data-asset-field="serial">SERIAL<input name="serial" autocomplete="off"></label><label data-asset-field="largo">LARGO FT<input name="largo" type="number" min="0" step="any"></label><label data-asset-field="fabricante">MARCA COMERCIAL / FABRICANTE<input name="fabricante" autocomplete="off"></label><label data-asset-field="marcaInterna">MARCA INTERNA<input name="marcaInterna" autocomplete="off"></label><label data-asset-area>DESTINADO A<select name="areaAsignada"></select></label><div class="assetRegisterActions" hidden><button type="button" data-save-new-asset>REGISTRAR ACTIVO</button><button type="button" data-cancel-new-asset>CANCELAR</button></div>`;
- assetField.after(button,panel);
- let newMode=false;
- const configure=(item,asset=null,editing=false)=>{const fields=visibleFields(item,editing);newMode=editing;panel.hidden=!item||(!asset&&!editing);panel.querySelector('h3').textContent=editing?`REGISTRAR ${itemName(item).toUpperCase()}`:'DATOS DEL ACTIVO SELECCIONADO';panel.querySelector('.assetRegisterHint').textContent=editing?newAssetHint(item)+' El activo también quedará registrado en Ingresos.':'Información de consulta; para modificarla usa SK Admin.';for(const [name,show] of Object.entries(fields)){const wrap=panel.querySelector(`[data-asset-field="${name}"]`),input=field(panel,name);wrap.hidden=!show||(editing&&name==='numeroYT'&&automaticClassNumber(itemName(item)));input.disabled=!show;input.readOnly=!editing;input.required=editing&&show&&requiredField(name,item);input.value=asset?(name==='numeroYT'?assetNumber(asset):clean(asset[name]||asset[name==='marcaInterna'?'marcaActual':''])):''}fillAssetArea(field(panel,'areaAsignada'),asset?.areaAsignada||'');field(panel,'areaAsignada').disabled=!editing;if(editing&&automaticClassNumber(itemName(item)))field(panel,'numeroYT').value=nextClassNumber(itemName(item));recentManufacturerControl(field(panel,'fabricante'),itemName(item));panel.querySelector('.assetRegisterActions').hidden=!editing};
- const refresh=()=>{const item=selectedItem(),fixed=isFixed(item),asset=(window.SKPlaza?.getData?.().assets||[]).find(row=>row.id===select.value);button.hidden=!fixed;button.textContent=select&&Array.from(select.options).some(option=>option.value)?'¿NO LO ENCONTRASTE?':'NO LO ENCONTRÉ';if(!fixed)configure(null);else if(!newMode)configure(item,asset,false)};
- const beginNew=()=>{const item=selectedItem();if(!isFixed(item))return;select.value='';select.dispatchEvent(new Event('change',{bubbles:true}));configure(item,null,true);panel.scrollIntoView({behavior:'smooth',block:'nearest'});field(panel,'numeroYT')?.focus()};
- const cancelNew=()=>{newMode=false;configure(selectedItem(),null,false);refresh()};
+ panel.id='deliveryAssetDetails';panel.className='deliveryAssetDetails';panel.hidden=true;panel.disabled=true;panel.innerHTML=`<h3>DATOS DEL ACTIVO</h3><p class="assetRegisterHint"></p><label class="assetClassNumberField" data-asset-field="numeroYT">NÚMERO DE CLASE<button type="button" class="assetFieldInfo" data-class-number-info aria-label="¿Qué es el número de clase?">i</button><input name="numeroYT" autocomplete="off"></label><label data-asset-field="modelo">MODELO<input name="modelo" autocomplete="off"></label><label data-asset-field="marcaPrevia">MARCA ANTERIOR<input name="marcaPrevia" autocomplete="off"></label><label data-asset-field="serial">SERIAL<input name="serial" autocomplete="off"></label><label data-asset-field="largo">LARGO FT<input name="largo" type="number" min="0" step="any"></label><label data-asset-field="fabricante">MARCA COMERCIAL / FABRICANTE<input name="fabricante" autocomplete="off"></label><label data-asset-field="marcaInterna">MARCA INTERNA<input name="marcaInterna" autocomplete="off"></label><label data-asset-area>DESTINADO A<select name="areaAsignada"></select></label><div class="assetRegisterActions"><button type="button" data-save-new-asset>REGISTRAR ACTIVO</button><button type="button" data-cancel-new-asset>CANCELAR</button></div>`;
+ assetField.after(summary,button,panel);
+ const refresh=()=>{
+  const item=selectedItem(),fixed=isFixed(item);
+  const asset=fixed&&select.value&&(window.SKPlaza.getData().assets||[]).find(row=>row.id===select.value);
+  if(!fixed||asset||panel.dataset.itemId!==item.id){panel.hidden=true;panel.disabled=true}
+  summary.hidden=!asset;
+  if(asset)renderSelectedAsset(summary,item,asset);
+  button.hidden=!fixed||Boolean(asset)||!panel.hidden;
+  button.textContent=Array.from(select.options).some(option=>option.value)?'¿NO LO ENCONTRASTE?':'NO LO ENCONTRÉ';
+ };
+ const beginNew=()=>{
+  const item=selectedItem();
+  if(!isFixed(item))return;
+  select.value='';select.dispatchEvent(new Event('change',{bubbles:true}));
+  panel.dataset.itemId=item.id;panel.hidden=false;panel.disabled=false;button.hidden=true;
+  panel.querySelector('h3').textContent='REGISTRAR '+itemName(item).toUpperCase();
+  panel.querySelector('.assetRegisterHint').textContent=newAssetHint(item)+' El activo también quedará registrado en Ingresos.';
+  const automatic=automaticClassNumber(itemName(item));
+  for(const [name,show] of Object.entries(visibleFields(item,true))){
+   const input=field(panel,name);
+   input.closest('label').hidden=!show||(name==='numeroYT'&&automatic);
+   input.disabled=!show;
+   input.required=show&&requiredField(name,item);
+   input.value=name==='numeroYT'&&automatic?nextClassNumber(itemName(item)):'';
+  }
+  fillAssetArea(field(panel,'areaAsignada'));
+  recentManufacturerControl(field(panel,'fabricante'),itemName(item));
+  panel.scrollIntoView({behavior:'smooth',block:'nearest'});
+  panel.querySelector('label:not([hidden]) input:enabled')?.focus();
+ };
+ const cancelNew=()=>{panel.hidden=true;panel.disabled=true;refresh();button.focus()};
  let savingNew=false;
  const saveNew=async()=>{if(savingNew)return;savingNew=true;try{const item=selectedItem(),data=JSON.parse(JSON.stringify(window.SKPlaza?.getData?.()||null)),user=window.SKPlaza?.getUser?.();if(!item||!data||!isFixed(item))return;const getInput=name=>field(panel,name);
  if(automaticClassNumber(itemName(item)))getInput('numeroYT').value=nextClassNumber(itemName(item));
  const candidate=readAssetFields(visibleFields(item,true),getInput,itemName(item));
  if(!validAssetForm(item,candidate,getInput))return;
- if(automaticClassNumber(candidate.clase))candidate.classNumberPolicy='auto-v1';candidate.areaAsignada=clean(field(panel,'areaAsignada').value);const found=duplicate(data.assets||[],candidate);if(found)return alert(`Este activo ya está registrado: ${assetLabel(found)}.`);const times=window.SKPlaza.movementTimes(form),assetId=uuid(),incomeId=uuid(),asset={id:assetId,mina:'Sandra K',...candidate,numeroClase:candidate.numeroYT,marcaActual:candidate.marcaInterna||'',criteriaId:item.id,ubicacion:'Bodega de Superficie',estado:'Operativo/a',disponibleEntrega:'Sí',fechaIngreso:initialArrivalDate(times.createdAt),...times,syncState:'pending',registeredFrom:'plaza-delivery',registeredBy:user?.documento||''},income={id:incomeId,syncEventId:incomeId,itemId:item.id,itemName:itemName(item),assetId,assetLabel:assetLabel(asset),quantity:1,notes:'Alta de activo fijo desde el menú Entregas',operatorId:user?.id||'',operatorDocument:user?.documento||'',operatorName:user?.nombre||'',...times,syncState:'pending'};if(asset.areaAsignada)asset.areaAsignadaRevision={value:asset.areaAsignada,at:asset.createdAt};Object.assign(asset,window.SKAssetMarking.prepare(asset));(data.assets||(data.assets=[])).push(asset);(data.blendingIncomes||(data.blendingIncomes=[])).push(income);await window.SKPlaza.saveData(data);newMode=false;window.SKPlaza.refreshDelivery?.();select.value=assetId;select.dispatchEvent(new Event('change',{bubbles:true}));configure(item,asset,false);window.SKPlaza.updatePendingBadge?.();if(!window.SKAssetMarking.saved([asset]))alert('Activo registrado. También se creó una fila en Ingresos y ya quedó seleccionado para continuar la entrega.');window.SKPlaza.sync?.(true)}catch(error){alert(error.message||'No fue posible guardar el activo.')}finally{savingNew=false}};
- form.elements.itemId.addEventListener('change',()=>setTimeout(()=>{newMode=false;refresh()},0));
- select.addEventListener('change',()=>{newMode=false;refresh()});
+ if(automaticClassNumber(candidate.clase))candidate.classNumberPolicy='auto-v1';candidate.areaAsignada=clean(field(panel,'areaAsignada').value);const found=duplicate(data.assets||[],candidate);if(found)return alert(`Este activo ya está registrado: ${assetLabel(found)}.`);const times=window.SKPlaza.movementTimes(form),assetId=uuid(),incomeId=uuid(),asset={id:assetId,mina:'Sandra K',...candidate,numeroClase:candidate.numeroYT,marcaActual:candidate.marcaInterna||'',criteriaId:item.id,ubicacion:'Bodega de Superficie',estado:'Operativo/a',disponibleEntrega:'Sí',fechaIngreso:initialArrivalDate(times.createdAt),...times,syncState:'pending',registeredFrom:'plaza-delivery',registeredBy:user?.documento||''},income={id:incomeId,syncEventId:incomeId,itemId:item.id,itemName:itemName(item),assetId,assetLabel:assetLabel(asset),quantity:1,notes:'Alta de activo fijo desde el menú Entregas',operatorId:user?.id||'',operatorDocument:user?.documento||'',operatorName:user?.nombre||'',...times,syncState:'pending'};if(asset.areaAsignada)asset.areaAsignadaRevision={value:asset.areaAsignada,at:asset.createdAt};Object.assign(asset,window.SKAssetMarking.prepare(asset));(data.assets||(data.assets=[])).push(asset);(data.blendingIncomes||(data.blendingIncomes=[])).push(income);await window.SKPlaza.saveData(data);panel.hidden=true;panel.disabled=true;window.SKPlaza.refreshDelivery?.();select.value=assetId;select.dispatchEvent(new Event('change',{bubbles:true}));window.SKPlaza.updatePendingBadge?.();if(!window.SKAssetMarking.saved([asset]))alert('Activo registrado. También se creó una fila en Ingresos y ya quedó seleccionado para continuar la entrega.');window.SKPlaza.sync?.(true)}catch(error){alert(error.message||'No fue posible guardar el activo.')}finally{savingNew=false}};
+ form.elements.itemId.addEventListener('change',refresh);
+ select.addEventListener('change',refresh);
  new MutationObserver(refresh).observe(select,{childList:true});
  panel.addEventListener('focusin',event=>{if(event.target===field(panel,'fabricante'))recentManufacturerControl(event.target,itemName(selectedItem()))});button.addEventListener('click',beginNew);panel.querySelector('[data-class-number-info]').addEventListener('click',()=>alert(CLASS_NUMBER_HELP));panel.querySelector('[data-cancel-new-asset]').addEventListener('click',cancelNew);panel.querySelector('[data-save-new-asset]').addEventListener('click',saveNew);refresh();
 }

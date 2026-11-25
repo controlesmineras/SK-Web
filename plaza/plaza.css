@@ -77,16 +77,16 @@
 .inventoryQuery .queryDeliveryDetails>.recentMovementList{margin:0}
 
 /* Opciones compactas de empresa y reposición, con área táctil de 44 px. */
-#deliveryForm #deliveryReplacementField{width:min(100%,420px);flex-wrap:wrap}
+#deliveryForm #deliveryReplacementField{flex-wrap:wrap}
 #deliveryForm #deliveryReplacementField label:has(input[value="first"]){flex:2 0 158px}
 #deliveryReplacementField[hidden]{display:none!important}
 #deliveryForm .recipientCompany label[hidden]{display:none!important}
 #deliveryAssetSearchMenu button{grid-template-columns:minmax(0,1fr)}
 #deliveryAssetSearchMenu button[data-active="true"]{background:#eaf1f6;outline:2px solid #397497;outline-offset:-2px}
 #deliveryAssetSearchMenu .itemSearchNames strong{white-space:normal;overflow-wrap:anywhere}
-#deliveryForm .recipientCompany:has(#loanRecipientCompanyInput:not(:disabled)){width:min(100%,480px);flex-wrap:wrap}
+#deliveryForm .recipientCompany:has(#loanRecipientCompanyInput:not(:disabled)){flex-wrap:wrap}
 #deliveryForm .recipientCompany:has(#loanRecipientCompanyInput:not(:disabled)) label{flex:1 0 100px}
-#deliveryForm .recipientCompany{min-width:0;width:min(100%,320px);margin:0;padding:6px 8px 8px;gap:8px}
+#deliveryForm .recipientCompany{min-width:0;width:100%;margin:0;padding:6px 8px 8px;gap:8px}
 #deliveryForm .recipientCompany legend{padding:0 4px;font-size:.86rem}
 #deliveryForm .recipientCompany label{flex-direction:row;justify-content:center;min-width:0;min-height:44px;padding:8px 12px;gap:8px}
 #deliveryForm .recipientCompany input[type="radio"]{flex:0 0 18px;width:18px;height:18px;min-height:0;margin:0;padding:0;accent-color:#173d59;cursor:pointer}
@@ -197,3 +197,34 @@
 #mineCarrierResults[hidden]{display:none}
 #mineCarrierResults button.isActive{outline:2px solid #397696;outline-offset:-2px;background:#e1eff6}
 #mineCarrierResults small,#mineCarrierResults p{color:#526977;font-size:.84rem;font-weight:400}
+
+/* El buscador y la ficha identifican una sola unidad antes de continuar la salida. */
+#deliveryForm{grid-template-columns:minmax(0,1fr)}
+#deliveryForm>*{min-width:0}
+#deliveryForm .plazaMovementTime{max-width:none}
+#deliveryAssetDetails{margin:0;min-inline-size:0}
+#deliveryAssetSummary:not([hidden]){
+ display:grid;gap:.2rem;padding:.65rem .85rem;
+ background:#edf5f8;border-inline-start:4px solid #397497;border-radius:6px;
+ overflow-wrap:anywhere;
+}
+#deliveryAssetSummary small{font-size:.8rem;font-weight:750;color:#36586b}
+#deliveryAssetSummary h3{margin:0;font-size:1.05rem}
+#deliveryAssetSummary dl{display:flex;flex-wrap:wrap;gap:.15rem 1rem;margin:0;font-size:.9rem}
+#deliveryAssetSummary dl:empty{display:none}
+#deliveryAssetSummary dl div{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 .3rem;min-width:0}
+#deliveryAssetSummary dt{color:#435c6c}
+#deliveryAssetSummary dd{margin:0;font-weight:650}
+
+@media(max-width:720px){
+ main:has(#delivery.active){padding-inline:6px}
+ #delivery.view{padding:14px 10px}
+ #delivery>h2{margin:0 0 1rem;text-align:center}
+ #deliveryForm>label,#deliveryForm .plazaMovementTime label{text-align:center}
+ #deliveryForm .recipientCompany legend{margin-inline:auto}
+ #deliveryForm :is(input[type=search],input[type=time],input[type=number],select){text-align:center;max-width:100%}
+ #deliveryForm .plazaMovementTime input[type=time]{appearance:none;height:46px}
+ #deliveryForm .skCalendarMirror{justify-content:center}
+ #deliveryForm .skCalendarEditor{text-align:center}
+ #deliveryForm .itemSearchMenu{text-align:start}
+}
