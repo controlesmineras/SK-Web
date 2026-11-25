@@ -77,14 +77,15 @@ const deviceAccess=createDeviceAccess('sk-plaza');
   function findItem(id){return(data.inventoryCriteria||[]).find(item=>item.id===id)||deliveryItems().find(item=>item.id===id)}
   function assetAvailableForDelivery(asset){return Boolean(asset&&window.SKAssetHistory?.available(asset,data))}
   function availableAssets(item){const className=norm(itemName(item)),reserved=new Set(deliveryDraft.map(row=>row.assetId).filter(Boolean));return(data.assets||[]).filter(asset=>norm(asset.clase)===className&&!reserved.has(asset.id)&&assetAvailableForDelivery(asset)).sort((a,b)=>(Number(assetNumber(a))||Number.MAX_SAFE_INTEGER)-(Number(assetNumber(b))||Number.MAX_SAFE_INTEGER)||assetNumber(a).localeCompare(assetNumber(b),'es',{numeric:true})||(a.serial||'').localeCompare(b.serial||'','es',{numeric:true}))}
-  function movementAssetLabel(row){return window.SKAssetRules.movementLabel(row,data.assets||[])}
-  function assetLabel(asset){if(window.SKAssetRules?.isColumn(asset))return window.SKAssetRules.columnLabel(asset);return[asset.clase,assetNumber(asset)&&`N.º ${assetNumber(asset)}`,asset.marcaActual||asset.marcaInterna||asset.marcaAnterior,asset.serial&&!/no aplica/i.test(asset.serial)?`Serial ${asset.serial}`:'',asset.minaOrigen&&`Origen: ${asset.minaOrigen}`].filter(Boolean).join(' · ')}
+  function movementAssetLabel(row){return window.SKAssetRules.movementLabel(row,data.assets||[],assetLabel)}
+  function assetLabel(asset){const heading=window.SKAssetRules?.equipmentHeading?.(asset)||asset.clase;if(window.SKAssetRules?.isColumn(asset))return window.SKAssetRules.columnLabel(asset,heading);return[heading,assetNumber(asset)&&`N.º ${assetNumber(asset)}`,asset.marcaActual||asset.marcaInterna||asset.marcaAnterior,asset.serial&&!/no aplica/i.test(asset.serial)?`Serial ${asset.serial}`:'',asset.minaOrigen&&`Origen: ${asset.minaOrigen}`].filter(Boolean).join(' · ')}
   function assetSelectionLabel(asset){
     const clean=value=>/^no aplica$/i.test(String(value??'').trim())?'':String(value??'').trim();
     const newMark=[asset.nuevaMarca,asset.marcaActual,asset.marcaInterna].map(clean).find(value=>/^(?:[a-z]{3}|[a-z]-[a-z]{2})$/i.test(value));
     const usesPreviousMark=/^(?:yt(?:\b|\d)|columnas?\b|autorrescatador(?:es)?\b)/i.test(clean(asset.clase));
     const previousMark=usesPreviousMark?[asset.marcaPrevia,asset.marcaAnterior,asset.numeroMarcaActual,asset.marcaActual,asset.marcaInterna].map(clean).find(Boolean):'';
-    return[clean(asset.fabricante||asset.marcaComercial),window.SKAssetRules.isColumn(asset)?'':clean(asset.serial),newMark||previousMark,clean(asset.modelo)].filter(Boolean).join(' · ')||'Sin datos de identificación';
+    const heading=window.SKAssetRules?.equipmentHeading?.(asset);
+    return[heading,clean(asset.fabricante||asset.marcaComercial),window.SKAssetRules.isColumn(asset)?'':clean(asset.serial),newMark||previousMark,heading?'':clean(asset.modelo)].filter(Boolean).join(' · ')||'Sin datos de identificación';
   }
   function deliveryAssetResults(assets,query){
     return query.rows(assets,asset=>[assetSelectionLabel(asset)]);

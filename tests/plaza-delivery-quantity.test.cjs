@@ -107,10 +107,12 @@ test('the specific asset selector shows manufacturer, serial, new mark and model
 
 test('YT, columns and self rescuers fall back to previous marks without inventing a new mark',()=>{
   const c=formClient();
-  assert.equal(c.api.selectionLabel({clase:'YT 29',fabricante:'Gisi',serial:'24022637',marcaPrevia:'42',modelo:'29'}),'Gisi · 24022637 · 42 · 29');
-  assert.equal(c.api.selectionLabel({clase:'Columna',serial:'SHOULD-NOT-SHOW',marcaAnterior:'15',modelo:'29'}),'15 · 29');
+  assert.equal(c.api.selectionLabel({clase:'YT 29',fabricante:'Gisi',serial:'24022637',marcaPrevia:'42',modelo:'29'}),'YT - 29 · Gisi · 24022637 · 42');
+  assert.equal(c.api.selectionLabel({clase:'Columna',serial:'SHOULD-NOT-SHOW',marcaAnterior:'15',modelo:'29'}),'Columna - 29 · 15');
   assert.equal(c.api.selectionLabel({clase:'Autorrescatador',fabricante:'Steel pro',serial:'00123',marcaPrevia:'SK-27',modelo:'Oxypro 50'}),'Steel pro · 00123 · SK-27 · Oxypro 50');
-  assert.equal(c.api.selectionLabel({clase:'YT',marcaPrevia:'37',nuevaMarca:'P-AB',modelo:'29'}),'P-AB · 29');
+  assert.equal(c.api.selectionLabel({clase:'YT',marcaPrevia:'37',nuevaMarca:'P-AB',modelo:'29'}),'YT - 29 · P-AB');
+  assert.equal(c.api.selectionLabel({clase:'Columna',modelo:'No aplica',marcaAnterior:'15'}),'Columna · 15');
+  assert.equal(c.api.selectionLabel({clase:'YT',serial:'123'}),'YT · 123');
   assert.equal(c.api.selectionLabel({clase:'Pulidora',fabricante:'DEWALT',serial:'No trae',marcaPrevia:'OLD',modelo:'DWE'}),'DEWALT · No trae · DWE');
 });
 

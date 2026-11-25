@@ -12,9 +12,19 @@
     const mark = firstValue(asset.marcaActual, asset.marcaInterna, asset.nuevaMarca);
     return {number, mark, numberLabel:markNumber ? 'N.º de marca' : 'N.º de clase'};
   }
-  function columnLabel(asset) {
+  function equipmentHeading(asset) {
+    const clase = displayValue(asset.clase);
+    const family = clase.match(/^(YT|Columnas?)(?=\b|\d)/i);
+    if (!family) return '';
+    const model = displayValue(asset.modelo);
+    if (!model) return clase;
+    const suffix = clase.slice(family[0].length).replace(/^[\s-]+/, '');
+    const name = suffix.toLowerCase() === model.toLowerCase() ? family[0] : clase;
+    return name + ' - ' + model;
+  }
+  function columnLabel(asset, heading = displayValue(asset.clase) || 'Columna') {
     const identity = columnIdentity(asset);
-    return [displayValue(asset.clase) || 'Columna',
+    return [heading,
       identity.number && `${identity.numberLabel}: ${identity.number}`,
       identity.mark && `Marca actual: ${identity.mark}`,
       displayValue(asset.largo) && `${displayValue(asset.largo)} ft`,
@@ -22,9 +32,9 @@
     ].filter(Boolean).join(' · ');
   }
   // Renderizar la identidad vigente sin reescribir los movimientos históricos.
-  function movementLabel(row, assets = []) {
+  function movementLabel(row, assets = [], describeColumn = columnLabel) {
     const asset = assets.find(asset => asset.id === row.assetId) || row.assetCandidate;
-    if (asset && isColumn(asset)) return columnLabel(asset);
+    if (asset && isColumn(asset)) return describeColumn(asset);
     const saved = displayValue(row.assetLabel);
     if (isColumn(row.itemName) || isColumn(saved)) {
       return saved.split(' · ').filter(part => !/^\s*serial\b/i.test(part)).join(' · ') || row.itemName || 'Columna';
@@ -106,5 +116,5 @@
     if (isColumn(asset)) return columnLabel(asset);
     return [asset.clase, asset.numeroClase || asset.numeroYT, asset.marcaActual || asset.marcaInterna, asset.serial].filter(Boolean).join(' · ');
   }
-  window.SKAssetRules = {assignmentAreas, marksCanCollide, serialKey, duplicateSerial, duplicateNewMark, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, isColumn, columnIdentity, columnLabel, movementLabel};
+  window.SKAssetRules = {assignmentAreas, marksCanCollide, serialKey, duplicateSerial, duplicateNewMark, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, equipmentHeading, isColumn, columnIdentity, columnLabel, movementLabel};
 })();

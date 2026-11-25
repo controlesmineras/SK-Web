@@ -32,7 +32,11 @@ function recentManufacturerControl(control,clase){
  list.replaceChildren(...brands.map(value=>new Option(value,value)));
 }
 
-const assetLabel=asset=>window.SKAssetRules.isColumn(asset)?window.SKAssetRules.columnLabel(asset):[asset?.clase,assetNumber(asset)&&`N.º ${assetNumber(asset)}`,asset?.marcaActual||asset?.marcaInterna||asset?.marcaAnterior,asset?.serial&&`Serial ${asset.serial}`,asset?.minaOrigen&&`Origen: ${asset.minaOrigen}`].filter(Boolean).join(' · ');
+const assetLabel=asset=>{
+ const heading=window.SKAssetRules?.equipmentHeading?.(asset)||asset.clase;
+ if(window.SKAssetRules.isColumn(asset))return window.SKAssetRules.columnLabel(asset,heading);
+ return [heading,assetNumber(asset)&&`N.º ${assetNumber(asset)}`,asset?.marcaActual||asset?.marcaInterna||asset?.marcaAnterior,asset?.serial&&`Serial ${asset.serial}`,asset?.minaOrigen&&`Origen: ${asset.minaOrigen}`].filter(Boolean).join(' · ');
+};
 
 const assetAreas=()=>{const record=(window.SKPlaza?.getData?.().inventoryCriteria||[]).find(row=>row.id==='SYSTEM-FORM-OPTIONS-V1'||row.recordType==='formOptions');return window.SKAssetRules.assignmentAreas(window.SKFormOptions?.values?.('personal.area')||record?.options?.['personal.area'])};
 function fillAssetArea(control,value=''){const values=assetAreas();control.replaceChildren(new Option('Seleccionar área…',''),...values.map(area=>new Option(area,area)));if(value&&!values.includes(value))control.add(new Option(value,value));control.value=value}
@@ -128,10 +132,11 @@ function renderSelectedAsset(card,item,asset,originMine=''){
  const fields=visibleFields(item),mark=clean(asset.nuevaMarca||asset.marcaActual||asset.marcaInterna);
  const previous=clean(asset.marcaPrevia||asset.marcaAnterior||asset.numeroMarcaActual);
  const title=card.querySelector('h3'),details=card.querySelector('dl');
- title.textContent=[clean(asset.clase)||itemName(item),mark].filter(Boolean).join(' · ');
+ const heading=window.SKAssetRules?.equipmentHeading?.(asset);
+ title.textContent=[heading||clean(asset.clase)||itemName(item),mark].filter(Boolean).join(' · ');
  const values=[
   ['Serial',fields.serial&&asset.serial],
-  ['Modelo',fields.modelo&&asset.modelo],
+  ['Modelo',!heading&&fields.modelo&&asset.modelo],
   ['N.º de clase',assetNumber(asset)],
   ['Marca anterior',previous!==mark&&previous],
   ['Largo (ft)',fields.largo&&asset.largo],
