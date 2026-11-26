@@ -12,6 +12,7 @@
   {key:'state',title:'Estado',width:19},{key:'location',title:'Ubicación',width:25}
  ];
  let shownColumns=columns;
+ const sortCriteria=[];
  const collator=new Intl.Collator('es',{numeric:true,sensitivity:'base'});
  const clean=value=>/^no aplica$/i.test(text(value))?'':text(value);
  const find=id=>document.getElementById(id);
@@ -42,6 +43,10 @@
     <p id="assetQueryCount" role="status" aria-live="polite"></p>
     <button type="button" id="assetQueryExcel" disabled>Descargar Excel</button>
    </aside><div class="assetQueryResults">
+    <div id="assetQueryOrder" role="group" aria-label="Orden de los resultados" hidden>
+     <select id="assetQueryAddOrder" aria-label="Agregar criterio de orden"></select>
+     <div id="assetQueryPriorities" role="group" aria-label="Prioridad de los criterios"></div>
+    </div>
     <div id="assetQueryList" class="assetOverviewTable" role="region" aria-label="Activos encontrados" tabindex="0" hidden>
      <table><thead><tr></tr></thead><tbody></tbody></table>
     </div>
@@ -55,6 +60,20 @@
   }
   find('assetQueryClass').addEventListener('change',filterChanged);
   find('assetQuerySearch').addEventListener('input',filterChanged);
+  find('assetQueryAddOrder').addEventListener('change',event=>{
+   changeSort(event.target.value,'toggle');
+  });
+  section.addEventListener('click',event=>{
+   const button=event.target.closest('button[data-sort-key]');
+   if(!button)return;
+   const {sortKey,sortAction}=button.dataset;
+   const fromHeader=!!button.closest('th');
+   changeSort(sortKey,sortAction);
+   const host=find(fromHeader?'assetQueryList':'assetQueryPriorities');
+   const focus=host.querySelector(`button[data-sort-key="${sortKey}"][data-sort-action="${sortAction}"]`)||
+    host.querySelector(`button[data-sort-key="${sortKey}"]`)||find('assetQueryAddOrder');
+   focus.focus({preventScroll:true});
+  });
   find('assetQueryExcel').addEventListener('click',()=>{
    if(!visible.length||!window.SKAdminAuth.canView('assetQuery'))return;
    const name=find('assetQueryClass').value?(visible[0].clase||'Sin clase'):'Todas las clases';
@@ -173,8 +192,58 @@
   const row=selectedId&&visible.find(row=>row.asset.id===selectedId);
   if(!row)selectedId='';
   find('assetQueryList').hidden=!!row||!visible.length;
+  find('assetQueryOrder').hidden=!!row||!visible.length;
   find('assetQueryDetail').hidden=!row;
   drawDetail(row ? row.projection : null);
+ }
+
+ function visibleCriteria(){
+  return sortCriteria.filter(entry=>shownColumns.some(col=>col.key===entry.key));
+ }
+
+ function changeSort(key,action){
+  if(!shownColumns.some(col=>col.key===key))return;
+  const index=sortCriteria.findIndex(entry=>entry.key===key);
+  if(action==='toggle'){
+   if(index<0)sortCriteria.push({key,dir:1});
+   else sortCriteria[index].dir*=-1;
+  }else if(action==='remove'){
+   sortCriteria.splice(index,1);
+  }else{
+   const criteria=visibleCriteria();
+   const position=criteria.findIndex(entry=>entry.key===key);
+   const neighbor=criteria[position+(action==='earlier'?-1:1)];
+   if(!neighbor)return;
+   const target=sortCriteria.indexOf(neighbor);
+   [sortCriteria[index],sortCriteria[target]]=[sortCriteria[target],sortCriteria[index]];
+  }
+  draw();
+  find('assetQueryList').scrollTop=0;
+ }
+
+ function drawSort(criteria,head){
+  const titles=new Map(shownColumns.map(col=>[col.key,col.title]));
+  const add=find('assetQueryAddOrder');
+  const available=shownColumns.filter(col=>!criteria.some(entry=>entry.key===col.key));
+  add.replaceChildren(new Option('Agregar criterio de orden…',''),...available.map(col=>new Option(col.title,col.key)));
+  add.disabled=!available.length;
+  const button=(key,action,label,content)=>`<button type="button" data-sort-key="${key}" data-sort-action="${action}" title="${label}" aria-label="${label}">${content}</button>`;
+  const toggleHint=entry=>titles.get(entry.key)+'. Cambiar a '+(entry.dir===1?'descendente':'ascendente');
+  find('assetQueryPriorities').innerHTML=criteria.map((entry,index)=>{
+   const {key,dir}=entry,name=titles.get(key);
+   return '<span class="assetSortEntry">'+
+    button(key,'toggle',toggleHint(entry),(index+1)+'. '+name+(dir===1?' ↑':' ↓'))+
+    (index>0?button(key,'earlier','Subir prioridad de '+name,'←'):'')+
+    (index+1<criteria.length?button(key,'later','Bajar prioridad de '+name,'→'):'')+
+    button(key,'remove','Quitar '+name+' del orden','×')+'</span>';
+  }).join('');
+  head.innerHTML=shownColumns.map(({key,title})=>{
+   const index=criteria.findIndex(entry=>entry.key===key),entry=criteria[index];
+   const aria=index===0?' aria-sort="'+(entry.dir===1?'ascending':'descending')+'"':'';
+   const mark=entry?(entry.dir===1?'↑':'↓')+'<sup>'+(index+1)+'</sup>':'↕';
+   const hint=entry?'Prioridad '+(index+1)+'. '+toggleHint(entry):'Ordenar por '+title+' en orden ascendente';
+   return '<th scope="col"'+aria+'>'+button(key,'toggle',hint,title+' <span aria-hidden="true">'+mark+'</span>')+'</th>';
+  }).join('');
  }
 
  function draw(){
@@ -182,7 +251,17 @@
   visible=rows.filter(row=>(!key||row.key===key)&&query.extra(row.asset,row.searchText)!==null);
   const table=find('assetQueryList').querySelector('table');
   shownColumns=visible.some(row=>row.values.model)?columns:columns.filter(col=>col.key!=='model');
-  table.tHead.rows[0].innerHTML=shownColumns.map(col=>'<th scope="col">'+col.title+'</th>').join('');
+  const criteria=visibleCriteria();
+  if(criteria.length)visible.sort((left,right)=>{
+   for(const {key,dir} of criteria){
+    const a=left.values[key],b=right.values[key];
+    if(Boolean(a)!==Boolean(b))return a?-1:1;
+    const difference=collator.compare(a||'',b||'');
+    if(difference)return dir*difference;
+   }
+   return 0;
+  });
+  drawSort(criteria,table.tHead.rows[0]);
   table.tBodies[0].innerHTML=visible.map(({asset,values,external})=>{
    const title='Abrir ficha de '+[values.label,values.number,values.serial,values.mark].filter(Boolean).join(' · ');
    const link='<button type="button" class="assetQueryLink" aria-controls="assetQueryDetail" aria-label="'+esc(title)+'">'+query.html(values.label||'Sin clase')+'</button>';

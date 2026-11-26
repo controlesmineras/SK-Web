@@ -279,8 +279,26 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
 .assetOverviewTable table{width:100%;border-collapse:separate;border-spacing:0;color:#17364a;font-size:.94rem;text-align:left}
 .assetOverviewTable :is(th,td){padding:.4rem .55rem;border-bottom:1px solid #dce4ea;white-space:nowrap}
 .assetOverviewTable td{max-width:15rem;white-space:normal;overflow-wrap:anywhere}
+#assetQueryOrder:not([hidden]),#assetQueryPriorities{display:flex;flex-wrap:wrap;align-items:center;gap:.4rem}
+#assetQueryOrder:not([hidden]){margin-bottom:.5rem}
+#assetQueryAddOrder{width:auto;max-width:100%;min-height:2rem;padding:.25rem .5rem;font-size:.88rem}
+.assetSortEntry{display:inline-flex;align-items:center;border:1px solid #aac1cf;border-radius:.4rem;background:#edf4f8}
+.assetSortEntry button,.assetOverviewTable th button{background:transparent;color:#173d59;font:inherit;cursor:pointer}
+.assetSortEntry button{padding:.3rem .4rem;min-height:2rem;font-size:.88rem}
+.assetOverviewTable th{padding:0}
+.assetOverviewTable th button{display:block;width:100%;padding:.4rem .55rem;text-align:left;text-transform:inherit;letter-spacing:inherit}
+.assetOverviewTable th button span{color:#466c83}
+.assetOverviewTable th button sup{font-size:.68em}
+.assetSortEntry button:hover,.assetOverviewTable th button:hover{background:#d7e7ef}
 @media(min-width:801px){
   .assetOverviewTable :is(th,td):not(:last-child){width:1%;white-space:nowrap}
+  body:has(#assetQuery.active #assetQueryList:not([hidden])){display:flex;flex-direction:column;min-height:100dvh;padding-bottom:0}
+  body:has(#assetQuery.active #assetQueryList:not([hidden]))>main{display:flex;flex-direction:column;flex:1;margin-bottom:.6rem}
+  #assetQuery.active:has(#assetQueryList:not([hidden])){display:flex;flex:1;flex-direction:column}
+  #assetQuery .assetQueryLayout{flex:1;align-items:stretch}
+  #assetQuery .assetQueryResults{display:flex;flex-direction:column}
+  #assetQueryList{height:0;min-height:12rem;max-height:none;flex:1 0 12rem}
+  body:has(#assetQuery.active #assetQueryList:not([hidden]))>#adminBack{left:max(2rem,calc((100% - 1450px)/2 + 25px));right:auto}
 }
 .assetOverviewTable th{position:sticky;top:0;background:#e5eff5;text-align:left}
 .assetOverviewTable tr:nth-child(even){background:#f4f8fa}
