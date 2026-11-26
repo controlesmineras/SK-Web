@@ -99,7 +99,7 @@
       // Abort alone is insufficient if a browser/redirect/body reader never settles.
       // Racing the entire exchange also ignores late replies without confirming data.
       const exchange=(async()=>{
-        const r=await fetch(c.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({productionBalanceVersions:versions,action:snapshot.novelties?.some(row=>row.noveltyAction?.status==='pending')?'syncNoveltyChanges':snapshot.novelties?.some(row=>row.datedNovelty)?'syncDatedNovelties':'sync',key:c.apiKey,token:window.SKAdminAuth?.token?.()||'',since:forceFull||collaboratorRevisionApi!==c.apiUrl?'':(localStorage.getItem('skWebServerUpdatedAt')||''),data:snapshot}),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
+        const r=await fetch(c.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({productionBalanceVersions:versions,action:snapshot.personal?.some(row=>row.deleted)?'syncPersonDeletion':snapshot.novelties?.some(row=>row.noveltyAction?.status==='pending')?'syncNoveltyChanges':snapshot.novelties?.some(row=>row.datedNovelty)?'syncDatedNovelties':'sync',key:c.apiKey,token:window.SKAdminAuth?.token?.()||'',since:forceFull||collaboratorRevisionApi!==c.apiUrl?'':(localStorage.getItem('skWebServerUpdatedAt')||''),data:snapshot}),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
         if(!r.ok)throw new Error(`El servicio respondió ${r.status}`);
         let result;try{result=await r.json()}catch(error){if(controller.signal.aborted||error?.name==='AbortError')throw error;throw new Error('El servicio devolvió una respuesta incompleta. Pulsa la nube para reintentar.');}
         if(!result?.ok)throw new Error(result?.error||'El servicio rechazó la sincronización');return result;
@@ -140,6 +140,9 @@
     const pending=await pendingSnapshot(),adjustments=await readAdjustments(),status=document.querySelector('#syncStatus');
     const count=stores.reduce((total,store)=>total+pending[store].length,adjustments.length);
     const adjustmentError=adjustments.find(row=>row.syncError)?.syncError;
+    if(detail.deletionWait&&pending.personal?.some(row=>row.deleted)){
+      phase(detail.deletionWait);ui('idle');return false;
+    }
     if(detail.waitingForServer&&pending.novelties?.some(row=>row.datedNovelty||row.noveltyAction)){if(status)status.textContent='Novedades guardadas en este dispositivo. Falta actualizar Apps Script para sincronizarlas.';ui('idle');return false;}
     if(count){
       if(status)status.textContent=`Sincronización parcial · ${count} ${count===1?'registro pendiente':'registros pendientes'}; se conservan en este dispositivo.${adjustmentError?' · '+adjustmentError:''}${balanceError?' · Producción: '+balanceError:''}`;
@@ -153,7 +156,11 @@
     if(!snapshot.personal?.length)return;
     const central=result.data?.personal;
     if(!Array.isArray(central))throw new Error('La base central no confirmó los colaboradores. Se conservan pendientes en este dispositivo.');
-    const missing=snapshot.personal.find(row=>!central.some(remote=>remote?.id&&remote.syncState!=='pending'&&(remote.id===row.id||(String(row.documento||'').trim()&&String(remote.documento||'').trim()===String(row.documento).trim()))));
+    const missing=snapshot.personal.find(row=>!central.some(remote=>{
+      if(!remote?.id||remote.syncState==='pending')return false;
+      if(row.deleted)return remote.id===row.id&&remote.deleted===true;
+      return remote.id===row.id||(!remote.deleted&&String(row.documento||'').trim()&&String(remote.documento||'').trim()===String(row.documento).trim());
+    }));
     if(missing)throw new Error('La base central no confirmó al colaborador '+(missing.nombre||missing.documento||'registrado')+'. Se conserva pendiente; pulsa la nube para reintentar.');
   }
   function confirmAssetMarkRequests(snapshot,result){
@@ -170,14 +177,27 @@
       const snapshot=await pendingSnapshot(),versions=await productionVersions();
       const changed=snapshot.novelties?.filter(row=>row.noveltyAction?.status==='pending')||[];
       const dated=snapshot.novelties?.filter(row=>row.datedNovelty&&!row.noveltyAction)||[];
-      let waitingForServer=false;
+      let waitingForServer=false,deletionWait='';
+      const holdDeletions=message=>{
+        snapshot.personal=snapshot.personal.filter(row=>!row.deleted);
+        deletionWait=message;
+      };
+      if(snapshot.personal?.some(row=>row.deleted)&&!window.SKAdminAuth?.isAdmin?.())
+        holdDeletions('Eliminación de personal pendiente. Inicia sesión como administrador para sincronizarla.');
       // A full response confirms each person and returns the canonical ID if the
       // document already exists centrally. A generic ACK cannot prove that.
       // Older servers do not change their shared revision after a Plaza person edit.
       // Negotiate that guarantee before trusting an unchanged snapshot.
       forceFull=forceFull||!silent||Boolean(snapshot.personal?.length)||(snapshot.assets||[]).some(row=>row.markRequest==='existing-v1'&&row.markStatus==='pending');
       let result;
-      try{result=await send(snapshot,forceFull||dated.length>0||changed.length>0,versions);}
+      try{
+        try{result=await send(snapshot,forceFull||dated.length>0||changed.length>0,versions);}
+        catch(error){
+          if(!snapshot.personal?.some(row=>row.deleted)||!/solicitud no v[aá]lida/i.test(error.message))throw error;
+          holdDeletions('Eliminación de personal pendiente. Actualiza la implementación de Apps Script para confirmarla.');
+          result=await send(snapshot,true,versions);
+        }
+      }
       catch(error){
         if(!(dated.length||changed.length)||!/solicitud no v[aá]lida/i.test(error.message))throw error;
         // El servicio anterior rechaza la acción antes de escribir. El resto de la cola puede avanzar.
@@ -201,13 +221,13 @@
       const serverUpdatedAt=result.updatedAt||result.data?.updatedAt||'';
       if(result.notModified){
         if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
-        return await finishSync('Sincronizado · sin cambios',{notModified:true,waitingForServer},versions,result.productionBalances,sentToken);
+        return await finishSync('Sincronizado · sin cambios',{notModified:true,waitingForServer,deletionWait},versions,result.productionBalances,sentToken);
       }
       if(result.acknowledged){
         phase('Confirmando los registros guardados…');await markSnapshotSynced(snapshot);phase('Actualizando las listas…');await refresh();window.SKInventoryAdmin?.render?.();
         if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
         window.dispatchEvent(new Event('skweb-inventory-refresh'));
-        return await finishSync('Sincronizado rápidamente',{acknowledged:true,waitingForServer},versions,result.productionBalances,sentToken);
+        return await finishSync('Sincronizado rápidamente',{acknowledged:true,waitingForServer,deletionWait},versions,result.productionBalances,sentToken);
       }
       const merged=result.data,localAssetIds=new Set((await all('assets')).map(x=>x.id).filter(Boolean)),mergedAssetIds=new Set((merged.assets||[]).map(x=>x.id));
       for(const [store,rows] of Object.entries(merged))if(Array.isArray(rows))merged[store]=rows.map(row=>row?.syncState==='pending'?{...row,syncState:'synced'}:row);
@@ -216,7 +236,7 @@
       phase('Aplicando la respuesta en este dispositivo…');await window.writeSyncedSnapshot(merged,snapshot);await seedParts();phase('Actualizando las listas…');await refresh();window.SKInventoryAdmin?.render?.();
       if(serverUpdatedAt)localStorage.setItem('skWebServerUpdatedAt',serverUpdatedAt);
       window.dispatchEvent(new Event('skweb-inventory-refresh'));
-      return await finishSync('Sincronizado automáticamente',{waitingForServer},versions,result.productionBalances,sentToken);
+      return await finishSync('Sincronizado automáticamente',{waitingForServer,deletionWait},versions,result.productionBalances,sentToken);
     }catch(e){
       retryAfter=Date.now()+60000;console.error('SK Web automatic sync:',e);ui('error');
       if(s)s.textContent=navigator.onLine?'Sincronización pendiente · '+(e?.message||e):'Sin conexión · cambios seguros en este dispositivo';
