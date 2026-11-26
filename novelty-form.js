@@ -117,6 +117,8 @@ async function save(event){
     if(!/^\d{4}-\d{2}-\d{2}$/.test(data.fechaNovedad)||!/^\d{2}:\d{2}$/.test(data.horaNovedad)||!Number.isFinite(date.getTime()))throw new Error('Selecciona la fecha y hora de la novedad.');
     const novelty={...meta,...data,occurredAt:date.toISOString(),fechaLocal:date.toLocaleDateString('es-CO',{timeZone:'America/Bogota'}),horaLocal:date.toLocaleTimeString('es-CO',{timeZone:'America/Bogota'})};
     novelty.datedNovelty=true;
+    const author=window.SKAdminAuth?.user?.();
+    if(author?.username){novelty.registeredBy=author.username;novelty.registeredByName=author.name||author.username;}
     for(const field of Object.keys(data))if(!String(data[field]??'').trim())delete novelty[field];
     // Solo la novedad entra en la cola. El servidor compara con su propia ficha.
     window.SKAdminAuth?.requireActive?.();
@@ -135,10 +137,10 @@ async function save(event){
     };
     await Promise.all([committed,saveRow().catch(error=>{try{tx.abort()}catch{} throw error;})]);
     form.reset();selectedAsset=null;
-    const status=document.querySelector('#noveltySaveStatus');status.hidden=false;
-    const saved=novelty.historyOnly?'✓ Novedad guardada solo en el historial.':'✓ Novedad guardada en este dispositivo.';
-    const assetName=window.SKAssetOwnership?.label(asset)||window.SKAssetRules?.label(asset)||asset.serial||asset.clase;
-    status.textContent=saved+' '+[assetName,novelty.descripcion,novelty.fechaNovedad.split('-').reverse().join('/')+' '+novelty.horaNovedad].filter(Boolean).join(' · ');
+    const status=document.querySelector('#noveltySaveStatus');
+    status.setAttribute?.('data-novelty-id',novelty.id);
+    renderSaveStatus(status,novelty,asset);
+    window.SKAssetHistoryUI?.followSaved?.(novelty.id);
     const showButton=document.querySelector('#noveltyShowSaved');
     if(showButton){
       showButton.hidden=false;
@@ -150,6 +152,19 @@ async function save(event){
     catch(error){console.error('La novedad se guardó, pero falló la actualización de la pantalla.',error);}
   }catch(error){alert(error.message||'No se pudo guardar la novedad.');}
   finally{form.inert=false;saving=false;if(button)button.disabled=false;}
+}
+
+function renderSaveStatus(status,row,asset){
+  status.hidden=false;
+  if(row.deleted||row.reversed||row.reversedAt){
+    status.textContent=row.deleted?'Esta novedad fue eliminada.':'Esta novedad fue revertida.';
+    const button=document.querySelector('#noveltyShowSaved');if(button)button.hidden=!!row.deleted;
+    return;
+  }
+  const state=row.syncState==='pending'?'Pendiente de sincronización.':'Confirmada en la base central.';
+  const saved=row.historyOnly?'Novedad guardada solo en el historial.':'Novedad guardada.';
+  const name=asset&&(window.SKAssetOwnership?.label(asset)||window.SKAssetRules?.label(asset)||asset.serial||asset.clase);
+  status.textContent='✓ '+saved+' '+state+' '+[name,row.descripcion,row.fechaNovedad.split('-').reverse().join('/')+' '+row.horaNovedad].filter(Boolean).join(' · ');
 }
 
 function installAssetPicker(){
@@ -205,7 +220,7 @@ function installNoveltyMenu(){
 installNoveltyMenu();
 
 const noveltyForm=document.querySelector('#noveltyForm');if(noveltyForm){noveltyForm.elements.ubicacion.closest('label').before(noveltyForm.elements.estado.closest('label'));noveltyForm.elements.estado.addEventListener('change',updateRetiredLocation);noveltyForm.addEventListener('reset',()=>{delete noveltyForm.elements.estado.dataset.beforeActa;noveltyForm.elements.estado.disabled=false;noveltyForm.elements.ubicacion.readOnly=false;delete noveltyForm.elements.ubicacion.dataset.beforeRetirement;});}
-mountActaField();window.SKNoveltyForm={update,updateFields,save,actaHTML};window.addEventListener('skweb-synced',update);
+mountActaField();window.SKNoveltyForm={update,updateFields,save,renderSaveStatus,actaHTML};window.addEventListener('skweb-synced',update);
 document.querySelector('#novDesc')?.addEventListener('change',updateFields);
 document.querySelector('#noveltyForm')?.addEventListener('reset',()=>setTimeout(update,0));
 window.addEventListener('skweb-options-applied',update);
