@@ -437,13 +437,13 @@ function queueQuantity(warehouse,itemId,quantity,observed,opening=false){
     return abort('La existencia cambió. Revisa el saldo actualizado y vuelve a guardar.');
    const change=mark();
    const operationId=newOpening?'opening-'+change.id:change.id;
-   queue.put({...change,id,operationId,warehouse,itemId,quantity,observedQuantity:Number(current?.quantity||0),stockRevision:newOpening?'0|0':stockRevision(current)});
+   queue.put({...change,id,operationId,...(warehouse==='plaza'?{recordedBy:window.SKAdminAuth?.user?.()?.username}:{}),warehouse,itemId,quantity,observedQuantity:Number(current?.quantity||0),stockRevision:newOpening?'0|0':stockRevision(current)});
   };
  });
 }
-function settleQuantity(adjustment,confirmed,conflict){
+function settleQuantity(adjustment,confirmed,conflict,receipt){
  const table=stockTable(adjustment.warehouse);
- return adjustmentTransaction([quantityAdjustments,table],tx=>{
+ return adjustmentTransaction([quantityAdjustments,table,...(receipt?['warehouseQuantityHistory']:[])],tx=>{
   const queue=tx.objectStore(quantityAdjustments),saved=queue.get(adjustment.id);
   saved.onsuccess=()=>{
    if(saved.result?.operationId!==adjustment.operationId)return;
@@ -453,6 +453,7 @@ function settleQuantity(adjustment,confirmed,conflict){
     const stock=current.result;
     const isNewer=adjustment.warehouse==='production'?stock?.sampledAt<=confirmed.sampledAt:stockRevision(stock)<=stockRevision(confirmed);
     if(!stock||stock.syncState!=='pending'&&isNewer)stocks.put(confirmed);
+    if(receipt)tx.objectStore('warehouseQuantityHistory').put(receipt);
     queue.delete(adjustment.id);
    };
   };
@@ -464,6 +465,7 @@ async function syncQuantities(){
  const criteria=new Map((await all('inventoryCriteria')).map(item=>[item.id,item]));
  for(const row of adjustments){
   // El criterio pudo haberse creado mientras ya se enviaba la sincronización anterior.
+  if(row.recordedBy&&row.recordedBy!==window.SKAdminAuth?.user?.()?.username)continue;
   const item=criteria.get(row.itemId);
   if(item?.syncState==='pending')continue;
   if(fixedCriterion(item)){
@@ -474,9 +476,9 @@ async function syncQuantities(){
   let result;
   try{
    result=row.warehouse?await window.SKAdminAuth.request('adminWarehouseQuantityV1',{
-    mode:'set',warehouse:row.warehouse,itemId:row.itemId,quantity:row.quantity,operationId:row.operationId,observedQuantity:row.observedQuantity,stockRevision:row.stockRevision
+    mode:'set',warehouse:row.warehouse,...(row.warehouse==='plaza'?{recordedAt:row.createdAt,recordedBy:row.recordedBy}:{}),itemId:row.itemId,quantity:row.quantity,operationId:row.operationId,observedQuantity:row.observedQuantity,stockRevision:row.stockRevision
    }):await window.SKAdminAuth.request('adminSetInventoryQuantity',{
-    itemId:row.itemId,quantity:row.quantity,stockRevision:row.stockRevision
+    itemId:row.itemId,quantity:row.quantity,stockRevision:row.stockRevision,recordedAt:row.createdAt
    });
   }catch(error){
    if(/cantidad cambió en la base central|criterio no permite editar|existencia fue retirada|requiere una cantidad entera|identificador ya corresponde/i.test(error.message)){
@@ -492,7 +494,7 @@ async function syncQuantities(){
   const acknowledged=row.warehouse?result.operationId===row.operationId&&result.warehouse===row.warehouse&&['accepted','already-applied'].includes(result.status):Number(stock?.quantity)===row.quantity;
   if(!stock?.id||stock.itemId!==row.itemId||!Number.isFinite(stock.quantity)||!acknowledged)
    throw new Error('La base central aún no confirmó el ajuste de cantidad.');
-  await settleQuantity(row,{...stock,syncState:'synced'});
+  await settleQuantity(row,{...stock,syncState:'synced'},null,result.adjustment);
   window.dispatchEvent(new Event('skweb-inventory-refresh'));
  }
 }

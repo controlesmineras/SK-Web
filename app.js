@@ -1,4 +1,4 @@
-const DB='sk-web-local',VER=7,stores=['personal','assets','novelties','parts','consumptions','incomes','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries','actas'];const quantityAdjustments='inventoryQuantityAdjustments',localStores=[...stores,quantityAdjustments];let db;const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],uuid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,now=()=>new Date().toISOString();
+const DB='sk-web-local',VER=8,stores=['personal','assets','novelties','parts','consumptions','incomes','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries','actas'];const quantityAdjustments='inventoryQuantityAdjustments',localStores=[...stores,quantityAdjustments];let db;const $=s=>document.querySelector(s),$$=s=>[...document.querySelectorAll(s)],uuid=()=>crypto.randomUUID?.()||`${Date.now()}-${Math.random()}`,now=()=>new Date().toISOString();
 const GOOGLE_CLIENT_ID='102740984387-di4t4r2djjc9t4l84b8ttl7cf49ef20g.apps.googleusercontent.com';
 const DRIVE_SCOPE='https://www.googleapis.com/auth/drive.appdata',CLOUD_FILE='sk-web-central.json';let tokenClient,accessToken='';
 const productionQuantityCache='productionQuantityCache',productionBalanceMetaKey=['snapshot-v1'];
@@ -8,7 +8,7 @@ const assetProfileTables=['assets','personal',...assetEventStores,assetProfileSt
 function openDB(){return new Promise((ok,no)=>{
  const r=indexedDB.open(DB,VER);
  r.onupgradeneeded=()=>{
-  for(const name of [...localStores,assetProfileStore,productionQuantityCache])if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id'});
+  for(const name of [...localStores,assetProfileStore,productionQuantityCache,'warehouseQuantityHistory'])if(!r.result.objectStoreNames.contains(name))r.result.createObjectStore(name,{keyPath:'id'});
   for(const name of assetEventStores){const table=r.transaction.objectStore(name);if(!table.indexNames.contains('assetId'))table.createIndex('assetId','assetId');}
   const table=r.transaction.objectStore('novelties');if(!table.indexNames.contains('syncState'))table.createIndex('syncState','syncState');
  };
@@ -66,7 +66,10 @@ function countStore(s){return new Promise((ok,no)=>{const r=db.transaction(s).ob
  const related=s==='assets'||assetEventStores.includes(s),tx=db.transaction(related?[s,assetProfileStore]:s,'readwrite'),store=tx.objectStore(s);
  if(related)tx.objectStore(assetProfileStore).clear();
  const write=values=>{store.clear();for(const row of values)if(row?.id)store.put(row)};
- if(s==='assets'){
+ if(s==='warehouseQuantityHistory'){
+  // Una respuesta previa puede llegar después del recibo de un ajuste más reciente.
+  for(const row of rows)if(row?.id)store.put(row);
+ }else if(s==='assets'){
   const read=store.getAll();read.onsuccess=()=>{
    const merged=new Map(rows.filter(row=>row?.id).map(row=>[row.id,row]));
    for(const local of read.result){const remote=merged.get(local.id);if(local.syncState==='pending'&&(!remote||Date.parse(local.updatedAt||local.createdAt)>Date.parse(remote.updatedAt||remote.createdAt)||(local.deleted&&!remote.deleted)))merged.set(local.id,local)}

@@ -1,0 +1,14 @@
+.plazaLedger{background:#fff;color:#18364b;border:1px solid #d7e1e8;border-radius:12px;padding:clamp(10px,2vw,20px);min-width:0}
+.plazaLedger .ledgerFilters{display:grid;grid-template-columns:2fr 1.2fr 1fr 1fr;gap:10px}
+.plazaLedger .ledgerFilters label{display:grid;gap:4px;font-weight:700;min-width:0}
+.plazaLedger .ledgerFilters :is(input,select){min-width:0;width:100%;background:#fff;color:#173d59}
+.ledgerTypes,.ledgerOptions,.ledgerPages{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin:12px 0}
+.plazaLedger .ledgerTypes button,.plazaLedger .ledgerPages button{background:#eef3f6;color:#183c50;border:1px solid #bbcfda;padding:8px 14px;width:auto}
+.plazaLedger .ledgerTypes button[aria-pressed=true]{background:#173d59;color:white}
+.plazaLedger .ledgerOptions label{display:inline-flex;flex-direction:row;align-items:center;gap:5px;font-weight:500}
+.plazaLedger .ledgerOptions input{width:1rem;height:1rem;min-height:0;accent-color:#173d59}
+.ledgerSummary{color:#455e70}.ledgerRows{overflow:auto}.ledgerRows table{width:100%;border-collapse:collapse;text-align:left;font-size:.9rem}
+.ledgerRows :is(th,td){padding:8px;border-bottom:1px solid #d7e1e8;vertical-align:top}.ledgerRows th{background:#e8f0f5}
+.ledgerRows small{display:block;color:#526475}.ledgerRows tr[data-type=adjustment]{background:#fff0ee;color:#942b24}.ledgerRows tr[data-type=adjustment] td:first-child{border-left:4px solid #ae372e}
+.ledgerRows tr[data-type=reversal]{background:#eef6ef}.ledgerPages[hidden]{display:none}
+@media(max-width:700px){.plazaLedger .ledgerFilters{grid-template-columns:1fr 1fr}.ledgerRows table,.ledgerRows tbody,.ledgerRows tr{display:block}.ledgerRows thead{position:absolute;clip-path:inset(50%);height:1px;width:1px;overflow:hidden}.ledgerRows tr{margin:8px 0;border:1px solid #d7e1e8;border-radius:8px;padding:5px}.ledgerRows td{display:grid;grid-template-columns:7.4rem 1fr;gap:0 6px;border:0;padding:3px 6px;overflow-wrap:anywhere}.ledgerRows td:before{content:attr(data-label);font-weight:600;color:#425b6a}.ledgerRows small{grid-column:2}}

@@ -76,7 +76,7 @@ test('Admin muestra original y reintegro con solicitante encima del bodeguero y 
  assert.ok(html.indexOf('Reversión solicitada por:')<html.indexOf('Bodeguero del movimiento original:'));assert.equal((html.match(/data-reverse=/g)||[]).length,1);
 });
 test('Admin envía el solicitante explícito por la nueva acción y conserva el modo consulta',async()=>{
- const b=backend(),h=admin(b.cloud(),{backend:b});await h.api.reverse(original.id);assert.deepEqual(h.calls,[{action:'adminReverseMovementV2',type:'delivery',movementId:original.id,reversalRequestedBy:'Solicitante de prueba'}]);
+ const b=backend(),h=admin(b.cloud(),{backend:b});await h.api.reverse(original.id);const [{recordedAt,...request}]=h.calls;assert.ok(Number.isFinite(Date.parse(recordedAt)));assert.deepEqual(request,{action:'adminReverseMovementV2',type:'delivery',movementId:original.id,reversalRequestedBy:'Solicitante de prueba'});
  const readonly=admin(b.cloud(),{owner:false});await readonly.api.render();assert.doesNotMatch(readonly.nodes.get('#plazaMovementList').innerHTML,/data-reverse=/);await readonly.api.reverse(later.id);assert.equal(readonly.calls.length,0);
 });
 test('cancelar o dejar solicitante vacío no envía; un Code.gs anterior muestra instrucción de actualización',async()=>{

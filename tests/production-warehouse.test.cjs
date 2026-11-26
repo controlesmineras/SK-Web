@@ -430,3 +430,23 @@ test('un traslado enviado desde Producción antes del ingreso manual conserva un
  assert.match(result.acknowledgements.blendingIncomes[0].error,/Ya existe un ingreso/);
  assert.equal(r.central.blendingIncomes.length,1);
 });
+
+test('Historial de Plaza enlaza ajuste, entrega y reversión y conserva la hora de captura en los reintentos',()=>{
+ const r=runtime(),auth={role:'owner',username:'admin',name:'Nombre del administrador'};
+ const recordedAt='2025-01-03T09:01:02.456Z';
+ const adjust={warehouse:'plaza',mode:'set',itemId:'tool',quantity:9,operationId:randomUUID(),observedQuantity:3,stockRevision:'',recordedAt,recordedBy:'admin'};
+ assert.throws(()=>r.c.adminWarehouseQuantity_(adjust,{...auth,username:'otro'}),/perfil/);
+ const first=r.c.adminWarehouseQuantity_(adjust,auth).adjustment;
+ assert.deepEqual([first.recordedAt,first.recordedByName,first.recordedBy,first.recordedByRole,first.balanceBefore,first.balanceAfter],[recordedAt,auth.name,'admin','owner',3,9]);
+ const row={id:'delivery',itemId:'tool',itemName:'Llave',quantity:2,recordedAt:'2025-01-02T15:22:12Z',createdAt:'2025-01-02T15:22:12Z',recipientId:'person',recipientCompany:'SK',syncState:'pending'};
+ r.c.plazaSync_({data:{blendingDeliveries:[row]}});
+ const reversal=r.c.adminReverseMovement_({type:'delivery',movementId:'delivery',reversalRequestedBy:'Turno',recordedAt:'2025-01-04T13:33:12.750Z'}).movement;
+ const snapshot=r.c.plazaSync_({data:{},since:r.central.updatedAt,includeQuantityHistory:true}).data;
+ assert.ok(snapshot);assert.equal(snapshot.warehouseQuantityHistory.length,1);
+ const [delivery,back]=snapshot.blendingDeliveries;
+ assert.deepEqual([delivery.balanceBefore,delivery.balanceAfter,back.balanceBefore,back.balanceAfter],[9,7,7,9]);
+ assert.equal(delivery.recordedAt,row.recordedAt);assert.equal(back.recordedAt,'2025-01-04T13:33:12.750Z');
+ assert.ok(first.balanceAppliedAt<delivery.balanceAppliedAt&&delivery.balanceAppliedAt<reversal.balanceAppliedAt);
+ assert.equal(r.c.adminWarehouseQuantity_(adjust,auth).adjustment.id,first.id);
+ assert.equal(r.central.warehouseQuantityHistory.length,1);
+});

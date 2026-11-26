@@ -182,7 +182,7 @@ test('cancelar limpia la edición sin modificar el criterio, sus existencias ni 
 });
 
 test('la cola offline conserva ajustes simultáneos por bodega y cada recibo actualiza solo su propio saldo',async()=>{
- const h=await harness();h.ctx.window.SKAdminAuth={isAdmin:()=>true};
+ const h=await harness();h.ctx.window.SKAdminAuth={isAdmin:()=>true,user:()=>({username:'principal'})};
  const item={id:'comun',name:'Palas'},plaza={id:'stock-comun',itemId:item.id,quantity:8,updatedAt:'plaza1'};
  const production={id:item.id,itemId:item.id,quantity:3,updatedAt:'1|3',sampledAt:'2026-11-21T15:00:00Z'};
  await h.ctx.put('inventoryCriteria',item);await h.ctx.put('inventoryStock',plaza);
@@ -198,11 +198,16 @@ test('la cola offline conserva ajustes simultáneos por bodega y cada recibo act
  h.ctx.window.SKAdminAuth.request=async(action,req)=>{
   attempts++;assert.equal(action,'adminWarehouseQuantityV1');
   if(req.warehouse==='production')throw Error('La cantidad cambió en la base central.');
-  return {warehouse:req.warehouse,operationId:req.operationId,status:'accepted',stock:{...plaza,quantity:6,updatedAt:'plaza2'}};
+  assert.equal(req.recordedBy,'principal');assert.equal(req.recordedAt,pending.find(row=>row.warehouse==='plaza').createdAt);
+  return {warehouse:req.warehouse,operationId:req.operationId,status:'accepted',stock:{...plaza,quantity:6,updatedAt:'plaza2'},
+   adjustment:{id:req.operationId,recordedAt:req.recordedAt,recordedByRole:'owner'}};
  };
  await api.syncQuantities();
  assert.equal(attempts,2);assert.equal((await h.ctx.all('inventoryStock'))[0].quantity,6);
  assert.equal((await h.ctx.all('productionQuantityCache'))[0].quantity,3);
+ assert.equal((await h.ctx.all('warehouseQuantityHistory'))[0].recordedByRole,'owner');
+ await h.ctx.replaceStoreRows('warehouseQuantityHistory',[]);
+ assert.equal((await h.ctx.all('warehouseQuantityHistory')).length,1);
  const remaining=await h.ctx.all('inventoryQuantityAdjustments');assert.equal(remaining.length,1);assert.match(remaining[0].syncError,/cambió/);
 });
 
