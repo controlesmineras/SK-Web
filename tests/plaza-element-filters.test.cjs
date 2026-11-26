@@ -2,7 +2,7 @@ const {entry}=require('./session-fixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict'),fs=require('node:fs'),vm=require('node:vm'),path=require('node:path');
 const source=fs.readFileSync(path.join(__dirname,'../plaza/plaza.js'),'utf8').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
-function client(){
+function client(wide=false){
  const nodes=new Map(),alerts=[],downloads=[],radios={delivery:['all','epp','assets','reversals'],income:['all','reversals']};
  for(const kind of Object.keys(radios))radios[kind]=radios[kind].map(value=>({value,checked:value==='all'}));
  const blank=()=>({value:'',textContent:'',innerHTML:'',addEventListener(){},setAttribute(name,value){this[name]=value}});
@@ -23,9 +23,10 @@ function client(){
   row(kind+'-different-id','b6','2026-10-02T11:00:00',{itemName:'Barreno 4 ft'}),row(kind+'-bad-date','b4','invalid'),
   row(kind+'-epp','epp','2026-10-02T11:00:00'),row(kind+'-asset','asset','2026-10-02T11:00:00')
  ];
- const ctx=vm.createContext({Blob,console,alert:message=>alerts.push(message),document:{querySelector:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input\[value="all"\]$/);return match?radios[match[1]][0]:node(key)},querySelectorAll:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input$/);return match?radios[match[1]]:[]}},window:{SKEntry:entry,alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:()=>null},setTimeout(){},clearTimeout(){},crypto:{}});
+ const ctx=vm.createContext({Blob,console,alert:message=>alerts.push(message),document:{querySelector:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input\[value="all"\]$/);return match?radios[match[1]][0]:node(key)},querySelectorAll:key=>{const match=key.match(/^#(delivery|income)CategoryFilter input$/);return match?radios[match[1]]:[]}},window:{SKEntry:entry,matchMedia:()=>({matches:wide,addEventListener(){}}),alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:()=>null},setTimeout(){},clearTimeout(){},crypto:{}});
+ vm.runInContext(fs.readFileSync(path.join(__dirname,'../asset-history.js'),'utf8'),ctx);
  vm.runInContext(fs.readFileSync(path.join(__dirname,'../asset-record-rules.js'),'utf8'),ctx);
- vm.runInContext(source+`\ndownloadBlob=(blob,name)=>window.capture(blob,name);window.audit={set:value=>{data=value},sort:recentSort,priority:changeRecentPriority,rows:recentQueryRows,render:renderRecentQueries,reset:resetRecentFilters,excel:exportMovementExcel,pdf:exportMovementPdf};})();`,ctx);
+ vm.runInContext(source+`\ndownloadBlob=(blob,name)=>window.capture(blob,name);window.audit={movementTimes,resetMovementTime,setRole:role=>{user={role}},set:value=>{data=value},sort:recentSort,priority:changeRecentPriority,rows:recentQueryRows,render:renderRecentQueries,reset:resetRecentFilters,excel:exportMovementExcel,pdf:exportMovementPdf};})();`,ctx);
  ctx.window.capture=(blob,name)=>downloads.push({blob,name});ctx.window.audit.set(data);
  return{api:ctx.window.audit,data,node,alerts,downloads,select(kind,id){node('#'+kind+'HistoryQueryForm').elements.itemId.value=id},category(value,kind='delivery'){radios[kind].forEach(r=>r.checked=r.value===value)}};
 }
@@ -128,5 +129,40 @@ test('reversals include each matching original and counterpart across dates in t
    assert.doesNotMatch(content,/movimiento-normal/);
   }
   c.select(kind,'b6');assert.equal(c.api.rows(kind).length,0);
+ }
+});
+
+test('hora del movimiento admite segundos o minutos y conserva la hora real del guardado',()=>{
+ const {api}=client();api.setRole('plaza_assistant');
+ const form={elements:{movementDay:{},movementHour:{}}};
+ api.resetMovementTime(form);assert.equal(form.elements.movementHour.step,'1');
+ const now=new Date('2026-11-25T19:15:32.481Z');
+ assert.equal(api.movementTimes(form,now).createdAt,now.toISOString());
+ form.elements.movementDay.value='2026-11-23';
+ form.elements.movementHour.value='18:08:47';
+ let time=api.movementTimes(form,now);
+ assert.equal(time.createdAt,'2026-11-23T23:08:47.000Z');assert.equal(time.recordedAt,now.toISOString());
+ form.elements.movementHour.value='18:08';
+ assert.equal(api.movementTimes(form,now).createdAt,'2026-11-23T23:08:00.000Z');
+ form.elements.movementDay.value='2026-11-25';form.elements.movementHour.value='14:15:33';
+ assert.throws(()=>api.movementTimes(form,now),/futuras/);
+});
+test('consulta y exportación muestran los segundos; solo un identificador compartido vincula los renglones',async()=>{
+ for(const wide of [false,true]){
+  const c=client(wide),base={itemId:'epp',itemName:'Prefiltro FESI 7030',quantity:1,createdAt:'2026-10-01T23:08:17.500Z'};
+  c.data.blendingDeliveries=[
+   {...base,id:'a',syncEventId:'grupo'}, {...base,id:'b',syncEventId:'grupo'},
+   {...base,id:'c',syncEventId:'separado'}, {...base,id:'antiguo'},
+   {...base,id:'d',syncEventId:'grupo',itemId:'otro'}, {...base,id:'e',syncEventId:'otro',createdAt:'2026-10-01T23:08:42.000Z'}
+  ];
+  c.data.blendingIncomes=[{...base,id:'ingreso'}];
+  c.api.render();
+  const html=c.node('#recentDeliveriesList').innerHTML;
+  assert.match(html,/6:08:42/);assert.match(html,/6:08:17/);
+  assert.equal((html.match(/2 renglones de este elemento en el mismo guardado/g)||[]).length,2);
+  assert.match(c.node('#recentIncomesList').innerHTML,/6:08:17/);
+  for(const action of ['excel','pdf']){
+   c.api[action]('delivery');assert.match(await c.downloads.at(-1).blob.text(),/6:08:42/);
+  }
  }
 });

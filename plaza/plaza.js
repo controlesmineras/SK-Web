@@ -332,6 +332,7 @@ function matchesItemSearch(text,number,query){
     const {movementDay, movementHour}=form.elements;
     const {date,time}=window.SKAssetHistory.localTime(new Date());
     const locked=!canEditMovementTime();
+    movementHour.step='1';
     movementDay.disabled=movementHour.disabled=locked;
     movementDay.defaultValue=movementDay.value=date;
     movementHour.defaultValue=movementHour.value=time;
@@ -349,7 +350,7 @@ function matchesItemSearch(text,number,query){
       const occurred=new Date(day+'T'+hour+'-05:00');
       if(!Number.isFinite(occurred.getTime()))throw new Error('Completa la fecha y la hora del movimiento.');
       const {date,time}=window.SKAssetHistory.localTime(occurred);
-      if(date!==day || time!==hour)throw new Error('Revisa la fecha y la hora del movimiento.');
+      if(date!==day || time!==hour.slice(0,5))throw new Error('Revisa la fecha y la hora del movimiento.');
       if(occurred>now)throw new Error('La fecha y la hora del movimiento no pueden ser futuras.');
       createdAt=occurred.toISOString();
     }
@@ -815,7 +816,7 @@ function matchesItemSearch(text,number,query){
     if(typeof row.bringsReplacement==='boolean')return row.bringsReplacement?'SÍ':'NO';
     return isEppDeliveryItem(findItem(row.itemId))?'Sin registrar':'';
   }
-  function deliveryReportRow(row){const personal=data.personal||[],recipient=personal.find(person=>person.id===row.recipientId),operatorDocument=String(row.actorDocument||row.operatorDocument||''),operator=personal.find(person=>String(person.documento||'')===operatorDocument)||personal.find(person=>person.id===row.operatorId);return{fecha:movementDate(row)?.toLocaleString('es-CO')||'',elemento:movementItem(row),activo:movementAssetLabel(row),tipoEntrega:row.deliveryType||(row.assetId?'No especificado':''),cantidad:row.quantity||1,reposicion:deliveryReplacementLabel(row)||'No aplica',funcionario:recipient?.nombre||row.recipientName||'No informado',documento:recipient?.documento||row.recipientDocument||'No informado',empresa:row.recipientCompany||recipient?.empresa||'No informada',area:recipient?.area||'No informada',turno:row.shiftKeeperName||row.shiftKeeperDocument||'Sin dato histórico',entrego:operator?.nombre||row.operatorName||operatorDocument||'No informado',destino:row.destination||'',observaciones:[row.notes,loanReturnSummary(row),row.reversed===true||row.reversado===true?'REVERSADO':'',row.movementType==='REVERSIÓN'?'REVERSIÓN · Movimiento original: '+new Date(row.originalCreatedAt).toLocaleString('es-CO')+' · Saldo: '+row.balanceBefore+' · '+(row.stockDelta>0?'+ Cantidad reintegrada: ':'− Cantidad retirada: ')+row.quantity+' · Nuevo saldo: '+row.balanceAfter:'',row.reversalRequestedBy?'Reversión solicitada por: '+row.reversalRequestedBy:''].filter(Boolean).join(' · ')}}
+  function deliveryReportRow(row){const personal=data.personal||[],recipient=personal.find(person=>person.id===row.recipientId),operatorDocument=String(row.actorDocument||row.operatorDocument||''),operator=personal.find(person=>String(person.documento||'')===operatorDocument)||personal.find(person=>person.id===row.operatorId);return{fecha:recentMovementTime(row),elemento:movementItem(row),activo:movementAssetLabel(row),tipoEntrega:row.deliveryType||(row.assetId?'No especificado':''),cantidad:row.quantity||1,reposicion:deliveryReplacementLabel(row)||'No aplica',funcionario:recipient?.nombre||row.recipientName||'No informado',documento:recipient?.documento||row.recipientDocument||'No informado',empresa:row.recipientCompany||recipient?.empresa||'No informada',area:recipient?.area||'No informada',turno:row.shiftKeeperName||row.shiftKeeperDocument||'Sin dato histórico',entrego:operator?.nombre||row.operatorName||operatorDocument||'No informado',destino:row.destination||'',observaciones:[row.notes,loanReturnSummary(row),row.reversed===true||row.reversado===true?'REVERSADO':'',row.movementType==='REVERSIÓN'?'REVERSIÓN · Movimiento original: '+new Date(row.originalCreatedAt).toLocaleString('es-CO')+' · Saldo: '+row.balanceBefore+' · '+(row.stockDelta>0?'+ Cantidad reintegrada: ':'− Cantidad retirada: ')+row.quantity+' · Nuevo saldo: '+row.balanceAfter:'',row.reversalRequestedBy?'Reversión solicitada por: '+row.reversalRequestedBy:''].filter(Boolean).join(' · ')}}
   function incomeReportRow(row){
     const person=(data.personal||[]).find(person=>person.id===row.broughtById);
     return{...deliveryReportRow(row),tipoIngreso:row.incomeType||'',origen:row.originMine||'',funcionario:person?.nombre||row.broughtByName||'No informado',documento:person?.documento||row.broughtByDocument||'No informado',empresa:person?.empresa||'No informada',area:person?.area||'No informada'};
@@ -945,7 +946,25 @@ function matchesItemSearch(text,number,query){
   function movementPeopleFromPersonal(row){const people=data.personal||[],document=String(row.actorDocument||row.operatorDocument||''),operator=(document?people.find(person=>String(person.documento||'')===document):null)||people.find(person=>person.id===row.operatorId);return movementPeople(row,operator?.nombre||row.operatorName||document||'No informado')}
   function movementSyncStatus(row){return row.syncState==='pending'?`<span><b>PENDIENTE DE SINCRONIZACIÓN</b>${row.syncError?' · '+esc(row.syncError):''}</span>`:''}
   const wideQueries=window.matchMedia?.('(min-width: 1000px)');
-  const recentDateFormat=new Intl.DateTimeFormat('es-CO',{dateStyle:'medium',timeStyle:'short',timeZone:'America/Bogota'});
+  const recentDateFormat=new Intl.DateTimeFormat('es-CO',{dateStyle:'medium',timeStyle:'medium',timeZone:'America/Bogota'});
+  function recentMovementTime(row){
+    const date=movementDate(row);
+    return date?recentDateFormat.format(date):'—';
+  }
+  function deliveryBatchNotes(rows){
+    const groups=new Map(),notes=new Map();
+    for(const row of rows){
+      if(!row.syncEventId||!row.itemId||!row.id||row.movementType==='REVERSIÓN')continue;
+      const key=JSON.stringify([row.syncEventId,row.itemId]);
+      if(!groups.has(key))groups.set(key,new Set());
+      groups.get(key).add(row.id);
+    }
+    for(const ids of groups.values()){
+      if(ids.size<2)continue;
+      for(const id of ids)notes.set(id,ids.size+' renglones de este elemento en el mismo guardado');
+    }
+    return notes;
+  }
   function recentHeaderButton(kind,key,title){
     const order=recentOrder[kind],index=order.findIndex(entry=>entry.key===key);
     const dir=activeRecentOrder(kind).find(entry=>entry.key===key)?.dir;
@@ -956,7 +975,7 @@ function matchesItemSearch(text,number,query){
     return '<button type="button" data-recent-sort="'+key+'" title="'+hint+'" aria-label="'+hint+'">'+
       title+' <span aria-hidden="true">'+arrow+(index<0?'':'<sup>'+(index+1)+'</sup>')+'</span></button>';
   }
-  function recentMovementTable(kind,rows,people,dateLabel){
+  function recentMovementTable(kind,rows,people,batchNotes){
     const delivery=kind==='delivery',columns=recentColumns(kind),primary=activeRecentOrder(kind)[0];
     const head=Object.entries(columns).map(([key,title])=>{
       const aria=key===primary.key?' aria-sort="'+(primary.dir===1?'ascending':'descending')+'"':'';
@@ -977,7 +996,7 @@ function matchesItemSearch(text,number,query){
         (row.balanceBefore!=null?line('Anterior: '+row.balanceBefore):'')+
         (row.balanceAfter!=null?line('Nuevo: '+row.balanceAfter):''):'';
       const quantity=esc(row.quantity??'—')+(isReversal?line(row.stockDelta>0?'Reintegrada':'Retirada'):'');
-      const values=[esc(dateLabel(row)),element,quantity,
+      const values=[esc(recentMovementTime(row))+(delivery?line(batchNotes.get(row.id)):''),element,quantity,
         (balances+(!delivery?line(row.originMine):''))||'—',
         (row.exitKind==='mine'?line('Quién transporta: '+(detail.person||'No informado')):line(detail.person||'No informado'))+line(detail.document),line(detail.company||'No informada')+line(detail.area),
         line(detail.keeper||'Sin dato histórico'),line(detail.operator||'No informado')];
@@ -988,7 +1007,7 @@ function matchesItemSearch(text,number,query){
   }
   wideQueries?.addEventListener('change',()=>{if($('#app')&&!$('#app').hidden)renderRecentQueries()});
   function renderRecentQueries(){const deliveries=$('#recentDeliveriesList'),incomes=$('#recentIncomesList');if(!deliveries||!incomes)return;const directory=recentPeople(),people=directory.byId,peopleByDocument=directory.byDocument;
-    const deliveryRows=recentQueryRows('delivery',directory),incomeRows=recentQueryRows('income',directory),dateLabel=row=>{const date=movementDate(row);return date?recentDateFormat.format(date):'—'};const deliveryRange=recentDateRange('delivery'),incomeRange=recentDateRange('income');$('#recentDeliveriesCount').textContent=deliveryRange.from&&deliveryRange.to&&deliveryRange.from>deliveryRange.to?'La fecha inicial debe ser anterior o igual a la fecha final.':`${deliveryRows.length} ${deliveryRows.length===1?'entrega encontrada':'entregas encontradas'} · ${recentFilterLabel('delivery')}`;deliveries.innerHTML=wideQueries?.matches&&deliveryRows.length?recentMovementTable('delivery',deliveryRows,directory,dateLabel):deliveryRows.map(row=>{const person=people.get(row.recipientId),operatorDocument=String(row.actorDocument||row.operatorDocument||''),operator=peopleByDocument.get(operatorDocument)||people.get(row.operatorId),operatorName=operator?.nombre||row.operatorName||operatorDocument||'No informado';return `<article${reversalAppearance(row)}><div><b>${row.movementType==='REVERSIÓN'?'REVERSIÓN · ':''}${esc(movementItem(row))}</b>${reversalStatus(row)}${row.movementType==='REVERSIÓN'?reversalBalance(row):!row.assetId&&Number.isFinite(Number(row.balanceBefore))&&Number.isFinite(Number(row.balanceAfter))?`<span><b>Saldo:</b> ${esc(row.balanceBefore)} · <b>− Cantidad entregada:</b> ${esc(row.quantity||0)} · <b>Nuevo saldo:</b> ${esc(row.balanceAfter)}</span>`:''}<span>${esc(dateLabel(row))}</span>${deliveryReplacementLabel(row)?`<span>Trae reposición: ${esc(deliveryReplacementLabel(row))}</span>`:''}${movementSyncStatus(row)}<span>${row.exitKind==='mine'?'Quién transporta':'Recibe'}: ${esc(person?.nombre||row.recipientName||'No informado')}</span><span>Documento: ${esc(person?.documento||row.recipientDocument||'No informado')}</span><span>Empresa: ${esc(row.recipientCompany||person?.empresa||'No informada')}</span><span>Área: ${esc(person?.area||'No informada')}</span>${reversalRequester(row)}${movementPeople(row,operatorName)}${row.assetLabel?`<span>Activo específico: ${esc(movementAssetLabel(row))}</span>`:''}${row.assetId||row.deliveryType?`<span>Tipo de entrega: ${esc(row.deliveryType||'No especificado')}</span>`:''}${row.destination?`<span>Destino: ${esc(row.destination)}</span>`:''}${loanReturnSummary(row)?`<span>${esc(loanReturnSummary(row))}</span>`:''}</div></article>`}).join('')||'<p class="permission">No hay entregas que coincidan con el rango y los filtros seleccionados.</p>';$('#recentIncomesCount').textContent=incomeRange.from&&incomeRange.to&&incomeRange.from>incomeRange.to?'La fecha inicial debe ser anterior o igual a la fecha final.':`${incomeRows.length} ${incomeRows.length===1?'ingreso encontrado':'ingresos encontrados'} · ${recentFilterLabel('income')}`;incomes.innerHTML=wideQueries?.matches&&incomeRows.length?recentMovementTable('income',incomeRows,directory,dateLabel):incomeRows.map(row=>`<article${reversalAppearance(row)}><div><b>${row.movementType==='REVERSIÓN'?'REVERSIÓN · ':''}${esc(movementItem(row))}</b><span>${esc(dateLabel(row))} · Cantidad: ${esc(row.quantity||1)}</span>${reversalStatus(row)}${row.movementType==='REVERSIÓN'?reversalBalance(row)+reversalRequester(row):''}${movementPeopleFromPersonal(row)}${movementSyncStatus(row)}${row.assetLabel?`<span>${esc(movementAssetLabel(row))}</span>`:''}${row.incomeType?`<span>${esc(row.incomeType)} · Mina de origen: ${esc(row.originMine)}</span>`:''}${row.notes?`<span>Observaciones: ${esc(row.notes)}</span>`:''}</div></article>`).join('')||'<p class="permission">No hay ingresos que coincidan con el rango y los filtros seleccionados.</p>';
+    const deliveryRows=recentQueryRows('delivery',directory),incomeRows=recentQueryRows('income',directory),batchNotes=deliveryBatchNotes(deliveryRows);const deliveryRange=recentDateRange('delivery'),incomeRange=recentDateRange('income');$('#recentDeliveriesCount').textContent=deliveryRange.from&&deliveryRange.to&&deliveryRange.from>deliveryRange.to?'La fecha inicial debe ser anterior o igual a la fecha final.':`${deliveryRows.length} ${deliveryRows.length===1?'entrega encontrada':'entregas encontradas'} · ${recentFilterLabel('delivery')}`;deliveries.innerHTML=wideQueries?.matches&&deliveryRows.length?recentMovementTable('delivery',deliveryRows,directory,batchNotes):deliveryRows.map(row=>{const person=people.get(row.recipientId),operatorDocument=String(row.actorDocument||row.operatorDocument||''),operator=peopleByDocument.get(operatorDocument)||people.get(row.operatorId),operatorName=operator?.nombre||row.operatorName||operatorDocument||'No informado';return `<article${reversalAppearance(row)}><div><b>${row.movementType==='REVERSIÓN'?'REVERSIÓN · ':''}${esc(movementItem(row))}</b>${reversalStatus(row)}${row.movementType==='REVERSIÓN'?reversalBalance(row):!row.assetId&&Number.isFinite(Number(row.balanceBefore))&&Number.isFinite(Number(row.balanceAfter))?`<span><b>Saldo:</b> ${esc(row.balanceBefore)} · <b>− Cantidad entregada:</b> ${esc(row.quantity||0)} · <b>Nuevo saldo:</b> ${esc(row.balanceAfter)}</span>`:''}<span>${esc(recentMovementTime(row))}</span>${batchNotes.has(row.id)?`<span>${esc(batchNotes.get(row.id))}</span>`:''}${deliveryReplacementLabel(row)?`<span>Trae reposición: ${esc(deliveryReplacementLabel(row))}</span>`:''}${movementSyncStatus(row)}<span>${row.exitKind==='mine'?'Quién transporta':'Recibe'}: ${esc(person?.nombre||row.recipientName||'No informado')}</span><span>Documento: ${esc(person?.documento||row.recipientDocument||'No informado')}</span><span>Empresa: ${esc(row.recipientCompany||person?.empresa||'No informada')}</span><span>Área: ${esc(person?.area||'No informada')}</span>${reversalRequester(row)}${movementPeople(row,operatorName)}${row.assetLabel?`<span>Activo específico: ${esc(movementAssetLabel(row))}</span>`:''}${row.assetId||row.deliveryType?`<span>Tipo de entrega: ${esc(row.deliveryType||'No especificado')}</span>`:''}${row.destination?`<span>Destino: ${esc(row.destination)}</span>`:''}${loanReturnSummary(row)?`<span>${esc(loanReturnSummary(row))}</span>`:''}</div></article>`}).join('')||'<p class="permission">No hay entregas que coincidan con el rango y los filtros seleccionados.</p>';$('#recentIncomesCount').textContent=incomeRange.from&&incomeRange.to&&incomeRange.from>incomeRange.to?'La fecha inicial debe ser anterior o igual a la fecha final.':`${incomeRows.length} ${incomeRows.length===1?'ingreso encontrado':'ingresos encontrados'} · ${recentFilterLabel('income')}`;incomes.innerHTML=wideQueries?.matches&&incomeRows.length?recentMovementTable('income',incomeRows,directory):incomeRows.map(row=>`<article${reversalAppearance(row)}><div><b>${row.movementType==='REVERSIÓN'?'REVERSIÓN · ':''}${esc(movementItem(row))}</b><span>${esc(recentMovementTime(row))} · Cantidad: ${esc(row.quantity||1)}</span>${reversalStatus(row)}${row.movementType==='REVERSIÓN'?reversalBalance(row)+reversalRequester(row):''}${movementPeopleFromPersonal(row)}${movementSyncStatus(row)}${row.assetLabel?`<span>${esc(movementAssetLabel(row))}</span>`:''}${row.incomeType?`<span>${esc(row.incomeType)} · Mina de origen: ${esc(row.originMine)}</span>`:''}${row.notes?`<span>Observaciones: ${esc(row.notes)}</span>`:''}</div></article>`).join('')||'<p class="permission">No hay ingresos que coincidan con el rango y los filtros seleccionados.</p>';
     updateRecentSort('delivery');updateRecentSort('income');
   }
   function recentControls(kind){
