@@ -47,7 +47,8 @@ function apply(){
   b.setAttribute('aria-pressed',String(chosen));b.style.fontWeight=chosen?'800':'400';
   b.textContent=(chosen?'✓ ':'')+(b.dataset.interfaceLanguage==='es'?'Español':'English');
  });
- observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['placeholder','title','aria-label']});
+ // El contenido nuevo ya se crea en español. Solo la traducción al inglés necesita observarlo.
+ if(language==='en')observer.observe(document.body,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['placeholder','title','aria-label']});
 }
 let queued=false;
 const observer=new MutationObserver(()=>{if(!queued){queued=true;queueMicrotask(()=>{queued=false;apply()})}});

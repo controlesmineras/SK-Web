@@ -4,6 +4,7 @@ function createAssetHistory(){
  const text=value=>String(value??'').trim();
  const norm=value=>text(value).toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'');
  const millis=value=>Date.parse(value)||0;
+ let colombiaClock;
  const reversed=row=>!!(row.reversed||row.reversado||row.reversedAt);
  const retired=asset=>/dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`);
  const inventoryLocation=area=>text(area)?'Inventario de '+text(area):'Inventario de área por confirmar';
@@ -15,7 +16,8 @@ function createAssetHistory(){
  }
  function localTime(value){
   if(!millis(value))return {date:'',time:''};
-  const parts=Object.fromEntries(new Intl.DateTimeFormat('en-US',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).formatToParts(new Date(value)).map(p=>[p.type,p.value]));
+  if(!colombiaClock)colombiaClock=new Intl.DateTimeFormat('en-US',{timeZone:'America/Bogota',year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit',hourCycle:'h23'});
+  const parts=Object.fromEntries(colombiaClock.formatToParts(new Date(value)).map(p=>[p.type,p.value]));
   return {date:`${parts.year}-${parts.month}-${parts.day}`,time:`${parts.hour}:${parts.minute}`};
  }
  function eventTime(row){
@@ -23,34 +25,35 @@ function createAssetHistory(){
   if(/^\d{4}-\d{2}-\d{2}$/.test(text(row.fechaNovedad))){const value=row.fechaNovedad+'T'+(row.horaNovedad||'00:00')+'-05:00';if(millis(value))return value;}
   return row.createdAt||''; // updatedAt is a synchronization/edit time, not the event time.
  }
- function person(people,id,document,name,area='',cargo=''){
+ function person(lookup,id,document,name,area='',cargo=''){
   document=text(document);name=text(name);
   // Older manual novelties snapshot the option label as "document - name".
   const match=name.match(/^([\d. -]+?)\s+-\s+(.+)$/);
   if(match){document=document||match[1].trim();name=match[2].trim();}
-  const found=(document&&people.find(p=>text(p.documento)===document))||people.find(p=>id&&text(p.id)===text(id)&&(!document||text(p.documento)===document));
+  const found=lookup(id,document);
   return {id:text(id||found?.id),document:document||text(found?.documento),name:name||text(found?.nombre),area:text(area||found?.area),cargo:text(cargo||found?.cargo)};
  }
- function warehouse(row,people,manual){
+ function warehouse(row,lookupPerson,manual){
   if(!manual&&(row.shiftKeeperId||row.shiftKeeperDocument||row.shiftKeeperName))
-   return person(people,row.shiftKeeperId,row.shiftKeeperDocument,row.shiftKeeperName);
-  return person(people,row.bodegueroId,row.documentoBodeguero,row.bodegueroNombre||row.nombreBodeguero);
+   return person(lookupPerson,row.shiftKeeperId,row.shiftKeeperDocument,row.shiftKeeperName);
+  return person(lookupPerson,row.bodegueroId,row.documentoBodeguero,row.bodegueroNombre||row.nombreBodeguero);
  }
- function registeredBy(row,people){
+ function registeredBy(row,lookupPerson){
   const doc=text(row.actorDocument||row.operatorDocument),mismatch=row.actorDocument&&row.operatorDocument&&text(row.actorDocument)!==text(row.operatorDocument);
-  return person(people,mismatch?'':row.operatorId,doc,mismatch?'':row.operatorName);
+  return person(lookupPerson,mismatch?'':row.operatorId,doc,mismatch?'':row.operatorName);
  }
  function timeline(data={},assetId){
-  const people=data.personal||[],entries=new Map();let order=0;
+  const rows=data.personal||[],entries=new Map();let order=0;
+  const lookupPerson=data.lookupPerson||((id,doc)=>doc?rows.find(p=>text(p.documento)===doc):id&&rows.find(p=>text(p.id)===text(id)));
   for(const source of ['novelties','blendingIncomes','blendingDeliveries'])for(const row of data[source]||[]){
    if(!row||row.deleted||!row.assetId||(assetId&&text(row.assetId)!==text(assetId)))continue;
    const manual=source==='novelties',income=source==='blendingIncomes',back=norm(row.movementType)==='devolucion';
    const kind=manual?'novelty':income?'income':back?'return':row.exitKind==='mine'?'mineExit':row.exitKind==='warehouse'?'transfer':norm(row.deliveryType)==='prestamo'?'loan':'assignment';
    const at=back?(row.returnedAt||row.createdAt||''):manual?eventTime(row):row.createdAt||'';
-   const responsible=manual?person(people,row.responsableId,row.documentoResponsable,row.responsableNombre||row.nombreResponsable):income?person(people,row.broughtById,row.broughtByDocument,row.broughtByName):back?person(people,row.returnedById,row.returnedByDocument,row.returnedByName):person(people,row.recipientId,row.recipientDocument,row.recipientName,row.recipientArea,row.recipientCargo);
+   const responsible=manual?person(lookupPerson,row.responsableId,row.documentoResponsable,row.responsableNombre||row.nombreResponsable):income?person(lookupPerson,row.broughtById,row.broughtByDocument,row.broughtByName):back?person(lookupPerson,row.returnedById,row.returnedByDocument,row.returnedByName):person(lookupPerson,row.recipientId,row.recipientDocument,row.recipientName,row.recipientArea,row.recipientCargo);
    const title=manual?(row.descripcion||'Novedad'):income?'Ingreso a bodega':back?'Devolución de préstamo':kind==='mineExit'?row.deliveryType+' · '+row.destinationMine:kind==='transfer'?'Traslado a bodega':kind==='loan'?'Préstamo':'Asignación';
    const key=source+':'+(row.id||[row.assetId,at,row.recipientId,row.broughtById,row.descripcion].join('|'));
-   const entry={key,order:++order,assetId:row.assetId,source,kind,title,at,epoch:millis(at),...localTime(at),responsible,warehouse:warehouse(row,people,manual),registeredBy:manual?null:registeredBy(row,people),location:manual?row.ubicacion||'':income||back?'Bodega de Superficie':row.destination||'Operación',state:manual?row.estado||'':'',reversed:reversed(row),pending:row.syncState==='pending',raw:row};
+   const entry={key,order:++order,assetId:row.assetId,source,kind,title,at,epoch:millis(at),...localTime(at),responsible,warehouse:warehouse(row,lookupPerson,manual),registeredBy:manual?null:registeredBy(row,lookupPerson),location:manual?row.ubicacion||'':income||back?'Bodega de Superficie':row.destination||'Operación',state:manual?row.estado||'':'',reversed:reversed(row),pending:row.syncState==='pending',raw:row};
    const previous=entries.get(key);
    if(!previous||millis(row.updatedAt)>=millis(previous.raw.updatedAt))entries.set(key,entry);
   }
@@ -201,7 +204,28 @@ function createAssetHistory(){
   return {asset:result,events,latest,assigned};
  }
  function available(asset,data){const current=project(asset,data).asset;return !current.deleted&&!retired(current)&&norm(current.ubicacion)==='bodega de superficie';}
- return {timeline,project,applyDatedNovelty,snapshot,restoreNovelty,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
+ // Prepara una consulta de varios activos sobre una misma lectura, incluidas novedades pendientes o eliminadas.
+ function batchProjector(data={}){
+  const byId=new Map(),byDocument=new Map();
+  for(const person of data.personal||[]){
+   const id=text(person.id),doc=text(person.documento);
+   if(id&&!byId.has(id))byId.set(id,person);
+   if(doc&&!byDocument.has(doc))byDocument.set(doc,person);
+  }
+  const lookupPerson=(id,doc)=>doc?byDocument.get(doc):id&&byId.get(text(id));
+  const byAsset=new Map();
+  for(const source of ['novelties','blendingIncomes','blendingDeliveries']){
+   for(const row of data[source]||[]){
+    if(!row?.assetId)continue;
+    const id=text(row.assetId);
+    if(!byAsset.has(id))byAsset.set(id,{lookupPerson,novelties:[],blendingIncomes:[],blendingDeliveries:[]});
+    byAsset.get(id)[source].push(row);
+   }
+  }
+  const empty={lookupPerson};
+  return asset=>project(asset,asset.id?(byAsset.get(text(asset.id))||empty):data);
+ }
+ return {timeline,project,batchProjector,applyDatedNovelty,snapshot,restoreNovelty,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
 }
 
 if(typeof module==='object'&&module.exports)module.exports=createAssetHistory();

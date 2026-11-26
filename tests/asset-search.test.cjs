@@ -6,7 +6,7 @@ function app(){
  const nodes={'#assetSearch':{value:''},'#assetAdminList':{}};
  const ctx=vm.createContext({window:{addEventListener(){}},document:{querySelector:key=>nodes[key]}});
  for(const file of ['asset-search.js','asset-record-rules.js','asset-list-order.js'])vm.runInContext(read(file),ctx);
- return {query:ctx.window.SKAssetSearch.query,ownership:ctx.window.SKAssetOwnership,nodes};
+ return {query:ctx.window.SKAssetSearch.query,indexText:ctx.window.SKAssetSearch.indexText,ownership:ctx.window.SKAssetOwnership,nodes};
 }
 test('resalta cada fragmento literal y conserva tildes, puntuación y texto seguro',()=>{
  const {query}=app(),q=query('  guIa  a.2 ');
@@ -42,4 +42,12 @@ test('documentos técnicos y serial oculto de columna no aparecen como coinciden
  for(const term of ['oculto','pending','a123'])assert.equal(query(term).rows([asset],describe).length,0);
  const [row]=query('52 columna').rows([asset],describe);
  assert.equal(row.detail,'N.º de clase: 52');
+});
+test('el índice del listado respeta los alias, las tildes y los campos ocultos del buscador',()=>{
+ const {query,indexText}=app();
+ const asset={clase:'Columna',serial:'oculto',marcaAnterior:'Externa 23116876',numeroClase:'P1',orden:'interno',fabricante:'No aplica'};
+ const label='Columna.29 · Ubicación Norte',index=indexText(asset,label);
+ for(const input of ['externa ubicacion','P1 23116876','oculto','interno','aplica','otra','']){
+  const q=query(input);assert.equal(q.matchesIndex(index),q.extra(asset,label)!==null,input);
+ }
 });
