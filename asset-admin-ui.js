@@ -12,7 +12,7 @@ async function recentBrands(form){
  const rows=await all('assets');if(control!==form.elements.fabricante||clase!==form.elements.clase.value)return;
  let list=document.querySelector('#assetRecentBrandOptions');if(!list){list=document.createElement('datalist');list.id='assetRecentBrandOptions';form.append(list)}
  const seen=new Set(),brands=rows.filter(row=>classKey(row.clase)===classKey(clase)&&txt(row.fabricante)).sort((a,b)=>txt(b.createdAt||b.fechaIngreso).localeCompare(txt(a.createdAt||a.fechaIngreso))).map(row=>txt(row.fabricante)).filter(value=>{const key=classKey(value);if(seen.has(key))return false;seen.add(key);return true}).slice(0,12);
- control.setAttribute('list',list.id);list.replaceChildren(...brands.map(value=>new Option(value,value)));
+ control.setAttribute('list',list.id);list.replaceChildren(...window.SKAssetRules.withUnrecordedOption(brands).map(value=>new Option(value,value)));
 }
 let criteriaByClass=new Map(),assetSaving=false,classRefreshVersion=0;
 const criterionName=item=>txt(item?.name||item?.nombre||item?.element||item?.elemento||item?.CI_ELEMENTO||item?.ciElemento||item?.itemName);
@@ -125,14 +125,16 @@ function syncModelChoices(form){
 function updateManufacturerControl(form,type){
  const current=form.elements.fabricante;if(!current)return;
  const kind=/^motosierras?$/.test(type)?'motosierra':type,restricted=['yt','autorrescatador','motosierra'].includes(kind),tag=restricted?'SELECT':'INPUT';
- if(current.tagName===tag)return;
+ if(current.tagName===tag&&(!restricted||!current.dataset.brandClass||current.dataset.brandClass===kind))return;
  const replacement=document.createElement(restricted?'select':'input'),value=current.value;
  for(const attribute of current.attributes)replacement.setAttribute(attribute.name,attribute.value);
  if(restricted){
+  replacement.removeAttribute('list');
   const blank=document.createElement('option');blank.value='';blank.textContent='Seleccionar marca…';replacement.append(blank);
   const defaults={yt:['Gisi','Irreconocible'],autorrescatador:['Steel pro'],motosierra:['Makita','Stihl']};
-  for(const brand of window.SKFormOptions?.values('asset.manufacturer.'+kind,defaults[kind])||defaults[kind]){const option=document.createElement('option');option.value=brand;option.textContent=brand;option.dataset.classOnly=kind;replacement.append(option)}
- }else{replacement.type='text';replacement.removeAttribute('pattern');replacement.removeAttribute('maxlength');replacement.placeholder='Ingresa la marca comercial…';}
+  replacement.dataset.brandClass=kind;
+  for(const brand of window.SKAssetRules.withUnrecordedOption(window.SKFormOptions?.values('asset.manufacturer.'+kind,defaults[kind])||defaults[kind])){const option=document.createElement('option');option.value=brand;option.textContent=brand;option.dataset.classOnly=kind;replacement.append(option)}
+ }else{replacement.type='text';replacement.removeAttribute('pattern');replacement.removeAttribute('maxlength');replacement.setAttribute('list','assetSerialOptions');replacement.placeholder='Marca comercial o No registra';}
  current.replaceWith(replacement);replacement.value=value;
 }
 function restoreAssetValue(control,value){
@@ -159,7 +161,7 @@ function updateMarkFieldVisibility(form,type,automatic){
  if(markTitle)markTitle.textContent=single?'MARCA ANTERIOR':'MARCA';
  if(automatic||single){const visible=single&&isPreviousMark(mark?.value,newMark.value)&&!isPreviousMark(form.elements.marcaPrevia?.value,newMark.value);markLabel?.classList.toggle('criterion-disabled-field',!visible);if(mark){mark.disabled=!visible;mark.required=false;mark.readOnly=true;}}
 }
-function updateAssetFields(){const f=document.querySelector('#assetForm');if(!f)return;f.elements.disponibleEntrega.value=window.SKAssetHistory.operationStatus({estado:f.elements.estado.value});fillAssignedArea();const number=f.elements.numeroYT,numberEligible=window.SKAssetRules.automaticNumberEligible(f.elements.clase?.value),autoNumber=!f.elements.id.value&&numberEligible;number.closest('label').classList.toggle('criterion-disabled-field',autoNumber);number.disabled=autoNumber;number.required=!numberEligible;number.readOnly=numberEligible;number.placeholder=numberEligible?'Se asigna automáticamente al guardar':'';if(autoNumber)number.value='';const type=norm(f.elements.clase?.value),criterion=criteriaByClass.get(type),isColumn=window.SKAssetRules.isColumn(type),isYT=type==='yt',isSelfRescuer=type==='autorrescatador';f.classList.toggle('asset-is-column',isColumn);f.classList.toggle('asset-is-yt',isYT);f.classList.toggle('asset-is-yt-column',isYT||isColumn);f.classList.toggle('asset-is-autorrescatador',isSelfRescuer);const romanNumber=f.elements.marcaAnterior;if(romanNumber){romanNumber.closest('label').classList.toggle('criterion-disabled-field',!isYT&&!isColumn);romanNumber.disabled=!isYT&&!isColumn;romanNumber.required=false;}updateModelControl(f,type);updateManufacturerControl(f,type);updateClassOnlyOptions(type);criterionField(f,'serial',true,false);f.elements.serial.closest('label').classList.toggle('criterion-disabled-field',isColumn);criterionField(f,'largo',isColumn||!!criterion?.usesLength,!!criterion?.usesLength);criterionField(f,'modelo',true,isColumn||isYT||!!criterion?.usesModel);criterionField(f,'fabricante',(!isColumn&&!isYT)||!!criterion?.usesManufacturer,!!criterion?.usesManufacturer);const automatic=!f.elements.id.value&&window.SKAssetMarking?.eligible(type),protectedMark=automatic||f.dataset.autoMarkPolicy==='letters-v1';criterionField(f,'marcaInterna',usesNewMarkForm(f)||protectedMark||!!criterion?.requiresInternalMark,!!criterion?.requiresInternalMark&&!protectedMark&&!usesNewMarkForm(f));f.elements.marcaInterna.readOnly=!!protectedMark;f.elements.marcaInterna.placeholder=automatic?'Se asigna automáticamente al sincronizar':'';f.elements.nuevaMarca.readOnly=!!protectedMark;f.elements.nuevaMarca.placeholder=automatic?'Marca de tres letras al sincronizar':'';updateMarkFieldVisibility(f,type,automatic);if(f.elements.estadoVisor){f.elements.estadoVisor.required=isSelfRescuer;if(!isSelfRescuer)f.elements.estadoVisor.value=''}if(f.elements.estado)f.elements.estado.required=isSelfRescuer;applySuggestedMark();setAssetMode(!!f.elements.id.value)}
+function updateAssetFields(){const f=document.querySelector('#assetForm');if(!f)return;f.elements.disponibleEntrega.value=window.SKAssetHistory.operationStatus({estado:f.elements.estado.value});fillAssignedArea();const number=f.elements.numeroYT,numberEligible=window.SKAssetRules.automaticNumberEligible(f.elements.clase?.value),autoNumber=!f.elements.id.value&&numberEligible;number.closest('label').classList.toggle('criterion-disabled-field',autoNumber);number.disabled=autoNumber;number.required=!numberEligible;number.readOnly=numberEligible;number.placeholder=numberEligible?'Se asigna automáticamente al guardar':'';if(autoNumber)number.value='';const type=norm(f.elements.clase?.value),criterion=criteriaByClass.get(type),isColumn=window.SKAssetRules.isColumn(type),isYT=type==='yt',isSelfRescuer=type==='autorrescatador';f.classList.toggle('asset-is-column',isColumn);f.classList.toggle('asset-is-yt',isYT);f.classList.toggle('asset-is-yt-column',isYT||isColumn);f.classList.toggle('asset-is-autorrescatador',isSelfRescuer);const romanNumber=f.elements.marcaAnterior;if(romanNumber){romanNumber.closest('label').classList.toggle('criterion-disabled-field',!isYT&&!isColumn);romanNumber.disabled=!isYT&&!isColumn;romanNumber.required=false;}updateModelControl(f,type);updateManufacturerControl(f,type);updateClassOnlyOptions(type);criterionField(f,'serial',true,false);f.elements.serial.closest('label').classList.toggle('criterion-disabled-field',isColumn);criterionField(f,'largo',isColumn||!!criterion?.usesLength,!!criterion?.usesLength);criterionField(f,'modelo',true,isColumn||isYT||!!criterion?.usesModel);criterionField(f,'fabricante',(!isColumn&&!isYT)||!!criterion?.usesManufacturer,!!criterion?.usesManufacturer);const automatic=!f.elements.id.value&&window.SKAssetMarking?.eligible(type),protectedMark=automatic||f.dataset.autoMarkPolicy==='letters-v1';criterionField(f,'marcaInterna',usesNewMarkForm(f)||protectedMark||!!criterion?.requiresInternalMark,!!criterion?.requiresInternalMark&&!protectedMark&&!usesNewMarkForm(f));f.elements.marcaInterna.readOnly=!!protectedMark;f.elements.marcaInterna.placeholder=automatic?'Se asigna automáticamente al sincronizar':'Marca o No registra';f.elements.nuevaMarca.readOnly=!!protectedMark;f.elements.nuevaMarca.placeholder=automatic?'Marca de tres letras al sincronizar':'';updateMarkFieldVisibility(f,type,automatic);if(f.elements.estadoVisor){f.elements.estadoVisor.required=isSelfRescuer;if(!isSelfRescuer)f.elements.estadoVisor.value=''}if(f.elements.estado)f.elements.estado.required=isSelfRescuer;applySuggestedMark();setAssetMode(!!f.elements.id.value)}
 const numberOf=a=>txt(window.SKAssetFields?.numero(a)||a.numeroClase||a.numeroYT||a.orden);function cleanLabel(a){
  if(window.SKAssetRules?.isColumn(a))return window.SKAssetRules.columnLabel(a);
  const type=norm(a.clase),yt=/^yt(?:\b|\d)/i.test(type),column=/^columnas?\b/i.test(type),present=value=>txt(value)&&norm(value)!=='no aplica';
@@ -208,6 +210,7 @@ async function hydrateEdit(){
  if(f.elements.nuevaMarca)f.elements.nuevaMarca.value=a.nuevaMarca||'';
  const c=window.SKAssetFields?.canonical(a);if(c){f.elements.numeroYT.value=c.numeroClase||'';f.elements.marcaInterna.value=c.marcaActual||'';f.elements.marcaAnterior.value=c.numeroMarcaActual||''}
  for(const name of ['serial','marcaPrevia','modelo','fabricante','mina','fechaNovedad','horaNovedad','descripcionNovedad'])if(f.elements[name])f.elements[name].value=a[name]??'';
+ if(f.elements.marcaInterna&&a.marcaInternaNoRegistra&&!a.marcaActual&&!a.marcaInterna)f.elements.marcaInterna.value='No registra';
  if(f.elements.hasPreviousMark)f.elements.hasPreviousMark.checked=!!txt(a.marcaPrevia);
  // Las excepciones guardadas antes se presentan como texto al editar la ficha.
  if(f.elements.serial&&!txt(a.serial))f.elements.serial.value=({none:'No trae',unreadable:'No visible'})[a.serialStatus]||'';
@@ -244,7 +247,7 @@ async function saveAsset(e){
   if((type==='yt'||window.SKAssetRules.isColumn(type))&&!['28','29'].includes(txt(x.modelo))){f.querySelector('.assetModelChoices input')?.focus();return alert('Selecciona el MODELO: 28 o 29.');}
   if(!editing){x.estado=f.elements.estado?.value||'';x.ubicacion='Bodega de Superficie';x.disponibleEntrega=window.SKAssetHistory.operationStatus(x);}
   x.serialStatus='';
-  x.serial=window.SKAssetRules.serialDescription(x.serial)||txt(x.serial);
+  x.serial=txt(x.serial);
   if(window.SKAssetRules.automaticNumberEligible(x.clase)){x.numeroYT=window.SKAssetRules.classNumber(rows,x);x.classNumberPolicy='auto-v1';}
   if(!txt(x.numeroYT))return alert('Ingresa el NÚMERO DE CLASE del activo.');
   if(!window.SKAssetRules.hasIdentity(x,criterion)){f.elements.serial?.focus();return alert('Ingresa el SERIAL o selecciona «No registra». La marca anterior no reemplaza el serial.');}
@@ -265,12 +268,13 @@ async function saveAsset(e){
     return alert('Ingresa '+label+'. Este campo es obligatorio para la clase '+x.clase+'.');
    }
   }
+  window.SKAssetRules.normalizeAssetIdentification(x);
   Object.assign(x,window.SKAssetAccessories?.read(f)||{});
   x.numeroClase=txt(x.numeroYT);x.marcaActual=txt(x.marcaInterna);x.numeroMarcaActual=txt(x.marcaAnterior);
   // Ocultar marcas históricas no debe borrarlas ni copiarlas desde la nueva marca.
   if(editing&&usesNewMarkForm(f)){
    const stored=rows.find(a=>a.id===x.id&&!a.deleted);
-   for(const name of ['marcaInterna','marcaActual','marcaAnterior','numeroMarcaActual','marcaPrevia']){delete x[name];if(stored&&Object.prototype.hasOwnProperty.call(stored,name))x[name]=stored[name];}
+   for(const name of ['marcaInterna','marcaInternaNoRegistra','marcaActual','marcaAnterior','numeroMarcaActual','marcaPrevia']){delete x[name];if(stored&&Object.prototype.hasOwnProperty.call(stored,name))x[name]=stored[name];}
   }
   const markDuplicate=window.SKAssetRules.duplicateNewMark(rows,x);
   if(markDuplicate)return alert(`MARCA NUEVA REPETIDA\n\nLa marca ${txt(x.nuevaMarca).toUpperCase()} ya pertenece a: ${cleanLabel(markDuplicate)}.\n\nNo se guardaron los cambios. Revisa la marca de esta ficha; para obtener una nueva utiliza «Solicitar marca nueva».`);
