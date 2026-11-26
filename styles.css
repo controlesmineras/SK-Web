@@ -275,9 +275,10 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
 #assetQueryCount{margin:.25rem 0 .75rem;padding:.5rem .8rem;border-left:3px solid #e0af34;background:#173d51;color:#f5f9fc}
 #assetQueryExcel{background:#236c48;color:white;min-height:2.6rem;justify-self:start}
 #assetQueryExcel:disabled{opacity:.65}
-.assetOverviewTable{max-width:100%;max-height:65vh;overflow:auto;border:1px solid #c9d7df;border-radius:.5rem;background:white}
-.assetOverviewTable table{width:100%;min-width:38rem;border-collapse:separate;border-spacing:0;color:#17364a;font-size:.94rem;text-align:left}
-.assetOverviewTable :is(th,td){padding:.5rem .75rem;border-bottom:1px solid #dce4ea;white-space:nowrap}
+.assetOverviewTable{width:fit-content;max-width:100%;max-height:65vh;overflow:auto;border:1px solid #c9d7df;border-radius:.5rem;background:white}
+.assetOverviewTable table{width:auto;border-collapse:separate;border-spacing:0;color:#17364a;font-size:.94rem;text-align:left}
+.assetOverviewTable :is(th,td){padding:.4rem .55rem;border-bottom:1px solid #dce4ea;white-space:nowrap}
+.assetOverviewTable td{max-width:15rem;white-space:normal;overflow-wrap:anywhere}
 .assetOverviewTable th{position:sticky;top:0;background:#e5eff5;text-align:left}
 .assetOverviewTable tr:nth-child(even){background:#f4f8fa}
 .assetOverviewTable td:first-child{font-weight:600}
