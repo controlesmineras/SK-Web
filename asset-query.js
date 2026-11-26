@@ -5,10 +5,26 @@
  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
  const date=value=>/^\d{4}-\d{2}-\d{2}$/.test(text(value))?value.split('-').reverse().join('/'):value;
  let rows=[],visible=[],data={},actas=[],selectedId='',version=0;
- const headers=['Clase','Modelo','Número de clase','Serial','Marca'];
+ const columns=[
+  {key:'label',title:'Clase',width:22},{key:'model',title:'Modelo',width:18},
+  {key:'number',title:'#',width:8},{key:'serial',title:'Serial',width:19},
+  {key:'mark',title:'Marca',width:12},{key:'mine',title:'Mina propietaria',width:20},
+  {key:'state',title:'Estado',width:19},{key:'location',title:'Ubicación',width:25}
+ ];
+ let shownColumns=columns;
  const collator=new Intl.Collator('es',{numeric:true,sensitivity:'base'});
  const clean=value=>/^no aplica$/i.test(text(value))?'':text(value);
  const find=id=>document.getElementById(id);
+ function classModel(asset){
+  const raw=clean(asset.clase).replace(/\s+/g,' '),model=clean(asset.modelo);
+  const family=raw.match(/^(YT|Columnas?)(?=\b|\d)[\s.-]*(.*)$/i);
+  if(!family)return {clase:raw,label:raw,model,equipment:false};
+  const clase=/^yt$/i.test(family[1])?'YT':'Columna';
+  const suffix=family[2];
+  const base=suffix&&!/^\d/.test(suffix)&&suffix.toLowerCase()!==model.toLowerCase()?raw:clase;
+  const series=(model||(base===clase?suffix:'')).replace(/^(?:YT|Columnas?)[\s.-]*(?=\d)/i,'');
+  return {clase:base,label:series?base+'.'+series:base,model:'',equipment:true};
+ }
 
  const field=(name,value,wide=false)=>`<div${wide?' class="assetQueryWide"':''}><dt>${esc(name)}</dt><dd>${esc(text(value)||'No registrado')}</dd></div>`;
  const group=(name,fields)=>`<section class="assetQueryGroup"><h4>${esc(name)}</h4><dl>${fields}</dl></section>`;
@@ -27,7 +43,7 @@
     <button type="button" id="assetQueryExcel" disabled>Descargar Excel</button>
    </aside><div class="assetQueryResults">
     <div id="assetQueryList" class="assetOverviewTable" role="region" aria-label="Activos encontrados" tabindex="0" hidden>
-     <table><thead><tr>${headers.map(h=>'<th scope="col">'+h+'</th>').join('')}</tr></thead><tbody></tbody></table>
+     <table><thead><tr></tr></thead><tbody></tbody></table>
     </div>
     <div id="assetQueryDetail" hidden></div>
    </div></div>`;
@@ -41,9 +57,10 @@
   find('assetQuerySearch').addEventListener('input',filterChanged);
   find('assetQueryExcel').addEventListener('click',()=>{
    if(!visible.length||!window.SKAdminAuth.canView('assetQuery'))return;
-   const name=find('assetQueryClass').value?(visible[0].cells[0]||'Sin clase'):'Todas las clases';
+   const name=find('assetQueryClass').value?(visible[0].clase||'Sin clase'):'Todas las clases';
    const filename='Activos - '+name.replace(/[\\/:*?"<>|]/g,'-')+'.xlsx';
-   window.SKDownloadTableExcel([headers,...visible.map(row=>row.cells)],filename,false,'Activos',[30,24,18,26,18]);
+   const values=visible.map(row=>shownColumns.map(col=>row.values[col.key]));
+   window.SKDownloadTableExcel([shownColumns.map(col=>col.title),...values],filename,false,'Activos',shownColumns.map(col=>col.width));
   });
   find('assetQueryList').addEventListener('click',event=>{
    const row=event.target.closest('tr[data-query-asset-id]');if(!row)return;
@@ -85,6 +102,7 @@
   const host=document.getElementById('assetQueryDetail');
   if(!projection){host.replaceChildren();return;}
   const a=projection.asset,canonical=window.SKAssetFields.canonical(a);
+  const identity=classModel(a);
   const person=(data.personal||[]).find(row=>a.asignadaId&&row.id===a.asignadaId);
   const assigned=projection.assigned||{name:person?.nombre,document:person?.documento,area:person?.area,cargo:person?.cargo};
   const column=/^columnas?\b/i.test(text(a.clase));
@@ -95,8 +113,8 @@
    <button type="button" data-back-to-assets>Volver al listado</button>
    <h3 id="assetQueryTitle" tabindex="-1">${esc(window.SKAssetOwnership.label(a))}</h3>
    ${group('Información principal',[
-    field('Clase',a.clase),field('Número de clase',canonical.numeroClase),
-    field('Modelo',a.modelo),field('Marca comercial',a.fabricante),
+    field('Clase',identity.label),field('#',canonical.numeroClase||a.orden),
+    identity.equipment?'':field('Modelo',a.modelo),field('Marca comercial',a.fabricante),
     field('MARCA',singleMark?a.nuevaMarca:canonical.marcaActual),
     singleMark?(previousMark?field('MARCA ANTERIOR',previousMark):''):field('No. de marca actual',canonical.numeroMarcaActual)+field('Nueva marca',a.nuevaMarca)+field('Marca anterior',a.marcaPrevia),
     column&&window.SKAssetOwnership.isSK(a)?'':field('Serial',a.serial||window.SKAssetRules?.serialStatusLabel(a)),
@@ -128,22 +146,22 @@
     const projection=window.SKAssetHistory.project(record,data);
     const asset=projection.asset;
     const fields = window.SKAssetFields.canonical(asset);
-    const clase = clean(asset.clase).replace(/\s+/g, ' ');
+    const {clase,label,model,equipment}=classModel(asset);
     const key = 'clase:' + clase.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-    const equipment = /^(?:yt|columnas?)(?:\b|\d)/i.test(clase);
     const currentMark = clean(fields.marcaActual), newMark = clean(asset.nuevaMarca);
-    const cells = [clase, clean(asset.modelo), clean(fields.numeroClase) || clean(asset.orden),
-      clean(asset.serial) || window.SKAssetRules.serialStatusLabel(asset),
-      equipment ? currentMark || newMark : newMark || currentMark];
+    const values={label,model,number:clean(fields.numeroClase)||clean(asset.orden),
+      serial:clean(asset.serial)||window.SKAssetRules.serialStatusLabel(asset),
+      mark:equipment?currentMark||newMark:newMark||currentMark,
+      mine:clean(asset.mina),state:clean(asset.estado),location:clean(asset.ubicacion)};
     const external=!window.SKAssetOwnership.isSK(asset);
-    const searchText=[...cells,window.SKAssetOwnership.label(asset),asset.mina,asset.ubicacion,asset.estado,external?'externo transitorio':''].join(' ');
-    return {asset,key,cells,searchText,external,projection};
+    const searchText=[...Object.values(values),window.SKAssetOwnership.label(asset),external?'externo transitorio':''].join(' ');
+    return {asset,key,clase,values,searchText,external,projection};
   }
 
  function updateClasses(){
   const filter=find('assetQueryClass'),selected=filter.value,classes=new Map();
-  for(const {key,cells} of rows){
-   if(!classes.has(key))classes.set(key,{name:cells[0]||'Sin clase',count:0});
+  for(const {key,clase} of rows){
+   if(!classes.has(key))classes.set(key,{name:clase||'Sin clase',count:0});
    classes.get(key).count++;
   }
   filter.replaceChildren(new Option('Todas las clases',''));
@@ -162,12 +180,14 @@
  function draw(){
   const query=window.SKAssetSearch.query(find('assetQuerySearch').value),key=find('assetQueryClass').value;
   visible=rows.filter(row=>(!key||row.key===key)&&query.extra(row.asset,row.searchText)!==null);
-  const body=find('assetQueryList').querySelector('tbody');
-  body.innerHTML=visible.map(({asset,cells,external})=>{
-   const title='Abrir ficha de '+cells.filter(Boolean).join(' · ');
-   const link='<button type="button" class="assetQueryLink" aria-controls="assetQueryDetail" aria-label="'+esc(title)+'">'+query.html(cells[0]||'Sin clase')+'</button>';
+  const table=find('assetQueryList').querySelector('table');
+  shownColumns=visible.some(row=>row.values.model)?columns:columns.filter(col=>col.key!=='model');
+  table.tHead.rows[0].innerHTML=shownColumns.map(col=>'<th scope="col">'+col.title+'</th>').join('');
+  table.tBodies[0].innerHTML=visible.map(({asset,values,external})=>{
+   const title='Abrir ficha de '+[values.label,values.number,values.serial,values.mark].filter(Boolean).join(' · ');
+   const link='<button type="button" class="assetQueryLink" aria-controls="assetQueryDetail" aria-label="'+esc(title)+'">'+query.html(values.label||'Sin clase')+'</button>';
    return '<tr data-query-asset-id="'+esc(asset.id)+'"'+(external?' class="external" title="Activo externo"':'')+'><td>'+link+'</td>'+
-     cells.slice(1).map(value=>'<td>'+query.html(value||'—')+'</td>').join('')+'</tr>';
+     shownColumns.slice(1).map(col=>'<td>'+query.html(values[col.key]||'—')+'</td>').join('')+'</tr>';
   }).join('');
   find('assetQueryCount').textContent=visible.length===1?'1 activo encontrado':visible.length+' activos encontrados';
   find('assetQueryExcel').disabled=!visible.length;
@@ -187,8 +207,8 @@
    const [assets,history,documents]=result;
    data=history;actas=documents;
    rows=assets.filter(asset=>!asset.deleted).map(describe).sort((a,b)=>
-    collator.compare(a.cells[0],b.cells[0])||collator.compare(a.cells[2],b.cells[2])||
-    collator.compare(a.cells[1],b.cells[1])||collator.compare(a.cells[3],b.cells[3]));
+    collator.compare(a.clase,b.clase)||collator.compare(a.values.number,b.values.number)||
+    collator.compare(clean(a.asset.modelo),clean(b.asset.modelo))||collator.compare(a.values.serial,b.values.serial));
    updateClasses();draw();
   }catch(error){
    if(ticket!==version)return;
