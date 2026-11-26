@@ -150,3 +150,22 @@ test('warehouse transfers credit Production while normal deliveries stay separat
  c.api.mode('warehouse');c.api.update();assert.equal(c.api.capture().destinationWarehouseId,'production');
  c.select('cable');assert.equal(c.fields.destinationWarehouseId.value,'');
 });
+
+test('a duplicate selection warns about quantity even when both quantities fit in stock',()=>{
+  const c=formClient();c.api.mode('assignment');c.select('pliers');c.api.add();
+  c.select('pliers');c.fields.quantity.value='2';c.api.add();
+  assert.match(c.alerts.at(-1),/No puedes agregar el mismo elemento en una misma entrega.*Aumenta la cantidad/);
+  assert.equal(c.api.draft().length,1);assert.equal(c.api.draft()[0].quantity,1);
+  assert.match(c.nodes.get('#deliveryDraft').innerHTML,/data-delivery-quantity="0"/);
+});
+
+test('the same specific asset is blocked but two assets of its class can share a delivery',()=>{
+  const c=formClient();
+  c.data.assets.push({...c.data.assets[0],id:'second',serial:'TEST-2'});
+  const add=id=>{c.select('saw');c.fields.assetId.value=id;c.fields.destination.value='Operación';c.api.add()};
+  add('asset');add('asset');
+  assert.match(c.alerts.at(-1),/Este activo fijo ya está agregado/);
+  add('second');
+  assert.deepEqual(Array.from(c.api.draft(),row=>[row.assetId,row.quantity]),[['asset',1],['second',1]]);
+  assert.doesNotMatch(c.nodes.get('#deliveryDraft').innerHTML,/data-delivery-quantity/);
+});

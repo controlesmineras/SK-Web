@@ -187,3 +187,28 @@ test('late legacy movements are imported once, keeping stock and confirmed rows 
   assert.equal(again.inventoryStock[0].quantity,8);
   assert.equal(again.blendingDeliveries.length,2);
 });
+
+test('a repeated item or invalid edited quantity blocks the entire delivery before the stock write',async()=>{
+  const c=client(),seed=formSeed(),form=batchForm();
+  await c.api.write(seed);c.audit.set(clone(seed));
+  for(const rows of [[clone(draft),clone(draft)],[{...draft,quantity:''}],[{...draft,quantity:11}]]){
+    c.audit.prepareDelivery(rows);
+    assert.equal(await c.audit.saveDeliveryBatch(form),false);
+    if(rows.length===2)assert.match(c.alerts.at(-1),/No puedes agregar el mismo elemento/);
+    assert.deepEqual(clone(await c.api.read()),seed);
+  }
+  c.nodes.set('#deliveryForm',form);
+  form.elements.itemId.value=draft.itemId;form.elements.quantity={value:'1'};
+  c.audit.prepareDelivery([clone(draft)]);
+  assert.equal(await c.audit.saveDeliveryBatch(form),false);
+  assert.match(c.alerts.at(-1),/No puedes agregar el mismo elemento/);
+  assert.deepEqual(clone(await c.api.read()),seed);
+  form.elements.itemId.value='';
+  for(const quantity of [4,1]){
+    c.audit.prepareDelivery([{...draft,quantity}]);
+    assert.equal(await c.audit.saveDeliveryBatch(form),true);
+  }
+  const stored=await c.api.read();
+  assert.deepEqual(Array.from(stored.blendingDeliveries,row=>row.quantity),[4,1]);
+  assert.equal(stored.inventoryStock[0].quantity,5);
+});

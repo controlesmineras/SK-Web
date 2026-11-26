@@ -91,6 +91,8 @@
 #deliveryForm .recipientCompany label{flex-direction:row;justify-content:center;min-width:0;min-height:44px;padding:8px 12px;gap:8px}
 #deliveryForm .recipientCompany input[type="radio"]{flex:0 0 18px;width:18px;height:18px;min-height:0;margin:0;padding:0;accent-color:#173d59;cursor:pointer}
 #deliveryForm .recipientCompany label:has(input:focus-visible){outline:3px solid #397497;outline-offset:2px}
+#deliveryDraft .draftQuantity{display:flex;flex-direction:row;align-items:center;gap:.5rem;color:#526475;font-size:.85rem}
+#deliveryDraft .draftQuantity input{width:6rem;max-width:100%;min-height:2.25rem;padding:.3rem .5rem}
 :is(#deliveryDraft,#incomeDraft):has(>.permission:only-child){border:0;border-radius:0;background:transparent;padding:0}
 :is(#deliveryDraft,#incomeDraft)>.permission:only-child{text-align:left;line-height:1.4}
 

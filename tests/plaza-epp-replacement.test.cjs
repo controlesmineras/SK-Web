@@ -14,6 +14,7 @@ function client(){
  const start=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
  vm.runInContext(read('asset-record-rules.js'),ctx);vm.runInContext(read('asset-history.js'),ctx);
  vm.runInContext(start+`\nmovementShift=()=>({});validateDeliveryRecipient=()=>true;renderRecentQueries=()=>{};updatePendingBadge=()=>{};discardDeliveryForm=()=>{};sync=()=>{};clearItemSearch=form=>{form.elements.itemId.value=''};updateDeliveryFields=()=>updateDeliveryReplacementField(findItem($('#deliveryForm').elements.itemId.value));downloadBlob=(blob,name)=>window.lastDownload={blob,name};window.audit={mode:value=>{deliveryMode=value},catalog:deliveryCatalog,get:()=>data,set:value=>{data=value},draft:()=>deliveryDraft,prepare:rows=>{deliveryDraft=rows},update:()=>updateDeliveryFields(),capture:currentDeliveryItem,add:addDeliveryItem,save:()=>saveDeliveryBatch($('#deliveryForm')),label:deliveryReplacementLabel,report:deliveryReportRow,card:queryMovementCard,excel:exportDeliveriesExcel,pdf:exportDeliveriesPdf};})();`,ctx);
+ ctx.window.SKPlazaLocal={write:async next=>storage.set('skPlazaData',JSON.stringify(next))};
  const api=ctx.window.audit;api.set(seed());
  return {api,ctx,form,field,inputs,storage,alerts,select(id){form.elements.itemId.value=id;api.update()},answer(value){inputs.forEach(input=>input.checked=input.value===value)}};
 }
@@ -39,13 +40,17 @@ test('batch validation blocks an unanswered EPP before changing stock or saving'
  c.api.prepare([]);c.select('gloves');assert.equal(await c.api.save(),false);assert.deepEqual(clone(c.api.get()),before);
 });
 test('mixed batch persists all three answers offline and through the real sync merge',async()=>{
- const c=client();for(const [id,answer] of [['gloves','yes'],['helmet','no'],['gloves','first'],['tool',null]]){c.select(id);if(answer)c.answer(answer);c.api.add()}
+ const c=client(),initial=c.api.get();
+ initial.inventoryCriteria.push({id:'filters',name:'Prefiltros',isEpp:true,unit:'Unidad'});
+ initial.inventoryStock.push({id:'stock-filters',itemId:'filters',quantity:10});
+ let cloud=clone(initial);
+ for(const [id,answer] of [['gloves','yes'],['helmet','no'],['filters','first'],['tool',null]]){c.select(id);if(answer)c.answer(answer);c.api.add()}
  assert.equal(await c.api.save(),true);const local=JSON.parse(c.storage.get('skPlazaData'));
- assert.deepEqual(local.blendingDeliveries.map(r=>r.bringsReplacement),[true,false,'first-delivery',undefined]);assert.deepEqual(local.inventoryStock.map(r=>r.quantity),[8,9,9]);
- let cloud=seed();const ctx=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}});vm.runInContext(read('backend/apps-script/Code.gs'),ctx);
+ assert.deepEqual(local.blendingDeliveries.map(r=>r.bringsReplacement),[true,false,'first-delivery',undefined]);assert.deepEqual(local.inventoryStock.map(r=>r.quantity),[9,9,9,9]);
+ const ctx=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}});vm.runInContext(read('backend/apps-script/Code.gs'),ctx);
  ctx.findFile_=()=> 'file';ctx.readFile_=()=>clone(cloud);ctx.writeFile_=(_,next)=>{cloud=clone(next)};ctx.json_=clone;ctx.verifyToken_=()=>({document:'operator',role:'plaza_operator'});
  const sync=()=>ctx.plazaSync_({token:'test',syncProtocol:'plaza-receipts-v1',data:{blendingDeliveries:clone(local.blendingDeliveries).map(row=>row.itemId==='tool'?{...row,bringsReplacement:'first-delivery'}:row)}});
- sync();sync();assert.deepEqual(cloud.blendingDeliveries.map(r=>r.bringsReplacement),[true,false,'first-delivery',undefined]);assert.deepEqual(cloud.inventoryStock.map(r=>r.quantity),[8,9,9]);
+ sync();sync();assert.deepEqual(cloud.blendingDeliveries.map(r=>r.bringsReplacement),[true,false,'first-delivery',undefined]);assert.deepEqual(cloud.inventoryStock.map(r=>r.quantity),[9,9,9,9]);
 });
 test('old records stay unrecorded, and queries and exports preserve the answer',async()=>{
  const c=client(),date=new Date().toISOString(),rows=[true,false,undefined,'first-delivery'].map((answer,i)=>({id:'r'+i,itemId:'gloves',itemName:'Guantes',recipientId:'person',quantity:1,createdAt:date,...(answer===undefined?{}:{bringsReplacement:answer})}));
