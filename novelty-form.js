@@ -134,10 +134,20 @@ async function save(event){
       await idbResult(tx.objectStore('novelties').add(novelty));
     };
     await Promise.all([committed,saveRow().catch(error=>{try{tx.abort()}catch{} throw error;})]);
-    form.reset();selectedAsset=null;await refresh();await update();
+    form.reset();selectedAsset=null;
     const status=document.querySelector('#noveltySaveStatus');status.hidden=false;
-    status.textContent=novelty.historyOnly?'✓ Novedad guardada solo en el historial.':'✓ Novedad guardada. Ficha actualizada en este dispositivo.';
+    const saved=novelty.historyOnly?'✓ Novedad guardada solo en el historial.':'✓ Novedad guardada en este dispositivo.';
+    const assetName=window.SKAssetOwnership?.label(asset)||window.SKAssetRules?.label(asset)||asset.serial||asset.clase;
+    status.textContent=saved+' '+[assetName,novelty.descripcion,novelty.fechaNovedad.split('-').reverse().join('/')+' '+novelty.horaNovedad].filter(Boolean).join(' · ');
+    const showButton=document.querySelector('#noveltyShowSaved');
+    if(showButton){
+      showButton.hidden=false;
+      showButton.onclick=()=>window.SKAssetHistoryUI.showSaved(novelty.id).catch(error=>alert(error.message));
+    }
+    window.dispatchEvent(new Event('skweb-local-change'));
     window.skSyncApi?.schedule?.(300);
+    try{await refresh();await update();}
+    catch(error){console.error('La novedad se guardó, pero falló la actualización de la pantalla.',error);}
   }catch(error){alert(error.message||'No se pudo guardar la novedad.');}
   finally{form.inert=false;saving=false;if(button)button.disabled=false;}
 }

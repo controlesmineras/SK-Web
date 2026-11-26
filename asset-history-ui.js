@@ -122,8 +122,9 @@
   menu.addEventListener('click',event=>{const button=event.target.closest('[role=option]');if(button)choose(button)});
   document.addEventListener('click',event=>{if(!menu.hidden&&!host.contains(event.target))close()});
   document.querySelector('#novFilterClear').addEventListener('click',()=>{select.value='';close()});
-  return function update(rows){
-   const id=select.value;
+  return function update(rows,selectedId){
+   const id=selectedId??select.value;
+   if(selectedId!==undefined){editing=false;menu.hidden=true;input.setAttribute('aria-expanded','false');}
    assets=rows.slice().sort((a,b)=>order.compare(title(a),title(b)));
    select.replaceChildren(new Option('Todos los activos',''),...assets.map(asset=>new Option(title(asset),asset.id)));
    select.value=id;
@@ -131,17 +132,37 @@
    if(!menu.hidden)draw();
   };
  }
- let updateAssetFilter;
- async function renderList(rows,assets){
-  const [data,actas]=await Promise.all([read(),all('actas')]);data.novelties=rows;
+ let updateAssetFilter,listVersion=0,reveal=null;
+ async function renderList(_rows,assets){
+  const ticket=++listVersion;
+  const [data,actas]=await Promise.all([read(),all('actas')]);
+  if(ticket!==listVersion)return;
   const list=document.querySelector('#noveltyList');if(!list)return;
   const from=document.querySelector('#novFilterFrom')?.value||'',to=document.querySelector('#novFilterTo')?.value||'',select=document.querySelector('#novFilterAsset'),assetMap=new Map(assets.map(row=>[row.id,row])),actaMap=new Map(actas.map(row=>[row.id,row]));
   if(select){updateAssetFilter??=historyAssetPicker(select);updateAssetFilter(assets);}
   const assetId=select?.value||'';
   const events=window.SKAssetHistory.timeline(data).filter(entry=>(!from||entry.date>=from)&&(!to||entry.date<=to)&&(!assetId||entry.assetId===assetId));
-  list.innerHTML=events.slice(0,100).map(entry=>`<div class="assetHistoryResult">${eventHTML(entry,assetMap.get(entry.assetId),actaMap.get(entry.raw.actaId),true)}<button type="button" data-history-asset="${escape(entry.assetId)}">Ver historial del activo</button></div>`).join('')||'<p class="hint">No hay novedades que coincidan con los filtros.</p>';
+  if(reveal&&(reveal.assetId!==assetId||reveal.date!==from||reveal.date!==to))reveal=null;
+  const position=reveal?events.findIndex(entry=>entry.kind==='novelty'&&entry.raw.id===reveal.id):-1;
+  list.innerHTML=events.slice(0,Math.max(100,position+1)).map(entry=>`<div class="assetHistoryResult"${entry.kind==='novelty'?' id="saved-novelty-'+escape(entry.raw.id)+'" tabindex="-1"':''}>${eventHTML(entry,assetMap.get(entry.assetId),actaMap.get(entry.raw.actaId),true)}<button type="button" data-history-asset="${escape(entry.assetId)}">Ver historial del activo</button></div>`).join('')||'<p class="hint">No hay novedades que coincidan con los filtros.</p>';
   const counter=document.querySelector('#nCount');if(counter)counter.textContent=window.SKAssetHistory.timeline(data).filter(entry=>!entry.reversed).length;
+  if(reveal?.focus&&position>=0){
+   const entry=document.getElementById('saved-novelty-'+reveal.id);
+   reveal.focus=false;
+   entry.focus({preventScroll:true});entry.scrollIntoView({block:'center'});
+  }
   await selectCurrent();
+ }
+ async function showSaved(id){
+  const [row,assets]=await Promise.all([idbResult(db.transaction('novelties').objectStore('novelties').get(id)),all('assets')]);
+  if(!row||row.deleted)throw new Error('Esta novedad ya no figura en el historial del dispositivo.');
+  const select=document.querySelector('#novFilterAsset');
+  updateAssetFilter??=historyAssetPicker(select);
+  updateAssetFilter(assets,row.assetId);
+  document.querySelector('#novFilterFrom').value=row.fechaNovedad;
+  document.querySelector('#novFilterTo').value=row.fechaNovedad;
+  reveal={id,assetId:row.assetId,date:row.fechaNovedad,focus:true};
+  await renderList(null,assets);
  }
  async function selectCurrent(){await Promise.all([select('asset',document.querySelector('#assetForm [name="id"]')?.value),select('novelty',document.querySelector('#novAsset')?.value)]);}
  let changing=false;
@@ -175,11 +196,12 @@
     await idbResult(table.put(updated));await idbResult(tx.objectStore(assetProfileStore).delete(row.assetId));
    };
    await Promise.all([committed,write().catch(error=>{try{tx.abort()}catch{} throw error;})]);
-   await refresh();
    const status=document.querySelector('#noveltySaveStatus');
    if(status){status.hidden=false;status.textContent=kind==='delete'?'✓ Novedad eliminada. Ficha recalculada.':'✓ Novedad revertida. Ficha recalculada.';}
+   const showButton=document.querySelector('#noveltyShowSaved');if(showButton)showButton.hidden=true;
    window.dispatchEvent(new Event('skweb-local-change'));
    window.skSyncApi?.schedule?.(300);
+   await refresh();
    return true;
   }finally{changing=false;}
  }
@@ -189,7 +211,7 @@
   button.disabled=true;
   changeNovelty(button.dataset.noveltyId,button.dataset.noveltyAction).catch(error=>alert(error.message)).finally(()=>button.disabled=false);
  });
- window.SKAssetHistoryUI={read,show,select,renderList,changeNovelty};
+ window.SKAssetHistoryUI={read,show,select,renderList,showSaved,changeNovelty};
  window.addEventListener('load',()=>{
   const style=document.createElement('style');style.textContent='.assetHistory{margin:0 0 20px;padding:16px;border:1px solid #ccd8e0;border-radius:12px;background:#f8fafc}.assetHistory[hidden]{display:none}.assetHistory h3{margin:0 0 8px}.assetHistoryEntry{padding:12px 0;border-bottom:1px solid #dce4ea;overflow-wrap:anywhere}.assetHistoryEntry>b,.assetHistoryEntry>small{display:block;margin-bottom:5px}.assetHistoryEntry>small{line-height:1.45;color:#3c4b59}.assetHistoryEntry.isReversed{border-left:3px solid #ab6a21;padding-left:10px}.assetHistoryResult{padding:10px 0;border-bottom:1px solid #dce4ea}.assetHistoryResult button,.assetHistory .historyMore{margin-top:10px;width:auto}.assetHistoryEntry strong{font-weight:600}.noveltyActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.noveltyActions button{width:auto;font-size:.85rem;padding:8px 12px}';document.head.append(style);
   document.querySelector('#novAsset')?.addEventListener('change',event=>select('novelty',event.target.value).catch(console.error));

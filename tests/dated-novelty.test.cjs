@@ -238,3 +238,17 @@ test('la baja fija ubicación y disponibilidad, admite reversión y respeta la f
  s.sync([cancel(s.get().novelties.find(row=>row.id==='retired'))]);
  assert.equal(s.get().assets[0].estado,yt.estado);assert.equal(s.get().assets[0].ubicacion,yt.ubicacion);assert.equal(s.get().assets[0].disponibleEntrega,'Sí');
 });
+
+test('eliminar y registrar la misma novedad al mismo minuto conserva solo la segunda en el historial',()=>{
+ const s=service();
+ const original=event('original','2026-11-18','08:00',{estado:'Averiado/a'});
+ s.sync([original]);
+ const deleted=cancel(s.get().novelties[0],'delete');
+ const replacement={...original,id:'replacement'};
+ for(const batch of [[replacement,deleted],[deleted,replacement]]){
+  s.sync(batch);
+  assert.deepEqual(history.timeline(s.get(),yt.id).map(e=>e.raw.id),['replacement']);
+  assert.equal(s.get().assets[0].currentNoveltyId,'replacement');
+  assert.equal(s.get().novelties.find(row=>row.id==='original').deleted,true);
+ }
+});
