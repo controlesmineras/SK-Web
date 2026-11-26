@@ -134,6 +134,7 @@ body>main .homeAccessRegister{background:#214b63}
 
 .assetPersonField{position:relative;min-width:0;align-self:start;grid-column:1/-1}
 @media(min-width:901px){.assetPersonField{grid-column:span 2}}
+#novWarehouseField{grid-column:auto}
 .assetPersonField label{margin-bottom:6px}
 .assetPersonControl{position:relative;border:1px solid #cbd3da;border-radius:8px;background:#fcfdfe}
 .assetPersonControl:focus-within{outline:2px solid #397497;outline-offset:1px}

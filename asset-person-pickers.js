@@ -1,8 +1,7 @@
-// Selección de personal en la ficha de activos, desde el directorio local de Admin.
+// Selección de personal en las fichas y novedades de activos, desde el directorio local de Admin.
 (()=>{
   'use strict';
-  const form = document.querySelector('#assetForm');
-  const fields = form.elements;
+  const fields = document.querySelector('#assetForm').elements;
   const normalize = value => String(value ?? '').trim().toLocaleLowerCase('es')
     .normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, ' ');
   const fullName = person => person?.nombre ||
@@ -17,8 +16,9 @@
       const rows = await all('personal');
       if (version !== readVersion) return;
       people = rows.filter(row => !row.deleted && row.active !== false).map(row => ({
-        id: row.id, nombre: fullName(row), documento: documentOf(row), area: row.area, cargo: row.cargo
+        id: row.id, nombre: fullName(row), documento: documentOf(row), empresa: row.empresa, area: row.area, cargo: row.cargo
       })).sort((a, b) => a.nombre.localeCompare(b.nombre, 'es', {sensitivity:'base'}));
+      noveltyWarehouse.refreshSelection();
       openPicker?.draw(true);
     } catch (error) {
       if (version === readVersion && !people.length) openPicker?.message('No se pudo leer el personal de este dispositivo.');
@@ -26,8 +26,9 @@
     }
   }
 
-  function picker(inputId, savedFields, {eligible = () => true, showAssignment = false} = {}) {
+  function picker(inputId, savedFields, {eligible = () => true, showAssignment = false, showEmployer = false} = {}) {
     const input = document.getElementById(inputId);
+    const form = input.form;
     const host = input.closest('.assetPersonField');
     const clear = host.querySelector('.assetPersonClear');
     const details = host.querySelector('.assetPersonDetails');
@@ -51,6 +52,7 @@
       for (const [key, field] of Object.entries(savedFields)) field.value = person?.[key] ?? '';
       const description = [];
       if (person?.nombre && person.documento) description.push('Documento ' + person.documento);
+      if (showEmployer && person?.empresa) description.push('Empresa: ' + person.empresa);
       if (showAssignment && person?.area) description.push('Área: ' + person.area);
       if (showAssignment && person?.cargo) description.push('Cargo: ' + person.cargo);
       details.textContent = description.join(' · ');
@@ -116,7 +118,14 @@
       draw();
       refreshPeople();
     }
-    const api = {close, draw, message, set};
+    function refreshSelection() {
+      if (!selected) return;
+      const current = people.find(person => person.id === selected.id);
+      writeSelection(current);
+      if (current) input.value = current.nombre || current.documento;
+      input.setCustomValidity(current ? '' : 'Selecciona una persona de la lista o borra la búsqueda.');
+    }
+    const api = {close, draw, message, set, refreshSelection};
     input.addEventListener('focus', () => {
       if (selected) input.select();
       open();
@@ -170,6 +179,11 @@
   const responsible = picker('assetResponsibleSearch', {nombre: fields.nombreResponsable, documento: fields.documentoResponsable});
   const warehouse = picker('assetWarehouseSearch', {nombre: fields.nombreBodeguero, documento: fields.documentoBodeguero});
   const assigned = picker('assetAssignedSearch', {id: fields.asignadaId}, {eligible: person => !!person.id, showAssignment: true});
+
+  const noveltyFields = document.querySelector('#noveltyForm').elements;
+  const noveltyWarehouse = picker('novWarehouseSearch', {
+    id: noveltyFields.bodegueroId, nombre: noveltyFields.bodegueroNombre, documento: noveltyFields.documentoBodeguero
+  }, {eligible: person => !!person.id, showEmployer: true});
 
   function snapshot(nombre, documento) {
     return nombre || documento ? {nombre, documento} : null;
