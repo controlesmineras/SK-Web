@@ -107,3 +107,13 @@ test('eliminar una ficha con una novedad offline conserva ambos registros y su h
  const novelty={id:'n-offline',assetId:'1',descripcion:'Revista física',ubicacion:'Socavón',estado:'Operativo/a',createdAt:'2026-10-06T12:00:00Z',updatedAt:'2026-10-06T12:00:00Z',syncState:'pending'};
  s.sync({assets:[deleted],novelties:[novelty]});assert.equal(s.cloud().assets[0].deleted,true);assert.equal(s.cloud().novelties[0].id,'n-offline');assert.equal(s.cloud().assetMarkRegistry.length,1);
 });
+
+test('alta antigua de administrador o auxiliar, también reintentada, deja la secuencia libre',()=>{
+ for(const role of ['owner','assistant']){
+  const s=service(),legacy=asset('1',{legacyUnmarked:true,serial:'No registra',marcaPrevia:'H-14',markingPolicy:undefined,markStatus:undefined});
+  s.sync({assets:[legacy]},role,role);s.sync({assets:[legacy]},role,role);
+  const saved=s.cloud().assets[0];assert.equal(saved.legacyUnmarked,true);assert.equal(saved.nuevaMarca,'');assert.equal(saved.marcaPrevia,'H-14');assert.equal(saved.markStatus,undefined);
+  s.sync({assets:[asset('2')]},role,role);
+  assert.deepEqual(s.cloud().assets.map(row=>row.nuevaMarca),['','AAA']);assert.equal(s.cloud().assetMarkRegistry.length,1);
+ }
+});

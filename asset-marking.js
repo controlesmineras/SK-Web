@@ -5,7 +5,7 @@ const POLICY='letters-v1',scope=location.pathname.includes('/plaza/')?'plaza':'a
 const clean=value=>String(value??'').trim();
 const eligible=value=>{
  const type=clean(typeof value==='string'?value:value?.clase).toLowerCase();
- if(!type||/^autorrescatador(?:es)?\b/i.test(type))return false;
+ if(value?.legacyUnmarked===true||!type||/^autorrescatador(?:es)?\b/i.test(type))return false;
  if(/^(yt(?:\b|\d)|columnas?\b)/i.test(type)){const origin=clean(value?.minaOrigen||value?.mina).toLowerCase().replace(/[.\s-]/g,'');return value?.incomeMarking===true&&!!origin}
  return true;
 };
@@ -111,10 +111,24 @@ async function refreshRequestButton(){
   let button=document.querySelector('#assetRequestMarkBtn');
   if(!button){button=document.createElement('button');button.id='assetRequestMarkBtn';button.type='button';button.textContent='Solicitar marca nueva';button.style.marginTop='8px';button.hidden=true;button.addEventListener('click',()=>button.dataset.mode==='correct'?correctDuplicate(form.elements.id.value):requestExisting(form.elements.id.value));label.append(button);}
   let note=document.querySelector('#assetMarkCorrectionNote');if(!note){note=document.createElement('small');note.id='assetMarkCorrectionNote';note.style.whiteSpace='pre-line';label.append(note);}note.textContent='';note.hidden=true;
+  let release=document.querySelector('#assetReleaseMarkBtn');
+  if(!release){
+    release=document.createElement('button');release.id='assetReleaseMarkBtn';release.type='button';release.style.marginTop='8px';
+    release.addEventListener('click',()=>releaseLegacyMark(form.elements.id.value));label.append(release);
+  }
+  release.hidden=true;
   button.hidden=true;const version=++requestViewVersion,id=form.elements.id.value;
   if(!id||!window.SKAdminAuth?.canManageAssets?.()||typeof all!=='function')return;
   const assets=await all('assets'),asset=assets.find(row=>row.id===id);
-  if(version!==requestViewVersion||form.elements.id.value!==id||!asset||asset.deleted||!eligible(asset))return;
+  if(version!==requestViewVersion||form.elements.id.value!==id||!asset||asset.deleted)return;
+  if(asset.legacyUnmarked){
+    if(asset.markRelease){note.textContent='Marca liberada: '+asset.markRelease.code+' · '+new Date(asset.markRelease.at).toLocaleString('es-CO');note.hidden=false;label.classList.remove('criterion-disabled-field');}
+    return;
+  }
+  if(!eligible(asset))return;
+  if(window.SKAdminAuth.isAdmin?.()&&asset.markingPolicy===POLICY&&asset.markStatus==='assigned'&&/^[A-Z]{3}$/.test(asset.nuevaMarca)&&asset.markScheme!=='mine-prefix-v1'){
+    release.hidden=false;release.disabled=requesting;release.textContent='Liberar '+asset.nuevaMarca+' para otro activo';label.classList.remove('criterion-disabled-field');
+  }
   if(asset.markCorrections?.length){note.textContent=asset.markCorrections.map(row=>`Corrección: ${row.from} → ${row.to} · ${new Date(row.at).toLocaleString('es-CO')} · ${row.byName||row.by}`).join('\n');note.hidden=false;}
   const correcting=!!clean(asset.nuevaMarca);if(correcting&&!hasDuplicateMark(assets,asset))return;
   label.classList.remove('criterion-disabled-field');
@@ -151,6 +165,33 @@ async function correctDuplicate(id){
   }catch(error){console.error(error);alert('No se pudo completar la corrección: '+(error?.message||error)+'. Si se perdió la conexión, sincroniza y vuelve a intentar; no se asignará otra marca por repetir la misma solicitud.');return false;}
   finally{requesting=false;refreshRequestButton().catch(console.error);}
 }
+async function releaseLegacyMark(id){
+  if(requesting||!id||!window.SKAdminAuth?.isAdmin?.())return false;
+  const form=document.querySelector('#assetForm');
+  if(form.dataset.historyEditRevision){alert('Guarda los cambios y vuelve a abrir la ficha antes de liberar la marca.');return false;}
+  if(!navigator.onLine||!window.skSyncApi?.configured?.()){alert('Conéctate a internet para liberar la marca en la base central.');return false;}
+  const displayed=clean(form.elements.nuevaMarca.value);
+  requesting=true;
+  try{
+    await refreshRequestButton();
+    if(!await window.skSyncApi.sync({silent:true,forceFull:true}))throw new Error('Sincroniza primero los cambios pendientes.');
+    const asset=(await all('assets')).find(row=>row.id===id);
+    if(form.elements.id.value!==id||form.dataset.historyEditRevision)return false;
+    if(!asset||asset.deleted||asset.syncState!=='synced'||asset.nuevaMarca!==displayed||!displayed)throw new Error('La ficha cambió. Vuelve a abrirla y revisa la marca.');
+    const identity=[asset.clase,asset.numeroClase&&'N.º '+asset.numeroClase,asset.fabricante,asset.serial&&'Serial '+asset.serial].filter(Boolean).join(' · ');
+    if(!confirm('¿Liberar '+displayed+' de '+identity+'?\n\nConfirma que el equipo no lleva físicamente '+displayed+'. El activo conservará su ficha y su historial. La marca podrá asignarse a otro equipo de la misma mina.'))return false;
+    const result=await window.SKAdminAuth.request('adminReleaseLegacyMark',{assetId:id,expectedMark:displayed});
+    if(result?.asset?.id!==id||result.asset.markRelease?.code!==displayed||!result.asset.legacyUnmarked||result.asset.nuevaMarca)throw new Error('La base central no confirmó la liberación. Sincroniza para consultar la ficha.');
+    remember(tracked().filter(assetId=>assetId!==id));
+    const synced=await window.skSyncApi.sync({silent:true,forceFull:true});
+    if(synced&&form.elements.id.value===id&&!form.dataset.historyEditRevision)await window.SKAssetAdminUI?.hydrateEdit?.();
+    alert('La base central confirmó la liberación de '+displayed+'.'+(synced?'':' Pulsa la nube para actualizar la ficha.'));
+    return true;
+  }catch(error){
+    alert(/solicitud no válida/i.test(error.message)?'Actualiza Code.gs y publica una nueva versión de la implementación existente para habilitar la liberación de marcas.':error.message);
+    return false;
+  }finally{requesting=false;refreshRequestButton().catch(console.error);}
+}
 async function requestExisting(id){
   if(requesting||!id||!window.SKAdminAuth?.canManageAssets?.())return false;
   const form=document.querySelector('#assetForm');
@@ -170,7 +211,7 @@ async function requestExisting(id){
   }catch(error){console.error(error);alert('No se pudo completar la solicitud de marca: '+(error?.message||error));return false;}
   finally{requesting=false;refreshRequestButton().catch(console.error);}
 }
-window.SKAssetMarking={eligible,prepare,saved,scan,syncSaved,refreshRequestButton,requestExisting,correctDuplicate,hasDuplicateMark,markConflicts};
+window.SKAssetMarking={eligible,prepare,saved,scan,syncSaved,refreshRequestButton,requestExisting,releaseLegacyMark,correctDuplicate,hasDuplicateMark,markConflicts};
 if(scope==='admin')for(const event of ['skweb-synced','skadmin-permissions'])window.addEventListener(event,()=>refreshRequestButton().catch(console.error));
 window.addEventListener('skweb-synced',scan);window.addEventListener('skplaza-synced',scan);
 window.addEventListener('load',()=>setTimeout(scan,800));window.addEventListener('focus',scan);

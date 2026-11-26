@@ -106,9 +106,12 @@
           const {historyOnly,assetBefore,assetAfter,...event}=row;
           return event;
         })}:snapshot;
-        const r=await fetch(c.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({productionBalanceVersions:versions,action:snapshot.personal?.some(row=>row.deleted)?'syncPersonDeletion':snapshot.novelties?.some(row=>row.noveltyAction?.status==='pending')?'syncNoveltyChanges':snapshot.novelties?.some(row=>row.datedNovelty)?'syncDatedNovelties':'sync',key:c.apiKey,token:window.SKAdminAuth?.token?.()||'',since:forceFull||collaboratorRevisionApi!==c.apiUrl?'':(localStorage.getItem('skWebServerUpdatedAt')||''),data}),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
+        // Los servidores anteriores asignan siempre una marca a las altas del auxiliar.
+        const legacyAssistant=snapshot.assets?.some(row=>row.legacyUnmarked===true)&&!window.SKAdminAuth?.isAdmin?.();
+        const r=await fetch(c.apiUrl,{method:'POST',headers:{'Content-Type':'text/plain;charset=utf-8'},body:JSON.stringify({productionBalanceVersions:versions,action:legacyAssistant?'syncLegacyAssets':snapshot.personal?.some(row=>row.deleted)?'syncPersonDeletion':snapshot.novelties?.some(row=>row.noveltyAction?.status==='pending')?'syncNoveltyChanges':snapshot.novelties?.some(row=>row.datedNovelty)?'syncDatedNovelties':'sync',key:c.apiKey,token:window.SKAdminAuth?.token?.()||'',since:forceFull||collaboratorRevisionApi!==c.apiUrl?'':(localStorage.getItem('skWebServerUpdatedAt')||''),data}),signal:controller.signal,redirect:'follow',cache:'no-store',credentials:'omit'});
         if(!r.ok)throw new Error(`El servicio respondió ${r.status}`);
         let result;try{result=await r.json()}catch(error){if(controller.signal.aborted||error?.name==='AbortError')throw error;throw new Error('El servicio devolvió una respuesta incompleta. Pulsa la nube para reintentar.');}
+        if(legacyAssistant&&!result?.ok&&/solicitud no válida/i.test(result?.error))throw new Error('El activo antiguo sigue pendiente. Actualiza la implementación de Apps Script para sincronizar altas de auxiliares sin marca nueva.');
         if(!result?.ok)throw new Error(result?.error||'El servicio rechazó la sincronización');return result;
       })();
       return await Promise.race([exchange,expired]);

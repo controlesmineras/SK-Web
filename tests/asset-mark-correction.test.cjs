@@ -103,3 +103,35 @@ test('compartir XLV entre YT y Columna no autoriza una remarcación',()=>{
  assert.throws(()=>s.correct({assetId:'col',expectedMark:'XLV'}),/no encontró otra asignación/);
  assert.equal(s.writes,0);
 });
+
+const assignedACR=()=>({...target(),nuevaMarca:'ACR',marcaActual:'ACR',marcaInterna:'ACR',markSequence:69});
+const release=(s,auth=owner,expectedMark='ACR')=>s.ctx.adminReleaseLegacyMark_({assetId:target().id,expectedMark},auth);
+test('liberar ACR conserva el historial y recupera el hueco una vez aunque la serie ya avanzó',()=>{
+ const old=assignedACR();
+ const s=backend({assets:[old],assetMarkRegistry:[mark(old.id,'ACR',69),mark('reservada','ACT',71)]});
+ const before=s.cloud(),result=release(s);
+ assert.equal(result.asset.legacyUnmarked,true);assert.equal(result.asset.nuevaMarca,'');assert.equal(result.asset.marcaActual,'');
+ for(const field of ['id','clase','serial','numeroClase','marcaPrevia','ubicacion','asignadaId','accessories'])assert.deepEqual(result.asset[field],old[field]);
+ for(const table of ['novelties','blendingDeliveries','consumptions'])assert.deepEqual(s.cloud()[table],before[table]);
+ assert.equal(result.asset.markRelease.by,owner.username);assert.equal(result.asset.markRelease.code,'ACR');
+ assert.deepEqual(release(s),result);assert.equal(s.writes,1);
+ const next=(id,mina)=>({id,mina,clase:'Taladro',serial:id,updatedAt:date,createdAt:date,syncState:'pending',markingPolicy:'letters-v1',markStatus:'pending'});
+ const rows=[next('otro','Providencia'),next('nuevo','Sandra K'),next('segundo','Sandra K')];
+ s.sync(rows);s.sync(rows);
+ assert.deepEqual(s.cloud().assets.slice(1).map(asset=>asset.nuevaMarca),['AAA','ACR','ACU']);
+ s.sync([{...old,updatedAt:'2099-01-01',syncState:'pending',markRelease:{code:'ZZZ'}}]);
+ const saved=s.cloud().assets[0];assert.equal(saved.nuevaMarca,'');assert.equal(saved.marcaActual,'');assert.deepEqual(saved.markRelease,result.asset.markRelease);
+ release(s);assert.equal(s.cloud().assetMarkRegistry.filter(entry=>entry.code==='ACR').length,1);
+});
+test('liberación comprueba rol, marca vigente y reservas de activos incluso eliminados',()=>{
+ const old=assignedACR();
+ for(const [seed,auth,expected] of [
+  [{},{role:'assistant'},'ACR'],[{},owner,'ACS'],
+  [{assets:[old,{...old,id:'baja',deleted:true}]},owner,'ACR'],
+  [{assetMarkRegistry:[mark('reserva','ACR',69)]},owner,'ACR'],
+  [{assets:[{...old,marcaPrevia:'ACR'}]},owner,'ACR']
+ ]){
+  const s=backend({assets:[old],assetMarkRegistry:[mark(old.id,'ACR',69)],...seed}),before=s.cloud();
+  assert.throws(()=>release(s,auth,expected));assert.deepEqual(s.cloud(),before);assert.equal(s.writes,0);
+ }
+});
