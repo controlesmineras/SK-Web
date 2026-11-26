@@ -12,6 +12,21 @@
   const dateLabel=time=>time===null?'Sin hora registrada':format.format(time);
   const amount=value=>value!=null&&value!==''&&Number.isFinite(Number(value))?Number(value):null;
   const balanceLabel=value=>amount(value)===null?'—':number.format(value);
+  function registrationTime(row,type){
+    // Los primeros ajustes con firma se fechaban al confirmar la escritura en la central.
+    if(type==='adjustment'&&(row.registrationClock==='central'||
+      (!row.registrationClock&&row.requestSignature&&!row.recordedByRole)))return null;
+    const recorded=timestamp(row.recordedAt),created=timestamp(row.createdAt);
+    if(type==='reversal'){
+      // Las reversiones antiguas podían heredar recordedAt del movimiento que se revirtió.
+      if(created===timestamp(row.syncedAt)&&recorded!==created)return null;
+      return created;
+    }
+    if(row.recordedAt!==undefined)return recorded;
+    // Antes de las fechas editables, Plaza guardaba el registro local en createdAt.
+    if(type==='adjustment'||row.sourceWarehouseId==='production'||created===timestamp(row.syncedAt))return null;
+    return created;
+  }
   function entries(data){
     const result=[],criteria=new Map((data.inventoryCriteria||[]).map(item=>[item.id,item]));
     for(const [store,source] of [['blendingIncomes','income'],['blendingDeliveries','delivery'],['warehouseQuantityHistory','adjustment']]){
@@ -20,9 +35,8 @@
         if(row.deleted||source==='adjustment'&&row.kind!=='quantity_adjustment')continue;
         const type=row.reversalOf||norm(row.movementType)==='reversion'?'reversal':norm(row.movementType)==='devolucion'?'returned':source;
         const criterion=criteria.get(row.itemId),item=row.itemName||criterion?.name||criterion?.CI_ELEMENTO||row.itemId||'Elemento';
-        const register=timestamp(type==='reversal'?row.createdAt:row.recordedAt||row.createdAt);
-        const original=type==='reversal'?row.originalCreatedAt:row.createdAt;
-        const entry={row,type,source,item,register,original:timestamp(original),applied:timestamp(row.balanceAppliedAt),reversed:!!(row.reversed||row.reversado||row.reversedAt)};
+        const register=registrationTime(row,type);
+        const entry={row,type,source,item,register,applied:timestamp(row.balanceAppliedAt),reversed:!!(row.reversed||row.reversado||row.reversedAt)};
         result.push(entry);
         if(entry.reversed&&type!=='reversal'&&row.reversedAt&&!reversedIds.has(row.id)){
           // Algunas versiones antiguas solo anotaban la reversión en la fila original.
@@ -114,14 +128,11 @@
         const r=e.row,d=delta(e);
         const qty=d===null?(r.assetId?esc(r.quantity??1):'—'):(d>0?'+':'')+number.format(d);
         const note=e.legacy?'Consta en el registro original':e.reversed?'Reversado':r.syncState==='pending'?'Pendiente de sincronización':'';
-        const detail=e.type==='reversal'?'Movimiento original':e.original!==e.register?'Fecha del movimiento':'';
-        const historical=e.type==='adjustment'&&(!r.recordedByRole||r.registrationClock==='central')?'Hora conservada en la base central':'';
         const small=text=>text?'<small>'+esc(text)+'</small>':'';
-        const time=esc(dateLabel(e.register))+small(historical)+(detail&&e.original!==null?small(detail+' · '+dateLabel(e.original)):'');
         const isMovement=['income','delivery','returned'].includes(e.type);
         const recipientRole=e.type==='income'?'Trae':e.type==='returned'?'Devuelve':r.exitKind==='mine'?'Transporta':'Recibe';
         const recipient=r.returnedByName||r.recipientName||r.broughtByName;
-        return '<tr data-type="'+e.type+'">'+cell(columns[0],time)+cell('Movimiento','<b>'+labels[e.type]+'</b>'+small(note))+cell('Elemento','<b>'+esc(e.item)+'</b>'+small(r.assetLabel))+
+        return '<tr data-type="'+e.type+'">'+cell(columns[0],esc(dateLabel(e.register)))+cell('Movimiento','<b>'+labels[e.type]+'</b>'+small(note))+cell('Elemento','<b>'+esc(e.item)+'</b>'+small(r.assetLabel))+
           cell(stockColumn,balances?stockSummary(r,qty):qty)+
           personCell('Persona del movimiento',isMovement&&recipient,recipientRole)+personCell('Bodeguero/a de turno',isMovement&&r.shiftKeeperName)+
           cell('Registró / solicitó',esc(actor(e)))+(canReverse?cell('Acción',!e.reversed&&!r.assetId&&['income','delivery'].includes(e.type)&&norm(r.deliveryType)!=='prestamo'&&r.syncState!=='pending'?'<button type="button" data-reverse-id="'+esc(r.id)+'" data-source="'+e.source+'">Revertir</button>':''):'')+'</tr>';

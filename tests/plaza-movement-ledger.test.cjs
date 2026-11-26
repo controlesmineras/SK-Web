@@ -3,6 +3,20 @@ const window={};
 vm.runInNewContext(fs.readFileSync('plaza-movement-ledger.js','utf8'),{window});
 const {entries,ordered}=window.SKPlazaLedger;
 const time='2025-11-10T13:14:15Z',late='2025-11-15T13:14:45Z';
+test('el historial distingue el registro en la terminal de las marcas de sincronización',()=>{
+ const rows=entries({blendingDeliveries:[
+  {id:'ext',createdAt:time,recordedAt:late,syncedAt:'2025-11-16T00:00:00Z'},
+  {id:'antigua',createdAt:time,syncedAt:late},
+  {id:'solo-sync',createdAt:late,syncedAt:late},
+  {id:'rev',reversalOf:'ext',createdAt:late,recordedAt:late,syncedAt:'2025-11-16T00:00:00Z'},
+  {id:'heredada',reversalOf:'antigua',createdAt:late,recordedAt:time,syncedAt:late}
+ ],warehouseQuantityHistory:[
+  {id:'local',kind:'quantity_adjustment',registrationClock:'device',recordedAt:time,syncedAt:late},
+  {id:'central',kind:'quantity_adjustment',registrationClock:'central',recordedAt:late},
+  {id:'ajuste-antiguo',kind:'quantity_adjustment',requestSignature:'[]',recordedAt:late,createdAt:late}
+ ]});
+ assert.deepEqual(Array.from(rows,r=>r.register),[Date.parse(late),Date.parse(time),null,Date.parse(late),null,Date.parse(time),null,null]);
+});
 test('un movimiento extemporáneo conserva su registro y una reversión antigua usa la fecha del reintegro',()=>{
  const original={id:'orig',itemId:'i',createdAt:time,recordedAt:late,reversedAt:late,reversed:true};
  const back={id:'rev',itemId:'i',createdAt:late,recordedAt:time,reversalOf:'orig',originalCreatedAt:time};
