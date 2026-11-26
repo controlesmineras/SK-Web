@@ -164,11 +164,12 @@
         target.ingresoTemporal = false; target.ubicacion = destination; target.asignadaId = ''; target.areaAsignada = '';
         target.updatedAt = times.recordedAt; target.syncState = 'pending';
         (next.blendingDeliveries ||= []).push(row);
+        form.inert = true;
         await api.saveData(next); reset(); api.updatePendingBadge(); api.renderRecentQueries(); window.SKPlazaReturns?.refresh();
         alert(operation + ' · ' + mine + '\n\nSalida registrada en este dispositivo y pendiente de sincronización.');
         void api.sync(true);
       } catch (error) {alert(error.message || 'No fue posible registrar la salida.');}
-      finally {saving = false; validateReturn(false);}
+      finally {form.inert = false; saving = false; validateReturn(false);}
     });
     return {reset, dirty:() => Boolean(selectedDestination()), saving:() => saving};
   }

@@ -78,16 +78,21 @@
   }
   function reset() {
     selectedId = '';
-    $('#assetReturnForm')?.reset();
-    if ($('#assetReturnForm')) $('#assetReturnForm').hidden = true;
+    const form = $('#assetReturnForm');
+    if (!form) return;
+    form.reset();
+    form.hidden = true;
+    $('#assetReturnSelected').textContent = '';
+    form.querySelector('[type="submit"]').disabled = true;
   }
   function selectLoan(id) {
-    if (readOnly) return;
+    if (readOnly || saving) return;
     const data = window.SKPlaza.getData(), loan = loans(data).find(row => row.id === id);
     if (!loan || loanState(data, loan) !== 'PENDIENTE') return refresh();
     selectedId = id;
     const form = $('#assetReturnForm'), people = (data.personal || []).filter(row => !row.deleted);
     form.reset(); form.hidden = false;
+    form.querySelector('[type="submit"]').disabled = false;
     $('#assetReturnSelected').textContent = loan.assetId ? loanLabel(data, loan) : `${loan.itemName} · Cantidad a retornar: ${loan.quantity} ${loan.unit || 'Unidad'} (total del préstamo)`;
     $('#assetReturnPeople').innerHTML = people.map(person => `<option value="${esc(personLabel(person))}"></option>`).join('');
     const borrower = loan.exitKind !== 'mine' && people.find(row => row.id === loan.recipientId);
@@ -97,7 +102,7 @@
   }
   async function save(event) {
     event.preventDefault();
-    if (readOnly || saving) return;
+    if (readOnly || saving || !selectedId) return;
     saving = true;
     const form = event.currentTarget, button = form.querySelector('[type="submit"]');
     button.disabled = true;
@@ -120,12 +125,14 @@
         row.balanceAfter = row.balanceBefore + row.quantity;
         stock.quantity = row.balanceAfter; stock.updatedAt = row.updatedAt;
       }
+      form.inert = true;
       await app.saveData(next); // Persistir antes de cambiar la pantalla o liberar el activo.
+      $('#assetReturnSearch').value = '';
       reset(); refresh(); app.refreshDelivery(); app.updatePendingBadge(); app.renderRecentQueries();
       alert('RETORNO REGISTRADO\n\nLos elementos volvieron a estar disponibles en bodega. El registro queda guardado en este dispositivo y pendiente de sincronización.');
       app.sync(true);
     } catch (error) { alert(error.message || 'No fue posible guardar la devolución.'); }
-    finally { saving = false; button.disabled = false; }
+    finally { form.inert = false; saving = false; button.disabled = !selectedId; }
   }
   function setup() {
     if (!window.SKPlaza || $('#assetReturns')) return;
