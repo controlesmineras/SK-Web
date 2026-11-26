@@ -124,13 +124,19 @@ const draft={itemId:'gloves',itemName:'Guantes',quantity:2,deliveryType:'ASIGNAC
 function batchForm(income=false){const button={disabled:false};return{button,elements:{recipientCompany:{value:'SK'},recipientId:{value:'person'},broughtById:{value:'person'},itemId:{value:''}},querySelector:()=>button}}
 test('delivery confirms only after the offline transaction commits; a failed save can retry without duplicates',async()=>{
   const c=client(),seed=formSeed();await c.api.read();await c.api.write(seed);c.audit.set(clone(seed));c.audit.prepareDelivery([clone(draft)]);
-  const form=batchForm(),write=c.api.write;let release;
+  const form=batchForm(),write=c.api.write;let release,writes=0;
   const gate=new Promise(resolve=>{release=resolve});
-  c.api.write=async value=>{await gate;return write(value)};
+  c.api.write=async value=>{writes++;await gate;return write(value)};
   const result=c.audit.saveDeliveryBatch(form);
-  assert.equal(form.button.disabled,true);assert.equal(c.alerts.length,0);
+  assert.equal(form.button.disabled,true);assert.equal(form.button.textContent,'GUARDANDO…');
+  assert.equal(await c.audit.saveDeliveryBatch(form),false);
+  assert.equal(writes,1);assert.equal(c.alerts.length,0);
   assert.equal(c.audit.get().blendingDeliveries.length,0);
   release();assert.equal(await result,true);
+  assert.equal(form.button.disabled,true);assert.equal(form.button.textContent,'REGISTRAR ENTREGA');
+  const confirmations=c.alerts.length;
+  assert.equal(await c.audit.saveDeliveryBatch(form),false);
+  assert.equal(c.alerts.length,confirmations);assert.equal(writes,1);
   assert.equal((await c.api.read()).blendingDeliveries[0].syncState,'pending');
   assert.equal((await c.api.read()).inventoryStock[0].quantity,8);
   assert.ok(c.alerts.some(message=>message.startsWith('ENTREGA REGISTRADA')));
@@ -141,6 +147,7 @@ test('delivery confirms only after the offline transaction commits; a failed sav
   assert.equal(c.audit.get().blendingDeliveries.length,1);
   assert.equal((await c.api.read()).blendingDeliveries.length,1);
   assert.ok(c.alerts.every(message=>!message.startsWith('ENTREGA REGISTRADA')));
+  assert.equal(form.button.disabled,false);
   c.api.write=write;
   assert.equal(await c.audit.saveDeliveryBatch(form),true);
   assert.equal((await c.api.read()).blendingDeliveries.length,2);

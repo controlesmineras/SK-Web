@@ -169,3 +169,13 @@ test('the same specific asset is blocked but two assets of its class can share a
   assert.deepEqual(Array.from(c.api.draft(),row=>[row.assetId,row.quantity]),[['asset',1],['second',1]]);
   assert.doesNotMatch(c.nodes.get('#deliveryDraft').innerHTML,/data-delivery-quantity/);
 });
+
+test('a second tap on Agregar is ignored until another item is selected',()=>{
+  const c=formClient();c.api.mode('assignment');c.select('');
+  const add=c.nodes.get('#addDeliveryItem'),submit=c.nodes.get('#submit');
+  assert.equal(add.disabled,true);assert.equal(submit.disabled,true);
+  c.select('pliers');assert.equal(add.disabled,false);assert.equal(submit.disabled,false);
+  c.api.add();assert.equal(add.disabled,true);assert.equal(submit.disabled,false);
+  c.api.add();assert.equal(c.alerts.length,0);assert.equal(c.api.draft().length,1);
+  c.select('cable');assert.equal(add.disabled,false);c.api.add();assert.equal(c.api.draft().length,2);
+});
