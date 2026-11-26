@@ -72,6 +72,14 @@
     if(e.type==='adjustment')return amount(r.delta);
     const qty=amount(r.quantity);return qty===null?null:(e.type==='delivery'?-qty:qty);
   }
+  function stockSummary(row,qty){
+    const before=balanceLabel(row.balanceBefore),after=balanceLabel(row.balanceAfter);
+    if(before==='—'&&after==='—')return qty==='—'?'—':'Cantidad '+qty;
+    return '<span class="ledgerStockSummary" title="Anterior · Movimiento → Saldo">'+
+      '<span class="ledgerSrOnly">Anterior: </span>'+before+' '+
+      '<span class="ledgerSrOnly">Movimiento: </span>'+qty+' '+
+      '<span aria-hidden="true">→</span> <span class="ledgerSrOnly">Saldo: </span><strong>'+after+'</strong></span>';
+  }
   function mount(host,actions={}){
     host.innerHTML=`<div class="ledgerFilters"><label>Buscar elemento o persona<input type="search" data-search placeholder="Nombre, serial o responsable…"></label>
       <label>Ordenar por<select data-order><option value="registration">Hora de registro</option><option value="balance">Aplicación al saldo</option></select></label>
@@ -98,8 +106,8 @@
       const first=page*size,limit=Math.min(rows.length,first+size);
       find('.ledgerSummary').textContent=rows.length?(first+1)+'–'+limit+' de '+rows.length+' movimientos'+(order==='balance'?' · Para movimientos sin orden de aplicación guardado se usa la hora disponible.':''):'No hay movimientos con estos filtros.';
       const canReverse=actions.canReverse?.()===true;
-      const stockColumns=balances?['Anterior','Cantidad','Nuevo']:['Cantidad'];
-      const columns=['Registro (Colombia)','Movimiento','Elemento',...stockColumns,'Persona del movimiento','Bodeguero/a de turno','Registró / solicitó',...(canReverse?['Acción']:[])];
+      const stockColumn=balances?'Resumen':'Cantidad';
+      const columns=['Registro (Colombia)','Movimiento','Elemento',stockColumn,'Persona del movimiento','Bodeguero/a de turno','Registró / solicitó',...(canReverse?['Acción']:[])];
       const cell=(label,html)=>'<td data-label="'+label+'">'+html+'</td>';
       const personCell=(label,value,detail='')=>value?cell(label,esc(value)+(detail?'<small>'+esc(detail)+'</small>':'')):'<td data-label="'+label+'" class="ledgerPersonEmpty">—</td>';
       find('.ledgerRows').innerHTML=rows.length?'<table><thead><tr>'+columns.map(c=>'<th scope="col" data-label="'+c+'">'+c+'</th>').join('')+'</tr></thead><tbody>'+rows.slice(first,limit).map(e=>{
@@ -113,9 +121,8 @@
         const isMovement=['income','delivery','returned'].includes(e.type);
         const recipientRole=e.type==='income'?'Trae':e.type==='returned'?'Devuelve':r.exitKind==='mine'?'Transporta':'Recibe';
         const recipient=r.returnedByName||r.recipientName||r.broughtByName;
-        const stockValues={Anterior:balanceLabel(r.balanceBefore),Cantidad:qty,Nuevo:balanceLabel(r.balanceAfter)};
         return '<tr data-type="'+e.type+'">'+cell(columns[0],time)+cell('Movimiento','<b>'+labels[e.type]+'</b>'+small(note))+cell('Elemento','<b>'+esc(e.item)+'</b>'+small(r.assetLabel))+
-          stockColumns.map(label=>cell(label,stockValues[label])).join('')+
+          cell(stockColumn,balances?stockSummary(r,qty):qty)+
           personCell('Persona del movimiento',isMovement&&recipient,recipientRole)+personCell('Bodeguero/a de turno',isMovement&&r.shiftKeeperName)+
           cell('Registró / solicitó',esc(actor(e)))+(canReverse?cell('Acción',!e.reversed&&!r.assetId&&['income','delivery'].includes(e.type)&&norm(r.deliveryType)!=='prestamo'&&r.syncState!=='pending'?'<button type="button" data-reverse-id="'+esc(r.id)+'" data-source="'+e.source+'">Revertir</button>':''):'')+'</tr>';
       }).join('')+'</tbody></table>':'';
