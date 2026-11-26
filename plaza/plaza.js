@@ -732,12 +732,13 @@ function matchesItemSearch(text,number,query){
   }
   function sortRecentGroups(kind,groups,people){
     const order=activeRecentOrder(kind);
-    const indexed=groups.map(rows=>{
+    const dateDirection=order.find(column=>column.key==='date')?.dir||0;
+    const indexed=groups.map((rows,registrationOrder)=>{
       const row=rows[rows.length-1],details=recentDetails(kind,row,people);
       const values={...details,date:movementDate(row)?.getTime(),item:movementItem(row),
         quantity:row.quantity==null?null:Number(row.quantity),balance:row.balanceAfter==null?null:Number(row.balanceAfter),
         origin:row.originMine,company:[details.company,details.area].filter(Boolean).join(' / ')};
-      return {rows,values};
+      return {rows,values,registrationOrder};
     });
     indexed.sort((a,b)=>{
       for(const {key,dir} of order){
@@ -747,7 +748,8 @@ function matchesItemSearch(text,number,query){
         const diff=typeof x==='number'?x-y:recentCollator.compare(x,y);
         if(diff)return dir*diff;
       }
-      return 0;
+      // Varios renglones del mismo guardado comparten incluso el milisegundo.
+      return dateDirection*(a.registrationOrder-b.registrationOrder);
     });
     return indexed.flatMap(group=>group.rows);
   }

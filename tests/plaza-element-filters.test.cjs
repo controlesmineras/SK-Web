@@ -93,6 +93,24 @@ test('columns append in tap order, direction stays in place, and only the line c
   c.api.reset(kind);c.api.render();assert.match(c.node('#'+kind+'SortStatus').innerHTML,/Más recientes primero/);
  }
 });
+test('entregas con la misma fecha exacta siguen el orden de registro en ambos sentidos',async()=>{
+ const c=client(),time='2026-10-01T18:08:00.000';
+ const delivery=(id,createdAt,before,quantity=1)=>({id,itemId:'epp',itemName:'Prefiltro FESI 7030',quantity,createdAt,
+  balanceBefore:before,balanceAfter:before-quantity,notes:id});
+ const rows=[delivery('anterior','2026-10-01T17:43:00',83),
+  ...[82,81,80,79,78].map(n=>delivery('entrega-'+n,time,n)),delivery('posterior','2026-10-02T10:22:00',77)];
+ c.data.blendingDeliveries=rows;
+ const ids=()=>Array.from(c.api.rows('delivery'),r=>r.id),ascending=rows.map(r=>r.id),descending=ascending.slice().reverse();
+ assert.deepEqual(ids(),descending);
+ c.api.excel('delivery');
+ const xml=await c.downloads.at(-1).blob.text();
+ assert.ok(xml.indexOf('entrega-78')<xml.indexOf('entrega-82'));
+ c.api.sort('delivery','date');assert.deepEqual(ids(),ascending);
+ c.api.sort('delivery','date');assert.deepEqual(ids(),descending);
+ c.api.sort('delivery','balance');c.api.sort('delivery','balance');
+ assert.deepEqual(ids().slice(1,-1),ascending.slice(1,-1),'el criterio secundario explícito prevalece al desempatar');
+ assert.deepEqual(rows.map(r=>r.id),ascending);
+});
 test('reversals include each matching original and counterpart across dates in the view and exports',async()=>{
  for(const [kind,store] of [['income','blendingIncomes'],['delivery','blendingDeliveries']]){
   const c=client(),base={itemId:'b4',itemName:'Barreno 4 ft',quantity:2,createdAt:'2026-10-01T12:00:00'};
