@@ -9,9 +9,25 @@
     ['Serial','serial'],['Modelo','modelo'],['Marca comercial','fabricante'],['Marca comercial','marcaComercial'],
     ['Mina','mina'],['Origen','minaOrigen']
   ];
+  function eachIdentifier(asset,visit){
+    for(const [caption,key] of identifiers){
+      if(key==='orden'&&(asset.numeroClase||asset.numeroYT))continue;
+      if(key==='serial'&&/^columnas?\b/.test(fold(asset.clase)))continue;
+      const value=String(asset[key]??'').trim();
+      if(!value)continue;
+      const normalized=fold(value);
+      if(normalized!=='no aplica')visit(caption,value,normalized);
+    }
+  }
+  function indexText(asset,visible){
+    const parts=[fold(visible)];
+    eachIdentifier(asset,(_caption,_value,normalized)=>parts.push(normalized));
+    return parts.join(' ');
+  }
   function query(input){
     const terms=[...new Set(fold(input).trim().split(/\s+/).filter(Boolean))];
-    function matches(value){const text=fold(value);return terms.every(term=>text.includes(term))}
+    function matchesIndex(index){return terms.every(term=>index.includes(term))}
+    function matches(value){return matchesIndex(fold(value))}
     function matchCount(value){
       const text=fold(value);
       return terms.filter(term=>text.includes(term)).length;
@@ -21,16 +37,12 @@
       const text=fold(visible),missing=terms.filter(term=>!text.includes(term));
       if(!missing.length)return '';
       const found=new Set(),details=new Set();
-      for(const [caption,key] of identifiers){
-        if(key==='orden'&&(asset.numeroClase||asset.numeroYT))continue;
-        if(key==='serial'&&/^columnas?\b/.test(fold(asset.clase)))continue;
-        const value=String(asset[key]??'').trim(),normalized=fold(value);
-        if(!value||normalized==='no aplica')continue;
+      eachIdentifier(asset,(caption,value,normalized)=>{
         for(const term of missing)if(normalized.includes(term)){
           found.add(term);
           details.add(caption+': '+value);
         }
-      }
+      });
       return found.size===missing.length?[...details].join(' · '):null;
     }
     function html(value){
@@ -72,7 +84,7 @@
       }
       return results;
     }
-    return {matches,matchCount,extra,rows,html};
+    return {matches,matchesIndex,matchCount,extra,rows,html};
   }
-  window.SKAssetSearch={query,escape};
+  window.SKAssetSearch={query,indexText,escape};
 })();

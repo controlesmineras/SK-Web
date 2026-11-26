@@ -4,6 +4,17 @@ const asset={id:'saw27',clase:'Motosierra',numeroClase:'27',marcaInterna:'AAE',s
 const people=[{id:'receiver',documento:'10001',nombre:'Operador de prueba',area:'Desmin - Obras civiles',cargo:'Operador minero'},{id:'warehouse',documento:'warehouse-doc',nombre:'Bodeguera de prueba'}];
 const delivery={id:'delivery',assetId:asset.id,recipientId:'receiver',shiftKeeperId:'warehouse',shiftKeeperDocument:'warehouse-doc',operatorId:'warehouse',operatorDocument:'warehouse-doc',operatorName:'Bodeguera de prueba',actorDocument:'warehouse-doc',deliveryType:'ASIGNACIÓN',destination:'Operación',createdAt:'2026-10-18T21:06:00Z',syncState:'synced'};
 const seed=()=>({personal:structuredClone(people),blendingDeliveries:[structuredClone(delivery)],blendingIncomes:[],novelties:[]});
+test('la consulta por lote conserva la misma ficha e historial que la consulta individual',()=>{
+ const data=seed(),other={id:'another',clase:'YT'},empty={id:'empty'};
+ data.personal.push({id:'duplicate',documento:people[0].documento,nombre:'Otro registro'});
+ data.blendingDeliveries.push({...delivery,id:'other-delivery',assetId:' another ',recipientDocument:'10001'},
+  {...delivery,id:'original-reversed',reversed:true}, {id:'stock-only'});
+ data.blendingIncomes.push({id:'return',assetId:other.id,createdAt:'2026-10-19T12:00:00Z'});
+ data.novelties.push({id:'n1',assetId:asset.id,datedNovelty:true,fechaNovedad:'2026-11-20',estado:'Averiado/a',syncState:'pending'},
+  {id:'n2',assetId:other.id,deleted:true,syncState:'pending',noveltyAction:{id:'undo',status:'pending'}});
+ const project=history.batchProjector(data);
+ for(const row of [asset,other,empty])assert.deepEqual(project(row),history.project(row,data));
+});
 test('la entrega ya registrada en Plaza completa última novedad, bodeguera y receptor sin escribir ni duplicar',()=>{
  const data=seed(),before=JSON.stringify({asset,data}),result=history.project(asset,data);
  assert.equal(result.asset.fechaNovedad,'2026-10-18');assert.equal(result.asset.horaNovedad,'16:06');assert.equal(result.asset.descripcionNovedad,'Asignación');

@@ -4,7 +4,8 @@
  const text=value=>String(value??'').trim();
  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
  const date=value=>/^\d{4}-\d{2}-\d{2}$/.test(text(value))?value.split('-').reverse().join('/'):value;
- let rows=[],visible=[],data={},actas=[],selectedId='',version=0;
+ let rows=[],filtered=[],visible=[],data={},actas=[],selectedId='',version=0;
+ let refreshFrame=0;
  const columns=[
   {key:'label',title:'Clase',width:22},{key:'model',title:'Modelo',width:18},
   {key:'number',title:'#',width:8},{key:'serial',title:'Serial',width:19},
@@ -161,8 +162,7 @@
   window.SKAssetHistoryUI.show(host.querySelector('#assetQueryHistory'),a,projection.events,actas);
  }
 
-  function describe(record) {
-    const projection=window.SKAssetHistory.project(record,data);
+  function describe(projection) {
     const asset=projection.asset;
     const fields = window.SKAssetFields.canonical(asset);
     const {clase,label,model,equipment}=classModel(asset);
@@ -174,7 +174,8 @@
       mine:clean(asset.mina),state:clean(asset.estado),location:clean(asset.ubicacion)};
     const external=!window.SKAssetOwnership.isSK(asset);
     const searchText=[...Object.values(values),window.SKAssetOwnership.label(asset),external?'externo externa externos externas transitorio':''].join(' ');
-    return {asset,key,clase,values,searchText,external,projection};
+    const searchIndex=window.SKAssetSearch.indexText(asset,searchText);
+    return {asset,key,clase,values,searchIndex,external,projection};
   }
 
  function updateClasses(){
@@ -217,7 +218,7 @@
    const target=sortCriteria.indexOf(neighbor);
    [sortCriteria[index],sortCriteria[target]]=[sortCriteria[target],sortCriteria[index]];
   }
-  draw();
+  draw({reorder:true});
   find('assetQueryList').scrollTop=0;
  }
 
@@ -246,12 +247,15 @@
   }).join('');
  }
 
- function draw(){
+ function draw({reorder=false}={}){
   const query=window.SKAssetSearch.query(find('assetQuerySearch').value),key=find('assetQueryClass').value;
-  visible=rows.filter(row=>(!key||row.key===key)&&query.extra(row.asset,row.searchText)!==null);
+  if(!reorder)filtered=rows.filter(row=>(!key||row.key===key)&&query.matchesIndex(row.searchIndex));
   const table=find('assetQueryList').querySelector('table');
-  shownColumns=visible.some(row=>row.values.model)?columns:columns.filter(col=>col.key!=='model');
+  const body=table.tBodies[0];
+  const nodes=reorder?new Map(visible.map((row,index)=>[row,body.children[index]])):null;
+  shownColumns=filtered.some(row=>row.values.model)?columns:columns.filter(col=>col.key!=='model');
   const criteria=visibleCriteria();
+  visible=criteria.length?filtered.slice():filtered;
   if(criteria.length)visible.sort((left,right)=>{
    for(const {key,dir} of criteria){
     const a=left.values[key],b=right.values[key];
@@ -262,13 +266,24 @@
    return 0;
   });
   drawSort(criteria,table.tHead.rows[0]);
-  table.tBodies[0].innerHTML=visible.map(({asset,values,external})=>{
+  if(reorder){
+   const fragment=document.createDocumentFragment();
+   for(const row of visible)fragment.append(nodes.get(row));
+   body.replaceChildren(fragment);
+   return;
+  }
+  const highlighted=new Map();
+  function highlight(value){
+   if(!highlighted.has(value))highlighted.set(value,query.html(value));
+   return highlighted.get(value);
+  }
+  body.innerHTML=visible.map(({asset,values,external})=>{
    const title='Abrir ficha de '+[values.label,values.number,values.serial,values.mark].filter(Boolean).join(' · ');
-   const link='<button type="button" class="assetQueryLink" aria-controls="assetQueryDetail" aria-label="'+esc(title)+'">'+query.html(values.label||'Sin clase')+'</button>';
+   const link='<button type="button" class="assetQueryLink" aria-controls="assetQueryDetail" aria-label="'+esc(title)+'">'+highlight(values.label||'Sin clase')+'</button>';
    return '<tr data-query-asset-id="'+esc(asset.id)+'"'+(external?' class="external" title="Activo externo"':'')+'><td>'+link+'</td>'+
      shownColumns.slice(1).map(col=>{
-      const badge=external&&col.key==='mine'?' <span class="externalBadge">'+query.html('EXTERNO')+'</span>':'';
-      return '<td>'+query.html(values[col.key]||'—')+badge+'</td>';
+      const badge=external&&col.key==='mine'?' <span class="externalBadge">'+highlight('EXTERNO')+'</span>':'';
+      return '<td>'+highlight(values[col.key]||'—')+badge+'</td>';
      }).join('')+'</tr>';
   }).join('');
   find('assetQueryCount').textContent=visible.length===1?'1 activo encontrado':visible.length+' activos encontrados';
@@ -277,18 +292,21 @@
  }
 
  async function render({list=false}={}){
+  cancelAnimationFrame(refreshFrame);
+  refreshFrame=0;
   mount();
-  if(list)selectedId='';
+  if(list&&selectedId){selectedId='';showSelection()}
   if(!window.SKAdminAuth?.canView?.('assetQuery'))return;
   const ticket=++version,count=find('assetQueryCount');
   if(!count)return;
   if(typeof db==='undefined'||!db){count.textContent='Iniciando almacenamiento local…';return;}
   try{
-   const result=await Promise.all([all('assets'),window.SKAssetHistoryUI.read(),all('actas')]);
+   const result=await Promise.all([all('assets'),window.SKAssetHistoryUI.read({assetsOnly:true}),all('actas')]);
    if(ticket!==version)return;
    const [assets,history,documents]=result;
    data=history;actas=documents;
-   rows=assets.filter(asset=>!asset.deleted).map(describe).sort((a,b)=>
+   const project=window.SKAssetHistory.batchProjector(history);
+   rows=assets.filter(asset=>!asset.deleted).map(asset=>describe(project(asset))).sort((a,b)=>
     collator.compare(a.clase,b.clase)||collator.compare(a.values.number,b.values.number)||
     collator.compare(clean(a.asset.modelo),clean(b.asset.modelo))||collator.compare(a.values.serial,b.values.serial));
    updateClasses();draw();
@@ -301,7 +319,11 @@
  }
  window.SKAssetQuery={mount,render};
  for(const event of ['skweb-db-ready','skweb-synced','skweb-assets-normalized','skweb-inventory-refresh','skweb-local-change'])window.addEventListener(event,()=>{
-  if(document.getElementById('assetQuery')?.classList.contains('active'))void render();
+  if(refreshFrame||!find('assetQuery')?.classList.contains('active'))return;
+  refreshFrame=requestAnimationFrame(()=>{
+   refreshFrame=0;
+   if(find('assetQuery')?.classList.contains('active'))void render();
+  });
  });
  mount();
 })();

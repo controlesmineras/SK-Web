@@ -4,7 +4,19 @@
  const identity=p=>[p.name,p.document&&'Doc. '+p.document].filter(Boolean).join(' · ')||'No registrado';
  const label=asset=>typeof assetLabel==='function'?assetLabel(asset):asset.clase||'Activo';
  const versions=new Map();
- async function read(){const names=['personal','novelties','blendingIncomes','blendingDeliveries'];return Object.fromEntries(await Promise.all(names.map(async name=>[name,await all(name)])));}
+ async function read({assetsOnly=false}={}){
+  const names=['personal','novelties','blendingIncomes','blendingDeliveries'];
+  if(!assetsOnly)return Object.fromEntries(await Promise.all(names.map(async name=>[name,await all(name)])));
+  const tx=db.transaction(names);
+  return Object.fromEntries(await Promise.all(names.map(async name=>{
+   const store=tx.objectStore(name);
+   if(name==='personal')return [name,await idbResult(store.getAll())];
+   const events=await idbResult(store.index('assetId').getAll());
+   // El orden de la clave primaria desempata movimientos con la misma fecha en el historial.
+   events.sort((a,b)=>indexedDB.cmp(a.id,b.id));
+   return [name,events];
+  })));
+ }
  function actionButtons(entry){
   if(entry.kind!=='novelty'||!window.SKAdminAuth?.isAdmin?.())return '';
   return '<div class="noveltyActions">'+
