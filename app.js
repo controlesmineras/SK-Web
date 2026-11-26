@@ -50,6 +50,11 @@ function countStore(s){return new Promise((ok,no)=>{const r=db.transaction(s).ob
    const changed=rules&&(!old||old.deleted||rules.serialKey(old.serial)!==rules.serialKey(o.serial));
    const duplicate=changed&&rules.duplicateSerial(rows,o);
    if(duplicate){failure=new Error('El serial '+String(o.serial).trim()+' ya existe en: '+rules.label(duplicate)+'. Revisa el activo registrado.');tx.abort();return;}
+   if(rules&&o.syncState==='pending'){
+    if(!old&&o.classNumberPolicy==='auto-v1'&&rules.automaticNumberEligible(o.clase))o.numeroYT=o.numeroClase=rules.classNumber(rows,o);
+    const conflict=rules.mineIdentifierConflict(rows,o,old);
+    if(conflict){failure=new Error(conflict.field+' '+conflict.value+' ya existe en '+(o.mina||o.minaOrigen||'Sandra K')+' para la clase '+o.clase+'.');tx.abort();return;}
+   }
    if(!old||!window.SKAssetHistory||o.syncState!=='pending'){table.put(o);return;}
    assetEventData(tx,o.id).then(data=>{
     if(data.novelties.some(row=>row.syncState==='pending'&&(row.datedNovelty&&!row.historyOnly||row.noveltyAction?.status==='pending'))){

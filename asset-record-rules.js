@@ -67,12 +67,41 @@
   }
   // Las YT y las columnas pueden llevar la misma marca física.
   // Una colisión que ya existía no impide guardar novedades ajenas a la marcación.
+  function ownerMine(asset) {
+    const value=String(asset?.mina||'').trim()||String(asset?.minaOrigen||'').trim();
+    const key=value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
+    return !key||/^(?:sandrak|sk|sk37)$/.test(key.replace(/[.\s-]/g,''))?'sandra k':key;
+  }
+  function mineIdentifierConflict(rows,asset,old) {
+    if(asset.deleted)return null;
+    const key=value=>String(value??'').trim().toLowerCase(),type=key(asset.clase),mine=ownerMine(asset);
+    const sameGroup=row=>key(row.clase)===type&&ownerMine(row)===mine;
+    const number=row=>{
+      const value=key(row.numeroClase||row.numeroYT);
+      if(type==='yt'&&!/^(?:[a-z]+)?\d+$/.test(value)){
+        const legacy=[row.orden,row.numeroMarcaActual||row.marcaAnterior].map(key).find(v=>/^\d+$/.test(v));
+        return legacy||(/^[ivxlcdm]+$/.test(value)?'':value);
+      }
+      return value||key(row.orden);
+    };
+    const physical=row=>row.marcaActual||row.marcaInterna||(type==='yt'&&/^[ivxlcdm]+$/i.test(key(row.numeroYT))?row.numeroYT:'');
+    const markNumber=row=>row.numeroMarcaActual||row.marcaAnterior;
+    const fields=[['NÚMERO DE CLASE',number],['MARCA ACTUAL',physical]];
+    if(/^(?:yt(?:\b|\d)|columnas?\b)/.test(type))fields.push(['NÚMERO DE MARCA',markNumber]);
+    for(const [field,read] of fields){
+      const value=read(asset),token=key(value);
+      if(!token||token==='no aplica'||old&&sameGroup(old)&&key(read(old))===token)continue;
+      const found=rows.find(row=>row&&!row.deleted&&(!asset.id||row.id!==asset.id)&&sameGroup(row)&&key(read(row))===token);
+      if(found)return {field,value,found};
+    }
+    return null;
+  }
   function duplicateNewMark(rows, asset) {
     const code=value=>String(value??'').trim().toUpperCase(),mark=code(asset.nuevaMarca);
     if(asset.deleted||!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark))return null;
     const old=rows.find(row=>row.id===asset.id);
-    if(old&&markFamily(old.clase)===markFamily(asset.clase)&&code(old.nuevaMarca)===mark)return null;
-    return rows.find(row=>row.id!==asset.id&&marksCanCollide(asset.clase,row.clase)&&['nuevaMarca','marcaActual','marcaInterna','marcaPrevia','marcaAnterior','numeroMarcaActual'].some(key=>code(row[key])===mark))||null;
+    if(old&&ownerMine(old)===ownerMine(asset)&&markFamily(old.clase)===markFamily(asset.clase)&&code(old.nuevaMarca)===mark)return null;
+    return rows.find(row=>row.id!==asset.id&&ownerMine(asset)===ownerMine(row)&&marksCanCollide(asset.clase,row.clase)&&['nuevaMarca','marcaActual','marcaInterna','marcaPrevia','marcaAnterior','numeroMarcaActual'].some(key=>code(row[key])===mark))||null;
   }
   const identityMark = asset => serialKey(asset.marcaPrevia || (!asset.markingPolicy ? asset.marcaActual || asset.marcaInterna : ''));
   const serialStatusLabel = asset => ({none:'Sin serial',unreadable:'Serial ilegible'})[asset.serialStatus] || '';
@@ -91,16 +120,17 @@
   function duplicateIdentity(rows, asset) {
     const serial = duplicateSerial(rows, asset);if(serial)return serial;
     const mark=identityMark(asset);if(!mark)return null;
-    const type=serialKey(asset.clase),mine=serialKey(asset.minaOrigen||asset.mina||'Sandra K');
-    return rows.find(row=>!row.deleted&&row.id!==asset.id&&serialKey(row.clase)===type&&serialKey(row.minaOrigen||row.mina||'Sandra K')===mine&&[row.marcaPrevia,row.marcaActual,row.marcaInterna,row.nuevaMarca].some(value=>serialKey(value)===mark))||null;
+    const type=serialKey(asset.clase),mine=ownerMine(asset);
+    return rows.find(row=>!row.deleted&&row.id!==asset.id&&serialKey(row.clase)===type&&ownerMine(row)===mine&&[row.marcaPrevia,row.marcaActual,row.marcaInterna,row.nuevaMarca].some(value=>serialKey(value)===mark))||null;
   }
   
   const automaticNumberEligible=value=>{const type=String(value??'').trim().toLowerCase();return !!type&&!/^(?:autorrescatador(?:es)?\b|yt(?:\b|\d)|columnas?\b)/i.test(type)};
   function classNumber(rows, asset) {
     const key=value=>String(value??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
     const number=row=>String(row.numeroClase||row.numeroYT||row.orden||'').trim();
-    const peers=rows.filter(row=>key(row.clase)===key(asset.clase)),old=peers.find(row=>row.id&&row.id===asset.id);
+    const old=rows.find(row=>row.id&&row.id===asset.id&&key(row.clase)===key(asset.clase));
     if(old&&number(old))return number(old);
+    const peers=rows.filter(row=>key(row.clase)===key(asset.clase)&&ownerMine(row)===ownerMine(asset));
     const used=new Set(peers.map(number).filter(value=>/^\d+$/.test(value)).map(Number));
     if(old){const missing=peers.filter(row=>!number(row)).sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''))||String(a.id).localeCompare(String(b.id)));let next=1;for(const row of missing){while(used.has(next))next++;if(row.id===asset.id)return String(next);used.add(next++);}}
     return String(Math.max(peers.length,0,...used)+1);
@@ -117,5 +147,5 @@
     if (isColumn(asset)) return columnLabel(asset);
     return [asset.clase, asset.numeroClase || asset.numeroYT, asset.marcaActual || asset.marcaInterna, searchSerial(asset.serial)].filter(Boolean).join(' · ');
   }
-  window.SKAssetRules = {assignmentAreas, marksCanCollide, serialKey, searchSerial, duplicateSerial, duplicateNewMark, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, equipmentHeading, isColumn, columnIdentity, columnLabel, movementLabel};
+  window.SKAssetRules = {ownerMine, mineIdentifierConflict, assignmentAreas, marksCanCollide, serialKey, searchSerial, duplicateSerial, duplicateNewMark, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, equipmentHeading, isColumn, columnIdentity, columnLabel, movementLabel};
 })();

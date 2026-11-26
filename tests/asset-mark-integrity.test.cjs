@@ -112,3 +112,43 @@ test('los avisos y el formulario distinguen la YT XLV de la columna XLV',()=>{
  assert.equal(ctx.window.SKAssetRules.duplicateNewMark([yt],column),null);
  assert.equal(ctx.window.SKAssetRules.duplicateNewMark([yt,second],column),second);
 });
+
+test('Sandra K y Providencia pueden registrar la misma YT con números y marca iguales',async()=>{
+ const machine=(id,mina,extra={})=>legacy(id,{clase:'YT',mina,minaOrigen:'Providencia',numeroClase:'6',marcaActual:'VI',numeroMarcaActual:'6',serial:'No registra',syncState:'pending',...extra});
+ const sk=machine('sk','Sandra K'),prov=machine('prov','Providencia'),service=backend(),device=await local();
+ for(const row of [sk,prov])await device.put('assets',row);
+ service.sync([sk,prov]);service.sync([sk,prov]);
+ assert.equal(service.cloud().assets.length,2);
+ for(const [property,value] of [['numeroClase','6'],['marcaActual','VI'],['numeroMarcaActual','6']]){
+  const repeated=machine('repetida',' SANDRA  K ',{numeroClase:'12',marcaActual:'XII',numeroMarcaActual:'12',[property]:value});
+  await assert.rejects(device.put('assets',repeated),/ya existe/i);
+  assert.throws(()=>service.sync([repeated]),/ya existe/i);
+ }
+ const withSerial=machine('real','Providencia',{numeroClase:'7',marcaActual:'VII',numeroMarcaActual:'7',serial:'YT-123'});
+ await device.put('assets',withSerial);service.sync([withSerial]);
+ const repeatedSerial={...withSerial,id:'otra',mina:'Sandra K'};
+ await assert.rejects(device.put('assets',repeatedSerial),/serial.*ya existe/i);
+ assert.throws(()=>service.sync([repeatedSerial]),/serial.*ya existe/i);
+});
+test('las secuencias automáticas de clase y de marca avanzan por mina, incluso sin conexión',async()=>{
+ const service=backend(),device=await local();
+ const rows=['Sandra K','Providencia','Providencia','Sandra K'].map((mina,i)=>request('tool-'+i,{mina,classNumberPolicy:'auto-v1',numeroClase:'1'}));
+ await Promise.all(rows.map(row=>device.put('assets',clone(row))));
+ assert.deepEqual(Array.from(await device.all('assets'),r=>r.numeroClase),['1','1','2','2']);
+ service.sync(rows);service.sync(rows);
+ const actual=service.cloud().assets;
+ assert.deepEqual(actual.map(r=>r.numeroClase),['1','1','2','2']);
+ assert.deepEqual(actual.map(r=>r.nuevaMarca),['AAA','AAA','AAB','AAB']);
+ assert.equal(service.cloud().assetMarkRegistry.length,4);
+ assert.deepEqual(clone(marker([]).api.markConflicts(actual)),[]);
+});
+test('las reservas históricas y los números asignados conservan la mina de emisión',()=>{
+ const old=legacy('anterior',{mina:'Providencia',numeroClase:'12',nuevaMarca:'AAG',marcaActual:'AAG',markStatus:'assigned',markingPolicy:'letters-v1'});
+ const s=backend([old],[{id:old.id,code:'AAG',sequence:6}]);
+ const newOne=(id,mina)=>request(id,{mina,classNumberPolicy:'auto-v1'});
+ s.sync([newOne('sk','Sandra K'),newOne('prov','Providencia')]);
+ assert.deepEqual(s.cloud().assets.slice(-2).map(r=>[r.nuevaMarca,r.numeroClase]),[['AAA','1'],['AAH','13']]);
+ s.sync([{...old,mina:'El Silencio',syncState:'pending',updatedAt:later,classNumberPolicy:'auto-v1'}]);
+ assert.equal(s.cloud().assets.find(r=>r.id===old.id).numeroClase,'12');
+ assert.equal(s.cloud().assetMarkRegistry.find(r=>r.id===old.id).ownerMine,'providencia');
+});
