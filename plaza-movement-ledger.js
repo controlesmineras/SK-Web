@@ -77,7 +77,7 @@
       <label>Desde<input type="date" data-from></label><label>Hasta<input type="date" data-to></label></div>
       <div class="ledgerTypes" aria-label="Filtrar movimientos">${Object.entries(types).map(([key,name])=>`<button type="button" data-kind="${key}" aria-pressed="${key==='all'}">${name}</button>`).join('')}</div>
       <div class="ledgerOptions"><label><input type="checkbox" data-skip-reversals> Omitir reversiones y originales reversados</label><label><input type="checkbox" data-skip-adjustments> Omitir ajustes de cantidad</label><label><input type="checkbox" data-balances checked> Mostrar saldos</label></div>
-      <p class="ledgerSummary" role="status"></p><div class="ledgerRows"></div>
+      <p class="ledgerSummary" role="status"></p><div class="ledgerRows" role="region" aria-label="Movimientos de inventario" tabindex="0"></div>
       <div class="ledgerPages"><button type="button" data-prev>Anterior</button><button type="button" data-next>Siguiente</button></div>`;
     const find=s=>host.querySelector(s),size=50;
     let all=[],kind='all',page=0;
@@ -97,9 +97,10 @@
       const first=page*size,limit=Math.min(rows.length,first+size);
       find('.ledgerSummary').textContent=rows.length?(first+1)+'–'+limit+' de '+rows.length+' movimientos'+(order==='balance'?' · Para movimientos sin orden de aplicación guardado se usa la hora disponible.':''):'No hay movimientos con estos filtros.';
       const canReverse=actions.canReverse?.()===true;
-      const columns=['Registro (Colombia)','Movimiento','Elemento','Cantidad',...(balances?['Anterior','Nuevo']:[]),'Responsable',...(canReverse?['Acción']:[])];
+      const columns=['Registro (Colombia)','Movimiento','Elemento','Cantidad',...(balances?['Anterior','Nuevo']:[]),'Persona del movimiento','Bodeguero/a de turno','Registró / solicitó',...(canReverse?['Acción']:[])];
       const cell=(label,html)=>'<td data-label="'+label+'">'+html+'</td>';
-      find('.ledgerRows').innerHTML=rows.length?'<table><thead><tr>'+columns.map(c=>'<th scope="col">'+c+'</th>').join('')+'</tr></thead><tbody>'+rows.slice(first,limit).map(e=>{
+      const personCell=(label,value,detail='')=>value?cell(label,esc(value)+(detail?'<small>'+esc(detail)+'</small>':'')):'<td data-label="'+label+'" class="ledgerPersonEmpty">—</td>';
+      find('.ledgerRows').innerHTML=rows.length?'<table><thead><tr>'+columns.map(c=>'<th scope="col" data-label="'+c+'">'+c+'</th>').join('')+'</tr></thead><tbody>'+rows.slice(first,limit).map(e=>{
         const r=e.row,d=delta(e);
         const qty=d===null?(r.assetId?esc(r.quantity??1):'—'):(d>0?'+':'')+number.format(d);
         const note=e.legacy?'Consta en el registro original':e.reversed?'Reversado':r.syncState==='pending'?'Pendiente de sincronización':'';
@@ -107,10 +108,13 @@
         const historical=e.type==='adjustment'&&(!r.recordedByRole||r.registrationClock==='central')?'Hora conservada en la base central':'';
         const small=text=>text?'<small>'+esc(text)+'</small>':'';
         const time=esc(dateLabel(e.register))+small(historical)+(detail&&e.original!==null?small(detail+' · '+dateLabel(e.original)):'');
+        const isMovement=['income','delivery','returned'].includes(e.type);
+        const recipientRole=e.type==='income'?'Trae':e.type==='returned'?'Devuelve':r.exitKind==='mine'?'Transporta':'Recibe';
         const recipient=r.returnedByName||r.recipientName||r.broughtByName;
         return '<tr data-type="'+e.type+'">'+cell(columns[0],time)+cell('Movimiento','<b>'+labels[e.type]+'</b>'+small(note))+cell('Elemento','<b>'+esc(e.item)+'</b>'+small(r.assetLabel))+cell('Cantidad',qty)+
           (balances?['balanceBefore','balanceAfter'].map((key,i)=>cell(i?'Nuevo':'Anterior',amount(r[key])===null?'—':number.format(r[key]))).join(''):'')+
-          cell('Responsable',esc(actor(e))+(e.type==='delivery'||e.type==='income'||e.type==='returned'?small(recipient?(e.type==='income'?'Trae: ':e.type==='returned'?'Devuelve: ':'Recibe: ')+recipient:'')+small(r.shiftKeeperName?'Bodeguero/a: '+r.shiftKeeperName:''):''))+(canReverse?cell('Acción',!e.reversed&&!r.assetId&&['income','delivery'].includes(e.type)&&norm(r.deliveryType)!=='prestamo'&&r.syncState!=='pending'?'<button type="button" data-reverse-id="'+esc(r.id)+'" data-source="'+e.source+'">Revertir</button>':''):'')+'</tr>';
+          personCell('Persona del movimiento',isMovement&&recipient,recipientRole)+personCell('Bodeguero/a de turno',isMovement&&r.shiftKeeperName)+
+          cell('Registró / solicitó',esc(actor(e)))+(canReverse?cell('Acción',!e.reversed&&!r.assetId&&['income','delivery'].includes(e.type)&&norm(r.deliveryType)!=='prestamo'&&r.syncState!=='pending'?'<button type="button" data-reverse-id="'+esc(r.id)+'" data-source="'+e.source+'">Revertir</button>':''):'')+'</tr>';
       }).join('')+'</tbody></table>':'';
       find('.ledgerPages').hidden=rows.length<=size;find('[data-prev]').disabled=page===0;find('[data-next]').disabled=limit===rows.length;
     }
