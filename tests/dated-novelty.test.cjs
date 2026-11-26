@@ -252,3 +252,77 @@ test('eliminar y registrar la misma novedad al mismo minuto conserva solo la seg
   assert.equal(s.get().novelties.find(row=>row.id==='original').deleted,true);
  }
 });
+
+async function syncDevice(server,device,role){
+ const {ctx}=device,window=ctx.window;
+ Object.assign(window.SKAdminAuth,{isAdmin:()=>role==='admin',ready:()=>true,token:()=>role});
+ window.SK_SYNC_CONFIG={apiUrl:'https://script.google.com/macros/s/test/exec'};
+ window.writeSyncedSnapshot=async(data,sent)=>{
+  for(const name of ['novelties','assets'])await ctx.replaceStoreRows(name,data[name],sent[name]);
+ };
+ const status={};
+ ctx.document.querySelector=selector=>selector==='#syncStatus'?status:null;
+ Object.assign(ctx,{navigator:{onLine:true},AbortController,setTimeout,clearTimeout,CustomEvent:class{},
+  localStorage:{getItem:()=>null,setItem(){},removeItem(){}},seedParts:async()=>{},
+  fetch:async(_,options)=>{
+   const {data}=JSON.parse(options.body);
+   try{return {ok:true,json:async()=>server.sync(data.novelties,role,data.assets)};}
+   catch(error){return {ok:true,json:async()=>({ok:false,error:error.message})};}
+  }});
+ vm.runInContext(read('sync-api.js'),ctx);
+ await window.skSyncApi.sync({silent:true});
+ return status.textContent;
+}
+
+test('el funcionario sincroniza la novedad de reemplazo aunque su copia conserve la eliminada',async()=>{
+ const s=service(),device=await localReversals(),old=event('original','2026-11-20','10:00');
+ s.sync([old]);
+ const staleAsset=copy(s.get().assets[0]);
+ await device.ctx.put('assets',staleAsset);await device.ctx.put('novelties',s.get().novelties[0]);
+ s.sync([cancel(s.get().novelties[0],'delete')],'admin');
+ const newer={...old,id:'nueva',estado:'En reparación'};
+ newer.historyOnly=!history.applyDatedNovelty(staleAsset,newer);
+ assert.equal(newer.historyOnly,true);
+ await device.ctx.put('novelties',newer);
+ await syncDevice(s,device,'assistant');
+ assert.equal(s.get().assets[0].currentNoveltyId,newer.id);
+ assert.equal(s.get().novelties.find(row=>row.id===newer.id).historyOnly,false);
+ assert.deepEqual(history.timeline({novelties:await device.ctx.all('novelties')}).map(entry=>[entry.raw.id,entry.pending]),[[newer.id,false]]);
+ await syncDevice(s,device,'assistant');
+ assert.equal(s.get().novelties.length,2);
+});
+
+test('una eliminación pendiente del administrador no bloquea novedades independientes del funcionario',async()=>{
+ const other={...yt,id:'otro-activo',serial:'otro-serial'};
+ const s=service({assets:[yt,other]}),device=await localReversals();
+ s.sync([event('anterior','2026-11-20','10:00')]);
+ for(const asset of s.get().assets)await device.ctx.put('assets',asset);
+ await device.ctx.put('novelties',s.get().novelties[0]);
+ await device.ui.changeNovelty('anterior','delete');
+ const next=event('nueva','2026-11-21','10:01',{assetId:other.id});
+ await device.ctx.put('novelties',next);
+ await syncDevice(s,device,'assistant');
+ assert.equal(s.get().novelties.find(row=>row.id===next.id)?.registeredBy,'test');
+ assert.equal(s.get().novelties.find(row=>row.id==='anterior').deleted,undefined);
+ assert.equal((await device.ctx.all('novelties')).find(row=>row.id==='anterior').syncState,'pending');
+ await syncDevice(s,device,'admin');
+ assert.equal(s.get().novelties.find(row=>row.id==='anterior').deleted,true);
+});
+
+test('un auxiliar recupera la confirmación perdida de la eliminación y luego envía la nueva novedad del mismo activo',async()=>{
+ const s=service(),device=await localReversals();
+ s.sync([event('borrada','2026-11-20','10:00')]);
+ await device.ctx.put('assets',s.get().assets[0]);await device.ctx.put('novelties',s.get().novelties[0]);
+ await device.ui.changeNovelty('borrada','delete');
+ const [action]=await device.ctx.all('novelties');
+ s.sync([action],'admin'); // La respuesta no llegó al dispositivo compartido.
+ const next=event('nueva','2026-11-20','10:00');
+ await device.ctx.put('novelties',next);
+ await syncDevice(s,device,'assistant');
+ const rows=await device.ctx.all('novelties');
+ assert.equal(rows.find(row=>row.id===action.id).syncState,'synced');
+ assert.equal(rows.find(row=>row.id===next.id).syncState,'pending');
+ await syncDevice(s,device,'assistant');
+ assert.equal(s.get().assets[0].currentNoveltyId,next.id);
+ assert.deepEqual(history.timeline(s.get()).map(entry=>entry.raw.id),[next.id]);
+});

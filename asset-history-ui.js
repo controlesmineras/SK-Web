@@ -132,12 +132,31 @@
    if(!menu.hidden)draw();
   };
  }
- let updateAssetFilter,listVersion=0,reveal=null;
+ let updateAssetFilter,listVersion=0,reveal=null,justSaved='';
+ function selectSavedRow(row,assets){
+  const select=document.querySelector('#novFilterAsset');
+  updateAssetFilter??=historyAssetPicker(select);
+  updateAssetFilter(assets,row.assetId);
+  document.querySelector('#novFilterFrom').value=row.fechaNovedad;
+  document.querySelector('#novFilterTo').value=row.fechaNovedad;
+  reveal={id:row.id,assetId:row.assetId,date:row.fechaNovedad,focus:true};
+ }
  async function renderList(_rows,assets){
   const ticket=++listVersion;
   const [data,actas]=await Promise.all([read(),all('actas')]);
   if(ticket!==listVersion)return;
   const list=document.querySelector('#noveltyList');if(!list)return;
+  const receipt=document.querySelector('#noveltySaveStatus');
+  if(receipt?.dataset?.noveltyId){
+   const row=data.novelties.find(item=>item.id===receipt.dataset.noveltyId);
+   if(row){
+    window.SKNoveltyForm?.renderSaveStatus?.(receipt,row,assets.find(asset=>asset.id===row.assetId));
+    if(justSaved===row.id){
+     justSaved='';
+     if(!row.deleted)selectSavedRow(row,assets);
+    }
+   }
+  }
   const from=document.querySelector('#novFilterFrom')?.value||'',to=document.querySelector('#novFilterTo')?.value||'',select=document.querySelector('#novFilterAsset'),assetMap=new Map(assets.map(row=>[row.id,row])),actaMap=new Map(actas.map(row=>[row.id,row]));
   if(select){updateAssetFilter??=historyAssetPicker(select);updateAssetFilter(assets);}
   const assetId=select?.value||'';
@@ -149,19 +168,14 @@
   if(reveal?.focus&&position>=0){
    const entry=document.getElementById('saved-novelty-'+reveal.id);
    reveal.focus=false;
-   entry.focus({preventScroll:true});entry.scrollIntoView({block:'center'});
+   if(entry.closest('.view')?.classList.contains('active')){entry.focus({preventScroll:true});entry.scrollIntoView({block:'center'});}
   }
   await selectCurrent();
  }
  async function showSaved(id){
   const [row,assets]=await Promise.all([idbResult(db.transaction('novelties').objectStore('novelties').get(id)),all('assets')]);
   if(!row||row.deleted)throw new Error('Esta novedad ya no figura en el historial del dispositivo.');
-  const select=document.querySelector('#novFilterAsset');
-  updateAssetFilter??=historyAssetPicker(select);
-  updateAssetFilter(assets,row.assetId);
-  document.querySelector('#novFilterFrom').value=row.fechaNovedad;
-  document.querySelector('#novFilterTo').value=row.fechaNovedad;
-  reveal={id,assetId:row.assetId,date:row.fechaNovedad,focus:true};
+  selectSavedRow(row,assets);
   await renderList(null,assets);
  }
  async function selectCurrent(){await Promise.all([select('asset',document.querySelector('#assetForm [name="id"]')?.value),select('novelty',document.querySelector('#novAsset')?.value)]);}
@@ -197,7 +211,7 @@
    };
    await Promise.all([committed,write().catch(error=>{try{tx.abort()}catch{} throw error;})]);
    const status=document.querySelector('#noveltySaveStatus');
-   if(status){status.hidden=false;status.textContent=kind==='delete'?'✓ Novedad eliminada. Ficha recalculada.':'✓ Novedad revertida. Ficha recalculada.';}
+   if(status){status.removeAttribute?.('data-novelty-id');status.hidden=false;status.textContent=kind==='delete'?'✓ Novedad eliminada. Ficha recalculada.':'✓ Novedad revertida. Ficha recalculada.';}
    const showButton=document.querySelector('#noveltyShowSaved');if(showButton)showButton.hidden=true;
    window.dispatchEvent(new Event('skweb-local-change'));
    window.skSyncApi?.schedule?.(300);
@@ -211,7 +225,7 @@
   button.disabled=true;
   changeNovelty(button.dataset.noveltyId,button.dataset.noveltyAction).catch(error=>alert(error.message)).finally(()=>button.disabled=false);
  });
- window.SKAssetHistoryUI={read,show,select,renderList,showSaved,changeNovelty};
+ window.SKAssetHistoryUI={read,show,select,renderList,showSaved,changeNovelty,followSaved(id){justSaved=id}};
  window.addEventListener('load',()=>{
   const style=document.createElement('style');style.textContent='.assetHistory{margin:0 0 20px;padding:16px;border:1px solid #ccd8e0;border-radius:12px;background:#f8fafc}.assetHistory[hidden]{display:none}.assetHistory h3{margin:0 0 8px}.assetHistoryEntry{padding:12px 0;border-bottom:1px solid #dce4ea;overflow-wrap:anywhere}.assetHistoryEntry>b,.assetHistoryEntry>small{display:block;margin-bottom:5px}.assetHistoryEntry>small{line-height:1.45;color:#3c4b59}.assetHistoryEntry.isReversed{border-left:3px solid #ab6a21;padding-left:10px}.assetHistoryResult{padding:10px 0;border-bottom:1px solid #dce4ea}.assetHistoryResult button,.assetHistory .historyMore{margin-top:10px;width:auto}.assetHistoryEntry strong{font-weight:600}.noveltyActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.noveltyActions button{width:auto;font-size:.85rem;padding:8px 12px}';document.head.append(style);
   document.querySelector('#novAsset')?.addEventListener('change',event=>select('novelty',event.target.value).catch(console.error));
