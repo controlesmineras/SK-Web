@@ -188,15 +188,12 @@ function matchesItemSearch(text,number,query){
     input.addEventListener('focus',draw);input.addEventListener('input',()=>{select.value='';draw();refreshBalance();if(isDelivery)updateDeliveryFields();else select.dispatchEvent(new Event('change',{bubbles:true}))});input.addEventListener('keydown',event=>{if(event.key==='Escape')close()});menu.addEventListener('click',event=>{if(isRecent&&event.target.closest('[data-clear-item]')){select.value='';input.value='';close();select.dispatchEvent(new Event('change',{bubbles:true}));return}const button=event.target.closest('[data-item-id]');if(!button||button.disabled)return;const item=findItem(button.dataset.itemId);select.value=button.dataset.itemId;input.value=itemName(item);close();select.dispatchEvent(new Event('change',{bubbles:true}))});document.addEventListener('click',event=>{if(!label.contains(event.target))close()});label._refreshItemSearch=()=>{const item=findItem(select.value);if(item||menu.hidden)input.value=item?itemName(item):'';refreshBalance()};label._clearItemSearch=()=>{select.value='';input.value='';close();refreshBalance()};refreshBalance()}
   function refreshItemSearches(){document.querySelectorAll('.itemSearchField').forEach(label=>label._refreshItemSearch?.())}
   function clearItemSearch(form){form.elements.itemId.closest('label')?._clearItemSearch?.()}
-  function setupDeliveryForm(){const form=$('#deliveryForm'),itemLabel=form.elements.itemId.closest('label'),quantityLabel=form.elements.quantity.closest('label'),recipientLabel=$('#recipientSearch').closest('label'),submit=form.querySelector('button[type="submit"],button:not([type])');itemLabel.childNodes[0].textContent='SELECCIONE ELEMENTO A ENTREGAR';itemLabel.id='deliveryItemField';quantityLabel.id='deliveryQuantityField';recipientLabel.id='deliveryRecipientField';recipientLabel.childNodes[0].textContent='RECEPTOR';const assetLabelElement=document.createElement('label');assetLabelElement.id='deliveryAssetField';assetLabelElement.hidden=true;assetLabelElement.innerHTML='SELECCIONE EL ACTIVO ESPECÍFICO<select name="assetId" id="deliveryAssetId"><option value="">Seleccionar…</option></select>';itemLabel.after(assetLabelElement);const destination=form.elements.destination.closest('label'),notes=form.elements.notes.closest('label'),newButton=$('#newRecipientBtn'),editButton=$('#editRecipientBtn'),addButton=document.createElement('button'),draft=document.createElement('div');destination.id='deliveryDestinationField';destination.childNodes[0].textContent='¿DÓNDE VA A ESTAR EL ACTIVO?';form.elements.destination.add(new Option('Socavón','Socavón'));const levelField=document.createElement('label');levelField.id='deliveryLevelField';levelField.hidden=true;levelField.innerHTML='NIVEL (OPCIONAL)<select name="destinationLevel"><option value="">Sin especificar</option>'+Array.from({length:15},(_,i)=>'<option value="'+(i+1)+'">Nivel '+(i+1)+'</option>').join('')+'</select>';form.elements.destination.addEventListener('change',()=>{if(form.elements.destination.dataset.assignmentArea==='1')form.elements.destination.dataset.manualArea='1';updateDestinationLevel()});notes.id='deliveryNotesField';addButton.type='button';addButton.id='addDeliveryItem';addButton.disabled=true;addButton.textContent='+ AGREGAR ELEMENTO';draft.id='deliveryDraft';draft.className='deliveryDraft';editButton.textContent='Editar colaborador';submit.type='submit';submit.disabled=true;submit.textContent='REGISTRAR ENTREGA';const actions=document.createElement('div'),cancel=document.createElement('button');actions.className='deliveryFormActions';cancel.type='button';cancel.id='cancelDeliveryBtn';cancel.textContent='CANCELAR';cancel.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();goBackPlaza()});actions.append(submit,cancel);const replacementField=document.createElement('fieldset');replacementField.id='deliveryReplacementField';replacementField.className='recipientCompany';replacementField.hidden=true;replacementField.disabled=true;replacementField.innerHTML='<legend>TRAE REPOSICIÓN</legend><label><input type="radio" name="bringsReplacement" value="yes"><span>SÍ</span></label><label><input type="radio" name="bringsReplacement" value="no"><span>NO</span></label><label><input type="radio" name="bringsReplacement" value="first"><span>PRIMERA ENTREGA</span></label>';const companyField=form.elements.recipientCompany[0].closest('fieldset');form.append(itemLabel,assetLabelElement,quantityLabel,replacementField,$("#deliveryWarehouseField"),companyField,recipientLabel,newButton,editButton,destination,levelField,notes,addButton,draft,actions);form.elements.itemId.addEventListener('change',()=>{
-      const item=findItem(form.elements.itemId.value);
-      if(item&&!isFixedItem(item)&&deliveryDraft.some(row=>!row.assetId&&row.itemId===item.id)){
-        clearItemSearch(form);
-        updateDeliveryFields();
-        showDuplicateDeliveryItem({itemId:item.id});
-        return;
+  function setupDeliveryForm(){const form=$('#deliveryForm'),itemLabel=form.elements.itemId.closest('label'),quantityLabel=form.elements.quantity.closest('label'),recipientLabel=$('#recipientSearch').closest('label'),submit=form.querySelector('button[type="submit"],button:not([type])');itemLabel.childNodes[0].textContent='SELECCIONE ELEMENTO A ENTREGAR';itemLabel.id='deliveryItemField';quantityLabel.id='deliveryQuantityField';recipientLabel.id='deliveryRecipientField';recipientLabel.childNodes[0].textContent='RECEPTOR';const assetLabelElement=document.createElement('label');assetLabelElement.id='deliveryAssetField';assetLabelElement.hidden=true;assetLabelElement.innerHTML='SELECCIONE EL ACTIVO ESPECÍFICO<select name="assetId" id="deliveryAssetId"><option value="">Seleccionar…</option></select>';itemLabel.after(assetLabelElement);const destination=form.elements.destination.closest('label'),notes=form.elements.notes.closest('label'),newButton=$('#newRecipientBtn'),editButton=$('#editRecipientBtn'),addButton=document.createElement('button'),draft=document.createElement('div');destination.id='deliveryDestinationField';destination.childNodes[0].textContent='¿DÓNDE VA A ESTAR EL ACTIVO?';form.elements.destination.add(new Option('Socavón','Socavón'));const levelField=document.createElement('label');levelField.id='deliveryLevelField';levelField.hidden=true;levelField.innerHTML='NIVEL (OPCIONAL)<select name="destinationLevel"><option value="">Sin especificar</option>'+Array.from({length:15},(_,i)=>'<option value="'+(i+1)+'">Nivel '+(i+1)+'</option>').join('')+'</select>';form.elements.destination.addEventListener('change',()=>{if(form.elements.destination.dataset.assignmentArea==='1')form.elements.destination.dataset.manualArea='1';updateDestinationLevel()});notes.id='deliveryNotesField';addButton.type='button';addButton.id='addDeliveryItem';addButton.disabled=true;addButton.textContent='+ AGREGAR ELEMENTO';draft.id='deliveryDraft';draft.className='deliveryDraft';editButton.textContent='Editar colaborador';submit.type='submit';submit.disabled=true;submit.textContent='REGISTRAR ENTREGA';const actions=document.createElement('div'),cancel=document.createElement('button');actions.className='deliveryFormActions';cancel.type='button';cancel.id='cancelDeliveryBtn';cancel.textContent='CANCELAR';cancel.addEventListener('click',event=>{event.preventDefault();event.stopPropagation();goBackPlaza()});actions.append(submit,cancel);const replacementField=document.createElement('fieldset');replacementField.id='deliveryReplacementField';replacementField.className='recipientCompany';replacementField.hidden=true;replacementField.disabled=true;replacementField.innerHTML='<legend>TRAE REPOSICIÓN</legend><label><input type="radio" name="bringsReplacement" value="yes"><span>SÍ</span></label><label><input type="radio" name="bringsReplacement" value="no"><span>NO</span></label><label><input type="radio" name="bringsReplacement" value="first"><span>PRIMERA ENTREGA</span></label>';const companyField=form.elements.recipientCompany[0].closest('fieldset');form.append(itemLabel,assetLabelElement,quantityLabel,replacementField,$("#deliveryWarehouseField"),companyField,recipientLabel,newButton,editButton,destination,levelField,notes,addButton,draft,actions);form.dataset.deliveryMode=deliveryMode;arrangeDeliveryFields(form);form.elements.itemId.addEventListener('change',selectDeliveryItem);
+    draft.addEventListener('change',event=>{
+      const index=event.target.dataset.deliveryReplacement;
+      if(index!==undefined&&deliveryDraft[index]&&Object.hasOwn(replacementAnswers,event.target.value)){
+        deliveryDraft[index].bringsReplacement=replacementAnswers[event.target.value];
       }
-      updateDeliveryFields();
     });
     draft.addEventListener('input',event=>{
       const index=event.target.dataset.deliveryQuantity;
@@ -204,7 +201,17 @@ function matchesItemSearch(text,number,query){
       const row=deliveryDraft[index];
       if(row&&!row.assetId)row.quantity=event.target.value===''?'':event.target.valueAsNumber;
     });
-    addButton.addEventListener('click',addDeliveryItem);draft.addEventListener('click',event=>{const button=event.target.closest('[data-remove-delivery]');if(!button)return;deliveryDraft.splice(Number(button.dataset.removeDelivery),1);renderDeliveryDraft();updateDeliveryFields()})}
+    addButton.addEventListener('click',addDeliveryItem);
+    draft.addEventListener('click',event=>{
+      const button=event.target.closest('[data-remove-delivery]');if(!button)return;
+      const index=Number(button.dataset.removeDelivery);
+      deliveryDraft.splice(index,1);renderDeliveryDraft();updateDeliveryFields();
+      if(deliveryMode==='assignment'){
+        const next=draft.children[Math.min(index,deliveryDraft.length-1)]||itemLabel.querySelector('.itemSearchInput');
+        next?.focus();
+      }
+    });
+  }
   function assignmentAreas(){
     const record=(data.inventoryCriteria||[]).find(row=>row.id==='SYSTEM-FORM-OPTIONS-V1'||row.recordType==='formOptions');
     const configured=record?.options?.['personal.area'],fallback=['Seguridad física','Desmin - Obras civiles','Producción','Producción - Selectivo (Corteros)','Administrativa'];
@@ -284,18 +291,30 @@ function matchesItemSearch(text,number,query){
     else{assetSelect.value='';assetSelect.dispatchEvent(new Event('change',{bubbles:true}));if(!loan)form.elements.notes.value='';if(!form.elements.quantity.value)form.elements.quantity.value='1'}
     $('#deliveryAssetField')._refreshAssetSearch?.();
   }
+  function arrangeDeliveryFields(form){
+    const company=form.elements.recipientCompany[0].closest('fieldset'),draft=$('#deliveryDraft');
+    const itemFields=[$('#deliveryItemField'),...form.querySelectorAll(':scope > .spareItemField')];
+    if(deliveryMode==='assignment'){
+      // El bloque del receptor incluye las coincidencias y la opción de registrar personal.
+      $('#deliveryDestinationField').before(company,draft,...itemFields);
+      return;
+    }
+    form.querySelector('.plazaMovementTime').after(...itemFields);
+    form.querySelector('.deliveryFormActions').before(draft);
+    const quantity=$('#deliveryQuantityField'),replacement=$('#deliveryReplacementField');
+    if(deliveryMode==='loan'){
+      itemFields[0].before(company);
+      $('#editRecipientBtn').after(quantity,replacement);
+    }else{
+      ($('#deliveryAssetDetails')||$('#deliveryAssetField')).after(quantity,replacement,company);
+    }
+  }
   function openDeliveryMode(mode){
-    $('#deliveryForm').dataset.deliveryMode=mode;
+    const form=$('#deliveryForm');
+    form.dataset.deliveryMode=mode;
     if(deliveryMode!==mode){
       discardDeliveryForm();deliveryMode=mode;
-      const form=$('#deliveryForm'),company=form.elements.recipientCompany[0].closest('fieldset');
-      const item=$('#deliveryItemField'),quantity=$('#deliveryQuantityField'),replacement=$('#deliveryReplacementField');
-      if(mode==='loan'){
-        item.before(company);
-        $('#editRecipientBtn').after(quantity,replacement);
-      }else{
-        ($('#deliveryAssetDetails')||$('#deliveryAssetField')).after(quantity,replacement,company);
-      }
+      arrangeDeliveryFields(form);
       clearItemSearch(form);
     }
     $('#deliveryForm').elements.itemId.innerHTML=options(deliveryCatalog(),item=>itemName(item)||'Elemento');
@@ -324,7 +343,49 @@ function matchesItemSearch(text,number,query){
     const whole=wholeDeliveryUnits(findItem(row.itemId));
     return `<label class="draftQuantity">Cantidad <input type="number" aria-label="Cantidad de ${esc(row.itemName)}" data-delivery-quantity="${index}" required min="${whole?'1':'0.01'}" step="${whole?'1':'any'}" value="${esc(row.quantity)}"></label>`;
   }
-  function renderDeliveryDraft(){const host=$('#deliveryDraft');$('#deliveryForm').elements.itemId.required=false;host.innerHTML=deliveryDraft.length?`<p><b>${deliveryDraft.length} ${deliveryDraft.length===1?'elemento agregado':'elementos agregados'}</b></p>${deliveryDraft.map((row,index)=>`<article><span><b>${esc(row.itemName)}</b>${deliveryDraftQuantity(row,index)}${row.destination?`<small>Ubicación: ${esc(row.destination)}</small>`:''}${row.deliveryType?`<small>Tipo de entrega: ${esc(row.deliveryType)}</small>`:''}${deliveryReplacementLabel(row)?`<small>Trae reposición: ${esc(deliveryReplacementLabel(row))}</small>`:''}</span><button type="button" data-remove-delivery="${index}">Quitar</button></article>`).join('')}`:`<p class="permission">Aún no has agregado elementos a ${deliveryMode==='loan'?'este préstamo':'esta entrega'}.</p>`}
+  function selectDeliveryItem(){
+    const form=$('#deliveryForm');
+    const item=findItem(form.elements.itemId.value);
+    if(item&&!isFixedItem(item)&&deliveryDraft.some(row=>!row.assetId&&row.itemId===item.id)){
+      clearItemSearch(form);
+      updateDeliveryFields();
+      showDuplicateDeliveryItem({itemId:item.id});
+      return;
+    }
+    if(item&&deliveryMode==='assignment'&&allowsDeliveryItem(item)){
+      deliveryDraft.push(stockDeliveryLine(item,1));
+      clearItemSearch(form);
+      renderDeliveryDraft();
+      updateDeliveryFields();
+      $('#deliveryDraft').lastElementChild?.focus();
+      return;
+    }
+    updateDeliveryFields();
+  }
+  function stockDeliveryLine(item,quantity){
+    return {itemId:item.id,itemName:itemRecordName(item),quantity,exitKind:'delivery',assetId:'',assetLabel:'',destination:'',notes:''};
+  }
+  function deliveryCard(row,index){
+    const item=findItem(row.itemId),unit=item?.unit||item?.CI_UNIDAD_MEDIDA||'unidades';
+    let replacement='';
+    if(replacementApplies(item,row)){
+      const choices=[['yes','SÍ'],['no','NO'],['first','PRIMERA ENTREGA']];
+      replacement='<fieldset class="recipientCompany cardReplacement"><legend>TRAE REPOSICIÓN</legend>'+choices.map(([value,label])=>
+        `<label><input type="radio" data-delivery-replacement="${index}" name="replacement-${index}" value="${value}" required ${row.bringsReplacement===replacementAnswers[value]?'checked':''}><span>${label}</span></label>`
+      ).join('')+'</fieldset>';
+    }
+    return `<article class="deliverySelectionCard" tabindex="-1" aria-labelledby="deliveryCardTitle-${index}">
+      <div class="deliveryCardHead"><h3 id="deliveryCardTitle-${index}">${esc(row.itemName)}</h3><button type="button" data-remove-delivery="${index}" aria-label="Quitar ${esc(row.itemName)}">Quitar</button></div>
+      <small>Existencia disponible: ${esc(itemAvailability(item))} ${esc(unit)}</small>
+      ${deliveryDraftQuantity(row,index)}${replacement}</article>`;
+  }
+  function renderDeliveryDraft(){const host=$('#deliveryDraft');$('#deliveryForm').elements.itemId.required=false;
+    if(deliveryMode==='assignment'){
+      host.hidden=!deliveryDraft.length;
+      host.innerHTML=deliveryDraft.map(deliveryCard).join('');
+      return;
+    }
+    host.hidden=false;host.innerHTML=deliveryDraft.length?`<p><b>${deliveryDraft.length} ${deliveryDraft.length===1?'elemento agregado':'elementos agregados'}</b></p>${deliveryDraft.map((row,index)=>`<article><span><b>${esc(row.itemName)}</b>${deliveryDraftQuantity(row,index)}${row.destination?`<small>Ubicación: ${esc(row.destination)}</small>`:''}${row.deliveryType?`<small>Tipo de entrega: ${esc(row.deliveryType)}</small>`:''}${deliveryReplacementLabel(row)?`<small>Trae reposición: ${esc(deliveryReplacementLabel(row))}</small>`:''}</span><button type="button" data-remove-delivery="${index}">Quitar</button></article>`).join('')}`:`<p class="permission">Aún no has agregado elementos a ${deliveryMode==='loan'?'este préstamo':'esta entrega'}.</p>`}
   function currentDeliveryItem(){
     const form=$('#deliveryForm'),item=findItem(form.elements.itemId.value),loan=deliveryMode==='loan';
     if(!item){alert(loan?'Selecciona el elemento a prestar.':'Selecciona el elemento a entregar.');return null}
@@ -342,7 +403,12 @@ function matchesItemSearch(text,number,query){
     if(error){alert(error);return null}
     if(fixed&&!form.elements.destination.value){alert('Selecciona dónde va a estar el activo.');return null}
     if(!fixed&&quantity>itemAvailability(item)){alert('La cantidad ingresada supera la disponibilidad');return null}
-    return{itemId:item.id,itemName:itemRecordName(item),quantity,...(deliveryMode==='assignment'?{exitKind:'delivery'}:{}),...(epp?{bringsReplacement:replacementAnswers[replacement]}:{}),assetId:asset?.id||'',assetLabel:asset?assetLabel(asset):'',...(deliveryMode==='warehouse'?{exitKind:'warehouse',destinationWarehouseId:'production',deliveryType:'TRASLADO A BODEGAS'}:loan?{deliveryType:'PRÉSTAMO',loanProtocol:1,unit:item.unit||item.CI_UNIDAD_MEDIDA||'Unidad'}:fixed?{deliveryType:'ASIGNACIÓN',destinationArea:matchedAssignmentArea(form.elements.destination.value.replace(/^Inventario de /,'')),destinationAreaMode:form.elements.destination.dataset.manualArea==='1'||form.elements.destination.value===externalAssetDestination?'manual':'recipient'}:{}),destination:deliveryDestination(form),notes:fixed||loan?form.elements.notes.value.trim():''};
+    if(deliveryMode==='assignment'&&!fixed){
+      const row=stockDeliveryLine(item,quantity);
+      if(epp)row.bringsReplacement=replacementAnswers[replacement];
+      return row;
+    }
+    return{itemId:item.id,itemName:itemRecordName(item),quantity,assetId:asset?.id||'',assetLabel:asset?assetLabel(asset):'',...(deliveryMode==='warehouse'?{exitKind:'warehouse',destinationWarehouseId:'production',deliveryType:'TRASLADO A BODEGAS'}:loan?{deliveryType:'PRÉSTAMO',loanProtocol:1,unit:item.unit||item.CI_UNIDAD_MEDIDA||'Unidad'}:fixed?{deliveryType:'ASIGNACIÓN',destinationArea:matchedAssignmentArea(form.elements.destination.value.replace(/^Inventario de /,'')),destinationAreaMode:form.elements.destination.dataset.manualArea==='1'||form.elements.destination.value===externalAssetDestination?'manual':'recipient'}:{}),destination:deliveryDestination(form),notes:fixed||loan?form.elements.notes.value.trim():''};
   }
   function addDeliveryItem(){const form=$('#deliveryForm');if(deliverySaving||!form.elements.itemId.value)return;const row=currentDeliveryItem();if(!row)return;deliveryDraft.push(row);clearItemSearch(form);form.elements.quantity.value='1';form.elements.destination.value='';delete form.elements.destination.dataset.manualArea;form.elements.destinationLevel.value='';form.elements.notes.value='';renderDeliveryDraft();updateDeliveryFields()}
   function setupIncomeForm(){const form=$('#incomeForm'),itemLabel=form.elements.itemId.closest('label'),quantityLabel=form.elements.quantity.closest('label'),notesLabel=form.elements.notes.closest('label'),personLabel=$('#incomeCollaboratorSearch').closest('label'),newButton=$('#newIncomeCollaborator'),editButton=$('#editIncomeCollaborator'),submit=form.querySelector('button[type="submit"],button:not([type])'),addButton=document.createElement('button'),draft=document.createElement('div');itemLabel.childNodes[0].textContent='SELECCIONE ELEMENTO A INGRESAR';itemLabel.id='incomeItemField';quantityLabel.id='incomeQuantityField';notesLabel.id='incomeNotesField';personLabel.childNodes[0].textContent='QUIÉN TRAE';addButton.type='button';addButton.id='addIncomeItem';addButton.disabled=true;addButton.textContent='+ AGREGAR ELEMENTO';draft.id='incomeDraft';draft.className='deliveryDraft';submit.textContent='REGISTRAR INGRESO';const cancel=document.createElement('button');cancel.type='button';cancel.id='cancelIncomeBtn';cancel.textContent='CANCELAR';cancel.addEventListener('click',goBackPlaza);const actions=document.createElement('div');actions.className='deliveryFormActions';actions.append(submit,cancel);form.append(itemLabel,quantityLabel,notesLabel,addButton,draft,personLabel,newButton,editButton,actions);addButton.addEventListener('click',addIncomeItem);form.elements.itemId.addEventListener('change',renderIncomeDraft);draft.addEventListener('click',event=>{const button=event.target.closest('[data-remove-income]');if(!button||incomeSaving)return;incomeDraft.splice(Number(button.dataset.removeIncome),1);renderIncomeDraft()})}
@@ -377,7 +443,7 @@ function matchesItemSearch(text,number,query){
   function validateDeliveryRecipient(recipientId,{announce=true}={}){const person=(data.personal||[]).find(row=>row.id===recipientId&&!row.deleted);if(!person){if(announce)alert('No se puede registrar la entrega porque el funcionario seleccionado no aparece en Personal. Busca y selecciona nuevamente el funcionario.');return false}const fields=deliveryRecipientIssues(person);if(!fields.length)return true;const name=person.nombre||person.documento||'El funcionario seleccionado',securityConflict=norm(person.area||person.AREA)==='seguridad fisica'&&norm(person.empresa||person.EMPRESA)==='desmin';window.SKPlaza?.showRecipientEdit?.(person.id,fields);if(announce){const cause=securityConflict?'La combinación EMPRESA DESMIN y ÁREA Seguridad física no es válida.':'Uno o más datos ya no coinciden con las opciones vigentes del formulario de Personal.';alert(`Hay información del funcionario por actualizar.\n\n${name}\n\n${cause}\n\nCampo${fields.length>1?'s':''} a actualizar: ${fields.join(', ').toUpperCase()}.\n\nUsa EDITAR COLABORADOR para corregir la información antes de registrar la entrega.`)}return false}
   function validateIncomeCollaborator(personId,{announce=true}={}){const person=incomeSource(personId);if(person===incomeSupplier)return true;if(!person){if(announce)alert('No se puede registrar el ingreso porque la persona seleccionada no aparece en Personal. Busca y selecciona nuevamente quién trae.');return false}const fields=deliveryRecipientIssues(person);if(!fields.length)return true;const name=person.nombre||person.documento||'La persona seleccionada',securityConflict=norm(person.area||person.AREA)==='seguridad fisica'&&norm(person.empresa||person.EMPRESA)==='desmin';window.SKPlaza?.showIncomeCollaboratorEdit?.(person.id,fields);if(announce){const cause=securityConflict?'La combinación EMPRESA DESMIN y ÁREA Seguridad física no es válida.':'Uno o más datos ya no coinciden con las opciones vigentes del formulario de Personal.';alert(`Hay información de quien trae por actualizar.\n\n${name}\n\n${cause}\n\nCampo${fields.length>1?'s':''} a actualizar: ${fields.join(', ').toUpperCase()}.\n\nUsa EDITAR COLABORADOR para corregir la información antes de registrar el ingreso.`)}return false}
   function recipientSnapshot(id){const person=(data.personal||[]).find(row=>row.id===id);return {recipientName:person?.nombre||[person?.primerNombre,person?.segundoNombre,person?.primerApellido,person?.segundoApellido].filter(Boolean).join(' '),recipientDocument:person?.documento||person?.document||'',recipientArea:person?.area||'',recipientCargo:person?.cargo||''}}
-  async function saveDeliveryBatch(form){if(deliverySaving||(!deliveryDraft.length&&!form.elements.itemId.value))return false;if(form.elements.itemId.closest?.('label')?._validateItemSearch?.()===false)return false;let shift;try{shift=movementShift()}catch(error){alert(error.message);return false}deliverySaving=true;updateDeliveryButtons(form);try{const recipientCompany=form.elements.recipientCompany.value,recipientCompanies=deliveryMode==='loan'?['SK','DESMIN','ARIS MINING']:['SK','DESMIN'];if(!recipientCompanies.includes(recipientCompany)){alert('Selecciona la EMPRESA RECEPTORA: '+recipientCompanies.join(', ')+'.');return false}const batch=deliveryDraft.map(row=>({...row}));if(form.elements.itemId.value){const row=currentDeliveryItem();if(!row)return false;batch.push(row)}if(!batch.length){alert('Agrega por lo menos un elemento a la entrega.');return false}if(batch.some(row=>!allowsDeliveryItem(findItem(row.itemId)))){alert('Un elemento ya no está habilitado para esta salida. Revisa el registro.');return false}if(recipientCompany==='ARIS MINING'&&batch.some(row=>norm(row.deliveryType)!=='prestamo')){alert('ARIS MINING solo está disponible para préstamos.');return false}const incompleteEpp=batch.find(row=>replacementApplies(findItem(row.itemId),row)&&!validReplacement(row.bringsReplacement));if(incompleteEpp){alert(`Falta TRAE REPOSICIÓN para ${incompleteEpp.itemName||itemName(findItem(incompleteEpp.itemId))}. Quita ese elemento y agrégalo nuevamente seleccionando SÍ, NO o PRIMERA ENTREGA.`);return false}for(const row of batch)if(!replacementApplies(findItem(row.itemId),row))delete row.bringsReplacement;if(batch.some(row=>row.deliveryType==='PRÉSTAMO'&&!permitsLoan(findItem(row.itemId)))){alert('Uno de los elementos ya no permite préstamo. Revisa Criterios de inventario.');return false}const recipientId=form.elements.recipientId.value;if(!recipientId){alert('Busca y selecciona el colaborador que recibe.');return false}if(!validateDeliveryRecipient(recipientId)){pendingDeliveryAfterCollaborator=true;return false}pendingDeliveryAfterCollaborator=false;const seen=new Set();
+  async function saveDeliveryBatch(form){if(deliverySaving||(!deliveryDraft.length&&!form.elements.itemId.value))return false;if(form.elements.itemId.closest?.('label')?._validateItemSearch?.()===false)return false;let shift;try{shift=movementShift()}catch(error){alert(error.message);return false}deliverySaving=true;updateDeliveryButtons(form);try{const recipientCompany=form.elements.recipientCompany.value,recipientCompanies=deliveryMode==='loan'?['SK','DESMIN','ARIS MINING']:['SK','DESMIN'];if(!recipientCompanies.includes(recipientCompany)){alert('Selecciona la EMPRESA RECEPTORA: '+recipientCompanies.join(', ')+'.');return false}const batch=deliveryDraft.map(row=>({...row}));if(form.elements.itemId.value){const row=currentDeliveryItem();if(!row)return false;batch.push(row)}if(!batch.length){alert('Agrega por lo menos un elemento a la entrega.');return false}if(batch.some(row=>!allowsDeliveryItem(findItem(row.itemId)))){alert('Un elemento ya no está habilitado para esta salida. Revisa el registro.');return false}if(recipientCompany==='ARIS MINING'&&batch.some(row=>norm(row.deliveryType)!=='prestamo')){alert('ARIS MINING solo está disponible para préstamos.');return false}const incompleteEpp=batch.find(row=>replacementApplies(findItem(row.itemId),row)&&!validReplacement(row.bringsReplacement));if(incompleteEpp){alert(`Falta TRAE REPOSICIÓN para ${incompleteEpp.itemName||itemName(findItem(incompleteEpp.itemId))}. Selecciona SÍ, NO o PRIMERA ENTREGA en su tarjeta.`);return false}for(const row of batch)if(!replacementApplies(findItem(row.itemId),row))delete row.bringsReplacement;if(batch.some(row=>row.deliveryType==='PRÉSTAMO'&&!permitsLoan(findItem(row.itemId)))){alert('Uno de los elementos ya no permite préstamo. Revisa Criterios de inventario.');return false}const recipientId=form.elements.recipientId.value;if(!recipientId){alert('Busca y selecciona el colaborador que recibe.');return false}if(!validateDeliveryRecipient(recipientId)){pendingDeliveryAfterCollaborator=true;return false}pendingDeliveryAfterCollaborator=false;const seen=new Set();
     for(const draft of batch){
       const key=deliveryLineKey(draft);
       if(seen.has(key)){showDuplicateDeliveryItem(draft);return false}
