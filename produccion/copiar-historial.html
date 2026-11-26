@@ -35,7 +35,7 @@
   const codigo = document.getElementById('codigo');
   async function preparar() {
     try {
-      const respuesta = await fetch('../backend/archivo-inventario/codigo-apps-script.txt', {cache:'no-store'});
+      const respuesta = await fetch('../backend/archivo-inventario/codigo-apps-script.txt?v=2', {cache:'no-store'});
       if (!respuesta.ok) throw Error();
       const completo = await respuesta.text();
       if (!completo.includes('async function activarHistorialInventario()') ||
