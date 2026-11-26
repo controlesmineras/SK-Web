@@ -35,7 +35,8 @@
       });
       menu.addEventListener('click',event=>{const button=event.target.closest('button');if(button&&!button.disabled){event.stopPropagation();choose(button)}});
       host.addEventListener('focusout',event=>{if(event.relatedTarget&&!host.contains(event.relatedTarget))close()});
-      document.addEventListener('click',event=>{if(!host.contains(event.target))close()});
+      // Al enfocar en móvil, la pantalla puede desplazarse antes de soltar el dedo.
+      document.addEventListener(form.id==='deliveryForm'?'pointerdown':'click',event=>{if(!host.contains(event.target))close()});
       return {input,menu,open,close};
     }
     function itemButton(item,index,prefix,query,short=false){
