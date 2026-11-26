@@ -1,6 +1,7 @@
 (()=>{
 const norm=v=>(v||'').toString().trim().toLowerCase(),txt=v=>(v??'').toString().trim();
-const usesNewMarkForm=form=>!!txt(form.elements.nuevaMarca?.value)&&norm(form.elements.nuevaMarca?.value)!=='no aplica'&&!/^(yt(?:\b|\d)|columnas?\b)/i.test(txt(form.elements.clase?.value));
+const isYtOrColumn=form=>/^(yt(?:\b|\d)|columnas?\b)/i.test(txt(form.elements.clase?.value));
+const usesNewMarkForm=form=>!!txt(form.elements.nuevaMarca?.value)&&norm(form.elements.nuevaMarca?.value)!=='no aplica'&&!isYtOrColumn(form);
 const isPreviousMark=(value,current)=>!!txt(value)&&norm(value)!=='no aplica'&&norm(value)!==norm(current);
 const CLASS_NUMBER_HELP='El número de clase indica el orden de llegada de los activos fijos dentro de su propia categoría. Por ejemplo, la categoría Motosierra lleva una numeración independiente de Pulidora, Rotomartillo y las demás categorías.';
 const classKey=value=>norm(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
@@ -34,17 +35,19 @@ function setAssetMode(editing){
 }
 function updatePreviousMarkFields(form,readOnly=false){
  const check=form.elements.hasPreviousMark,input=form.elements.marcaPrevia;if(!check||!input)return;
- const single=usesNewMarkForm(form),visible=single?isPreviousMark(input.value,form.elements.nuevaMarca.value):check.checked;
- check.closest('label').classList.toggle('criterion-disabled-field',single);check.disabled=readOnly||single;
- input.closest('label').classList.toggle('criterion-disabled-field',!visible);
- input.disabled=readOnly||!visible;input.readOnly=single;input.required=!single&&check.checked;
+ const single=usesNewMarkForm(form),equipment=isYtOrColumn(form);
+ const showCheck=!equipment&&!single;
+ const showInput=!equipment&&(single?isPreviousMark(input.value,form.elements.nuevaMarca.value):check.checked);
+ check.closest('label').classList.toggle('criterion-disabled-field',!showCheck);check.disabled=readOnly||!showCheck;
+ input.closest('label').classList.toggle('criterion-disabled-field',!showInput);
+ input.disabled=readOnly||!showInput;input.readOnly=single;input.required=showCheck&&check.checked;
 }
 function updateSerialFields(form,criterion,readOnly){
  const serial=form.elements.serial;if(!serial)return;
  const column=window.SKAssetRules.isColumn(form.elements.clase?.value);
  serial.closest('label').classList.toggle('criterion-disabled-field',column);serial.disabled=readOnly||column;serial.required=window.SKAssetRules.requiresSerial({clase:form.elements.clase?.value},criterion);
  const hint=form.querySelector('#assetIdentityHint');
- if(hint){const single=usesNewMarkForm(form);hint.textContent=serial.required?'El serial es obligatorio. Si desconoces el serial, selecciona «No registra».'+(single?'':' La marca anterior se registra aparte y no reemplaza el serial.'):'Esta clase no requiere serial.'+(single?'':' Activa «¿Tiene marca anterior?» únicamente si necesitas registrarla.');if(column)hint.hidden=true;}
+ if(hint){const hideMarkHelp=isYtOrColumn(form)||usesNewMarkForm(form);hint.textContent=serial.required?'El serial es obligatorio. Si desconoces el serial, selecciona «No registra».'+(hideMarkHelp?'':' La marca anterior se registra aparte y no reemplaza el serial.'):'Esta clase no requiere serial.'+(hideMarkHelp?'':' Activa «¿Tiene marca anterior?» únicamente si necesitas registrarla.');if(column)hint.hidden=true;}
 }
 function isRepair(f){const t=[f.elements.descripcionNovedad?.value,f.elements.estado?.value,f.elements.observaciones?.value].join(' ').toLowerCase();return /reparaci[oó]n|reparar/.test(t)}
 function suggestedMark(f){return norm(f.elements.clase?.value)==='yt'&&norm(f.elements.mina?.value)==='providencia'&&isRepair(f)?'P-AAA':''}
@@ -238,7 +241,9 @@ async function saveAsset(e){
   if(window.SKAssetRules.automaticNumberEligible(x.clase)){x.numeroYT=window.SKAssetRules.classNumber(rows,x);x.classNumberPolicy='auto-v1';}
   if(!txt(x.numeroYT))return alert('Ingresa el NÚMERO DE CLASE del activo.');
   if(!window.SKAssetRules.hasIdentity(x,criterion)){f.elements.serial?.focus();return alert('Ingresa el SERIAL o selecciona «No registra». La marca anterior no reemplaza el serial.');}
-  if(f.elements.hasPreviousMark&&!usesNewMarkForm(f)){
+  if(isYtOrColumn(f)){
+   delete x.marcaPrevia;
+  }else if(f.elements.hasPreviousMark&&!usesNewMarkForm(f)){
    x.marcaPrevia=f.elements.hasPreviousMark.checked?txt(f.elements.marcaPrevia.value):'';
    if(f.elements.hasPreviousMark.checked&&!x.marcaPrevia){f.elements.marcaPrevia.focus();return alert('Ingresa la MARCA ANTERIOR o desmarca «¿Tiene marca anterior?» si el equipo no tiene una.');}
   }

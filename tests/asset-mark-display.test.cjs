@@ -47,10 +47,14 @@ test('guardar conserva las marcas históricas y no copia la nueva sobre ellas',a
   assert.equal(s.saved[0].syncState,'pending');assert.equal(s.saved[0].serial,'105152');
  }
 });
-test('YT28, YT29 y sus columnas mantienen sus campos de identificación',()=>{
+test('YT28, YT29 y sus columnas conservan sus marcas al guardar sin la casilla de marca anterior',async()=>{
  for(const clase of ['YT','Columna'])for(const modelo of ['28','29']){
   const s=app({clase,modelo,marcaActual:'LIII',marcaInterna:'LIII',marcaAnterior:'53',numeroMarcaActual:'53',marcaPrevia:'ANTERIOR'});s.update();
-  assert.equal(s.labels.nuevaMarca.title.textContent,'NUEVA MARCA');assert.equal(s.labels.marcaInterna.title.textContent,'MARCA');assert.equal(s.hidden('marcaInterna'),false);assert.equal(s.hidden('marcaPrevia'),false);
+  assert.equal(s.labels.nuevaMarca.title.textContent,'NUEVA MARCA');assert.equal(s.labels.marcaInterna.title.textContent,'MARCA');assert.equal(s.hidden('marcaInterna'),false);
+  assert.equal(s.hidden('hasPreviousMark'),true);assert.equal(s.inputs.hasPreviousMark.disabled,true);
+  assert.equal(s.hidden('marcaPrevia'),true);assert.equal(s.inputs.marcaPrevia.required,false);
+  s.inputs.marcaPrevia.value='';await s.save();assert.equal(s.saved.length,1,s.alerts.join('\n'));
+  for(const name of ['marcaPrevia','marcaActual','marcaInterna','numeroMarcaActual','marcaAnterior'])assert.equal(s.saved[0][name],s.values[name],name);
   const html=s.detail();assert.match(html,/<dt>MARCA<\/dt><dd>LIII<\/dd>/);assert.match(html,/<dt>No. de marca actual<\/dt><dd>53<\/dd>/);
  }
 });
