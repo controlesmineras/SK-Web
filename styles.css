@@ -309,13 +309,32 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
 #assetLatestSummary dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.45rem .8rem;margin:.5rem 0 0}
 #assetLatestSummary dt{font-size:.78rem;font-weight:650;color:#526777}
 #assetLatestSummary dd{margin:.1rem 0 0;overflow-wrap:anywhere}
+#assetAdminList .assetRow{font-size:.91rem}
+#assetAdminList .assetRow small{font-size:.8rem}
 @media(min-width:721px){
-  #assets .adminSplit{gap:.65rem}
+  #assets .adminSplit{grid-template-columns:minmax(0,34%) minmax(0,1fr);gap:.65rem}
   #assets .adminSplit>aside,#assets .editor{padding:.6rem}
-  #assetForm{gap:.45rem .65rem}
+  #assetForm{
+    --control-height:2.25rem;
+    --caption-gap:.2rem;
+    grid-template-columns:repeat(auto-fill,minmax(min(100%,11.75rem),1fr));
+    align-items:start;
+    gap:.45rem .65rem;
+  }
   #assetForm .formSection{margin:.1rem 0 0;padding:.35rem .6rem}
-  #assetForm label{gap:.2rem;line-height:1.2}
-  #assetForm :is(input:not([type="checkbox"]):not([type="radio"]),select){min-height:36px;padding:.35rem .5rem}
+  #assetForm label,#assetForm .assetModelField legend{line-height:1.2}
+  #assetForm label{gap:var(--caption-gap)}
+  #assetForm .assetModelField legend{margin-bottom:var(--caption-gap)}
+  #assetForm :where(input:not([type="checkbox"],[type="radio"],.skCalendarSource,.skCalendarPicker,.skCalendarEditor),select){
+    min-height:var(--control-height);padding:.35rem .5rem;
+  }
+  #assetForm .assetModelChoices label{min-height:var(--control-height);padding:.25rem .5rem;gap:.4rem}
+  #assetForm>.assetPreviousMarkCheck{margin-top:calc(.88rem * 1.2 + var(--caption-gap));min-height:var(--control-height)}
+  #assetForm .skCalendarControls{min-height:var(--control-height)}
+  #assetForm :is(.skCalendarText,.skCalendarEditor,.skCalendarIcon){
+    height:calc(var(--control-height) - 2px);min-height:0;
+  }
+  #assetForm .skCalendarMirror,#assetForm .skCalendarEditor{padding-inline:.5rem}
   #assetAdminList{margin-top:.3rem}
   #assetAdminList .assetRow{min-height:42px;padding:.35rem .55rem;line-height:1.18}
   #assetAdminList .assetRow small{margin-top:.12rem;line-height:1.15}
