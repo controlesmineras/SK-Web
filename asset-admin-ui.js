@@ -3,7 +3,7 @@ const norm=v=>(v||'').toString().trim().toLowerCase(),txt=v=>(v??'').toString().
 const isYtOrColumn=form=>/^(yt(?:\b|\d)|columnas?\b)/i.test(txt(form.elements.clase?.value));
 const usesNewMarkForm=form=>!!txt(form.elements.nuevaMarca?.value)&&norm(form.elements.nuevaMarca?.value)!=='no aplica'&&!isYtOrColumn(form);
 const isPreviousMark=(value,current)=>!!txt(value)&&norm(value)!=='no aplica'&&norm(value)!==norm(current);
-const CLASS_NUMBER_HELP='El número de clase indica el orden de llegada de los activos fijos dentro de su propia categoría. Por ejemplo, la categoría Motosierra lleva una numeración independiente de Pulidora, Rotomartillo y las demás categorías.';
+const CLASS_NUMBER_HELP='El número de clase indica el orden de llegada de los activos fijos dentro de su categoría y mina propietaria. Por ejemplo, la categoría Motosierra lleva una numeración independiente de Pulidora, Rotomartillo y las demás categorías.';
 const classKey=value=>norm(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
 const autoClassNumber=value=>/^taladros? inalambricos?$/.test(classKey(value));
 const nextDrillNumber=(rows,clase)=>String(rows.filter(row=>classKey(row.clase)===classKey(clase)).reduce((max,row)=>{const value=txt(row.numeroClase||row.numeroYT||row.orden);return /^\d+$/.test(value)?Math.max(max,Number(value)):max},0)+1);
@@ -109,15 +109,14 @@ function updateModelControl(form,type){
   for(const model of ['28','29']){
    const label=document.createElement('label'),radio=document.createElement('input'),text=document.createElement('span');
    radio.type='radio';radio.name='_assetModelo';radio.value=model;radio.required=true;
-   radio.setAttribute('aria-label','Modelo '+model);radio.setAttribute('aria-describedby','assetModelHelp');
+   radio.setAttribute('aria-label','Modelo '+model);
    text.textContent=model;label.append(radio,text);choices.append(label);
    radio.addEventListener('change',()=>{if(radio.checked)replacement.value=radio.value;});
   }
-  const help=document.createElement('small');help.id='assetModelHelp';help.textContent='Selecciona 28 o 29. Obligatorio.';
-  group.append(choices,help);field.replaceWith(group);syncModelChoices(form);
+  group.append(choices);field.replaceWith(group);syncModelChoices(form);
  }else{
   replacement.type='text';replacement.placeholder='Ingresa el modelo…';
-  const label=document.createElement('label');label.textContent='MODELO';label.append(replacement);field.replaceWith(label);
+  const label=document.createElement('label'),caption=document.createElement('span');caption.textContent='MODELO';label.append(caption,replacement);field.replaceWith(label);
  }
 }
 function syncModelChoices(form){
@@ -223,7 +222,15 @@ async function hydrateEdit(){
 }
 window.SKAssetAdminUI={hydrateEdit};
 
-function duplicateAsset(rows,x,editing){const identityDuplicate=window.SKAssetRules.duplicateIdentity(rows,x);if(identityDuplicate)return{field:window.SKAssetRules.duplicateSerial(rows,x)?'SERIAL':'MARCA ANTERIOR',value:x.serial||x.marcaPrevia||x.marcaActual||x.marcaInterna,found:identityDuplicate};const cls=norm(x.clase),candidates=rows.filter(a=>!a.deleted&&norm(a.clase)===cls&&(!editing||a.id!==x.id));const serial=txt(x.serial),num=txt(x.numeroClase||x.numeroYT),mark=txt(x.marcaInterna||x.marcaActual);if(serial&&norm(serial)!=='no aplica'){const found=window.SKAssetRules.duplicateSerial(rows,x);if(found)return{field:'SERIAL',value:serial,found}}if(num&&norm(num)!=='no aplica'){const found=candidates.find(a=>norm(numberOf(a))===norm(num));if(found)return{field:'NÚMERO DE CLASE',value:num,found}}if(mark&&norm(mark)!=='no aplica'){const found=candidates.find(a=>norm(a.marcaActual||a.marcaInterna)===norm(mark));if(found)return{field:'MARCA ACTUAL',value:mark,found}}return null}
+function duplicateAsset(rows,asset,editing){
+ const rules=window.SKAssetRules,old=editing?rows.find(row=>row.id===asset.id):null;
+ const serial=rules.duplicateSerial(rows,asset);
+ if(serial)return {field:'SERIAL',value:asset.serial,found:serial};
+ const local=rules.mineIdentifierConflict(rows,asset,old);
+ if(local)return local;
+ const found=rules.duplicateIdentity(rows,asset);
+ return found?{field:'MARCA ANTERIOR',value:asset.marcaPrevia||asset.marcaActual||asset.marcaInterna,found}:null;
+}
 async function saveAsset(e){
  e.preventDefault();e.stopImmediatePropagation();if(assetSaving)return;
  if(e.currentTarget.dataset?.assetLoading)return alert('Espera a que termine de cargar la ficha antes de guardar. Si no carga, vuelve a abrir el activo.');

@@ -306,6 +306,12 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
 .assetOverviewTable td:first-child{font-weight:600}
 .assetOverviewTable[hidden]{display:none}
 
+#assetForm label:has(> :required:enabled:not([readonly]))>span:first-child::after,
+#assetForm .assetModelField:has(input:required:enabled)>legend::after {
+  content:" *" / "";
+  color:#bc2626;
+  font-weight:700;
+}
 #assetHistoryControls[hidden],#assetLatestSummary[hidden]{display:none}
 #assetLatestSummary dl{display:grid;grid-template-columns:repeat(auto-fit,minmax(9rem,1fr));gap:.45rem .8rem;margin:.5rem 0 0}
 #assetLatestSummary dt{font-size:.78rem;font-weight:650;color:#526777}

@@ -83,7 +83,7 @@ function incomeManufacturerControl(panel,item){
  if(!dropdown)recentManufacturerControl(control,itemName(item));
  if(dropdown){const brands=window.SKFormOptions?.values?.('asset.manufacturer.motosierra')||['Makita','Stihl'];control.replaceChildren(new Option('Seleccionar marca…',''),...brands.map(brand=>new Option(brand,brand)))}
 }
-function duplicate(rows,candidate){const identityDuplicate=window.SKAssetRules.duplicateIdentity(rows,candidate);if(identityDuplicate)return identityDuplicate;const type=norm(candidate.clase);return rows.find(asset=>!asset.deleted&&norm(asset.clase)===type&&asset.id!==candidate.id&&((candidate.numeroYT&&norm(assetNumber(asset))===norm(candidate.numeroYT))||(candidate.marcaInterna&&norm(asset.marcaInterna||asset.marcaActual)===norm(candidate.marcaInterna))))}
+function duplicate(rows,candidate){return window.SKAssetRules.duplicateIdentity(rows,candidate)||window.SKAssetRules.mineIdentifierConflict(rows,candidate)?.found}
 function injectStyle(){if(document.querySelector('#plazaNewAssetStyle'))return;const style=document.createElement('style');style.id='plazaNewAssetStyle';style.textContent=`#assetNotFoundBtn{grid-column:1/-1}.deliveryAssetDetails{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:10px;padding:14px;border:1px solid #ccd8e0;border-radius:11px;background:#f7f9fa}.deliveryAssetDetails[hidden]{display:none}.deliveryAssetDetails h3,.deliveryAssetDetails .assetRegisterHint,.deliveryAssetDetails .assetRegisterActions{grid-column:1/-1;margin:0}.deliveryAssetDetails label[hidden]{display:none}.deliveryAssetDetails select:disabled{background:#e9eef2;color:#52687a;opacity:1;cursor:default}.deliveryAssetDetails input[readonly]{background:#e9eef2;color:#52687a}.assetClassNumberField{position:relative}.assetFieldInfo{position:absolute;top:-5px;right:0;width:28px!important;height:28px!important;min-height:28px!important;padding:0!important;border:1px solid #1a4a68!important;border-radius:50%!important;background:#eef6fa!important;color:#173d59!important;font:700 16px/26px system-ui,sans-serif!important;text-align:center!important;box-shadow:none!important}.assetFieldInfo:focus-visible{outline:3px solid #8bc7e8;outline-offset:2px}.assetRegisterActions{display:flex;justify-content:center;gap:10px}.assetRegisterActions button{width:auto}.assetRegisterActions [data-cancel-new-asset]{background:#eef2f5;color:#173d59}@media(max-width:560px){.deliveryAssetDetails{grid-template-columns:1fr}}`;document.head.append(style)}
 function createAssetSummary(id){
  const card=document.createElement('article');
@@ -326,7 +326,7 @@ function mountIncome(){
  };
  const checkDraft=(draft,data,known)=>{
   const asset=draft.assetCandidate;
-  if(automaticClassNumber(asset.clase)){asset.numeroYT=nextClassNumber(asset.clase,known);asset.numeroClase=asset.numeroYT;}
+  if(automaticClassNumber(asset.clase)){asset.numeroYT=window.SKAssetRules.classNumber(known,asset);asset.numeroClase=asset.numeroYT;}
   const item=(data?.inventoryCriteria||[]).find(row=>row.id===draft.itemId);
   const issue=newAssetIssue(item,asset);
   if(issue)throw new Error(issue.message);
@@ -339,7 +339,14 @@ function mountIncome(){
  };
  const validateBatch=batch=>{
   const data=window.SKPlaza?.getData?.(),known=data?.assets||[],candidates=[],ids=new Set();
-  for(const draft of batch){if(draft.assetCandidate){checkDraft(draft,data,known.concat(candidates));draft.assetLabel=assetLabel(draft.assetCandidate);const found=duplicate(known.concat(candidates),draft.assetCandidate);if(found)throw new Error('El lote contiene un activo ya registrado o repetido. Revisa marca, serial y número de clase.');candidates.push(draft.assetCandidate)}else if(draft.assetId){if(ids.has(draft.assetId))throw new Error('Este activo ya está agregado al ingreso.');ids.add(draft.assetId);const asset=known.find(row=>row.id===draft.assetId&&!row.deleted);if(!asset)throw new Error('El activo seleccionado ya no está disponible.');const reason=blockedReason(asset);if(reason)throw new Error(reason)}}
+  for(const draft of batch){if(draft.assetCandidate){checkDraft(draft,data,known.concat(candidates));draft.assetLabel=assetLabel(draft.assetCandidate);const found=duplicate(known.concat(candidates),draft.assetCandidate);if(found)throw new Error('El lote contiene un activo ya registrado o repetido. Revisa marca, serial y número de clase.');candidates.push(draft.assetCandidate)}else if(draft.assetId){if(ids.has(draft.assetId))throw new Error('Este activo ya está agregado al ingreso.');ids.add(draft.assetId);const asset=known.find(row=>row.id===draft.assetId&&!row.deleted);if(!asset)throw new Error('El activo seleccionado ya no está disponible.');const reason=blockedReason(asset);if(reason)throw new Error(reason);
+   if(draft.incomeType==='TRASLADO'){
+    const target={...asset,mina:'Sandra K'},conflict=window.SKAssetRules.mineIdentifierConflict(known.concat(candidates),target,asset);
+    if(conflict)throw new Error(conflict.field+' '+conflict.value+' ya existe en Sandra K para la clase '+asset.clase+'.');
+    if(window.SKAssetRules.duplicateNewMark(known.concat(candidates),target))throw new Error('La marca de este activo ya existe en Sandra K.');
+    candidates.push(target);
+   }
+  }}
  };
  window.SKPlazaIncomeAsset={captureCurrent,commit,validateBatch};refresh();
 }

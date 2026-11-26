@@ -1,10 +1,41 @@
+function ownerMine(asset) {
+  const value=String(asset?.mina||'').trim()||String(asset?.minaOrigen||'').trim();
+  const key=value.normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/\s+/g,' ');
+  return !key||/^(?:sandrak|sk|sk37)$/.test(key.replace(/[.\s-]/g,''))?'sandra k':key;
+}
+function mineIdentifierConflict(rows,asset,old) {
+  if(asset.deleted)return null;
+  const key=value=>String(value??'').trim().toLowerCase(),type=key(asset.clase),mine=ownerMine(asset);
+  const sameGroup=row=>key(row.clase)===type&&ownerMine(row)===mine;
+  const number=row=>{
+    const value=key(row.numeroClase||row.numeroYT);
+    if(type==='yt'&&!/^(?:[a-z]+)?\d+$/.test(value)){
+      const legacy=[row.orden,row.numeroMarcaActual||row.marcaAnterior].map(key).find(v=>/^\d+$/.test(v));
+      return legacy||(/^[ivxlcdm]+$/.test(value)?'':value);
+    }
+    return value||key(row.orden);
+  };
+  const physical=row=>row.marcaActual||row.marcaInterna||(type==='yt'&&/^[ivxlcdm]+$/i.test(key(row.numeroYT))?row.numeroYT:'');
+  const markNumber=row=>row.numeroMarcaActual||row.marcaAnterior;
+  const fields=[['NÚMERO DE CLASE',number],['MARCA ACTUAL',physical]];
+  if(/^(?:yt(?:\b|\d)|columnas?\b)/.test(type))fields.push(['NÚMERO DE MARCA',markNumber]);
+  for(const [field,read] of fields){
+    const value=read(asset),token=key(value);
+    if(!token||token==='no aplica'||old&&sameGroup(old)&&key(read(old))===token)continue;
+    const found=rows.find(row=>row&&!row.deleted&&(!asset.id||row.id!==asset.id)&&sameGroup(row)&&key(read(row))===token);
+    if(found)return {field,value,found};
+  }
+  return null;
+}
+
 function automaticClassNumberEligible_(clase){return (value=>{const type=String(value??'').trim().toLowerCase();return !!type&&!/^(?:autorrescatador(?:es)?\b|yt(?:\b|\d)|columnas?\b)/i.test(type)})(clase);}
 
   function automaticClassNumber_(rows, asset) {
     const key=value=>String(value??'').trim().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/\s+/g,' ');
     const number=row=>String(row.numeroClase||row.numeroYT||row.orden||'').trim();
-    const peers=rows.filter(row=>key(row.clase)===key(asset.clase)),old=peers.find(row=>row.id&&row.id===asset.id);
+    const old=rows.find(row=>row.id&&row.id===asset.id&&key(row.clase)===key(asset.clase));
     if(old&&number(old))return number(old);
+    const peers=rows.filter(row=>key(row.clase)===key(asset.clase)&&ownerMine(row)===ownerMine(asset));
     const used=new Set(peers.map(number).filter(value=>/^\d+$/.test(value)).map(Number));
     if(old){const missing=peers.filter(row=>!number(row)).sort((a,b)=>String(a.createdAt||'').localeCompare(String(b.createdAt||''))||String(a.id).localeCompare(String(b.id)));let next=1;for(const row of missing){while(used.has(next))next++;if(row.id===asset.id)return String(next);used.add(next++);}}
     return String(Math.max(peers.length,0,...used)+1);
@@ -456,23 +487,31 @@ function marksCanCollide_(leftClass,rightClass){
 function markReservationClass_(entry,assets){
  return entry.assetClass||assets.get(entry.reservedForAssetId||entry.id)?.clase;
 }
+function reservationMine_(entry,assets){
+ const recorded=entry.ownerMine||entry.mine;
+ if(recorded)return ownerMine({mina:recorded});
+ const owner=assets.get(entry.reservedForAssetId||entry.id);
+ if(owner)return ownerMine(owner);
+ const prefixes={P:'Providencia',S:'El Silencio',C:'Carla',L:'Alianza'};
+ return ownerMine({mina:entry.scheme==='mine-prefix-v1'?prefixes[entry.prefix]:''});
+}
 function validateNewAssetMarks_(cloud,rows,registry){
  const code=value=>String(value??'').trim().toUpperCase(),previous=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row])),final=new Map(previous),owners=new Map();
- function reserve(value,id,clase){
+ function reserve(value,id,clase,mine){
   const mark=code(value);
   if(!id||!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark))return;
   if(!owners.has(mark))owners.set(mark,[]);
-  owners.get(mark).push({id,clase});
+  owners.get(mark).push({id,clase,mine});
  }
  for(const row of rows){const old=previous.get(row.id);final.set(row.id,old?.deleted?old:choose_(row,old))}
  // Conservar las reservas históricas, aunque el activo ya no esté en la lista visible.
- for(const row of registry)reserve(row.code,row.id,markReservationClass_(row,previous)||markReservationClass_(row,final));
- for(const row of [...previous.values(),...final.values()])for(const key of ['nuevaMarca','marcaActual','marcaInterna','marcaPrevia','marcaAnterior','numeroMarcaActual'])reserve(row[key],row.id,row.clase);
+ for(const row of registry)reserve(row.code,row.id,markReservationClass_(row,previous)||markReservationClass_(row,final),reservationMine_(row,previous));
+ for(const row of [...previous.values(),...final.values()])for(const key of ['nuevaMarca','marcaActual','marcaInterna','marcaPrevia','marcaAnterior','numeroMarcaActual'])reserve(row[key],row.id,row.clase,ownerMine(row));
  for(const input of rows){
   const row=final.get(input.id),old=previous.get(input.id);if(!row||row.deleted)continue;
   for(const field of ['nuevaMarca','marcaActual','marcaInterna']){
-   const mark=code(row[field]);if(!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark)||old&&markFamily_(old.clase)===markFamily_(row.clase)&&code(old[field])===mark)continue;
-   const owner=(owners.get(mark)||[]).find(other=>other.id!==row.id&&marksCanCollide_(row.clase,other.clase));
+   const mark=code(row[field]);if(!/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(mark)||old&&ownerMine(old)===ownerMine(row)&&markFamily_(old.clase)===markFamily_(row.clase)&&code(old[field])===mark)continue;
+   const owner=(owners.get(mark)||[]).find(other=>other.id!==row.id&&other.mine===ownerMine(row)&&marksCanCollide_(row.clase,other.clase));
    if(!owner)continue;
    const otherId=owner.id;
    const other=previous.get(otherId)||final.get(otherId),label=other?[other.clase,other.numeroClase||other.numeroYT,other.serial&&'Serial: '+other.serial].filter(Boolean).join(' · '):'otro activo del registro histórico';
@@ -483,37 +522,70 @@ function validateNewAssetMarks_(cloud,rows,registry){
 function assignAssetMarks_(cloud,rows,requestAuth){
  const registry=(Array.isArray(cloud.assetMarkRegistry)?cloud.assetMarkRegistry:[]).map(row=>Object.assign({},row,{code:String(row.code||'').trim().toUpperCase()}));
  const byId=new Map(registry.map(row=>[row.id,row])),existing=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
- const used=new Set(registry.map(row=>row.code));
- // Reservar también marcas físicas anteriores, incluso de activos dados de baja.
- (cloud.assets||[]).concat(rows).forEach(asset=>{if(!asset)return;['marcaInterna','marcaActual','nuevaMarca','marcaPrevia','marcaAnterior','numeroMarcaActual'].forEach(key=>{const value=String(asset[key]||'').trim().toUpperCase();if(/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(value))used.add(value)})});
- const sequenceOf=row=>row.scheme==='mine-prefix-v1'?-1:Math.max(Number.isInteger(row.sequence)?row.sequence:-1,/^[A-Z]{3}$/.test(row.code)?[...row.code].reduce((n,c)=>n*26+c.charCodeAt(0)-65,0):-1);
- let next=Math.max(-1,...registry.map(sequenceOf))+1,changed=false;
+ // Cada mina reserva sus propias marcas, incluidas las de fichas retiradas.
+ const sequences=new Map();
+ function sequenceFor(mine){
+  if(!sequences.has(mine))sequences.set(mine,{used:new Set(),next:0});
+  return sequences.get(mine);
+ }
+ function reserveEntry(entry,mine){
+  const sequence=sequenceFor(mine);
+  sequence.used.add(entry.code);
+  if(entry.scheme==='mine-prefix-v1'){
+   // Las antiguas marcas externas sin guion también se reservaron en la serie general.
+   if(/^[A-Z]{3}$/.test(entry.code))sequenceFor('sandra k').used.add(entry.code);
+   return;
+  }
+  const ordinal=/^[A-Z]{3}$/.test(entry.code)?[...entry.code].reduce((n,c)=>n*26+c.charCodeAt(0)-65,0):-1;
+  sequence.next=Math.max(sequence.next,ordinal+1,Number.isInteger(entry.sequence)?entry.sequence+1:0);
+ }
+ for(const entry of registry)reserveEntry(entry,reservationMine_(entry,existing));
+ for(const asset of existing.values()){
+  if(!byId.has(asset.id)&&asset.markingPolicy==='letters-v1'&&asset.markStatus==='assigned'&&asset.nuevaMarca){
+   reserveEntry({code:String(asset.nuevaMarca).trim().toUpperCase(),scheme:asset.markScheme,sequence:asset.markSequence},ownerMine(asset));
+  }
+ }
+ for(const asset of (cloud.assets||[]).concat(rows)){
+  if(!asset)continue;
+  const used=sequenceFor(ownerMine(asset)).used;
+  for(const key of ['marcaInterna','marcaActual','nuevaMarca','marcaPrevia','marcaAnterior','numeroMarcaActual']){
+   const code=String(asset[key]||'').trim().toUpperCase();
+   if(/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(code))used.add(code);
+   if(!asset.mina&&!asset.minaOrigen&&/^[PSCL]-[A-Z]{2}$/.test(code)){
+    const inferred=reservationMine_({scheme:'mine-prefix-v1',prefix:code[0]},existing);
+    sequenceFor(inferred).used.add(code);
+   }
+  }
+ }
+ let changed=false;
  const assets=rows.map(input=>{
   const asset=Object.assign({},input),old=existing.get(asset.id);
   // El registro de correcciones solo lo escribe la operación central autorizada.
   if(old&&Array.isArray(old.markCorrections))asset.markCorrections=old.markCorrections;else delete asset.markCorrections;
   let entry=byId.get(asset.id);
+  if(entry&&!entry.ownerMine&&!entry.mine&&old&&ownerMine(old)!==ownerMine(asset)){entry.ownerMine=ownerMine(old);changed=true;}
   const requested=asset.markingPolicy==='letters-v1',eligible=usesAutomaticAssetMark_(asset);
   const existingRequest=!!(old&&asset.markRequest==='existing-v1'&&canManageAssets_(requestAuth)&&!old.deleted&&!String(old.nuevaMarca||'').trim()&&usesAutomaticAssetMark_(old)&&eligible);
   // Un cliente antiguo o una edición no puede borrar/cambiar una marca ya emitida.
   if(!entry&&old&&old.markingPolicy==='letters-v1'&&old.markStatus==='assigned'&&/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(old.nuevaMarca||'')){
-   entry={id:old.id,assetClass:old.clase,code:old.nuevaMarca,sequence:old.markSequence,issuedAt:old.markAssignedAt,...(old.markScheme==='mine-prefix-v1'?{scheme:old.markScheme,prefix:old.markPrefix,mine:old.markMine}:{})};registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);next=Math.max(next,sequenceOf(entry)+1);
+   entry={id:old.id,assetClass:old.clase,ownerMine:ownerMine(old),code:old.nuevaMarca,sequence:old.markSequence,issuedAt:old.markAssignedAt,...(old.markScheme==='mine-prefix-v1'?{scheme:old.markScheme,prefix:old.markPrefix,mine:old.markMine}:{})};registry.push(entry);byId.set(entry.id,entry);reserveEntry(entry,ownerMine(old));changed=true;
   }
   if(!entry&&requested&&eligible&&(!old||old.markingPolicy==='letters-v1'&&old.markStatus==='pending'||existingRequest)){
+   const mine=ownerMine(asset),pool=sequenceFor(mine);
    const external=asset.incomeMarking===true&&asset.activoExterno===true&&repairIncomeClass_(asset.clase),prefix=external?externalMinePrefix_(asset.mina):'';
    if(external){
     if(!prefix)throw new Error('La mina de origen no tiene un prefijo de marcación configurado');
-    const legacySuffixes=new Set(registry.filter(row=>row.scheme==='mine-prefix-v1'&&row.prefix===prefix&&/^[A-Z]{3}$/.test(row.code||'')).map(row=>row.code.slice(1)));
+    const legacySuffixes=new Set(registry.filter(row=>row.scheme==='mine-prefix-v1'&&row.prefix===prefix&&reservationMine_(row,existing)===mine&&/^[A-Z]{3}$/.test(row.code||'')).map(row=>row.code.slice(1)));
     let sequence=0;const code=index=>prefix+'-'+String.fromCharCode(65+Math.floor(index/26),65+index%26);
-    while(sequence<676&&(used.has(code(sequence))||legacySuffixes.has(code(sequence).slice(2))))sequence++;
+    while(sequence<676&&(pool.used.has(code(sequence))||legacySuffixes.has(code(sequence).slice(2))))sequence++;
     if(sequence>=676)throw new Error('Se agotaron las marcas del prefijo '+prefix+' para '+asset.mina+'. Contacta al administrador.');
-    entry={id:asset.id,assetClass:asset.clase,code:code(sequence),sequence:sequence,issuedAt:new Date().toISOString(),scheme:'mine-prefix-v1',prefix:prefix,mine:asset.mina};
+    entry={id:asset.id,assetClass:asset.clase,ownerMine:mine,code:code(sequence),sequence:sequence,issuedAt:new Date().toISOString(),scheme:'mine-prefix-v1',prefix:prefix,mine:asset.mina};
    }else{
     // PAA (Sandra K) y P-AA (Providencia) son códigos distintos.
-    while(next<17576&&used.has(automaticAssetMarkCode_(next)))next++;
-    entry={id:asset.id,assetClass:asset.clase,code:automaticAssetMarkCode_(next),sequence:next,issuedAt:new Date().toISOString()};next++;
+    while(pool.next<17576&&pool.used.has(automaticAssetMarkCode_(pool.next)))pool.next++;
+    entry={id:asset.id,assetClass:asset.clase,ownerMine:mine,code:automaticAssetMarkCode_(pool.next),sequence:pool.next,issuedAt:new Date().toISOString()};
    }
-   registry.push(entry);byId.set(entry.id,entry);used.add(entry.code);changed=true;
+   registry.push(entry);byId.set(entry.id,entry);reserveEntry(entry,mine);changed=true;
   }
   if(entry){
    if(old&&old.markPreviousValues&&!existingRequest){
@@ -565,14 +637,14 @@ function adminCorrectAssetMark_(q,auth){
   if(code(old.nuevaMarca)!==expectedMark)throw new Error('La marca del activo cambió. Sincroniza y revisa la ficha antes de corregirla.');
   if(!usesAutomaticAssetMark_(old))throw new Error('Esta clase no usa la secuencia automática de marcas.');
   const assetById=new Map(assets.filter(Boolean).map(row=>[row.id,row]));
-  const duplicate=assets.some(row=>row&&row.id!==assetId&&marksCanCollide_(old.clase,row.clase)&&['nuevaMarca','marcaActual','marcaInterna'].some(key=>code(row[key])===expectedMark))||
-   registry.some(row=>row&&(row.reservedForAssetId||row.id)!==assetId&&code(row.code)===expectedMark&&marksCanCollide_(old.clase,markReservationClass_(row,assetById)));
+  const duplicate=assets.some(row=>row&&row.id!==assetId&&ownerMine(row)===ownerMine(old)&&marksCanCollide_(old.clase,row.clase)&&['nuevaMarca','marcaActual','marcaInterna'].some(key=>code(row[key])===expectedMark))||
+   registry.some(row=>row&&(row.reservedForAssetId||row.id)!==assetId&&code(row.code)===expectedMark&&reservationMine_(row,assetById)===ownerMine(old)&&marksCanCollide_(old.clase,markReservationClass_(row,assetById)));
   if(!duplicate)throw new Error('La base central no encontró otra asignación de esta marca. Se conserva la marca actual.');
   const timestamp=nextRevision_(old.updatedAt||old.createdAt),archiveId='mark-correction:'+assetId+':'+expectedMark;
   const priorEntries=registry.filter(row=>row.id===assetId),keptRegistry=registry.filter(row=>row.id!==assetId).map(row=>Object.assign({},row));
   const reserved=new Map();for(const entry of priorEntries)reserved.set(code(entry.code),entry);
   for(const key of ['nuevaMarca','marcaActual','marcaInterna']){const value=code(old[key]);if(/^(?:[A-Z]{3}|[A-Z]-[A-Z]{2})$/.test(value)&&!reserved.has(value))reserved.set(value,{code:value,sequence:old.markSequence,issuedAt:old.markAssignedAt,...(old.markScheme==='mine-prefix-v1'?{scheme:old.markScheme,prefix:old.markPrefix,mine:old.markMine}:{})});}
-  for(const [value,entry] of reserved)keptRegistry.push(Object.assign({},entry,{id:archiveId+':'+value,code:value,assetClass:entry.assetClass||old.clase,reservedForAssetId:assetId,retiredAt:timestamp,reason:'Corrección de marca duplicada'}));
+  for(const [value,entry] of reserved)keptRegistry.push(Object.assign({},entry,{id:archiveId+':'+value,code:value,assetClass:entry.assetClass||old.clase,ownerMine:entry.ownerMine||ownerMine(old),reservedForAssetId:assetId,retiredAt:timestamp,reason:'Corrección de marca duplicada'}));
   // Se reutiliza el mismo asignador y el mismo bloqueo que Admin y Plaza.
   const candidate=Object.assign({},old,{marcaInterna:'',marcaActual:'',nuevaMarca:'',markingPolicy:'letters-v1',markStatus:'pending',updatedAt:timestamp,syncState:'synced'});
   for(const key of ['markSequence','markAssignedAt','markScheme','markPrefix','markMine','markRequest'])delete candidate[key];
@@ -616,7 +688,7 @@ function prepareAssistantAsset_(row,cloud,known,auth){
  if(!hasAssetIdentity_(row,criterion))throw new Error('Ingresa el SERIAL real o «No registra». La marca anterior no reemplaza el serial.');const automatic=usesAutomaticAssetMark_(row);
  for(const [flag,field] of [['usesSerial','serial'],['usesLength','largo'],['usesModel','modelo'],['usesManufacturer','fabricante'],['requiresInternalMark','marcaInterna']])if(!['serial','marcaInterna'].includes(field)&&criterion[flag]&&!(automatic&&field==='marcaInterna')&&!text(row[field]))throw new Error('Falta un campo obligatorio del activo: '+field);
  for(const existing of known.values()){
-  if(existing.deleted||cargoNorm_(existing.clase)!==cargoNorm_(row.clase))continue;
+  if(existing.deleted||ownerMine(existing)!==ownerMine(row)||cargoNorm_(existing.clase)!==cargoNorm_(row.clase))continue;
   const same=(a,b)=>text(a)&&cargoNorm_(a)!=='no aplica'&&cargoNorm_(a)===cargoNorm_(b);
   if(same(number,existing.numeroClase||existing.numeroYT)||same(assetUniqueSerialKey_(row.serial),assetUniqueSerialKey_(existing.serial))||!automatic&&same(row.marcaActual||row.marcaInterna,existing.marcaActual||existing.marcaInterna))throw new Error('Este activo ya existe: revisa número de clase, serial y marca');
  }
@@ -809,22 +881,29 @@ function assetIdentityMark_(asset){return assetSerialKey_(asset.marcaPrevia||(!a
 function hasAssetIdentity_(asset,criterion){if(/^columnas?\b/i.test(String(asset.clase||'').trim())||criterion&&!truthy_(criterion.usesSerial??criterion.CI_USA_SERIAL))return true;const key=String(asset.serial??'').trim().toLowerCase().replace(/\s+/g,' ');return !!key&&!/^(?:no aplica|no trae serial|no es visible|sin serial|serial ilegible|ilegible|legible|no (?:es )?legible|no tiene(?: serial)?)$/.test(key);}
 function assetCriterion_(criteria,asset){return (criteria||[]).find(item=>item&&!item.deleted&&item.active!==false&&truthy_(item.isFixedAsset??item.esActivoFijo??item.CI_ES_A_FIJO)&&cargoNorm_(item.name||item.nombre||item.elemento||item.CI_ELEMENTO)===cargoNorm_(asset.clase));}
 function duplicateAssetIdentity_(rows,asset){
- const serial=assetUniqueSerialKey_(asset.serial),mark=assetIdentityMark_(asset),type=assetSerialKey_(asset.clase),mine=assetSerialKey_(asset.minaOrigen||asset.mina||'Sandra K');
- return rows.find(row=>row&&!row.deleted&&row.id!==asset.id&&((serial&&assetUniqueSerialKey_(row.serial)===serial)||(mark&&assetSerialKey_(row.clase)===type&&assetSerialKey_(row.minaOrigen||row.mina||'Sandra K')===mine&&[row.marcaPrevia,row.marcaActual,row.marcaInterna,row.nuevaMarca].some(value=>assetSerialKey_(value)===mark))))||null;
+ const serial=assetUniqueSerialKey_(asset.serial),mark=assetIdentityMark_(asset),type=assetSerialKey_(asset.clase),mine=ownerMine(asset);
+ return rows.find(row=>row&&!row.deleted&&row.id!==asset.id&&((serial&&assetUniqueSerialKey_(row.serial)===serial)||(mark&&assetSerialKey_(row.clase)===type&&ownerMine(row)===mine&&[row.marcaPrevia,row.marcaActual,row.marcaInterna,row.nuevaMarca].some(value=>assetSerialKey_(value)===mark))))||null;
 }
 function validateAssetSerials_(cloudAssets,changes,criteria=[]){
  const previous=new Map((cloudAssets||[]).filter(Boolean).map(row=>[row.id,row])),final=new Map(previous);
  for(const row of changes||[])if(row&&row.id){const old=previous.get(row.id);final.set(row.id,old?.deleted?old:choose_(row,old));}
+ const finalRows=Array.from(final.values());
  for(const row of changes||[]){
   if(!row?.id)continue;
   const saved=final.get(row.id),old=previous.get(row.id),serial=assetUniqueSerialKey_(saved?.serial);
   if(saved?.deleted)continue;if(/^dad[oa](?:\/[oa])? de baja$/.test(cargoNorm_(saved.estado))){saved.ubicacion='Desechado/a';row.ubicacion='Desechado/a';saved.disponibleEntrega='No';row.disponibleEntrega='No';}
   if(!hasAssetIdentity_(saved,assetCriterion_(criteria,saved)))throw new Error('Ingresa el SERIAL real o «No registra». La marca anterior no reemplaza el serial.');
-  if(!old||assetUniqueSerialKey_(old.serial)!==serial||assetIdentityMark_(old)!==assetIdentityMark_(saved)){
-   const identityDuplicate=duplicateAssetIdentity_(Array.from(final.values()),saved);if(identityDuplicate)throw new Error('El activo ya existe: serial o marca anterior repetidos.');
+  if(!old||ownerMine(old)!==ownerMine(saved)||assetSerialKey_(old.clase)!==assetSerialKey_(saved.clase)||assetUniqueSerialKey_(old.serial)!==serial||assetIdentityMark_(old)!==assetIdentityMark_(saved)){
+   const other=duplicateAssetIdentity_(finalRows,saved);
+   if(other){
+    if(serial&&assetUniqueSerialKey_(other.serial)===serial)throw new Error('El serial '+String(saved.serial).trim()+' ya existe en '+(other.mina||other.minaOrigen||'Sandra K')+'.');
+    throw new Error('Este activo ya existe: la marca '+assetIdentityMark_(saved).toUpperCase()+' ya pertenece a otro activo en '+(saved.mina||saved.minaOrigen||'Sandra K')+'.');
+   }
   }
+  const conflict=mineIdentifierConflict(finalRows,saved,old);
+  if(conflict)throw new Error(conflict.field+' '+conflict.value+' ya existe en '+(saved.mina||saved.minaOrigen||'Sandra K')+' para la clase '+saved.clase+'.');
   if(!serial||old&&!old.deleted&&assetUniqueSerialKey_(old.serial)===serial)continue;
-  const duplicate=Array.from(final.values()).find(other=>!other.deleted&&other.id!==row.id&&assetUniqueSerialKey_(other.serial)===serial);
+  const duplicate=finalRows.find(other=>!other.deleted&&other.id!==row.id&&assetUniqueSerialKey_(other.serial)===serial);
   if(duplicate)throw new Error('El serial '+String(saved.serial).trim()+' ya existe en: '+[duplicate.clase,duplicate.numeroClase||duplicate.numeroYT,duplicate.marcaActual||duplicate.marcaInterna].filter(Boolean).join(' · ')+'.');
  }
 }
@@ -1192,7 +1271,7 @@ function validatePlazaExit_(row,name,cloud,asset){
  if(row.deliveryType==='SALIDA A REPARACIÓN')asset.estado='En reparación';
  asset.ingresoTemporal=false;asset.asignadaId='';asset.areaAsignada='';
 }
-function receivePlazaAsset_(row,asset,cloud){
+function receivePlazaAsset_(row,asset,cloud,peers,registry){
   const location=String(asset.ubicacion||'').trim();
   delete row.receivedFromProduction;
   if(productionWarehouseLocation_(location)||/^(?:inventario de |bodega de )?produccion ·/.test(cargoNorm_(location))){
@@ -1205,12 +1284,21 @@ function receivePlazaAsset_(row,asset,cloud){
       throw new Error('Ya existe un ingreso de este activo desde Producción. Revisa su historial en Plaza antes de registrar otro.');
     }
   }
-  applyPlazaIncomeContext_(row,asset);
+  const received=Object.assign({},asset);
+  applyPlazaIncomeContext_(row,received);
+  if(ownerMine(received)!==ownerMine(asset)){
+    const conflict=mineIdentifierConflict(peers,received,asset);
+    if(conflict)throw new Error(conflict.field+' '+conflict.value+' ya existe en '+received.mina+' para la clase '+received.clase+'.');
+    validateNewAssetMarks_({assets:peers},[received],registry);
+    const entry=registry.find(entry=>entry.id===asset.id);
+    if(entry&&!entry.ownerMine&&!entry.mine)entry.ownerMine=ownerMine(asset);
+  }
+  Object.assign(asset,received);
   asset.ubicacion='Bodega de Superficie';
 }
 function applyPlazaChanges_(cloud,incoming,auth){
     const allowed={},stock=new Map((cloud.inventoryStock||[]).filter(x=>x&&x.itemId).map(x=>[x.itemId,Object.assign({},x)])),cloudAssets=Array.isArray(cloud.assets)?cloud.assets:[],pendingAssets=(Array.isArray(incoming.assets)?incoming.assets:[]).filter(x=>x&&x.id&&x.syncState==='pending'),assetIds=new Set(cloudAssets.map(x=>x.id).filter(Boolean)),acceptedAssets=[];
-    pendingAssets.forEach(input=>{if(assetIds.has(input.id)){const existing=cloudAssets.find(asset=>asset.id===input.id);if(existing&&existing.markingPolicy==='letters-v1'&&existing.markStatus==='pending'&&usesAutomaticAssetMark_(existing))acceptedAssets.push(Object.assign({},existing));return;}const asset=stampActor_(input,auth);if(asset.classNumberPolicy==='auto-v1'&&automaticClassNumberEligible_(asset.clase)){asset.numeroClase=automaticClassNumber_(cloudAssets.concat(acceptedAssets),asset);asset.numeroYT=asset.numeroClase;}const criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===asset.criteriaId&&!item.deleted&&item.active!==false);if(!criterion||!truthy_(criterion.isFixedAsset??criterion.esActivoFijo??criterion.CI_ES_A_FIJO))throw new Error('La clase seleccionada no está configurada como activo fijo');preparePlazaIncomeAsset_(asset);if(!hasAssetIdentity_(asset,criterion))throw new Error('Ingresa el SERIAL real o «No registra». La marca anterior no reemplaza el serial.');const required=[['usesSerial','serial','serial'],['usesLength','largo','largo'],['usesModel','modelo','modelo'],['usesManufacturer','fabricante','fabricante'],['requiresInternalMark','marcaInterna','marca interna']];if(!String(asset.numeroClase||asset.numeroYT||'').trim())throw new Error('Falta el número de clase del activo');required.forEach(rule=>{if(!['serial','marcaInterna'].includes(rule[1])&&truthy_(criterion[rule[0]])&&!(rule[1]==='marcaInterna'&&asset.markingPolicy==='letters-v1'&&usesAutomaticAssetMark_(asset))&&!String(asset[rule[1]]||'').trim())throw new Error('Falta '+rule[2]+' del activo')});const className=String(asset.clase||'').trim().toLowerCase(),number=String(asset.numeroClase||asset.numeroYT||'').trim().toLowerCase(),serial=assetUniqueSerialKey_(asset.serial),mark=String(asset.marcaInterna||asset.marcaActual||'').trim().toLowerCase(),duplicate=cloudAssets.concat(acceptedAssets).find(row=>row&&!row.deleted&&String(row.clase||'').trim().toLowerCase()===className&&((serial&&assetUniqueSerialKey_(row.serial)===serial)||(number&&String(row.numeroClase||row.numeroYT||'').trim().toLowerCase()===number)||(mark&&String(row.marcaInterna||row.marcaActual||'').trim().toLowerCase()===mark)));if(duplicate)throw new Error('El activo ya existe en la tabla de Activos fijos');asset.ubicacion='Bodega de Superficie';asset.syncState='synced';acceptedAssets.push(asset);assetIds.add(asset.id)});
+    pendingAssets.forEach(input=>{if(assetIds.has(input.id)){const existing=cloudAssets.find(asset=>asset.id===input.id);if(existing&&existing.markingPolicy==='letters-v1'&&existing.markStatus==='pending'&&usesAutomaticAssetMark_(existing))acceptedAssets.push(Object.assign({},existing));return;}const asset=stampActor_(input,auth);if(asset.classNumberPolicy==='auto-v1'&&automaticClassNumberEligible_(asset.clase)){asset.numeroClase=automaticClassNumber_(cloudAssets.concat(acceptedAssets),asset);asset.numeroYT=asset.numeroClase;}const criterion=(cloud.inventoryCriteria||[]).find(item=>item&&item.id===asset.criteriaId&&!item.deleted&&item.active!==false);if(!criterion||!truthy_(criterion.isFixedAsset??criterion.esActivoFijo??criterion.CI_ES_A_FIJO))throw new Error('La clase seleccionada no está configurada como activo fijo');preparePlazaIncomeAsset_(asset);if(!hasAssetIdentity_(asset,criterion))throw new Error('Ingresa el SERIAL real o «No registra». La marca anterior no reemplaza el serial.');const required=[['usesSerial','serial','serial'],['usesLength','largo','largo'],['usesModel','modelo','modelo'],['usesManufacturer','fabricante','fabricante'],['requiresInternalMark','marcaInterna','marca interna']];if(!String(asset.numeroClase||asset.numeroYT||'').trim())throw new Error('Falta el número de clase del activo');required.forEach(rule=>{if(!['serial','marcaInterna'].includes(rule[1])&&truthy_(criterion[rule[0]])&&!(rule[1]==='marcaInterna'&&asset.markingPolicy==='letters-v1'&&usesAutomaticAssetMark_(asset))&&!String(asset[rule[1]]||'').trim())throw new Error('Falta '+rule[2]+' del activo')});asset.ubicacion='Bodega de Superficie';asset.syncState='synced';acceptedAssets.push(asset);assetIds.add(asset.id)});
     validateAssetSerials_(cloud.assets||[],acceptedAssets,cloud.inventoryCriteria||[]);const marking=assignAssetMarks_(cloud,acceptedAssets);
     if(marking.assets.length)allowed.assets=marking.assets;
     const markedIds=new Set(marking.assets.map(asset=>asset.id)),workingAssets=cloudAssets.filter(asset=>!markedIds.has(asset.id)).concat(marking.assets),workingDeliveries=(cloud.blendingDeliveries||[]).slice();
@@ -1262,7 +1350,7 @@ function applyPlazaChanges_(cloud,incoming,auth){
           else if(name==='blendingDeliveries'){
             if(String(asset.ubicacion||'').toLowerCase()!=='bodega de superficie')throw new Error('El activo ya no está disponible en Bodega de Superficie');
             asset.ubicacion=row.destination||'Operación';
-          }else receivePlazaAsset_(row,asset,cloud);
+          }else receivePlazaAsset_(row,asset,cloud,workingAssets,marking.registry);
           asset.updatedAt=new Date().toISOString();
         }else{
           const current=stock.get(row.itemId)||{id:'stock-'+row.itemId,itemId:row.itemId,quantity:0},balanceBefore=Number(current.quantity)||0,next=balanceBefore+(name==='blendingIncomes'||isReturn?qty:-qty);row.balanceBefore=balanceBefore;row.balanceAfter=next;
@@ -1918,7 +2006,7 @@ function productionWarehouseApply_(data,central,request,user,actor,withShift){
   const peers=[...(central.assets||[]),...(data.warehouseMovements||[]).filter(row=>row.newAsset).map(row=>row.newAsset)];
   if(automaticClassNumberEligible_(newAsset.clase)){newAsset.classNumberPolicy='auto-v1';newAsset.numeroClase=automaticClassNumber_(peers,newAsset);}
   if(!newAsset.numeroClase)throw new Error('Falta el número de clase del activo.');
-  if(peers.some(row=>!row.deleted&&cargoNorm_(row.clase)===cargoNorm_(newAsset.clase)&&cargoNorm_(row.minaOrigen||row.mina||'Sandra K')===cargoNorm_(newAsset.minaOrigen)&&String(row.numeroClase||row.numeroYT||'')===newAsset.numeroClase))throw new Error('El número de clase ya pertenece a otro activo.');
+  if(peers.some(row=>!row.deleted&&cargoNorm_(row.clase)===cargoNorm_(newAsset.clase)&&ownerMine(row)===ownerMine(newAsset)&&String(row.numeroClase||row.numeroYT||'')===newAsset.numeroClase))throw new Error('El número de clase ya pertenece a otro activo.');
   newAsset.numeroYT=newAsset.numeroClase;validateAssetSerials_(peers,[newAsset],central.inventoryCriteria||[]);
  }
  const asset=fixed?(newAsset||(central.assets||[]).find(row=>row.id===request.assetId&&!row.deleted)||(data.warehouseMovements||[]).find(row=>row.bridgePending&&row.newAsset&&row.assetId===request.assetId)?.newAsset):null;
