@@ -4,8 +4,9 @@
  const text=value=>String(value??'').trim();
  const esc=value=>String(value??'').replace(/[&<>"']/g,c=>'&#'+c.charCodeAt(0)+';');
  const date=value=>/^\d{4}-\d{2}-\d{2}$/.test(text(value))?value.split('-').reverse().join('/'):value;
- let rows=[],filtered=[],visible=[],data={},actas=[],selectedId='',version=0;
+ let rows=[],filtered=[],visible=[],data={},selectedId='',version=0;
  let refreshFrame=0;
+ let revision=0;
  const columns=[
   {key:'label',title:'Clase',width:22},{key:'model',title:'Modelo',width:18},
   {key:'number',title:'#',width:8},{key:'serial',title:'Serial',width:19},
@@ -159,7 +160,21 @@
    ${a.hasAccessories!=null||(Array.isArray(a.accessories)&&a.accessories.length)?group('Accesorios',field('¿Trae accesorios?',a.hasAccessories===false?'No':a.hasAccessories===true||a.accessories?.length?'Sí':'Sin especificar')+((Array.isArray(a.accessories)?a.accessories:[]).map((row,index)=>field('Accesorio '+(index+1),typeof row==='string'?row:row.description,true)).join(''))):''}
    <section class="assetHistory" id="assetQueryHistory" aria-label="Historial del activo"></section>
   </article>`;
-  window.SKAssetHistoryUI.show(host.querySelector('#assetQueryHistory'),a,projection.events,actas);
+  void showHistory(host.querySelector('#assetQueryHistory'),a,projection.events);
+ }
+
+ async function showHistory(host,asset,events){
+  const ids=[...new Set(events.map(entry=>entry.raw.actaId).filter(Boolean))];
+  let documents=[];
+  if(ids.length){
+   host.textContent='Cargando historial…';
+   try{
+    const store=db.transaction('actas').objectStore('actas');
+    documents=(await Promise.all(ids.map(id=>idbResult(store.get(id))))).filter(Boolean);
+   }catch(error){console.error('Lectura de actas del activo:',error)}
+   if(!host.isConnected)return;
+  }
+  window.SKAssetHistoryUI.show(host,asset,events,documents);
  }
 
   function describe(projection) {
@@ -291,7 +306,27 @@
   showSelection();
  }
 
- async function render({list=false}={}){
+ async function readList(){
+  const [assets,history]=await Promise.all([all('assets'),window.SKAssetHistoryUI.read({assetsOnly:true})]);
+  const project=window.SKAssetHistory.batchProjector(history);
+  const list=assets.filter(asset=>!asset.deleted).map(asset=>describe(project(asset))).sort((a,b)=>
+   collator.compare(a.clase,b.clase)||collator.compare(a.values.number,b.values.number)||
+   collator.compare(clean(a.asset.modelo),clean(b.asset.modelo))||collator.compare(a.values.serial,b.values.serial));
+  return {list,personal:history.personal};
+ }
+
+ function prepare(){
+  if(rows.length||!window.SKAdminAuth?.canView?.('assetQuery')||typeof db==='undefined'||!db)return;
+  const source=db,session=window.SKAdminAuth.token(),startRevision=revision;
+  let expires=Infinity;
+  const result=readList().catch(()=>null).finally(()=>{expires=performance.now()+5000});
+  return {
+   valid:()=>db===source&&revision===startRevision&&window.SKAdminAuth.token()===session&&performance.now()<expires,
+   result
+  };
+ }
+
+ async function render({list=false,prepared}={}){
   cancelAnimationFrame(refreshFrame);
   refreshFrame=0;
   mount();
@@ -300,25 +335,27 @@
   const ticket=++version,count=find('assetQueryCount');
   if(!count)return;
   if(typeof db==='undefined'||!db){count.textContent='Iniciando almacenamiento local…';return;}
+  if(list&&!rows.length)count.textContent='Cargando activos…';
   try{
-   const result=await Promise.all([all('assets'),window.SKAssetHistoryUI.read({assetsOnly:true}),all('actas')]);
-   if(ticket!==version)return;
-   const [assets,history,documents]=result;
-   data=history;actas=documents;
-   const project=window.SKAssetHistory.batchProjector(history);
-   rows=assets.filter(asset=>!asset.deleted).map(asset=>describe(project(asset))).sort((a,b)=>
-    collator.compare(a.clase,b.clase)||collator.compare(a.values.number,b.values.number)||
-    collator.compare(clean(a.asset.modelo),clean(b.asset.modelo))||collator.compare(a.values.serial,b.values.serial));
+   let result;
+   if(prepared?.valid()){
+    const snapshot=await prepared.result;
+    if(prepared.valid())result=snapshot;
+   }
+   if(!result)result=await readList();
+   if(ticket!==version||!window.SKAdminAuth.canView('assetQuery'))return;
+   rows=result.list;data={personal:result.personal};
    updateClasses();draw();
   }catch(error){
    if(ticket!==version)return;
    console.error('Consulta de activos:',error);
-   rows=[];data={};actas=[];selectedId='';updateClasses();draw();
+   rows=[];data={};selectedId='';updateClasses();draw();
    count.textContent='No fue posible consultar los activos. Vuelve a abrir la consulta para reintentar.';
   }
  }
- window.SKAssetQuery={mount,render};
+ window.SKAssetQuery={mount,render,prepare};
  for(const event of ['skweb-db-ready','skweb-synced','skweb-assets-normalized','skweb-inventory-refresh','skweb-local-change'])window.addEventListener(event,()=>{
+  revision++;
   if(refreshFrame||!find('assetQuery')?.classList.contains('active'))return;
   refreshFrame=requestAnimationFrame(()=>{
    refreshFrame=0;
