@@ -98,7 +98,7 @@
  const isEpp=row=>row.isEpp===true||['true','si','sí','1','yes'].includes(String(row.isEpp||'').trim().toLowerCase());
  const criteria=()=>(snapshot.catalog?.criteria||[]).filter(row=>!row.deleted&&row.active!==false&&!isEpp(row)),people=()=>snapshot.catalog?.personal||[];
  const pending=()=>snapshot.pending||[],records=()=>[...(snapshot.records||[])].sort((a,b)=>a.revision-b.revision);
- const item=id=>criteria().find(row=>row.id===id),assetLabel=row=>[row.clase,row.marcaActual||row.marcaInterna||row.marcaAnterior,row.numeroClase&&'N.º '+row.numeroClase,row.serial].filter(Boolean).join(' · ');
+ const item=id=>criteria().find(row=>row.id===id),assetLabel=row=>[row.clase,row.marcaActual||row.marcaInterna||row.marcaAnterior,row.numeroClase&&'N.º '+row.numeroClase,window.SKAssetRules.searchSerial(row.serial)].filter(Boolean).join(' · ');
  const itemLabel=row=>row.isYtSpare?[row.spareEquipment,String(row.spareItemNumber??'').trim()?'Ítem '+row.spareItemNumber:'',row.spareItemName||row.name,row.spareApplication||row.application||row.ubicacionAplicacion].filter(Boolean).join(' · '):[row.name,row.application||row.ubicacionAplicacion].filter(Boolean).join(' · ');
  // Los préstamos y sus reintegros locales participan antes de que llegue la confirmación.
  function warehouseLoans(snapshot){

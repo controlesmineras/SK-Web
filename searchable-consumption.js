@@ -2,7 +2,7 @@
 const norm=v=>(v||'').toString().normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().trim();let machines=[],parts=[],people=[],partsVersion=0;
 const assetNo=a=>window.SKAssetFields?.numero(a)||a.numeroClase||a.numeroYT||a.orden||'';
 const assetMark=a=>window.SKAssetFields?.marca(a)||a.marcaActual||a.marcaInterna||'';
-const machineLabel=(a,t)=>{const roman=assetMark(a),serial=a.serial&&norm(a.serial)!=='no aplica'?a.serial:'';if(t==='Columna')return[roman,serial].filter(Boolean).join(' - ');const no=assetNo(a);return[no&&`YT ${no}`,roman,serial].filter(Boolean).join(' - ')};
+const machineLabel=(a,t)=>{const roman=assetMark(a),serial=window.SKAssetRules.searchSerial(a.serial);if(t==='Columna')return[roman,serial].filter(Boolean).join(' - ');const no=assetNo(a);return[no&&`YT ${no}`,roman,serial].filter(Boolean).join(' - ')};
 function matchesItemSearch(text,number,query){
  const q=norm(query),haystack=norm(text);
  const requested=q.match(/\bitem\s*(\d+)\b/);

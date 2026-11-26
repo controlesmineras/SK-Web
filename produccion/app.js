@@ -115,7 +115,7 @@ async function api(action,data={}){
   return await Promise.race([exchange,deadline]);
  }finally{clearTimeout(timeout)}
 }
-const labelAsset=row=>[row.clase,row.modelo,row.marcaActual||row.marcaInterna,row.numeroMarcaActual,row.serial].filter(Boolean).join(' · ');
+const labelAsset=row=>[row.clase,row.modelo,row.marcaActual||row.marcaInterna,row.numeroMarcaActual,window.SKAssetRules.searchSerial(row.serial)].filter(Boolean).join(' · ');
 const personLabel=row=>[row.nombre,row.documento].filter(Boolean).join(' · ');
 function partOptions(){
  return window.SKSpareCatalog.filter(catalog(),fields.tipoEquipo.value,inventoryOrigin);

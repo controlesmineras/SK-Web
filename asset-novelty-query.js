@@ -20,7 +20,7 @@
    [entry.location], personLines(entry.responsible), personLines(entry.warehouse), personLines(entry.registeredBy)
   ];
   const text=[...cells.flat(),entry.date,asset?.numeroClase,asset?.numeroYT,asset?.modelo,asset?.fabricante,
-   asset?.marcaActual,asset?.marcaInterna,asset?.marcaAnterior,asset?.marcaPrevia,asset?.nuevaMarca,asset?.serial].filter(Boolean).join(' ');
+   asset?.marcaActual,asset?.marcaInterna,asset?.marcaAnterior,asset?.marcaPrevia,asset?.nuevaMarca,window.SKAssetRules.searchSerial(asset?.serial)].filter(Boolean).join(' ');
   return {cells,text};
  }
  function draw(){

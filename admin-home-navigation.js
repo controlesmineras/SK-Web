@@ -1,7 +1,7 @@
 // Navegación principal de SK Web Administrador: Inicio -> Consultar / Registrar.
 (()=>{
 'use strict';
-const modules={personQuery:'person-query.js?v=20261020-person-query-fix-1',optionCatalog:'form-option-catalog.js?v=20261121-catalogos-por-aplicacion'};
+const modules={personQuery:'person-query.js?v=20261020-person-query-fix-1',optionCatalog:'form-option-catalog.js?v=20261126-activos-baja'};
 let currentView='home';
 const trail=[];
 let viewObserver;

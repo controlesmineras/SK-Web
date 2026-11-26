@@ -51,3 +51,13 @@ test('el índice del listado respeta los alias, las tildes y los campos ocultos 
   const q=query(input);assert.equal(q.matchesIndex(index),q.extra(asset,label)!==null,input);
  }
 });
+
+test('el serial No registra se puede repetir y no produce coincidencias parciales ni completas',()=>{
+ const {query,indexText,ownership}=app();
+ const rows=[{id:'a',clase:'Taladro',serial:'No registra',mina:'Sandra K'},{id:'b',clase:'Taladro',serial:' NO  REGISTRA ',mina:'Providencia'},{id:'c',clase:'Taladro',serial:'No registra-123'}];
+ for(const input of ['registra','no registra']){
+  assert.deepEqual(Array.from(ownership.results(rows,input),r=>r.asset.id),['c']);
+  assert.equal(query(input).matchesIndex(indexText(rows[0],'Taladro')),false);
+ }
+ assert.equal(ownership.results(rows,'Taladro').length,3);
+});

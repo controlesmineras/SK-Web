@@ -48,7 +48,7 @@
   // Estas descripciones se conservan en la ficha, pero no identifican un equipo.
   const uniqueSerialKey = value => {
     const key = serialKey(value);
-    return /^(?:no trae(?: serial)?|no (?:es )?visible|sin serial|serial ilegible|ilegible|no tiene(?: serial)?)$/.test(key.replace(/\s+/g,' ')) ? '' : key;
+    return /^(?:no registra|no trae(?: serial)?|no (?:es )?visible|sin serial|serial ilegible|ilegible|no tiene(?: serial)?)$/.test(key.replace(/\s+/g,' ')) ? '' : key;
   };
   function duplicateSerial(rows, asset) {
     const key = uniqueSerialKey(asset.serial);
@@ -80,8 +80,9 @@
   const requiresSerial = (asset, criterion) => !isColumn(asset) && (!criterion || /^(true|1|si|sí|yes)$/i.test(String(criterion.usesSerial??criterion.CI_USA_SERIAL??'').trim()));
   const serialDescription = value => {
     const key=String(value??'').trim().toLowerCase().replace(/\s+/g,' ');
-    return key==='no trae'?'No trae':key==='no visible'?'No visible':'';
+    return ['no registra','no trae','no visible'].includes(key)?'No registra':'';
   };
+  const searchSerial = value => uniqueSerialKey(value) ? displayValue(value) : '';
   const hasIdentity = (asset, criterion) => {
     if(!requiresSerial(asset,criterion))return true;
     const key=String(asset.serial??'').trim().toLowerCase().replace(/\s+/g,' ');
@@ -114,7 +115,7 @@
 
   function label(asset) {
     if (isColumn(asset)) return columnLabel(asset);
-    return [asset.clase, asset.numeroClase || asset.numeroYT, asset.marcaActual || asset.marcaInterna, asset.serial].filter(Boolean).join(' · ');
+    return [asset.clase, asset.numeroClase || asset.numeroYT, asset.marcaActual || asset.marcaInterna, searchSerial(asset.serial)].filter(Boolean).join(' · ');
   }
-  window.SKAssetRules = {assignmentAreas, marksCanCollide, serialKey, duplicateSerial, duplicateNewMark, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, equipmentHeading, isColumn, columnIdentity, columnLabel, movementLabel};
+  window.SKAssetRules = {assignmentAreas, marksCanCollide, serialKey, searchSerial, duplicateSerial, duplicateNewMark, identityMark, serialStatusLabel, hasSerialException, requiresSerial, serialDescription, hasIdentity, duplicateIdentity, classNumber, automaticNumberEligible, label, equipmentHeading, isColumn, columnIdentity, columnLabel, movementLabel};
 })();

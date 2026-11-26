@@ -9,7 +9,7 @@ const isRescuer=asset=>norm(asset?.clase)==='autorrescatador';
 const isVisorChange=value=>norm(value)===norm(VISOR_CHANGE);
 const colors=()=>window.SKFormOptions?.values('asset.viewerColor')||['Marrón','Azul celeste','Blanco','Negro','Amarillo','Averiado'];
 
-const isRetirement=value=>/^(?:dada|dado) de baja mediante acta$/.test(norm(value));
+const requiresActa=value=>/^dad[oa](?:\/[oa])? de baja mediante acta$/.test(norm(value));
 const validActa=row=>row&&!row.deleted&&row.tipo!=='OFICIO';
 const safeActaUrl=value=>{try{const url=new URL(String(value||'').trim());return ['https:','http:'].includes(url.protocol)?url.href:''}catch{return ''}};
 const escapeActa=value=>String(value??'').replace(/[&<>"']/g,char=>'&#'+char.charCodeAt(0)+';');
@@ -23,25 +23,29 @@ function mountActaField(){
  select.addEventListener('change',()=>{const selected=actaRows.find(row=>row.id===select.value);preview.innerHTML=selected?actaHTML({actaId:selected.id,actaNumero:selected.consecutivo},selected):'Selecciona un acta registrada. Si no aparece, regístrala primero en Registro de documentos.'});
 }
 function updateActaField(form){
- mountActaField();const active=isRetirement(form.elements.descripcion.value),select=form.elements.actaId,label=document.querySelector('#novActaField'),preview=document.querySelector('#novActaPreview');if(!select)return;
+ mountActaField();const active=requiresActa(form.elements.descripcion.value),select=form.elements.actaId,label=document.querySelector('#novActaField'),preview=document.querySelector('#novActaPreview');if(!select)return;
  label.hidden=!active;label.style.display=active?'':'none';preview.hidden=!active;select.disabled=!active;select.required=active;
- const state=form.elements.estado;
- if(!active){
-  select.value='';preview.replaceChildren();
-  if(state.dataset.beforeActa!==undefined){state.value=state.dataset.beforeActa;delete state.dataset.beforeActa;}
-  return;
- }
- if(state.dataset.beforeActa===undefined)state.dataset.beforeActa=state.value;
+ if(!active){select.value='';preview.replaceChildren();return;}
  const current=select.value;select.replaceChildren(new Option('Seleccionar acta registrada…',''),...actaRows.map(row=>new Option('Acta N.º '+row.consecutivo+' · '+(row.fecha||'Sin fecha')+' · '+(row.motivo||row.area||''),row.id)));select.value=current;
  select.dispatchEvent(new Event('change'));
- form.elements.estado.value=isRescuer(selectedAsset)?'Dado de baja':'Dado/a de baja';
+
 }
 
 
-const isRetiredState=value=>/^dad[oa](?:\/[oa])? de baja$/.test(norm(value));
+const isRetiredState=value=>window.SKAssetHistory.isRetiredState(value);
 function updateRetiredLocation(){
  const form=document.querySelector('#noveltyForm'),location=form?.elements.ubicacion;if(!location)return;
- const retired=isRetiredState(form.elements.estado.value);
+ const state=form.elements.estado,notice=window.SKAssetHistory.isRetirementNotice(form.elements.descripcion.value);
+ if(notice){
+  if(state.dataset.beforeActa===undefined)state.dataset.beforeActa=state.value;
+  const retiredState=isRescuer(selectedAsset)?'Dado de baja':'Dado/a de baja';
+  if(!Array.from(state.options).some(option=>option.value===retiredState))state.add(new Option(retiredState,retiredState));
+  state.value=retiredState;
+ }else if(state.dataset.beforeActa!==undefined){state.value=state.dataset.beforeActa;delete state.dataset.beforeActa;}
+ state.disabled=notice;
+ const retired=isRetiredState(state.value);
+ const availability=form.elements.namedItem('novOperationStatus');
+ if(availability)availability.value=state.value?window.SKAssetHistory.operationStatus({estado:state.value}):(selectedAsset?window.SKAssetHistory.operationStatus(selectedAsset):'');
  if(retired){if(!location.readOnly)location.dataset.beforeRetirement=location.value;location.value='Desechado/a';location.readOnly=true;location.style.background='#eef2f5';}
  else{if(location.readOnly&&location.dataset.beforeRetirement!==undefined)location.value=location.dataset.beforeRetirement;delete location.dataset.beforeRetirement;location.readOnly=false;location.style.background='';}
 }
@@ -72,8 +76,8 @@ async function update(){
   const ticket=++generation,assetId=form.elements.assetId.value,[assets,historyData]=await Promise.all([all('assets'),window.SKAssetHistoryUI.read()]);actaRows=(await all('actas')).filter(validActa).sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo));
   if(ticket!==generation||assetId!==form.elements.assetId.value)return;
   const asset=assets.find(row=>row.id===assetId&&!row.deleted),changed=selectedAsset?.id!==asset?.id;
-  selectedAsset=asset||null;
   const visible=asset&&window.SKAssetHistory.project(asset,historyData).asset;
+  selectedAsset=visible||null;
   const assigned=form.elements.areaAsignada,currentArea=changed?'':assigned.value;
   const areas=window.SKAssetRules.assignmentAreas(window.SKFormOptions?.values?.('personal.area'));
   if(currentArea&&!areas.includes(currentArea))areas.push(currentArea);
@@ -89,7 +93,7 @@ async function update(){
   if(current&&!states.includes(current))states.push(current);
   fill(form.elements.estado,states,current,visible?.estado?'Sin cambio · '+visible.estado:'Sin cambio');
   const locations=document.querySelector('#novLocationOptions');
-  if(locations){const values=window.SKFormOptions?.values('asset.location')||['Bodega de Superficie','Bodega de Producción-N. 4','Socavón','Extraviado'];const choices=[...new Set([...values,asset?.ubicacion].filter(Boolean))];locations.replaceChildren(...choices.map(value=>new Option(value,value)));}
+  if(locations){const values=window.SKFormOptions?.values('asset.location')||['Bodega de Superficie','Bodega de Producción-N. 4','Socavón','Extraviado'];const choices=[...new Set([...values,'Desechado/a',asset?.ubicacion].filter(Boolean))];locations.replaceChildren(...choices.map(value=>new Option(value,value)));}
   if(changed){delete form.elements.estado.dataset.beforeActa;form.elements.ubicacion.readOnly=false;delete form.elements.ubicacion.dataset.beforeRetirement;form.elements.ubicacion.value='';}
   form.elements.ubicacion.placeholder=visible?.ubicacion?'Sin cambio · '+visible.ubicacion:'Sin cambio';
   updateFields();
@@ -102,7 +106,8 @@ async function save(event){
   try{
     const data=fd(form);data.descripcion=noveltyText(data.descripcion);if(!data.descripcion)throw new Error('Selecciona la novedad.');const asset=data.assetId&&await idbResult(db.transaction('assets').objectStore('assets').get(data.assetId));
     if(!asset||asset.deleted)throw new Error('Selecciona un activo.');
-    if(isRetirement(data.descripcion)){const acta=(await all('actas')).find(row=>row.id===data.actaId&&validActa(row));if(!acta)throw new Error('Selecciona un acta de Registro de documentos.');data.actaNumero=acta.consecutivo;data.actaEnlace=safeActaUrl(acta.enlace);data.estado=isRescuer(asset)?'Dado de baja':'Dado/a de baja'}else{delete data.actaId;delete data.actaNumero;delete data.actaEnlace}
+    if(requiresActa(data.descripcion)){const acta=(await all('actas')).find(row=>row.id===data.actaId&&validActa(row));if(!acta)throw new Error('Selecciona un acta de Registro de documentos.');data.actaNumero=acta.consecutivo;data.actaEnlace=safeActaUrl(acta.enlace);data.estado=isRescuer(asset)?'Dado de baja':'Dado/a de baja'}else{delete data.actaId;delete data.actaNumero;delete data.actaEnlace}
+    if(window.SKAssetHistory.isRetirementNotice(data.descripcion))data.estado=isRescuer(asset)?'Dado de baja':'Dado/a de baja';
     if(isRetiredState(data.estado))data.ubicacion='Desechado/a';
     const visor=isVisorChange(data.descripcion);
     if(visor&&!isRescuer(asset))throw new Error('El cambio de color del visor solo está disponible para autorrescatadores.');
@@ -147,7 +152,7 @@ function installAssetPicker(){
  select.hidden=true;select.required=false;assetField.insertBefore(input,select);assetField.append(status,results);
  const style=document.createElement('style');style.textContent='#noveltyForm #novAssetSearchResults{display:grid;gap:5px;max-height:280px;overflow:auto;margin-top:6px}#noveltyForm #novAssetSearchResults[hidden]{display:none}#novAssetSearchResults button{width:100%;text-align:left;white-space:normal;background:#f2f6f9;color:#173d59;border:1px solid #ccd8e0;padding:10px;font-weight:500}#novAssetSearchResults button:focus-visible{outline:3px solid #e7b45a}';document.head.append(style);
  let rows=[],version=0;
- const label=asset=>window.SKAssetRules?.isColumn(asset)?window.SKAssetRules.columnLabel(asset):[asset.clase,asset.fabricante,asset.serial&&'Serial: '+asset.serial,asset.marcaPrevia&&'Marca: '+asset.marcaPrevia,asset.marcaActual||asset.marcaInterna,asset.nuevaMarca,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.mina].filter(Boolean).join(' · ');
+ const label=asset=>window.SKAssetRules?.isColumn(asset)?window.SKAssetRules.columnLabel(asset):[asset.clase,asset.fabricante,window.SKAssetRules.searchSerial(asset.serial)&&'Serial: '+asset.serial,asset.marcaPrevia&&'Marca: '+asset.marcaPrevia,asset.marcaActual||asset.marcaInterna,asset.nuevaMarca,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.mina].filter(Boolean).join(' · ');
  const filtered=query=>query.rows(rows.filter(asset=>!classes.value||norm(asset.clase)===norm(classes.value)),asset=>[label(asset)]);
  const close=()=>{results.hidden=true;input.setAttribute('aria-expanded','false')};
  const choose=asset=>{if(![...select.options].some(option=>option.value===asset.id))select.add(new Option(label(asset),asset.id));select.value=asset.id;classes.value=asset.clase;input.value=label(asset);input.setCustomValidity('');status.textContent='Activo seleccionado.';close();select.dispatchEvent(new Event('change',{bubbles:true}))};
@@ -189,7 +194,7 @@ function installNoveltyMenu(){
 }
 installNoveltyMenu();
 
-const noveltyForm=document.querySelector('#noveltyForm');if(noveltyForm){noveltyForm.elements.ubicacion.closest('label').before(noveltyForm.elements.estado.closest('label'));noveltyForm.elements.estado.addEventListener('change',updateRetiredLocation);noveltyForm.addEventListener('reset',()=>{delete noveltyForm.elements.estado.dataset.beforeActa;noveltyForm.elements.ubicacion.readOnly=false;delete noveltyForm.elements.ubicacion.dataset.beforeRetirement;});}
+const noveltyForm=document.querySelector('#noveltyForm');if(noveltyForm){noveltyForm.elements.ubicacion.closest('label').before(noveltyForm.elements.estado.closest('label'));noveltyForm.elements.estado.addEventListener('change',updateRetiredLocation);noveltyForm.addEventListener('reset',()=>{delete noveltyForm.elements.estado.dataset.beforeActa;noveltyForm.elements.estado.disabled=false;noveltyForm.elements.ubicacion.readOnly=false;delete noveltyForm.elements.ubicacion.dataset.beforeRetirement;});}
 mountActaField();window.SKNoveltyForm={update,updateFields,save,actaHTML};window.addEventListener('skweb-synced',update);
 document.querySelector('#novDesc')?.addEventListener('change',updateFields);
 document.querySelector('#noveltyForm')?.addEventListener('reset',()=>setTimeout(update,0));

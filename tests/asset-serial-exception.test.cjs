@@ -27,13 +27,13 @@ test('columnas y criterios sin serial conservan el campo opcional',()=>{
  }
 });
 
-test('los dos textos permitidos se sincronizan repetidos y conservan una identidad interna por equipo',()=>{
- for(const serial of ['No trae','No visible'])for(const role of ['owner','assistant']){
+test('la opción sin serial y sus variantes históricas se sincronizan repetidas y conservan una identidad interna por equipo',()=>{
+ for(const serial of ['No registra','No trae','No visible'])for(const role of ['owner','assistant']){
   const s=service(),rows=[asset('1',{serial}),asset('2',{serial})];s.sync(rows,role);s.sync(rows,role);
   const saved=s.cloud().assets;assert.equal(saved.length,2);assert.deepEqual(saved.map(a=>a.serial),[serial,serial]);
   assert.ok(saved.every(a=>a.marcaPrevia===''&&a.serialStatus===''&&a.syncState==='synced'));assert.notEqual(saved[0].nuevaMarca,saved[1].nuevaMarca);
  }
- assert.equal(rules.serialDescription(' no  trae '),'No trae');assert.equal(rules.serialDescription('NO VISIBLE'),'No visible');assert.equal(rules.serialDescription('Ilegible'),'');
+ for(const text of [' no  REGISTRA ',' no  trae ','NO VISIBLE'])assert.equal(rules.serialDescription(text),'No registra');assert.equal(rules.serialDescription('Ilegible'),'');
 });
 
 test('el servidor rechaza vacíos y otras descripciones aunque exista marca anterior',()=>{
@@ -43,7 +43,7 @@ test('el servidor rechaza vacíos y otras descripciones aunque exista marca ante
 });
 
 test('los seriales reales y las marcas anteriores siguen siendo únicos',()=>{
- for(const serial of ['SN-123','ABC','No visible-123','No trae 123']){
+ for(const serial of ['SN-123','ABC','No visible-123','No trae 123','No registra-123']){
   const first=asset('1',{serial}),second=asset('2',{serial});assert.equal(rules.duplicateSerial([first],second),first);
   for(const role of ['owner','assistant']){const s=service();s.sync([first],role);assert.throws(()=>s.sync([second],role),/ya existe/);}
  }
@@ -65,13 +65,13 @@ test('el auxiliar puede reintentar el alta y editar el serial conservando su val
  const before=s.cloud();assert.throws(()=>s.sync([{...before.assets[0],serial:'',syncState:'pending'}],'assistant'),/Ingresa el SERIAL/);assert.deepEqual(s.cloud(),before);
 });
 
-test('los dos textos se guardan offline y sincronizan sin duplicar registros',async()=>{
+test('los seriales desconocidos se guardan offline y sincronizan sin duplicar registros',async()=>{
  const localWindow={SKAssetRules:rules,dispatchEvent(){}},context=vm.createContext({indexedDB:new IDBFactory(),window:localWindow,Event:class{},CustomEvent:class{},console});
  vm.runInContext(read('app.js').split('const PARTS=')[0],context);await context.openDB();
- for(const id of ['1','2','3'])await context.put('assets',asset(id,{serial:id==='3'?'No visible':'No trae'}));
+ for(const id of ['1','2','3'])await context.put('assets',asset(id,{serial:id==='3'?'No visible':'No registra'}));
  const pending=clone(await context.all('assets'));assert.equal(pending.length,3);assert.ok(pending.every(a=>a.syncState==='pending'));
  const s=service();s.sync(pending);await context.replaceStoreRows('assets',s.cloud().assets,pending);
- const saved=await context.all('assets');assert.equal(saved.length,3);assert.ok(saved.every(a=>['No trae','No visible'].includes(a.serial)&&a.syncState==='synced'));
+ const saved=await context.all('assets');assert.equal(saved.length,3);assert.ok(saved.every(a=>['No registra','No visible'].includes(a.serial)&&a.syncState==='synced'));
 });
 
 test('el formulario exige serial según criterio y conserva ayuda, columnas y permisos',async()=>{
@@ -79,7 +79,7 @@ test('el formulario exige serial según criterio y conserva ayuda, columnas y pe
  const localWindow={SKAssetRules:rules,SKAssetHistory:{operationStatus:()=>'Sí'},SKAdminAuth:{canView:()=>true,canManageAssets:()=>true},addEventListener(){}};
  const context=vm.createContext({window:localWindow,document:{querySelector:()=>null,querySelectorAll:()=>[{value:'Taladro'}]},all:async()=>[],fd:()=>({id:'',clase:'Taladro',serial:'   ',marcaPrevia:'PREVIA'}),put:async()=>{writes++},alert:m=>alerts.push(m),console});
  vm.runInContext(read('asset-admin-ui.js').replace('window.SKAssetAdminUI={hydrateEdit};',"window.SKAssetAdminUI={hydrateEdit,updateSerialFields,saveAsset};criteriaByClass.set('taladro',{usesSerial:true});"),context);
- const ui=localWindow.SKAssetAdminUI;ui.updateSerialFields(form,{usesSerial:true},false);assert.equal(serial.required,true);assert.equal(serial.disabled,false);assert.equal(hidden,false);assert.match(hint.textContent,/No trae.*No visible/);
+ const ui=localWindow.SKAssetAdminUI;ui.updateSerialFields(form,{usesSerial:true},false);assert.equal(serial.required,true);assert.equal(serial.disabled,false);assert.equal(hidden,false);assert.match(hint.textContent,/No registra/);
  await ui.saveAsset({currentTarget:form,preventDefault(){},stopImmediatePropagation(){}});assert.equal(writes,0);assert.equal(focused,1);assert.match(alerts[0],/Ingresa el SERIAL/);
  ui.updateSerialFields(form,{usesSerial:false},false);assert.equal(serial.required,false);
  ui.updateSerialFields(form,{usesSerial:true},true);assert.equal(serial.disabled,true);

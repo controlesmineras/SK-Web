@@ -5,10 +5,10 @@ const clean=v=>(v??'').toString().trim();
 const norm=v=>clean(v).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const isSK=a=>{const m=norm(a?.mina);return !m||m==='sandra k'||m==='sk'||m==='sk 3.7'};
 const num=a=>window.SKAssetFields?.numero?.(a)||clean(a?.numeroClase||a?.numeroYT);
-const baseLabel=a=>window.SKAssetRules?.isColumn(a)?window.SKAssetRules.columnLabel(a):window.SKAssetListLabel?window.SKAssetListLabel(a):[a?.clase,num(a),window.SKAssetFields?.marca?.(a)||a?.marcaActual||a?.marcaInterna,a?.serial,a?.modelo&&`Mod. ${a.modelo}`].filter(Boolean).join(' - ');
+const baseLabel=a=>window.SKAssetRules?.isColumn(a)?window.SKAssetRules.columnLabel(a):window.SKAssetListLabel?window.SKAssetListLabel(a):[a?.clase,num(a),window.SKAssetFields?.marca?.(a)||a?.marcaActual||a?.marcaInterna,window.SKAssetRules?.searchSerial(a?.serial),a?.modelo&&`Mod. ${a.modelo}`].filter(Boolean).join(' - ');
 const label=a=>{
  const summary=baseLabel(a).replace(/Marca actual:/gi,'MARCA:');
- const serial=clean(a?.serial);
+ const serial=window.SKAssetRules?.searchSerial(a?.serial)??clean(a?.serial);
  return !isSK(a)&&serial&&norm(serial)!=='no aplica'&&!/\bserial\s*:/i.test(summary)
   ? [summary,'Serial: '+serial].filter(Boolean).join(' · ')
   : summary;

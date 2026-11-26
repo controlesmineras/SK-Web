@@ -25,10 +25,10 @@ function deletionUI({owner=true,confirmed=true,fail=false,auth=null}={}){
  const document={querySelector:selector=>({'#assetForm':form,'#assetDeleteBtn':remove,'#assetSaveBtn':save}[selector])||null};
  // Read-only mode iterates the actual form controls.
  fields[Symbol.iterator]=function*(){yield fields.id};fields.id.dataset={};
- const ctx={document,console,window:{addEventListener(){},SKAdminAuth:auth||{canManageAssets:()=>owner,user:()=>({username:'admin',name:'Administrador'})},skSyncApi:{schedule(){scheduled++}}},all:async()=>rows,put:async(_,row)=>{writes++;if(fail)throw new Error('Storage failed');rows=[row]},refresh:async()=>{refreshed++},confirm:()=>{prompts++;return confirmed},alert:message=>alerts.push(message)};
+ const ctx={document,console,window:{addEventListener(){},SKAssetRules:window.SKAssetRules,SKAdminAuth:auth||{canManageAssets:()=>owner,user:()=>({username:'admin',name:'Administrador'})},skSyncApi:{schedule(){scheduled++}}},all:async()=>rows,put:async(_,row)=>{writes++;if(fail)throw new Error('Storage failed');rows=[row]},refresh:async()=>{refreshed++},confirm:()=>{prompts++;return confirmed},alert:message=>alerts.push(message)};
  let source=fs.readFileSync(path.join(__dirname,'../asset-admin-ui.js'),'utf8');
  source=source.replace('window.addEventListener(\'load\',',"window.__test={deleteAsset,setAssetMode};window.addEventListener('load',");
- source=source.replace('saved=true;form.reset();form.elements.id.value=\'\';delete form.dataset.autoMarkPolicy;updateAssetFields();',"saved=true;form.reset();form.elements.id.value='';delete form.dataset.autoMarkPolicy;");
+ source=source.replace('saved=true;showLatestSummary(null);form.reset();form.elements.id.value=\'\';delete form.dataset.autoMarkPolicy;updateAssetFields();',"saved=true;showLatestSummary(null);form.reset();form.elements.id.value='';delete form.dataset.autoMarkPolicy;");
  vm.runInNewContext(source,ctx);
  return{run:ctx.window.__test.deleteAsset,mode:ctx.window.__test.setAssetMode,remove,form,rows:()=>rows,stats:()=>({prompts,writes,scheduled,refreshed,alerts})};
 }

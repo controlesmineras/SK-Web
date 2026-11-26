@@ -14,7 +14,7 @@
       if(key==='orden'&&(asset.numeroClase||asset.numeroYT))continue;
       if(key==='serial'&&/^columnas?\b/.test(fold(asset.clase)))continue;
       const value=String(asset[key]??'').trim();
-      if(!value)continue;
+      if(!value||key==='serial'&&window.SKAssetRules&&!window.SKAssetRules.searchSerial(value))continue;
       const normalized=fold(value);
       if(normalized!=='no aplica')visit(caption,value,normalized);
     }

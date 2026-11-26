@@ -72,7 +72,7 @@ test('guardar desde el formulario sin conexión conserva los empates, los vacío
   const window={SKAssetHistory:history,SKAdminAuth:{canView:()=>true},dispatchEvent(){}};
   const ctx=vm.createContext({window,indexedDB,document:{querySelector:()=>status},Event:class{},alert:m=>alerts.push(m)});
   vm.runInContext(read('app.js').split('const PARTS=')[0],ctx);await ctx.openDB();
-  Object.assign(ctx,{refresh:async()=>{},update:async()=>{},saving:false,selectedAsset:null,noveltyText:x=>x,isRetirement:()=>false,isRetiredState:()=>false,isVisorChange:()=>false});
+  Object.assign(ctx,{refresh:async()=>{},update:async()=>{},saving:false,selectedAsset:null,noveltyText:x=>x,requiresActa:()=>false,isRetiredState:()=>false,isVisorChange:()=>false});
   const src=read('novelty-form.js');
   vm.runInContext(src.slice(src.indexOf('async function save(event)'),src.indexOf('\nfunction installAssetPicker')),ctx);
   const save=async row=>{
@@ -219,4 +219,22 @@ test('revertir la fecha equivocada y registrar la correcta en el mismo envío ap
  assert.equal(current.fechaNovedad,'2026-11-16');assert.equal(current.horaNovedad,'08:00');
  assert.equal(current.estado,'Averiado/a');assert.equal(current.ubicacion,yt.ubicacion);
  assert.equal(s.get().novelties.find(row=>row.id==='correcta').historyOnly,false);
+});
+
+test('la baja fija ubicación y disponibilidad, admite reversión y respeta la fecha de una novedad antigua',()=>{
+ const s=service();
+ for(const state of ['Dada de baja','Dado de baja','Dado/a de baja']){
+  assert.equal(history.operationStatus({estado:state}), 'No');
+  assert.equal(history.project({estado:state,ubicacion:'Taller'},{}).asset.ubicacion,'Desechado/a');
+ }
+ s.sync([event('past','2026-11-12','08:00',{descripcion:'Dada de baja'})]);
+ assert.equal(s.get().assets[0].estado,yt.estado);
+ s.sync([event('retired','2026-11-16','11:00',{descripcion:'Dado de baja',ubicacion:'Taller',estado:'Operativo/a'})]);
+ const current=s.get().assets[0];
+ assert.equal(current.ubicacion,'Desechado/a');assert.equal(current.disponibleEntrega,'No');
+ s.sync([], 'owner',[{...yt,assetDetailsOnly:true,serial:'SN-nuevo',syncState:'pending',updatedAt:'2026-12-01T10:00:00Z'}]);
+ const edited=s.get().assets[0];assert.equal(edited.serial,'SN-nuevo');assert.equal(edited.currentNoveltyId,'retired');assert.equal(edited.ubicacion,'Desechado/a');assert.equal(edited.disponibleEntrega,'No');
+ assert.equal(edited.assetDetailsOnly,undefined);
+ s.sync([cancel(s.get().novelties.find(row=>row.id==='retired'))]);
+ assert.equal(s.get().assets[0].estado,yt.estado);assert.equal(s.get().assets[0].ubicacion,yt.ubicacion);assert.equal(s.get().assets[0].disponibleEntrega,'Sí');
 });

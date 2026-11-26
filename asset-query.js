@@ -145,7 +145,7 @@
     field('Fecha de ingreso',date(a.fechaIngreso))
    ].join(''))}
    ${group('Última novedad / estado actual',[
-    field('Ubicación',a.ubicacion,true),field('Estado',a.estado),field('Disponible para entrega',a.disponibleEntrega),
+    field('Ubicación',a.ubicacion,true),field('Estado',a.estado),field('Disponible para operación',a.disponibleEntrega),
     field('Fecha de novedad',date(a.fechaNovedad)),field('Hora de novedad',a.horaNovedad),
     field('Descripción de la novedad',a.descripcionNovedad,true),
     field('Responsable',a.nombreResponsable),field('Documento responsable',a.documentoResponsable),
@@ -188,7 +188,7 @@
       mark:equipment?currentMark||newMark||clean(fields.numeroMarcaActual):newMark||currentMark,
       mine:clean(asset.mina),state:clean(asset.estado),location:clean(asset.ubicacion)};
     const external=!window.SKAssetOwnership.isSK(asset);
-    const searchText=[...Object.values(values),window.SKAssetOwnership.label(asset),external?'externo externa externos externas transitorio':''].join(' ');
+    const searchText=[...Object.values({...values,serial:window.SKAssetRules.searchSerial(asset.serial)}),window.SKAssetOwnership.label(asset),external?'externo externa externos externas transitorio':''].join(' ');
     const searchIndex=window.SKAssetSearch.indexText(asset,searchText);
     return {asset,key,clase,values,searchIndex,external,projection};
   }
