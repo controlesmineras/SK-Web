@@ -70,3 +70,16 @@ test('recupera una marca confirmada con guion sin registro auxiliar y la conserv
  const result=s.ctx.assignAssetMarks_({assets:[old]},[{...old,nuevaMarca:'ZZZ',marcaActual:'ZZZ',marcaInterna:'ZZZ'}]);
  assert.equal(result.assets[0].nuevaMarca,'P-AA');assert.equal(result.registry[0].code,'P-AA');
 });
+
+test('Plaza sincroniza dos activos antiguos con marca y serial sin registrar y permite reintentar',()=>{
+ const s=service(),window={};vm.runInNewContext(readFileSync(join(__dirname,'../asset-record-rules.js'),'utf8'),{window});
+ for(const id of ['1','2']){
+  const data=batch(id,'Sandra K','TRASLADO',{incomeMarking:false,markingPolicy:'',markStatus:'',serial:'desconocido',marcaInterna:'No registra',fabricante:'Desconocida'});
+  window.SKAssetRules.normalizeAssetIdentification(data.assets[0]);
+  s.sync(data);s.sync(data);
+ }
+ const rows=s.cloud().assets;
+ assert.equal(rows.length,2);
+ assert.ok(rows.every(row=>row.serial==='No registra'&&row.fabricante==='No registra'&&row.marcaInternaNoRegistra));
+ assert.equal(s.cloud().blendingIncomes.length,2);
+});

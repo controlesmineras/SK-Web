@@ -62,7 +62,7 @@ function apply(){
     const models=values('asset.model.yt').map(value=>({value,only:'yt'})).concat(values('asset.model.autorrescatador').map(value=>({value,only:'autorrescatador'})));
     const brands=values('asset.manufacturer.yt').map(value=>({value,only:'yt'})).concat(values('asset.manufacturer.autorrescatador').map(value=>({value,only:'autorrescatador'})),values('asset.manufacturer.motosierra').map(value=>({value,only:'motosierra'})));
     options(asset.elements.modelo,models.map(row=>row.value),{preserveUnknown:!!asset.elements.id.value,attributes:value=>({classOnly:models.find(row=>row.value===value)?.only||''})});
-    options(asset.elements.fabricante,brands.map(row=>row.value),{preserveUnknown:!!asset.elements.id.value,attributes:value=>({classOnly:brands.find(row=>row.value===value)?.only||''})});
+    options(asset.elements.fabricante,window.SKAssetRules.withUnrecordedOption(brands.map(row=>row.value)),{preserveUnknown:!!asset.elements.id.value,attributes:value=>({classOnly:brands.find(row=>row.value===value)?.only||''})});
     options(asset.elements.estadoVisor,values('asset.viewerColor'));
     options(asset.elements.mina,values('asset.owner'));
     options(asset.elements.ubicacion,values('asset.location'),{preserveUnknown:!!asset.elements.id.value});
@@ -70,6 +70,7 @@ function apply(){
     options(asset.elements.marcada,values('asset.physicallyMarked'));
     options(asset.elements.disponibleEntrega,values('asset.deliveryAvailable'));
     for(const name of ['modelo','fabricante','estado'])if(asset.elements[name])delete asset.elements[name]._classCatalog;
+    if(asset.elements.fabricante)delete asset.elements.fabricante.dataset.brandClass;
     asset.elements.clase?.dispatchEvent(new Event('change',{bubbles:true}));
   }
   const destination=document.querySelector('#deliveryForm [name="destination"]');

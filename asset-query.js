@@ -136,7 +136,7 @@
    ${group('Información principal',[
     field('Clase',identity.label),field('#',canonical.numeroClase||a.orden),
     identity.equipment?'':field('Modelo',a.modelo),field('Marca comercial',a.fabricante),
-    field('MARCA',singleMark?a.nuevaMarca:canonical.marcaActual),
+    field('MARCA',(singleMark?a.nuevaMarca:canonical.marcaActual)||(a.marcaInternaNoRegistra?'No registra':'')),
     singleMark?(previousMark?field('MARCA ANTERIOR',previousMark):''):field('No. de marca actual',canonical.numeroMarcaActual)+field('Nueva marca',a.nuevaMarca)+field('Marca anterior',a.marcaPrevia),
     column&&window.SKAssetOwnership.isSK(a)?'':field('Serial',a.serial||window.SKAssetRules?.serialStatusLabel(a)),
     column||text(a.largo)?field('Largo (ft)',a.largo):'',

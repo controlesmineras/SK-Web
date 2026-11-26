@@ -100,7 +100,32 @@ test('Plaza valida los datos de la clase local al crear activos y respeta la mar
  const manual={...valid,clase:'Columna',serial:''};
  assert.equal(issue(column,manual).name,'marcaInterna');
  assert.equal(issue(column,{...manual,marcaInterna:'C40'}),undefined);
+ assert.equal(issue(column,{...manual,marcaInterna:'',marcaInternaNoRegistra:true}),undefined);
  assert.equal(issue(column,{...manual,incomeMarking:true,minaOrigen:'Sandra K'}),undefined);
  assert.match(issue({...criterion,active:false},valid).message,/clase activa/);
  assert.match(issue(undefined,valid).message,/clase activa/);
+});
+
+test('activos antiguos conservan el dato conocido y pueden compartir las excepciones en el registro central',()=>{
+ const criterion={id:'yt',name:'YT',isFixedAsset:true,usesManufacturer:true,usesSerial:true,requiresInternalMark:true};
+ const manual=(id,serial,marcaInterna,fabricante)=>{
+  const row=asset(id,{clase:'YT',modelo:'29',serial,marcaInterna,fabricante,markingPolicy:'',markStatus:''});
+  rules.normalizeAssetIdentification(row);
+  row.marcaActual=row.marcaInterna;
+  return row;
+ };
+ for(const role of ['owner','assistant']){
+  const s=service({inventoryCriteria:[criterion]});
+  const rows=[manual('1','SN-1','desconocida','No registra'),manual('2','Desconocido','No registra','Gisi'),manual('3','NO REGISTRA','No registra','desconocida')];
+  s.sync(rows,role);s.sync(rows,role);
+  const saved=s.cloud().assets;
+  assert.deepEqual(saved.map(a=>[a.serial,a.fabricante,a.marcaInterna,a.marcaInternaNoRegistra]),[
+   ['SN-1','No registra','',true],['No registra','Gisi','',true],['No registra','No registra','',true]]);
+  const corrected={...saved[2],marcaInterna:'SK-42',serial:'SN-3',syncState:'pending',updatedAt:'2026-10-23T00:00:00Z'};
+  rules.normalizeAssetIdentification(corrected);corrected.marcaActual=corrected.marcaInterna;s.sync([corrected],role);
+  assert.equal(s.cloud().assets.find(a=>a.id==='3').marcaInternaNoRegistra,false);
+  assert.throws(()=>s.sync([manual('4','SN-1','No registra','Gisi')],role),/ya existe/);
+  assert.throws(()=>s.sync([manual('5','No registra','SK-42','Gisi')],role),/ya existe/);
+ }
+ assert.deepEqual([...rules.withUnrecordedOption(['Makita',' no  registra ','Desconocida','Stihl'])],['No registra','Makita','Stihl']);
 });
