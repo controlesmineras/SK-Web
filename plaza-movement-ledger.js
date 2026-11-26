@@ -11,6 +11,7 @@
   const timestamp=value=>Number.isFinite(Date.parse(value))?Date.parse(value):null;
   const dateLabel=time=>time===null?'Sin hora registrada':format.format(time);
   const amount=value=>value!=null&&value!==''&&Number.isFinite(Number(value))?Number(value):null;
+  const balanceLabel=value=>amount(value)===null?'—':number.format(value);
   function entries(data){
     const result=[],criteria=new Map((data.inventoryCriteria||[]).map(item=>[item.id,item]));
     for(const [store,source] of [['blendingIncomes','income'],['blendingDeliveries','delivery'],['warehouseQuantityHistory','adjustment']]){
@@ -97,7 +98,8 @@
       const first=page*size,limit=Math.min(rows.length,first+size);
       find('.ledgerSummary').textContent=rows.length?(first+1)+'–'+limit+' de '+rows.length+' movimientos'+(order==='balance'?' · Para movimientos sin orden de aplicación guardado se usa la hora disponible.':''):'No hay movimientos con estos filtros.';
       const canReverse=actions.canReverse?.()===true;
-      const columns=['Registro (Colombia)','Movimiento','Elemento','Cantidad',...(balances?['Anterior','Nuevo']:[]),'Persona del movimiento','Bodeguero/a de turno','Registró / solicitó',...(canReverse?['Acción']:[])];
+      const stockColumns=balances?['Anterior','Cantidad','Nuevo']:['Cantidad'];
+      const columns=['Registro (Colombia)','Movimiento','Elemento',...stockColumns,'Persona del movimiento','Bodeguero/a de turno','Registró / solicitó',...(canReverse?['Acción']:[])];
       const cell=(label,html)=>'<td data-label="'+label+'">'+html+'</td>';
       const personCell=(label,value,detail='')=>value?cell(label,esc(value)+(detail?'<small>'+esc(detail)+'</small>':'')):'<td data-label="'+label+'" class="ledgerPersonEmpty">—</td>';
       find('.ledgerRows').innerHTML=rows.length?'<table><thead><tr>'+columns.map(c=>'<th scope="col" data-label="'+c+'">'+c+'</th>').join('')+'</tr></thead><tbody>'+rows.slice(first,limit).map(e=>{
@@ -111,8 +113,9 @@
         const isMovement=['income','delivery','returned'].includes(e.type);
         const recipientRole=e.type==='income'?'Trae':e.type==='returned'?'Devuelve':r.exitKind==='mine'?'Transporta':'Recibe';
         const recipient=r.returnedByName||r.recipientName||r.broughtByName;
-        return '<tr data-type="'+e.type+'">'+cell(columns[0],time)+cell('Movimiento','<b>'+labels[e.type]+'</b>'+small(note))+cell('Elemento','<b>'+esc(e.item)+'</b>'+small(r.assetLabel))+cell('Cantidad',qty)+
-          (balances?['balanceBefore','balanceAfter'].map((key,i)=>cell(i?'Nuevo':'Anterior',amount(r[key])===null?'—':number.format(r[key]))).join(''):'')+
+        const stockValues={Anterior:balanceLabel(r.balanceBefore),Cantidad:qty,Nuevo:balanceLabel(r.balanceAfter)};
+        return '<tr data-type="'+e.type+'">'+cell(columns[0],time)+cell('Movimiento','<b>'+labels[e.type]+'</b>'+small(note))+cell('Elemento','<b>'+esc(e.item)+'</b>'+small(r.assetLabel))+
+          stockColumns.map(label=>cell(label,stockValues[label])).join('')+
           personCell('Persona del movimiento',isMovement&&recipient,recipientRole)+personCell('Bodeguero/a de turno',isMovement&&r.shiftKeeperName)+
           cell('Registró / solicitó',esc(actor(e)))+(canReverse?cell('Acción',!e.reversed&&!r.assetId&&['income','delivery'].includes(e.type)&&norm(r.deliveryType)!=='prestamo'&&r.syncState!=='pending'?'<button type="button" data-reverse-id="'+esc(r.id)+'" data-source="'+e.source+'">Revertir</button>':''):'')+'</tr>';
       }).join('')+'</tbody></table>':'';
