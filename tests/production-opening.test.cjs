@@ -63,7 +63,7 @@ test('an offline opening clears only after commit and a failed save keeps the fo
  await finish();await write;
  assert.equal(r.read().pending.length,1);assert.match(r.c.formMessage,/GUARDADO EN ESTE EQUIPO/);
  assert.equal(fields.search.value,'');assert.equal(fields.partId.value,'');assert.equal(fields.cantidad.value,'');
- assert.equal(fields.fechaISO.value,'10/11/2026');assert.equal(fields.origen.value,'YT29');
+ assert.equal(fields.fechaISO.value,r.c.displayDate(date));assert.equal(fields.origen.value,'YT29');
  fields.search.value=part.nombre;fields.partId.value=part.id;fields.cantidad.value='0';
  r.c.changeState=async()=>{throw Error('Falló el almacenamiento local')};
  await r.save();assert.match(r.c.formMessage,/Falló el almacenamiento/);

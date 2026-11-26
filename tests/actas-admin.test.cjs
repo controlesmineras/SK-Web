@@ -41,6 +41,16 @@ test('registra el número y fecha originales; conserva el siguiente consecutivo 
   await s.flush();assert.equal(s.elements.modoRegistro.value,'anterior');assert.equal(s.elements.numeroAnterior.value,'');
 });
 
+test('dos toques seguidos guardan una sola acta y limpian el formulario',async()=>{
+  const s=app();
+  await s.previous(8);
+  await Promise.all([s.save(),s.save()]);
+  assert.equal(s.writes.length,1);
+  assert.equal(s.elements.id.value,'');
+  assert.equal(s.elements.numeroAnterior.value,'');
+  assert.equal(s.elements.motivo.value,'');
+});
+
 test('la siguiente acta nueva usa el mayor consecutivo registrado, incluso al cargar una anterior de número superior',async()=>{
   const s=app([{id:'existing',tipo:'ACTA',consecutivo:20}]);await s.previous(10);await s.save();assert.equal(await s.api.nextNumber(),21);await s.flush();
   await s.previous(27);await s.save();await s.flush();assert.equal(await s.api.nextNumber(),28);
@@ -74,10 +84,10 @@ test('los oficios mantienen numeración independiente y el registro anterior se 
   await s.api.selectMode('ACTA');assert.equal(s.elements.modoRegistro.value,'nuevo');assert.equal(s.fields['.actaRegistrationMode'].hidden,false);assert.equal(await s.api.nextNumber(),9);
 });
 
-test('quitar y reemplazar enlace conserva acta e identidad',async()=>{const s=app([{id:'a',tipo:'ACTA',consecutivo:9,fecha:'2026-11-16',enlace:'https://example.com/old.pdf'}]);await s.api.edit('a');s.elements.enlace.value='';await s.save();assert.equal(s.records()[0].enlace,'');s.elements.enlace.value='https://example.com/new.pdf';await s.save();assert.equal(s.records().length,1);assert.equal(s.records()[0].enlace,'https://example.com/new.pdf');assert.equal(s.records()[0].consecutivo,9)});
+test('quitar y reemplazar enlace conserva acta e identidad',async()=>{const s=app([{id:'a',tipo:'ACTA',consecutivo:9,fecha:'2026-11-16',enlace:'https://example.com/old.pdf'}]);await s.api.edit('a');s.elements.enlace.value='';await s.save();assert.equal(s.records()[0].enlace,'');assert.equal(s.elements.id.value,'');await s.api.edit('a');s.elements.enlace.value='https://example.com/new.pdf';await s.save();assert.equal(s.records().length,1);assert.equal(s.records()[0].enlace,'https://example.com/new.pdf');assert.equal(s.records()[0].consecutivo,9)});
 
 
-test('editar número conserva ID, rechaza repetidos y ajusta max + 1',async()=>{const s=app([{id:'a',tipo:'ACTA',consecutivo:20,fecha:'2026-11-16'},{id:'b',tipo:'ACTA',consecutivo:30}]);await s.api.edit('a');s.elements.numeroAnterior.value='30';await s.save();assert.equal(s.writes.length,0);assert.match(s.nodes.actaStatus.textContent,/ya está registrada/);s.elements.numeroAnterior.value='45';await s.save();assert.equal(s.records().find(x=>x.id==='a').consecutivo,45);assert.equal(await s.api.nextNumber(),46);s.elements.numeroAnterior.value='12';await s.save();assert.equal(await s.api.nextNumber(),31);assert.equal(s.records().length,2)});
+test('editar número conserva ID, rechaza repetidos y ajusta max + 1',async()=>{const s=app([{id:'a',tipo:'ACTA',consecutivo:20,fecha:'2026-11-16'},{id:'b',tipo:'ACTA',consecutivo:30}]);await s.api.edit('a');s.elements.numeroAnterior.value='30';await s.save();assert.equal(s.writes.length,0);assert.match(s.nodes.actaStatus.textContent,/ya está registrada/);s.elements.numeroAnterior.value='45';await s.save();assert.equal(s.records().find(x=>x.id==='a').consecutivo,45);assert.equal(await s.api.nextNumber(),46);await s.api.edit('a');s.elements.numeroAnterior.value='12';await s.save();assert.equal(await s.api.nextNumber(),31);assert.equal(s.records().length,2)});
 test('sin registros usa 1 y excluye actas eliminadas',async()=>{const s=app([{id:'a',tipo:'ACTA',consecutivo:99,deleted:true}]);assert.equal(await s.api.nextNumber(),1)});
 
 test('actas y oficios muestran día/mes/año y guardan la fecha ISO sin intercambiar día y mes',async()=>{
@@ -96,7 +106,7 @@ test('actas y oficios muestran día/mes/año y guardan la fecha ISO sin intercam
 test('acepta ocho dígitos y fecha bisiesta, normalizando el campo a DD/MM/AAAA',async()=>{
   const s=app();await s.api.reset();s.elements.fecha.value='29022024';await s.save();
   assert.equal(s.records()[0].fecha,'2024-02-29');
-  assert.equal(s.elements.fecha.value,'29/02/2024');
+  await s.api.edit(s.records()[0].id);assert.equal(s.elements.fecha.value,'29/02/2024');
 });
 
 test('rechaza fechas imposibles, incompletas o en formato norteamericano sin modificar el registro',async()=>{

@@ -206,8 +206,9 @@ function mountAdmin(){
   addForm.addEventListener('submit',async event=>{
     event.preventDefault();if(!window.SKAdminAuth?.isAdmin())return;
     const form=event.currentTarget,value=clean(form.elements.value.value),key=group.value;
-    if(!value||!key)return;
-    try{await changeOption(key,null,value);if(group.value===key&&clean(form.elements.value.value)===value)form.reset();draw()}catch(error){alert(error.message)}
+    if(!value||!key||form.inert)return;
+    form.inert=true;
+    try{await changeOption(key,null,value);if(group.value===key&&clean(form.elements.value.value)===value)form.reset();draw()}catch(error){alert(error.message)}finally{form.inert=false}
   });
   list.addEventListener('click',async event=>{
     const button=event.target.closest('[data-remove-option],[data-edit-option]');if(!button||!window.SKAdminAuth?.isAdmin())return;

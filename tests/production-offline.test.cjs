@@ -31,16 +31,19 @@ test('transaction errors surface and do not erase previously saved offline data'
 test('double tap on a new offline draft creates one record, edits replace it, zero survives reload',async()=>{
  const c=await context();
  Object.assign(c,{session:{user:{document:'account'}},state:{inventoryCounts:[],countQueue:[]},countSaving:false,countReport:null,countSelection:'',countDirty:true,countEditRevision:'',countValues:new Map([['part',0]]),
-  countFields:{date:{value:'10/11/2026'},origin:{value:'YT29'}},navigator:{onLine:false},crypto:{randomUUID},canCount:()=>true,readDate:()=> '2026-11-10',today:()=> '2026-11-10',paintCount(){},paintSync(){},countStatus:message=>{throw new Error(message)}});
+  displayDate:()=> '10/11/2026',countFields:{search:{value:''},date:{value:'10/11/2026'},origin:{value:'YT29'}},navigator:{onLine:false},crypto:{randomUUID},canCount:()=>true,readDate:()=> '2026-11-10',today:()=> '2026-11-10',paintCount(){},paintSync(){},countStatus:message=>{throw new Error(message)}});
  await c.changeState('account',()=>c.state);
  c.selectedCount=()=>c.state.countQueue.find(row=>row.id===c.countSelection);
+ vm.runInContext(app.slice(app.indexOf('function selectCount(id)'),app.indexOf('function countReportRows(')),c);
  vm.runInContext(app.slice(app.indexOf('async function queueCount('),app.indexOf('countForm.onsubmit=')),c);
  await Promise.all([c.queueCount('save'),c.queueCount('save')]);
  const first=await c.changeState('account');
  assert.equal(first.countQueue.length,1);
  const id=first.countQueue[0].id;
  assert.equal(first.countQueue[0].values[0].physical,0);
- c.countValues=new Map([['part',4]]);c.countDirty=true;
+ assert.equal(c.countSelection,'');assert.equal(c.countValues.size,0);
+ await c.queueCount('save');assert.equal((await c.changeState('account')).countQueue.length,1);
+ c.selectCount(id);c.countValues=new Map([['part',4]]);c.countDirty=true;
  await c.queueCount('save');
  const second=await c.changeState('account');
  assert.equal(second.countQueue.length,1);assert.equal(second.countQueue[0].id,id);

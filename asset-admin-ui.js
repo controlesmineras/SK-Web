@@ -249,6 +249,7 @@ async function saveAsset(e){
   if(markDuplicate)return alert(`MARCA NUEVA REPETIDA\n\nLa marca ${txt(x.nuevaMarca).toUpperCase()} ya pertenece a: ${cleanLabel(markDuplicate)}.\n\nNo se guardaron los cambios. Revisa la marca de esta ficha; para obtener una nueva utiliza «Solicitar marca nueva».`);
   const dup=duplicateAsset(rows,x,editing);
   if(dup)return alert(`ESTE ACTIVO YA ESTÁ REGISTRADO\n\nYa existe un activo con ${dup.field}: ${dup.value}.\n\nRegistro existente: ${cleanLabel(dup.found)}.\n\nRevisa nuevamente el buscador de activos.`);
+  f.inert=true;
   if(editing){
    const old=rows.find(a=>a.id===x.id&&!a.deleted);if(!old)return alert('No se encontró el activo.');
    const savedAt=now();
@@ -264,7 +265,7 @@ async function saveAsset(e){
   }
   openNewAsset(false);await refresh();if(window.refreshConsumptionMachines)await window.refreshConsumptionMachines();window.skSyncApi?.schedule?.(300);if(createdAsset)window.SKAssetMarking.syncSaved(createdAsset).catch(console.error);
  }catch(error){console.error(error);alert('No se pudo completar el registro: '+(error.message||error));}
- finally{assetSaving=false;if(button)button.disabled=false;}
+ finally{f.inert=false;assetSaving=false;if(button)button.disabled=false;}
 }
 async function deleteAsset(){
  if(assetSaving||!window.SKAdminAuth?.canManageAssets?.())return;

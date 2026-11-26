@@ -18,7 +18,7 @@ function runtime(){
  vm.runInContext(server.slice(server.indexOf('function productionSync_(')),backend);
  let local=structuredClone({...central,stockAdjustment:true,parts:[part],pending:[]});
  const c=vm.createContext({sessionPolicy,state:structuredClone(local),session:{token:'online',expiresAt:Date.now()+60000,user:{document:'doc',role:'admin'}},saving:false,syncing:false,syncRequested:false,syncFailed:false,syncConnectionFailed:false,countSelection:'',countDirty:false,countSaving:false,
-  window:{addEventListener(){}},document:{addEventListener(){},hidden:false},setTimeout:()=>1,clearTimeout(){},setInterval(){},navigator:{onLine:true},crypto:{randomUUID},today:()=>date,readDate:()=>date,
+  window:{addEventListener(){}},document:{addEventListener(){},hidden:false},setTimeout:()=>1,clearTimeout(){},setInterval(){},navigator:{onLine:true},crypto:{randomUUID},today:()=>date,readDate:()=>date,displayDate:value=>value.split('-').reverse().join('/'),
   status:message=>{c.message=message},stockStatus:(form,message)=>{c.formMessage=message},paintSync(){},paint(){},console:{error(){}},
   changeState:async(document,update)=>{if(update)local=structuredClone(update(structuredClone(local)));return structuredClone(local)},
   api:async(action,payload)=>backend.productionSync_(payload)});
@@ -30,7 +30,7 @@ function runtime(){
  vm.runInContext(source.slice(source.indexOf('const incomeMovements='),source.indexOf('function filterParts(')),c);
  vm.runInContext(source.slice(source.indexOf('async function saveStock('),source.indexOf('for(const view of stockViews){')),c);
  vm.runInContext(source.slice(source.indexOf('let syncRequested=false'),source.indexOf('function showConsumptionView(')),c);
- const form={elements:{origen:{value:'YT29'},partId:{value:part.id},fechaISO:{value:'10/11/2026'},cantidad:{value:'4'}}};
+ const form={dataset:{},querySelector:()=>({}),elements:{search:{value:part.nombre},origen:{value:'YT29'},partId:{value:part.id},fechaISO:{value:'10/11/2026'},cantidad:{value:'4'}}};
  return {c,form,save:()=>c.saveStock({preventDefault(){}},{form,kind:'adjustment'}),read:()=>local,central:()=>central,backend};
 }
 test('legacy pending adjustments sync to history without changing the opening-based display',async()=>{
@@ -39,7 +39,7 @@ test('legacy pending adjustments sync to history without changing the opening-ba
  assert.equal(r.c.stockFor(part,'YT29'),24);assert.equal(r.read().pending[0].baseQuantity,24);
  assert.match(r.c.formMessage,/GUARDADO EN ESTE EQUIPO/);assert.match(r.c.formMessage,/PENDIENTE/);
  r.c.navigator.onLine=true;await r.c.sync();assert.equal(r.read().pending.length,0);assert.equal(r.central().incomes.at(-1).target,4);
- r.form.elements.cantidad.value='0';await r.save();await r.c.sync();assert.equal(r.c.stockFor(part,'YT29'),24);assert.equal(r.read().pending[0].syncRejected,true);
+ r.form.elements.partId.value=part.id;r.form.elements.cantidad.value='0';await r.save();await r.c.sync();assert.equal(r.c.stockFor(part,'YT29'),24);assert.equal(r.read().pending[0].syncRejected,true);
 });
 test('an expired online token does not prevent saving locally',async()=>{
  const r=runtime();r.c.session.expiresAt=1;await r.save();
@@ -78,14 +78,14 @@ test('a previous server cannot silently apply a local adjustment without checkin
 test('an income before an offline adjustment and a consumption afterwards preserve operation order',async()=>{
  const r=runtime();r.c.navigator.onLine=false;
  r.form.elements.cantidad.value='6';await r.c.saveStock({preventDefault(){}},{form:r.form,kind:'income'});
- r.form.elements.cantidad.value='4';await r.save();assert.equal(r.read().pending[1].baseQuantity,30);
+ r.form.elements.partId.value=part.id;r.form.elements.cantidad.value='4';await r.save();assert.equal(r.read().pending[1].baseQuantity,30);
  await r.c.changeState('doc',current=>({...current,pending:[...current.pending,movement('consume-after-001',undefined,1,{tipoEquipo:'YT',assetId:'machine',responsableId:'person',turno:'D'})]}));r.c.state=await r.c.changeState('doc');
  assert.equal(r.c.stockFor(part,'YT29'),29);
  r.c.navigator.onLine=true;await r.c.sync();assert.equal(r.read().pending.length,0);assert.equal(r.c.stockFor(part,'YT29'),29);
 });
 test('a double tap and a second target cannot duplicate or replace the pending operation',async()=>{
  const r=runtime();await Promise.all([r.save(),r.save()]);assert.equal(r.read().pending.length,1);
- r.form.elements.cantidad.value='7';await r.save();assert.equal(r.read().pending[0].cantidad,4);assert.match(r.c.formMessage,/ya tiene un ajuste pendiente/);
+ r.form.elements.partId.value=part.id;r.form.elements.cantidad.value='7';await r.save();assert.equal(r.read().pending[0].cantidad,4);assert.match(r.c.formMessage,/ya tiene un ajuste pendiente/);
 });
 test('a storage failure does not show local success or change the entered quantity',async()=>{
  const r=runtime();r.c.changeState=async()=>{throw new Error('No se pudo guardar en este dispositivo')};await r.save();
@@ -122,9 +122,9 @@ test('stock form distinguishes locally saved, centrally confirmed and rejected q
  vm.runInContext(source.slice(source.indexOf('function paintStockView('),source.indexOf('function paintBalances(')),r.c);
  const view={form:r.form,panel:{querySelector:node},kind:'adjustment'};
  await r.save();r.c.paintStockView(view);
- assert.equal(r.form.elements.cantidad.disabled,true);assert.match(r.c.formMessage,/PENDIENTE/);assert.equal(node('reviewStockAdjustment').hidden,true);
+ assert.equal(r.form.elements.partId.value,'');assert.equal(r.form.elements.cantidad.value,'');assert.equal(node('button[type=submit]').disabled,true);assert.match(r.c.formMessage,/PENDIENTE/);assert.equal(node('reviewStockAdjustment').hidden,true);
  await r.c.sync();r.c.paintStockView(view);
  assert.equal(r.form.elements.cantidad.disabled,false);assert.match(r.c.formMessage,/CONFIRMADA EN LA BASE CENTRAL: 4/);
- r.form.elements.cantidad.value='6';await r.save();r.backend.productionSync_({pending:[movement('other-income-0001','income',2)]});
- await r.c.sync();r.c.paintStockView(view);assert.equal(node('reviewStockAdjustment').hidden,false);assert.match(r.c.formMessage,/existencia cambió/);
+ r.form.elements.partId.value=part.id;r.form.elements.cantidad.value='6';await r.save();r.backend.productionSync_({pending:[movement('other-income-0001','income',2)]});
+ await r.c.sync();r.form.elements.partId.value=part.id;r.c.paintStockView(view);assert.equal(node('reviewStockAdjustment').hidden,false);assert.match(r.c.formMessage,/existencia cambió/);
 });

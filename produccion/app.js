@@ -441,7 +441,7 @@ async function saveStock(event,{form:stockForm,kind}){
  if(!Number.isSafeInteger(quantity)||quantity<(kind==='income'?1:0)){tell('Escribe una cantidad entera válida.',true);return;}
  const record={kind,origen:origen.value,partId:partId.value,fechaISO:date,cantidad:quantity,id:crypto.randomUUID(),createdAt:new Date().toISOString(),syncState:'pending'};
  if(kind==='adjustment')record.baseQuantity=stockFor(part,record.origen);
- saving=true;
+ saving=true;stockForm.inert=true;stockForm.querySelector('button[type=submit]').disabled=true;
  try{
   const fresh=await changeState(active.user.document,current=>{
    const pending=current.pending||[];
@@ -462,20 +462,19 @@ async function saveStock(event,{form:stockForm,kind}){
   });
   if(session!==active)return;
   state=fresh;
-  if(kind==='income'||kind==='initial')cantidad.value='';
-  if(kind==='initial'){
-   partId.value='';
-   stockForm.elements.search.value='';
-   stockForm.querySelector('.partOptions').hidden=true;
-   stockForm.dataset.stockPartKey=record.origen+'|';
-   stockForm.dataset.pendingStockId=record.id;
-   delete stockForm.dataset.openingPart;
-  }
-  if(stockForm.dataset){delete stockForm.dataset.openingDirty;delete stockForm.dataset.openingDateEdited;}
+  cantidad.value='';
+  partId.value='';stockForm.elements.search.value='';
+  stockForm.querySelector('.partOptions').hidden=true;
+  stockForm.dataset.stockPartKey=record.origen+'|';
+  if(kind!=='income')stockForm.dataset.pendingStockId=record.id;
+  delete stockForm.dataset.openingPart;
+  delete stockForm.dataset.openingDirty;
+  delete stockForm.dataset.openingDateEdited;
+  fechaISO.value=displayDate(today());
   tell('GUARDADO EN ESTE EQUIPO · PENDIENTE DE SINCRONIZAR.');
   scheduleSync(300);
  }catch(error){if(session===active)tell(error.message,true);}
- finally{saving=false;if(session===active)paint();}
+ finally{saving=false;stockForm.inert=false;if(session===active)paint();}
 }
 for(const view of stockViews){
  const {search,partId,origen}=view.form.elements;
@@ -616,6 +615,7 @@ function paintPeople(){
  if(!matches.length)responsibleOptions.textContent='No se encontraron colaboradores.';
 }
 function paintDraft(){
+ form.querySelector('[type=submit]').disabled=saving||!draft.length;
  const list=byId('draft');
  list.hidden=!draft.length;
  const parts=new Map((draft.length?catalog():[]).map(part=>[part.id,part]));
@@ -941,10 +941,16 @@ byId('reviewIncomeConflicts').onclick=()=>{
 byId('incomeEditCancel').onclick=()=>byId('incomeEditDialog').close();
 byId('incomeEditForm').onsubmit=async event=>{
  event.preventDefault();const edit=event.currentTarget,row=byId('incomeEditDialog').incomeRow;
+ if(saving||!row||!byId('incomeEditDialog').open)return;
  const cantidad=Number(edit.elements.cantidad.value),fechaISO=readDate(edit.elements.fechaISO);
  if(!Number.isSafeInteger(cantidad)||cantidad<1||!fechaISO||fechaISO>today()){byId('incomeEditError').textContent='Escribe una cantidad entera mayor que cero y una fecha válida hasta hoy.';return;}
  if(!confirm('Editar este registro afectará la cantidad en el módulo Inventario, en la columna Saldo esperado.\n\nCantidad: '+row.cantidad+' → '+cantidad+'\nFecha: '+displayDate(row.fechaISO)+' → '+displayDate(fechaISO)+'\n\n¿Confirmas la edición?'))return;
- if(await queueIncomeChange(row,'edit',{cantidad,fechaISO,deleted:false}))byId('incomeEditDialog').close();
+ const submit=edit.querySelector('[type=submit]');submit.disabled=true;edit.inert=true;
+ try{
+  if(await queueIncomeChange(row,'edit',{cantidad,fechaISO,deleted:false})){
+   edit.reset();byId('incomeEditDialog').incomeRow=null;byId('incomeEditDialog').close();
+  }
+ }finally{submit.disabled=false;edit.inert=false;}
 };
 function showQueryType(panel){
  const buttons=byId('productionQueries').querySelectorAll('.productionViews button');
@@ -1000,7 +1006,7 @@ function paintCount(){
  countFields.record.disabled=countSaving;
  countFields.origin.disabled=countSaving||Boolean(selected)||Boolean(countValues.size);
  countFields.date.disabled=countSaving||Boolean(selected)||Boolean(countValues.size)||review;
- countForm.querySelector('[type=submit]').disabled=!editable;
+ countForm.querySelector('[type=submit]').disabled=!editable||!countDirty||![...countValues.values()].some(value=>value!==null);
  byId('submitCount').disabled=!editable;
  byId('approveCount').hidden=byId('returnCount').hidden=!(admin&&review);
  byId('approveCount').disabled=byId('returnCount').disabled=Boolean(queued);
@@ -1038,6 +1044,7 @@ function paintCount(){
   input.oninput=()=>{
    countValues.set(part.id,input.value===''?null:input.valueAsNumber);
    countDirty=true;
+   countForm.querySelector('[type=submit]').disabled=![...countValues.values()].some(value=>value!==null);
    countFields.origin.disabled=true;countFields.date.disabled=true;
    countStatus('CAMBIOS SIN GUARDAR · Pulsa GUARDAR BORRADOR.');
    difference.textContent=input.value===''||!input.validity.valid?'—':input.valueAsNumber-expected;
@@ -1062,6 +1069,7 @@ async function queueCount(action,note){
   const date=readDate(countFields.date),origin=countFields.origin.value;
   if(!date||date>today()){countStatus('Ingresa una fecha de inventario válida, hasta hoy.');return}
   const values=[...countValues].filter(([,value])=>value!==null).map(([partId,physical])=>({partId,physical}));
+  if(!values.length||(action==='save'&&!countDirty))return;
   if(values.some(row=>!Number.isSafeInteger(row.physical)||row.physical<0)){countStatus('Registra cantidades enteras de cero en adelante.');return}
   if(action==='submit'&&window.SKSpareCatalog.filter(catalog(),origin.replace(/\d+$/,''),origin).some(part=>!values.some(row=>row.partId===part.id))){
    countStatus('Completa todos los repuestos antes de solicitar autorización.');return;
@@ -1073,7 +1081,11 @@ async function queueCount(action,note){
  try{
   const fresh=await changeState(active.user.document,current=>({...current,countSyncError:'',countQueue:[...(current.countQueue||[]).filter(row=>row.id!==id),request]}));
   if(session!==active)return;
-  state=fresh;countSelection=id;countDirty=false;countEditRevision=revision;paintSync();
+  state=fresh;countDirty=false;
+  if(action==='save'||action==='submit'){
+   countFields.search.value='';countFields.date.value=displayDate(today());selectCount('');
+  }else{countSelection=id;countEditRevision=revision;}
+  paintSync();
  }catch(error){if(session===active){state={...state,countSyncError:error.message};countStatus(error.message)}}
  finally{countSaving=false;if(session===active)paintCount()}
  if(session===active)scheduleSync(300);
@@ -1186,7 +1198,7 @@ async function openWorkspace({offlineAccess=!navigator.onLine}={}){
  }
 }
 form.onsubmit=async event=>{
- event.preventDefault();if(saving)return;
+ event.preventDefault();if(saving||!draft.length)return;
  if(!session)return status('Inicia sesión para guardar.');
  const active=session;
  saving=true;form.querySelector('[type=submit]').disabled=true;
@@ -1201,10 +1213,15 @@ form.onsubmit=async event=>{
   if(!shared.fechaISO){fields.fechaISO.reportValidity();return}
   if(!shared.responsableId)throw new Error('Selecciona el mecánico o responsable de la reparación.');
   const records=lines.map(row=>({...shared,...row,syncState:'pending',registradoPorNombre:active.user.name,id:crypto.randomUUID(),createdAt:new Date().toISOString()}));
+  form.inert=true;
   const fresh=await changeState(active.user.document,current=>({...current,pending:[...(current.pending||[]),...records]}));
-  if(session===active){state=fresh;draft=[];manualShift=false;refreshShift();closeParts();paint();status('CONSUMOS GUARDADOS EN ESTE EQUIPO · PENDIENTES DE SINCRONIZAR.');scheduleSync(300);}
+  if(session===active){
+   state=fresh;draft=[];form.reset();byId('inventoryOrigin').value=inventoryOrigin;
+   fields.assetId.value='';selectedMachineLabel='';closeMachine();closeParts();
+   fields.responsableId.value='';personSearch.value='';responsibleOptions.hidden=true;
+   fields.fechaISO.value=displayDate(today());manualShift=false;refreshShift();paint();status('CONSUMOS GUARDADOS EN ESTE EQUIPO · PENDIENTES DE SINCRONIZAR.');scheduleSync(300);}
  }catch(error){status(error.message)}
- finally{saving=false;form.querySelector('[type=submit]').disabled=false}
+ finally{saving=false;form.inert=false;form.querySelector('[type=submit]').disabled=!draft.length}
 };
 function submitAccess(id,handler){
  const feedback=byId('accessStatus');

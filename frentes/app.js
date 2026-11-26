@@ -37,16 +37,21 @@ f.nivel.onchange=()=>{f.corte.disabled=!f.nivel.value;};
 f.empresa.onchange=catalogs;
 for(const radio of f.turno)radio.onchange=()=>{manualShift=true;};
 function updateShift(){if(!manualShift&&!editing)f.turno.value=shift();}
+function updateSaveButton(){
+  $('save').disabled=Boolean(savingReport)||(!selected.length&&!newMode());
+}
 function showRegistration(open){
   $('lookup').hidden=open||Boolean(editing&&selected.length);
   $('personFields').hidden=$('personFields').disabled=!open;
   if(!open)$('details').disabled=true;
+  updateSaveButton();
 }
 function clearSearch(){
   showRegistration(false);$('search').value='';$('matches').replaceChildren();$('add').hidden=true;
 }
 function paintSelected(){
   const cards=$('chosen');
+  updateSaveButton();
   cards.hidden=!selected.length;
   cards.replaceChildren(...selected.map(p=>{
     const card=document.createElement('li');
@@ -171,7 +176,7 @@ function render(){
   if(newMode())results(true);else if(!$('lookup').hidden)results();
 }
 report.onsubmit=async event=>{
-  event.preventDefault();if(!session||savingReport)return;
+  event.preventDefault();if(!session||savingReport||(!selected.length&&!newMode()))return;
   const s=session;
   try{
     if(!newMode()&&$('search').value.trim())throw new Error('Selecciona al funcionario que estás buscando o limpia la búsqueda antes de guardar.');
@@ -188,7 +193,7 @@ report.onsubmit=async event=>{
       personId:p.id,documento:p.documento||'',nombre:personName(p),
       newPerson:p.local||p.draftNew?Object.fromEntries(personKeys.map(k=>[k,p[k]||''])):null
     }));
-    const previous=editing?.rev;$('save').disabled=true;
+    const previous=editing?.rev;$('save').disabled=true;report.inert=true;
     savingReport=access(common.owner,local=>{
       sessionPolicy.requireActive(s.token);
       for(const row of rows)FrontStore.save(local,row,previous);
@@ -197,7 +202,7 @@ report.onsubmit=async event=>{
     if(session!==s)return;state=saved;reset();render();
     message('notice',rows.length===1?'Reporte guardado en este dispositivo.':'Reporte guardado en este dispositivo para '+rows.length+' funcionarios.');
     void sync();
-  }catch(error){if(session===s)message('notice',error.message);}finally{savingReport=null;$('save').disabled=false;}
+  }catch(error){if(session===s)message('notice',error.message);}finally{savingReport=null;report.inert=false;updateSaveButton();}
 };
 
 async function post(body,signal){

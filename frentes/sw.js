@@ -1,9 +1,9 @@
-const VERSION='20261125-sesion-offline-36h';
+const VERSION='20261125-guardado-apps';
 const CACHE='sk-frentes-'+VERSION;
 const scope=self.registration.scope;
 const indexUrl=new URL('./index.html?v='+VERSION,scope).href;
 const shell=[
-  '../app-entry.js?v='+VERSION,indexUrl,'./app.js?v='+VERSION,'./store.js?v='+VERSION,'./app.css?v='+VERSION,
+  '../app-entry.js?v=20261125-sesion-offline-36h',indexUrl,'./app.js?v='+VERSION,'./store.js?v='+VERSION,'./app.css?v='+VERSION,
   './manifest.webmanifest','../sync-config.js','../date-calendar.js','../date-calendar.css',
   '../form-option-catalog.js','./labor.svg','./labor-180.png','./labor-192.png','./labor-512.png'
 ];
