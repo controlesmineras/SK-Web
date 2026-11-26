@@ -11,7 +11,8 @@ function backend(initial={},role='assistant'){
  const ctx=vm.createContext({LockService:{getScriptLock:()=>({waitLock(){},releaseLock(){}})}});
  vm.runInContext(read('backend/apps-script/Code.gs'),ctx);
  ctx.findFile_=()=> 'test';ctx.readFile_=()=>clone(cloud);ctx.writeFile_=(_,value)=>{cloud=clone(value)};ctx.json_=clone;ctx.verifyToken_=()=>({document:'TEST-OPERATOR',role:'plaza_operator'});
- return{sync:q=>ctx.adminSyncAuthorized_(q.data,q.since,{role,username:'test'}),cloud:()=>clone(cloud),plaza:()=>ctx.plazaSync_({token:'test',data:{}})};
+ ctx.adminProductionBalances_=()=>({protocol:'production-balances-v1',enabled:false,sampledAt:date,count:0,rows:[],removed:[]});
+ return{sync:q=>ctx.adminSyncAuthorized_(q.data,q.since,{role,username:'test'},q.productionBalanceVersions),cloud:()=>clone(cloud),plaza:()=>ctx.plazaSync_({token:'test',data:{}})};
 }
 async function client({respond,initialCloud,role='assistant'}={}){
  const b=backend(initialCloud,role),storage=new Map([['skWebServerUpdatedAt',date]]),states=[],events=[],requests=[],scheduled=new Map();
@@ -79,7 +80,7 @@ test('una falla de servicio conserva el ID reparado para reintentar sin duplicar
  assert.equal(await c.sync(),false);const id=(await c.rows())[0].id;assert.ok(id);assert.equal(await c.sync(),true);assert.equal(c.requests[1].data.personal[0].id,id);assert.equal(c.b.plaza().data.personal.length,1);
 });
 test('la recuperación conserva las eliminaciones y no inventa registros que ya no existen localmente',async()=>{
- const c=await client();assert.equal(await c.ctx.repairPersonalIds(),0);assert.deepEqual(await c.rows(),[]);await c.raw(person('',{deleted:true}));await c.ctx.repairPersonalIds();assert.equal((await c.rows())[0].deleted,true);assert.equal(await c.sync(),true);assert.equal(c.b.plaza().data.personal[0].deleted,true);
+ const c=await client({role:'admin'});c.ctx.window.SKAdminAuth.isAdmin=()=>true;assert.equal(await c.ctx.repairPersonalIds(),0);assert.deepEqual(await c.rows(),[]);await c.raw(person('',{deleted:true}));await c.ctx.repairPersonalIds();assert.equal((await c.rows())[0].deleted,true);assert.equal(await c.sync(),true);assert.equal(c.b.plaza().data.personal[0].deleted,true);
 });
 test('los demás registros aceptan confirmación rápida, pero primero negocian revisiones fiables',async()=>{
  const c=await client({respond:()=>({ok:true,acknowledged:true,updatedAt:'new-cursor'})});await c.ctx.put('actas',{id:'acta-test',updatedAt:date,syncState:'pending'});
@@ -144,4 +145,55 @@ test('sincronización general descarga saldos por lote, conserva ceros y elimina
  assert.equal((await c.ctx.all('inventoryStock'))[0].quantity,12);
  await c.ctx.clearStore('inventoryQuantityAdjustments');assert.equal(await c.sync(),false);assert.match(c.status.textContent,/Saldos de Producción pendientes/);
  assert.equal(c.requests.length,4);
+});
+
+test('la base central reserva la eliminación al administrador y protege el historial en reintentos',()=>{
+ const central=person('original',{syncState:'synced',pinHash:'test',plazaEnabled:true});
+ const delivery={id:'delivery',recipientId:'original',recipientName:central.nombre};
+ const initial={personal:[central],blendingDeliveries:[delivery]};
+ const deletion=person('original',{deleted:true,nombre:'Edición desactualizada'});
+ const request={data:{personal:[deletion]}};
+ const limited=backend(initial,'assistant');
+ assert.throws(()=>limited.sync(request),/Administrador/);
+ assert.deepEqual(limited.cloud().personal,[central]);
+ for(const role of ['admin','owner']){
+  const b=backend(initial,role);
+  b.sync(request);
+  const [removed]=b.cloud().personal;
+  assert.equal(removed.deleted,true);
+  assert.equal(removed.nombre,central.nombre);
+  assert.equal(removed.deletedBy,'test');
+  assert.equal(removed.plazaEnabled,undefined);
+  b.sync(request);
+  b.sync({data:{personal:[person('original',{updatedAt:'2099-03-20T00:00:00Z'})]}});
+  assert.deepEqual(b.cloud().personal,[removed]);
+  b.sync({data:{personal:[person('new-id')]}});
+  assert.deepEqual(b.cloud().personal.filter(p=>!p.deleted).map(p=>p.id),['new-id']);
+  assert.deepEqual(b.cloud().blendingDeliveries,[delivery]);
+ }
+});
+
+test('una eliminación espera al administrador o al servidor actualizado y permite sincronizar otras fichas',async()=>{
+ for(const admin of [false,true]){
+  const c=await client({respond(q,n,ctx,b){
+   if(q.action==='syncPersonDeletion')return {ok:false,error:'Solicitud no válida'};
+   assert.ok(!q.data.personal.some(row=>row.deleted));return b.sync(q);
+  }});
+  c.ctx.window.SKAdminAuth.isAdmin=()=>admin;
+  await c.raw(person('deleted',{deleted:true}));
+  await c.raw(person('other',{documento:'TEST-2'}));
+  assert.equal(await c.sync(),false);
+  assert.equal((await c.rows()).find(p=>p.id==='deleted').syncState,'pending');
+  assert.equal(c.b.cloud().personal[0].id,'other');
+  assert.equal(c.requests.some(q=>q.action==='syncPersonDeletion'),admin);
+  assert.match(c.status.textContent,admin?/Apps Script/:/administrador/);
+ }
+});
+
+test('una ficha activa en la respuesta no confirma su eliminación',async()=>{
+ const c=await client({role:'admin',respond:()=>({ok:true,data:{personal:[person('p',{syncState:'synced'})]}})});
+ c.ctx.window.SKAdminAuth.isAdmin=()=>true;
+ await c.raw(person('p',{deleted:true}));
+ assert.equal(await c.sync(),false);
+ assert.equal((await c.rows())[0].syncState,'pending');
 });
