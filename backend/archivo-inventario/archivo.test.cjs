@@ -7,6 +7,21 @@ const vm = require('node:vm');
 const crypto = require('node:crypto');
 const {DatabaseSync} = require('node:sqlite');
 const {programa} = require('./empaquetar.cjs');
+const {parse} = require('acorn');
+const {execFileSync} = require('node:child_process');
+
+test('el código para copiar y el ZIP contienen el mismo script de sintaxis ES2019 con ambas funciones públicas', () => {
+  const codigo = programa();
+  const arbol = parse(codigo, {ecmaVersion: 2019, sourceType: 'script'});
+  for (const nombre of ['activarHistorialInventario', 'copiarHistorialConfirmado']) {
+    assert.ok(arbol.body.some(n => n.type === 'FunctionDeclaration' && n.id.name === nombre));
+  }
+  assert.equal(fs.readFileSync(path.join(__dirname, 'codigo-apps-script.txt'), 'utf8'), codigo);
+  const comprimido = execFileSync('python3', ['-c',
+    "import sys, zipfile; sys.stdout.buffer.write(zipfile.ZipFile(sys.argv[1]).read('Codigo.gs'))",
+    path.join(__dirname, 'Historial-SQLite.zip')], {maxBuffer: 8 * 1024 * 1024});
+  assert.equal(comprimido.toString('utf8'), codigo);
+});
 
 function blob(bytes) {
   const b = Buffer.from(bytes);

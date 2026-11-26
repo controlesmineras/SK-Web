@@ -2,13 +2,19 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const {execFileSync} = require('node:child_process');
+const {transformSync} = require('esbuild');
 
 function programa() {
   const raiz = path.resolve(path.dirname(require.resolve('sql.js')),'..');
-  const motor = fs.readFileSync(path.join(raiz, 'dist/sql-asm-memory-growth.js'), 'utf8');
+  // El editor de Apps Script rechaza las asignaciones lógicas y los campos de clase del motor.
+  const opciones = {target: 'es2019', charset: 'utf8'};
+  const motor = transformSync(fs.readFileSync(path.join(raiz, 'dist/sql-asm-memory-growth.js'), 'utf8'), {
+    ...opciones, minifyWhitespace: true, lineLimit: 1024
+  }).code;
+  const archivador = transformSync(fs.readFileSync(path.join(__dirname, 'ArchivoInventario.gs'), 'utf8'), opciones).code;
   const licencia = fs.readFileSync(path.join(raiz, 'LICENSE'), 'utf8');
   // Adaptadores locales para V8 de Apps Script. La distribución de SQLite va completa, sin descargas ni eval.
-  return fs.readFileSync(path.join(__dirname,'ArchivoInventario.gs'),'utf8') + `
+  return archivador + `
 /* sql.js ${JSON.parse(fs.readFileSync(path.join(raiz,'package.json'),'utf8')).version}
 ${licencia} */
 function motorArchivoInventario_() {

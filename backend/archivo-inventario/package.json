@@ -1,6 +1,13 @@
 {
   "name": "sk-archivo-inventario",
   "private": true,
-  "scripts": {"build": "node empaquetar.cjs", "test": "node --test archivo.test.cjs"},
-  "devDependencies": {"sql.js": "1.17.0"}
+  "scripts": {
+    "build": "node empaquetar.cjs",
+    "test": "node --test archivo.test.cjs"
+  },
+  "devDependencies": {
+    "acorn": "8.19.0",
+    "esbuild": "0.28.2",
+    "sql.js": "1.17.0"
+  }
 }
