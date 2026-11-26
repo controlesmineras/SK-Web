@@ -150,7 +150,8 @@ async function edit(id){
 }
 async function save(event){
   event.preventDefault();const form=event.currentTarget,button=document.getElementById('actaSave'),status=document.getElementById('actaStatus');
-  button.disabled=true;
+  if(form.inert||button.disabled)return;
+  form.inert=true;button.disabled=true;
   try{
     const list=await rows(),id=form.elements.id.value,existing=id?list.find(x=>x.id===id):null,consecutivo=existing?(documentType==='ACTA'?Number(form.elements.numeroAnterior.value):Number(existing.consecutivo)):isPreviousActa(form)?Number(form.elements.numeroAnterior.value):await nextNumber(documentType,list),stamp=new Date().toISOString();
     if(id&&!existing)throw new Error('El documento ya no está disponible. Actualiza los datos e intenta nuevamente.');
@@ -175,9 +176,9 @@ async function save(event){
       acta.notCreatedAt=acta.notCreatedAt||stamp;
     }
     Object.assign(acta,{tipo:documentType,consecutivo,fecha,area:documentType==='ACTA'?(requested?'NO APLICA':form.elements.area.value):'',motivo:documentType==='ACTA'?(requested?(window.SKAdminAuth?.isAdmin?.()===true?'NO SE REGISTRÓ':existing?.motivo||''):form.elements.motivo.value):'',asunto:documentType==='OFICIO'?form.elements.asunto.value.trim():'',dirigidoA:documentType==='OFICIO'?form.elements.dirigidoA.value.trim():'',enlace:requested?'':form.elements.enlace.value.trim(),updatedAt:stamp,syncState:'pending'});
-    await put('actas',acta);window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-documents-changed'));status.hidden=false;status.textContent=existing?'Cambios guardados.':`${documentType==='ACTA'?'Acta':'Oficio'} N.º ${consecutivo} ${documentType==='ACTA'?'registrada':'registrado'} y pendiente de sincronización.`;await render();if(!existing)setTimeout(()=>reset({keepRegistrationMode:true}),900);
+    await put('actas',acta);window.skSyncApi?.schedule?.(300);window.dispatchEvent(new Event('skweb-documents-changed'));await reset({keepRegistrationMode:true});status.hidden=false;status.textContent=existing?'Cambios guardados.':`${documentType==='ACTA'?'Acta':'Oficio'} N.º ${consecutivo} ${documentType==='ACTA'?'registrada':'registrado'} y pendiente de sincronización.`;await render();
   }catch(error){status.hidden=false;status.textContent=error?.message||String(error)}
-  finally{button.disabled=false}
+  finally{form.inert=false;button.disabled=false}
 }
 function mount(){
   if(document.getElementById('actas'))return;

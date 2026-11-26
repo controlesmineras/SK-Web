@@ -86,7 +86,7 @@ test('a closed inventory blocks edits and undo; expired undo is rejected',async(
 test('canceling either confirmation writes nothing; warning names the affected inventory balance',async()=>{
  const r=runtime();let message='';r.c.confirm=text=>{message=text;return false};
  await r.c.deleteIncome(income(r));assert.match(message,/Borrar este registro afectará el Saldo esperado en el módulo Inventario/);assert.equal((r.read().incomeChanges||[]).length,0);
- r.c.byId('incomeEditDialog').incomeRow=income(r);
+ r.c.byId('incomeEditDialog').open=true;r.c.byId('incomeEditDialog').incomeRow=income(r);
  await r.c.byId('incomeEditForm').onsubmit({preventDefault(){},currentTarget:{elements:{cantidad:{value:'5'},fechaISO:{value:date}}}});
  assert.match(message,/Editar este registro afectará la cantidad en el módulo Inventario, en la columna Saldo esperado/);assert.equal((r.read().incomeChanges||[]).length,0);
 });

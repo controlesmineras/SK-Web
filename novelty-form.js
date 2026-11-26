@@ -115,7 +115,7 @@ async function save(event){
     for(const field of Object.keys(data))if(!String(data[field]??'').trim())delete novelty[field];
     // Solo la novedad entra en la cola. El servidor compara con su propia ficha.
     window.SKAdminAuth?.requireActive?.();
-    const tx=db.transaction(assetProfileTables,'readwrite');
+    form.inert=true;const tx=db.transaction(assetProfileTables,'readwrite');
     const committed=new Promise((resolve,reject)=>{tx.oncomplete=resolve;tx.onabort=()=>reject(tx.error||new Error('No se pudo guardar la novedad.'));});
     const saveRow=async()=>{
       const stored=await idbResult(tx.objectStore('assets').get(asset.id));
@@ -134,7 +134,7 @@ async function save(event){
     status.textContent=novelty.historyOnly?'✓ Novedad guardada solo en el historial.':'✓ Novedad guardada. Ficha actualizada en este dispositivo.';
     window.skSyncApi?.schedule?.(300);
   }catch(error){alert(error.message||'No se pudo guardar la novedad.');}
-  finally{saving=false;if(button)button.disabled=false;}
+  finally{form.inert=false;saving=false;if(button)button.disabled=false;}
 }
 
 function installAssetPicker(){

@@ -86,7 +86,7 @@ async function open(scope){
  function rolesFor(row){
   return Object.entries(access).flatMap(([key,list])=>(list||[]).filter(other=>other===row||same(other,row)).map(other=>apps[key].name+' — '+labels(key,other)));
  }
- function clearLaborSelection(){
+ function clearSelection(){
   selected=null;search.value='';info.hidden=true;manage.hidden=true;manage.replaceChildren();
   find('[data-document]').value='';find('[data-company]').value='';showResults(false);
  }
@@ -175,7 +175,7 @@ async function open(scope){
      if(!current()||selected!==row)return;
      if(result.personId!==row.personId||result.scope!=='labor'||result.role!==requested)throw new Error('La base central no confirmó el rol de Labor. Revisa la implementación de Code.gs.');
      manage.querySelector('[data-role-report]')?.replaceChildren();
-     row.role=requested;role.value=requested;save.hidden=true;clearInvite();renderActive();
+     row.role=requested;role.value=requested;clearInvite();clearSelection();renderActive();
      status.textContent='Rol guardado. Sincroniza Labor para aplicarlo en la sesión abierta.';
     }));
     role.onchange=()=>{save.hidden=role.value===row.role};
@@ -199,7 +199,7 @@ async function open(scope){
     Object.assign(person,updated);Object.assign(row,{plazaRole:updated.plazaRole,role:updated.plazaRole});
     if(!current())return;
     manage.querySelector('[data-role-report]')?.replaceChildren();
-    clearInvite();renderActive();role.value=row.role;saveRole.hidden=true;
+    clearInvite();clearSelection();renderActive();
     status.textContent='Rol guardado. Sincroniza Plaza Blending para aplicarlo en la sesión abierta.';
    }));
    saveRole.hidden=true;
@@ -215,7 +215,7 @@ async function open(scope){
     const confirmed=scope==='production'?productionSelection(result):result.role;
     if(result.personId!==row.personId||result.scope!==scope||confirmed!==requested)throw new Error('La base central no confirmó el rol. Revisa la implementación de Code.gs.');
     manage.querySelector('[data-role-report]')?.replaceChildren();
-    Object.assign(row,{role:result.role,roles:result.roles});role.value=confirmed;save.hidden=true;clearInvite();renderActive();
+    Object.assign(row,{role:result.role,roles:result.roles});role.value=confirmed;clearInvite();clearSelection();renderActive();
     status.textContent='Rol guardado. Vuelve a ingresar a '+app.name+' con la misma contraseña.';
    }));
    role.onchange=()=>{save.hidden=role.value===previous()};save.hidden=true;manage.append(save);
@@ -228,8 +228,8 @@ async function open(scope){
  }
  async function run(message,fn){
   if(busy)return;
-  busy=true;search.disabled=true;status.textContent=message;
-  try{await fn()}catch(error){status.textContent=error.message||String(error)}finally{busy=false;search.disabled=false}
+  busy=true;manage.inert=true;search.disabled=true;status.textContent=message;
+  try{await fn()}catch(error){status.textContent=error.message||String(error)}finally{busy=false;manage.inert=false;search.disabled=false}
  }
  function generate(row,role){
   if(busy||(scope==='labor'&&!access.labor))return;
@@ -275,12 +275,11 @@ async function open(scope){
     const account=access.labor.find(other=>same(other,row));
     if(!account){
      access.labor.push({...row,role:data.laborRole,pending:true});renderActive();
-     clearLaborSelection();
     }else if(account.pending){
      account.role=data.laborRole;renderActive();
     }
    }
-   inviteUrl=url.href;
+   clearSelection();inviteUrl=url.href;
    status.textContent='Invitación para '+identity(row)+'. Válida durante 24 horas y para un solo uso.';
    copy.append(button('Copiar enlace',async()=>{
     try{await navigator.clipboard.writeText(inviteUrl);status.textContent='Enlace copiado.'}
@@ -315,7 +314,7 @@ async function open(scope){
    if(!current())return;
    access[scope]=access[scope].filter(other=>other!==row);
    if(selected===row){
-    if(scope==='labor')clearLaborSelection();
+    if(scope==='labor')clearSelection();
     else{selected=null;manage.hidden=true}
    }
    renderActive();renderSearch();status.textContent=cancelInvite?'Invitación cancelada.':'Acceso retirado.';
@@ -398,7 +397,7 @@ async function open(scope){
     if(selected){
      const existing=access.labor.find(row=>same(row,selected));
      if(existing){
-      clearLaborSelection();status.textContent=identity(existing)+(existing.pending?' ya tiene una invitación pendiente.':' ya tiene acceso a Labor.');
+      clearSelection();status.textContent=identity(existing)+(existing.pending?' ya tiene una invitación pendiente.':' ya tiene acceso a Labor.');
      }else choose(selected,false);
     }else renderSearch();
    }catch(error){

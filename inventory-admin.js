@@ -301,7 +301,8 @@ async function save(e){
  Object.assign(item,{allowAccessories:f.elements.isFixedAsset.checked&&f.elements.allowAccessories.checked,deliveryWarehouse:f.elements.isYtSpare.checked?'Producción':'',isYtSpare:f.elements.isYtSpare.checked,spareEquipment:f.elements.isYtSpare.checked?f.elements.spareEquipment.value:"",spareItemNumber:f.elements.isYtSpare.checked?f.elements.spareItemNumber.value.trim():"",spareItemName:f.elements.isYtSpare.checked?f.elements.spareItemName.value.trim():"",sparePartCode:f.elements.isYtSpare.checked?f.elements.sparePartCode.value.trim():"",spareApplication:f.elements.isYtSpare.checked?f.elements.spareApplication.value.trim():"",name,unit,secondaryName,tertiaryName,referenceUrl:f.elements.referenceUrl.value.trim(),containerUnit:f.elements.fractionable.checked?f.elements.containerUnit.value.trim():'',isFixedAsset:f.elements.isFixedAsset.checked,usesSerial:f.elements.usesSerial.checked,usesLength:f.elements.usesLength.checked,usesModel:f.elements.usesModel.checked,usesManufacturer:f.elements.usesManufacturer.checked,requiresInternalMark:f.elements.requiresInternalMark.checked,isEpp:f.elements.isEpp.checked,allowAssignment:f.elements.allowAssignment.checked,allowLoan:f.elements.allowLoan.checked,allowTransfer:f.elements.allowTransfer.checked,allowRemission:f.elements.allowRemission.checked,fractionable:f.elements.fractionable.checked,active:true,deleted:false,updatedAt:t,syncState:'pending'});
 
  if(!name)throw new Error('Escribe el nombre del elemento.');
- await put('inventoryCriteria',item);committed=true;
+ f.inert=true;await put('inventoryCriteria',item);committed=true;
+ document.querySelector('#inventoryItemSearch').value='';
  reset();lastSavedItemId=item.id;status.hidden=false;
  status.textContent=(id?'Cambios guardados en este dispositivo.':'Elemento guardado en este dispositivo.')+' Pendiente de sincronizar; se enviará al tener conexión.';
  window.dispatchEvent(new Event('skweb-inventory-refresh'));
@@ -311,7 +312,7 @@ async function save(e){
   status.hidden=false;
   status.textContent=committed?'El elemento quedó guardado. No se pudo actualizar el listado; vuelve a abrirlo.':'No se pudo guardar: '+(error?.message||error);
   console.error('SK Admin: guardar criterio',error);
- }finally{saving=false;button.disabled=cancel.disabled=false;syncSpareFilterButtons()}
+ }finally{f.inert=false;saving=false;button.disabled=cancel.disabled=false;syncSpareFilterButtons()}
 }
 
 async function deactivate(){
