@@ -170,10 +170,10 @@
     const currentMark = clean(fields.marcaActual), newMark = clean(asset.nuevaMarca);
     const values={label,model,number:clean(fields.numeroClase)||clean(asset.orden),
       serial:clean(asset.serial)||window.SKAssetRules.serialStatusLabel(asset),
-      mark:equipment?currentMark||newMark:newMark||currentMark,
+      mark:equipment?currentMark||newMark||clean(fields.numeroMarcaActual):newMark||currentMark,
       mine:clean(asset.mina),state:clean(asset.estado),location:clean(asset.ubicacion)};
     const external=!window.SKAssetOwnership.isSK(asset);
-    const searchText=[...Object.values(values),window.SKAssetOwnership.label(asset),external?'externo transitorio':''].join(' ');
+    const searchText=[...Object.values(values),window.SKAssetOwnership.label(asset),external?'externo externa externos externas transitorio':''].join(' ');
     return {asset,key,clase,values,searchText,external,projection};
   }
 
@@ -266,7 +266,10 @@
    const title='Abrir ficha de '+[values.label,values.number,values.serial,values.mark].filter(Boolean).join(' · ');
    const link='<button type="button" class="assetQueryLink" aria-controls="assetQueryDetail" aria-label="'+esc(title)+'">'+query.html(values.label||'Sin clase')+'</button>';
    return '<tr data-query-asset-id="'+esc(asset.id)+'"'+(external?' class="external" title="Activo externo"':'')+'><td>'+link+'</td>'+
-     shownColumns.slice(1).map(col=>'<td>'+query.html(values[col.key]||'—')+'</td>').join('')+'</tr>';
+     shownColumns.slice(1).map(col=>{
+      const badge=external&&col.key==='mine'?' <span class="externalBadge">'+query.html('EXTERNO')+'</span>':'';
+      return '<td>'+query.html(values[col.key]||'—')+badge+'</td>';
+     }).join('')+'</tr>';
   }).join('');
   find('assetQueryCount').textContent=visible.length===1?'1 activo encontrado':visible.length+' activos encontrados';
   find('assetQueryExcel').disabled=!visible.length;
