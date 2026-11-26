@@ -40,7 +40,7 @@ test('servidor actualizado confirma la devolución sin perder otra guardada dura
  const rows=h.api.get().blendingDeliveries;assert.equal(rows.length,2);assert.equal(rows[0].syncState,'synced');assert.equal(rows[1].syncState,'pending');
  assert.equal(JSON.parse(h.storage.get('skPlazaData')).blendingDeliveries.length,2);
 });
-test('el formulario conserva el préstamo si falla el almacenamiento y evita doble devolución',()=>{
+test('el formulario conserva el préstamo si falla el almacenamiento y evita doble devolución',async()=>{
  const nodes=new Map(),alerts=[];const button={disabled:false};
  const form={hidden:false,reset(){},querySelector(){return button},elements:{returnedBy:{value:'123 · Persona'},returnedAt:{value:'2026-10-08T10:00:00Z'},notes:{value:'Completo'}}};
  nodes.set('#assetReturnForm',form);nodes.set('#assetReturnFilter',{value:'PENDIENTE'});nodes.set('#assetReturnSearch',{value:''});
@@ -48,9 +48,18 @@ test('el formulario conserva el préstamo si falla el almacenamiento y evita dob
  const app={movementTimes:()=>({createdAt:'2026-10-08T10:00:00.000Z',recordedAt:'2026-10-08T10:00:00.000Z',updatedAt:'2026-10-08T10:00:00.000Z'}),movementShift:()=>({shiftKeeperId:'keeper',shiftKeeperDocument:'2',shiftKeeperName:'Bodeguera de turno'}),getData:()=>data,getUser:()=>({id:'operator',nombre:'Bodeguera'}),saveData(next){if(fail)throw Error('Sin espacio');data=next},refreshDelivery(){},updatePendingBadge(){},renderRecentQueries(){},sync(){syncs++}};
  const ctx=vm.createContext({window:{SKPlaza:app,addEventListener(){}},document:{querySelector(selector){if(!nodes.has(selector))nodes.set(selector,{});return nodes.get(selector)}},crypto:{randomUUID:()=> 'return'},alert:message=>alerts.push(message)});
  const source=read('plaza/asset-returns.js').replace(/\}\)\(\);\s*$/,'window.testing={save,select:id=>{selectedId=id}};})();');vm.runInContext(source,ctx);
- ctx.window.testing.select('loan');ctx.window.testing.save({preventDefault(){},currentTarget:form});
+ ctx.window.testing.select('loan');await ctx.window.testing.save({preventDefault(){},currentTarget:form});
  assert.equal(data.blendingDeliveries.length,1);assert.equal(data.assets[0].ubicacion,'Operación');assert.equal(form.hidden,false);assert.equal(syncs,0);
- fail=false;ctx.window.testing.save({preventDefault(){},currentTarget:form});ctx.window.testing.save({preventDefault(){},currentTarget:form});
+ assert.equal(button.disabled,false);
+ nodes.get('#assetReturnSearch').value='Herramienta';
+ fail=false;const saving=ctx.window.testing.save({preventDefault(){},currentTarget:form});
+ assert.equal(button.disabled,true);
+ await ctx.window.testing.save({preventDefault(){},currentTarget:form});
+ await saving;
+ const confirmations=alerts.length;
+ await ctx.window.testing.save({preventDefault(){},currentTarget:form});
+ assert.equal(button.disabled,true);assert.equal(alerts.length,confirmations);
+ assert.equal(nodes.get('#assetReturnSearch').value,'');
  assert.equal(data.blendingDeliveries.length,2);assert.equal(data.blendingDeliveries[1].shiftKeeperName,'Bodeguera de turno');assert.equal(data.assets[0].ubicacion,'Bodega de Superficie');assert.equal(syncs,1);assert.equal(form.hidden,true);
 });
 test('Prestar filtra por el permiso existente y Entregas excluye activos fijos',()=>{
