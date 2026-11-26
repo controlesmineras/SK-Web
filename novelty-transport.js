@@ -4,11 +4,11 @@ const $=s=>document.querySelector(s);
 const text=value=>String(value??'').trim();
 const norm=value=>text(value).normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase();
 const personLabel=person=>[person.documento,person.nombre].filter(Boolean).join(' - ');
-let people=[],generation=0,loaded=false,loadError=false,input,list,responsible,warehouse;
+let people=[],generation=0,loaded=false,loadError=false,input,list,responsible;
 
-function snapshotPerson(select,prefix){
-  const form=$('#noveltyForm'),person=people.find(row=>text(row.id)===select.value);
-  for(const [name,value] of [[`${prefix}Nombre`,person?.nombre],[prefix==='responsable'?'documentoResponsable':'documentoBodeguero',person?.documento]]){
+function snapshotResponsible(){
+  const form=$('#noveltyForm'),person=people.find(row=>text(row.id)===responsible.value);
+  for(const [name,value] of [['responsableNombre',person?.nombre],['documentoResponsable',person?.documento]]){
     let hidden=form.querySelector(`input[name="${name}"]`);
     if(!hidden){hidden=document.createElement('input');hidden.type='hidden';hidden.name=name;form.append(hidden)}
     hidden.value=text(value);
@@ -45,25 +45,24 @@ async function loadPeople(){
     people=rows.filter(person=>person&&!person.deleted&&text(person.id)).sort((a,b)=>text(a.nombre).localeCompare(text(b.nombre),'es'));
     loaded=true;loadError=false;
     // Read the selection after the await: the user may have changed it during loading.
-    const oldR=responsible.value,oldW=warehouse.value;
+    const selectedId=responsible.value;
     responsible.replaceChildren(new Option('Seleccionar responsable…',''),...people.map(person=>new Option(personLabel(person),text(person.id))));
-    warehouse.replaceChildren(new Option('Seleccionar bodeguero/a…',''),...people.filter(person=>/bodeguer[oa]/i.test(text(person.cargo))).map(person=>new Option(personLabel(person),text(person.id))));
-    responsible.value=oldR;warehouse.value=oldW;
+    responsible.value=selectedId;
     const chosen=people.find(person=>text(person.id)===responsible.value);
     if(chosen)input.value=personLabel(chosen);
-    snapshotPerson(responsible,'responsable');snapshotPerson(warehouse,'bodeguero');validate();
+    snapshotResponsible();validate();
   }catch(error){if(ticket!==generation)return;loadError=true;console.error('No se pudo cargar el personal de novedades:',error)}
   if(!list.hidden)render();
 }
 function init(){
-  const form=$('#noveltyForm');responsible=$('#novResponsible');warehouse=$('#novWarehouse');
-  if(!form||!responsible||!warehouse||$('#novResponsibleSearch'))return;
+  const form=$('#noveltyForm');responsible=$('#novResponsible');
+  if(!form||!responsible||$('#novResponsibleSearch'))return;
   input=document.createElement('input');input.id='novResponsibleSearch';input.type='search';input.autocomplete='off';input.placeholder='Buscar por nombre o documento…';
   input.setAttribute('aria-controls','novResponsibleLive');input.setAttribute('aria-expanded','false');responsible.before(input);responsible.hidden=true;
   list=document.createElement('div');list.id='novResponsibleLive';list.hidden=true;input.parentElement.append(list);
   // Own results container: other modules close every shared .liveSuggestions on click.
   const style=document.createElement('style');style.textContent='#novResponsibleLive{display:grid;gap:4px;max-height:280px;overflow:auto;margin-top:4px;border:1px solid #ccd8e0;border-radius:8px}#novResponsibleLive[hidden]{display:none}#novResponsibleLive button{width:100%;text-align:left;white-space:normal;background:#f2f6f9;color:#173d59;padding:10px;font-weight:500}#novResponsibleLive button:focus-visible{outline:3px solid #e7b45a;outline-offset:-3px}';document.head.append(style);
-  input.addEventListener('input',()=>{responsible.value='';snapshotPerson(responsible,'responsable');validate();render()});
+  input.addEventListener('input',()=>{responsible.value='';snapshotResponsible();validate();render()});
   input.addEventListener('focus',()=>{render();void loadPeople()});
   input.addEventListener('click',render);
   input.addEventListener('keydown',event=>{
@@ -73,9 +72,8 @@ function init(){
   });
   list.addEventListener('keydown',event=>{if(event.key==='Escape'){input.focus();close()}});
   document.addEventListener('pointerdown',event=>{if(!input.parentElement.contains(event.target))close()});
-  responsible.addEventListener('change',()=>{const person=people.find(row=>text(row.id)===responsible.value);input.value=person?personLabel(person):'';snapshotPerson(responsible,'responsable');validate()});
-  warehouse.addEventListener('change',()=>snapshotPerson(warehouse,'bodeguero'));
-  form.addEventListener('reset',()=>setTimeout(()=>{input.value='';responsible.value='';warehouse.value='';snapshotPerson(responsible,'responsable');snapshotPerson(warehouse,'bodeguero');validate();close()},0));
+  responsible.addEventListener('change',()=>{const person=people.find(row=>text(row.id)===responsible.value);input.value=person?personLabel(person):'';snapshotResponsible();validate()});
+  form.addEventListener('reset',()=>setTimeout(()=>{input.value='';responsible.value='';snapshotResponsible();validate();close()},0));
   for(const event of ['skweb-db-ready','skweb-synced'])window.addEventListener(event,()=>void loadPeople());
   void loadPeople();
 }
