@@ -19,7 +19,7 @@ function app(asset){
  const adminSource=read('asset-admin-ui.js').replace('window.SKAssetAdminUI={hydrateEdit};',`window.SKAssetAdminUI={hydrateEdit,updateMarkFieldVisibility,updatePreviousMarkFields,saveAsset};criteriaByClass.set(${JSON.stringify(values.clase.toLowerCase())},{usesSerial:true});`);
  vm.runInContext(adminSource,context);
  window.SKAssetOwnership={label:window.SKAssetListLabel,isSK:()=>true};
- vm.runInContext(read('asset-query.js').replace('window.SKAssetQuery={mount,render};','window.SKAssetQuery={mount,render,drawDetail};'),context);
+ vm.runInContext(read('asset-query.js').replace('window.SKAssetQuery={mount,render,prepare};','window.SKAssetQuery={mount,render,prepare,drawDetail};'),context);
  const update=(readOnly=false)=>{window.SKAssetAdminUI.updateMarkFieldVisibility(form,inputs.clase.value.toLowerCase(),false);window.SKAssetAdminUI.updatePreviousMarkFields(form,readOnly)};
  return{values,inputs,labels,alerts,saved,form,window,update,hidden:name=>labels[name].classList.contains('criterion-disabled-field'),save:()=>window.SKAssetAdminUI.saveAsset({currentTarget:form,preventDefault(){},stopImmediatePropagation(){}}),detail(){window.SKAssetQuery.drawDetail({asset:values,events:[]});return host.innerHTML}};
 }
