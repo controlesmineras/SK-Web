@@ -13,7 +13,7 @@ function client(){
  const ctx=vm.createContext({Blob,console,crypto:require('node:crypto').webcrypto,document:{querySelectorAll:()=>[],querySelector:key=>{if(!nodes.has(key))nodes.set(key,{value:'',hidden:false,textContent:'',addEventListener(){}});return nodes.get(key)}},alert:message=>alerts.push(message),window:{SKEntry:entry,alert:message=>alerts.push(message)},sessionStorage:{getItem:()=>null},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value)},setTimeout(){},clearTimeout(){}});
  const start=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
  vm.runInContext(read('asset-record-rules.js'),ctx);vm.runInContext(read('asset-history.js'),ctx);
- vm.runInContext(start+`\nmovementShift=()=>({});validateDeliveryRecipient=()=>true;renderRecentQueries=()=>{};updatePendingBadge=()=>{};discardDeliveryForm=()=>{};sync=()=>{};clearItemSearch=form=>{form.elements.itemId.value=''};updateDeliveryFields=()=>updateDeliveryReplacementField(findItem($('#deliveryForm').elements.itemId.value));downloadBlob=(blob,name)=>window.lastDownload={blob,name};window.audit={mode:value=>{deliveryMode=value},catalog:deliveryCatalog,get:()=>data,set:value=>{data=value},draft:()=>deliveryDraft,prepare:rows=>{deliveryDraft=rows},update:()=>updateDeliveryFields(),capture:currentDeliveryItem,add:addDeliveryItem,save:()=>saveDeliveryBatch($('#deliveryForm')),label:deliveryReplacementLabel,report:deliveryReportRow,card:queryMovementCard,excel:exportDeliveriesExcel,pdf:exportDeliveriesPdf};})();`,ctx);
+ vm.runInContext(start+`\nmovementShift=()=>({});validateDeliveryRecipient=()=>true;renderRecentQueries=()=>{};updatePendingBadge=()=>{};discardDeliveryForm=()=>{};sync=()=>{};clearItemSearch=form=>{form.elements.itemId.value=''};updateDeliveryFields=()=>updateDeliveryReplacementField(findItem($('#deliveryForm').elements.itemId.value));downloadBlob=(blob,name)=>window.lastDownload={blob,name};window.audit={mode:value=>{deliveryMode=value},catalog:deliveryCatalog,get:()=>data,set:value=>{data=value},draft:()=>deliveryDraft,prepare:rows=>{deliveryDraft=rows},update:()=>updateDeliveryFields(),pick:selectDeliveryItem,capture:currentDeliveryItem,add:addDeliveryItem,save:()=>saveDeliveryBatch($('#deliveryForm')),label:deliveryReplacementLabel,report:deliveryReportRow,card:queryMovementCard,excel:exportDeliveriesExcel,pdf:exportDeliveriesPdf};})();`,ctx);
  ctx.window.SKPlazaLocal={write:async next=>storage.set('skPlazaData',JSON.stringify(next))};
  const api=ctx.window.audit;api.set(seed());
  return {api,ctx,form,field,inputs,storage,alerts,select(id){form.elements.itemId.value=id;api.update()},answer(value){inputs.forEach(input=>input.checked=input.value===value)}};
@@ -91,4 +91,20 @@ test('consultations never request replacement for assets or loans with old repla
  for(const row of [{itemId:'gloves',assetId:'asset',bringsReplacement:true},{itemId:'gloves',deliveryType:'PRÉSTAMO',bringsReplacement:false},{itemId:'gloves',deliveryType:'PRÉSTAMO'}]){
   const before=clone(row);assert.equal(c.api.label(row),'');assert.equal(c.api.report(row).reposicion,'No aplica');assert.deepEqual(row,before);
  }
+});
+
+test('elegir un elemento crea la tarjeta y libera el selector antes de completar la reposición',async()=>{
+ const c=client(),pick=id=>{c.form.elements.itemId.value=id;c.api.pick()};
+ pick('gloves');
+ assert.equal(c.form.elements.itemId.value,'');
+ assert.equal(c.api.draft()[0].quantity,1);
+ assert.equal(c.api.draft()[0].bringsReplacement,undefined);
+ assert.equal(await c.api.save(),false);
+ c.api.draft()[0].bringsReplacement=false;c.api.draft()[0].quantity=3;
+ pick('tool');pick('gloves');
+ assert.deepEqual(Array.from(c.api.draft(),row=>[row.itemId,row.quantity,row.bringsReplacement]),[['gloves',3,false],['tool',1,undefined]]);
+ assert.match(c.alerts.at(-1),/No puedes agregar el mismo elemento/);
+ assert.equal(await c.api.save(),true);
+ const saved=JSON.parse(c.storage.get('skPlazaData'));
+ assert.deepEqual(saved.blendingDeliveries.map(row=>[row.itemId,row.quantity,row.balanceAfter]),[['gloves',3,7],['tool',1,9]]);
 });
