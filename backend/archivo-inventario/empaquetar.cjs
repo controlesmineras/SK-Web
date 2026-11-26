@@ -37,6 +37,7 @@ if (require.main === module) {
   const directorio = fs.mkdtempSync(path.join(os.tmpdir(),'sk-sqlite-'));
   try {
     fs.writeFileSync(path.join(directorio,'Codigo.gs'), programa());
+    fs.copyFileSync(path.join(directorio,'Codigo.gs'),path.join(__dirname,'codigo-apps-script.txt'));
     fs.copyFileSync(path.join(__dirname,'README.md'),path.join(directorio,'Instrucciones.txt'));
     const salida=path.join(__dirname,'Historial-SQLite.zip');
     execFileSync('python3',['-c',`import sys, zipfile, pathlib
