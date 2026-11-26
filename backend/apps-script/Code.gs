@@ -45,7 +45,7 @@ const CLOUD_FILE='sk-web-central.json';
 const PLAZA_READ=['warehouseQuantityHistory','personal','assets','inventoryCriteria','inventoryStock','blendingIncomes','blendingDeliveries'];
 const PLAZA_WRITE=['blendingIncomes','blendingDeliveries'];
 function doGet(){return json_({ok:true,service:'SK Web Sync',time:new Date().toISOString()})}
-function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='laborLogin')return laborLogin_(q);if(q.action==='laborRoleDirectory')return laborRoleDirectory_(q);if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='entryConfigure')return entryConfigure_(q,auth);if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role,...(auth.document?{document:auth.document}:{})}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='changeAppActiveRole'){requireAdmin_(auth);return changeAppActiveRole_(q)}if(q.action==='appRolesForPerson'){requireAdmin_(auth);return appRolesForPerson_(q)}if(q.action==='laborChangeActiveRole'){requireAdmin_(auth);return laborChangeActiveRole_(q)}if(q.action==='laborUsers'||q.action==='laborDisable'){requireAdmin_(auth);return laborAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='plazaChangeActiveRole'){requireAdmin_(auth);return plazaChangeActiveRole_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges','syncPersonDeletion'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth,q.productionBalanceVersions)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
+function doPost(e){try{const q=JSON.parse(e.postData.contents||'{}');if(q.action==='laborLogin')return laborLogin_(q);if(q.action==='laborRoleDirectory')return laborRoleDirectory_(q);if(q.action==='workFrontSync')return workFrontSync_(q);if(q.action==='productionLogin')return productionLogin_(q);if(q.action==='productionSync')return productionSync_(q);if(q.action==='productionWarehouseSync')return productionWarehouseSync_(q);if(q.action==='plazaLogin')return plazaLogin_(q);if(q.action==='plazaSync')return plazaSync_(q);if(q.action==='plazaCollaborator')return plazaCollaborator_(q);if(q.action==='adminStatus')return adminStatus_();if(q.action==='adminLogin')return adminLogin_(q);if(q.action==='accessInvitationInfo')return accessInvitationInfo_(q);if(q.action==='accessInvitationAccept')return accessInvitationAccept_(q);const expected=PropertiesService.getScriptProperties().getProperty('SK_SYNC_KEY');if(q.action==='adminBootstrap'){if(!expected||q.key!==expected)throw new Error('Acceso no autorizado');return adminBootstrap_(q)}const configured=adminUsers_().length>0,auth=configured?verifyAdminToken_(q.token):{username:'legacy-owner',name:'Administrador principal',role:'owner'};if(!configured&&(!expected||q.key!==expected))throw new Error('Acceso no autorizado');if(q.action==='entryConfigure')return entryConfigure_(q,auth);if(q.action==='adminCargoSearch')return adminCargoSearch_(q,auth);if(q.action==='adminCargoAdd')return adminCargoAdd_(q,auth);if(q.action==='adminWhoAmI')return json_({ok:true,user:{username:auth.username,name:auth.name,role:auth.role,...(auth.document?{document:auth.document}:{})}});if(q.action==='productionWarehouseConfigure'){requireAdmin_(auth);return productionWarehouseConfigure_(q)}if(q.action==='productionUsers'||q.action==='productionDisable'){requireAdmin_(auth);return productionAccessAdmin_(q)}if(q.action==='changeAppActiveRole'){requireAdmin_(auth);return changeAppActiveRole_(q)}if(q.action==='appRolesForPerson'){requireAdmin_(auth);return appRolesForPerson_(q)}if(q.action==='laborChangeActiveRole'){requireAdmin_(auth);return laborChangeActiveRole_(q)}if(q.action==='laborUsers'||q.action==='laborDisable'){requireAdmin_(auth);return laborAccessAdmin_(q)}if(q.action==='adminUsersList'){requireAdmin_(auth);return adminUsersList_()}if(q.action==='accessInvitationCreate'){requireAdmin_(auth);return accessInvitationCreate_(q)}if(q.action==='adminUserSave'){requireAdmin_(auth);return adminUserSave_(q)}if(q.action==='adminUserDisable'){requireAdmin_(auth);return adminUserDisable_(q)}if(q.action==='plazaUserAdmin'){requireAdmin_(auth);return plazaUserAdmin_(q)}if(q.action==='plazaChangeActiveRole'){requireAdmin_(auth);return plazaChangeActiveRole_(q)}if(q.action==='adminWarehouseQuantityV1')return adminWarehouseQuantity_(q,auth);if(q.action==='adminSetInventoryQuantity')return adminSetInventoryQuantity_(q,auth);if(q.action==='adminReleaseLegacyMark')return adminReleaseLegacyMark_(q,auth);if(q.action==='adminCorrectAssetMark')return adminCorrectAssetMark_(q,auth);if(q.action==='adminReverseMovement'||q.action==='adminReverseMovementV2'){requireAdmin_(auth);return adminReverseMovement_(q)}if(q.action==='adminDeleteMovement'){requireAdmin_(auth);return adminDeleteMovement_(q)}if(!['sync','syncDatedNovelties','syncNoveltyChanges','syncPersonDeletion','syncLegacyAssets'].includes(q.action)||!q.data)throw new Error('Solicitud no válida');return adminSyncAuthorized_(q.data,q.since,auth,q.productionBalanceVersions)}catch(e){return json_({ok:false,error:String(e&&e.message||e)})}}
 
 // Frentes de trabajo: la ficha nueva y su reporte se confirman en la misma escritura.
 function frontDocument_(value){
@@ -466,7 +466,7 @@ function preparePlazaIncomeAsset_(asset){
 }
 function usesAutomaticAssetMark_(asset){
  const type=String(asset&&asset.clase||'').trim().toLowerCase();
- if(!type||/^autorrescatador(?:es)?\b/i.test(type))return false;
+ if(asset?.legacyUnmarked===true||!type||/^autorrescatador(?:es)?\b/i.test(type))return false;
  if(repairIncomeClass_(type))return asset.incomeMarking===true&&!!String(asset.minaOrigen||asset.mina||'').trim();
  return true;
 }
@@ -519,13 +519,32 @@ function validateNewAssetMarks_(cloud,rows,registry){
   }
  }
 }
+// Solo la operación central puede crear el comprobante de una liberación.
+function protectLegacyMark_(input,old){
+ const asset=Object.assign({},input);
+ delete asset.markRelease;
+ if(old?.markRelease)asset.markRelease=old.markRelease;
+ if(old && !old.legacyUnmarked)delete asset.legacyUnmarked;
+ if(old?.legacyUnmarked)asset.legacyUnmarked=true;
+ if(asset.legacyUnmarked!==true)return asset;
+ for(const key of ['markingPolicy','markStatus','markSequence','markAssignedAt','markScheme','markPrefix','markMine','markRequest','markRequestedAt'])delete asset[key];
+ asset.nuevaMarca='';
+ // Una ficha pendiente de otro dispositivo puede contener aún la marca liberada.
+ if(old?.markRelease){
+  for(const key of ['marcaInterna','marcaActual','marcaPrevia','marcaAnterior','numeroMarcaActual']){
+   if(String(asset[key]||'').trim().toUpperCase()===old.markRelease.code)asset[key]=old[key]||'';
+  }
+ }
+ return asset;
+}
 function assignAssetMarks_(cloud,rows,requestAuth){
  const registry=(Array.isArray(cloud.assetMarkRegistry)?cloud.assetMarkRegistry:[]).map(row=>Object.assign({},row,{code:String(row.code||'').trim().toUpperCase()}));
  const byId=new Map(registry.map(row=>[row.id,row])),existing=new Map((cloud.assets||[]).filter(Boolean).map(row=>[row.id,row]));
+ rows=rows.map(row=>protectLegacyMark_(row,existing.get(row.id)));
  // Cada mina reserva sus propias marcas, incluidas las de fichas retiradas.
  const sequences=new Map();
  function sequenceFor(mine){
-  if(!sequences.has(mine))sequences.set(mine,{used:new Set(),next:0});
+  if(!sequences.has(mine))sequences.set(mine,{used:new Set(),released:new Set(),next:0});
   return sequences.get(mine);
  }
  function reserveEntry(entry,mine){
@@ -541,6 +560,7 @@ function assignAssetMarks_(cloud,rows,requestAuth){
  }
  for(const entry of registry)reserveEntry(entry,reservationMine_(entry,existing));
  for(const asset of existing.values()){
+  if(asset.markRelease)sequenceFor(asset.markRelease.ownerMine).released.add(asset.markRelease.code);
   if(!byId.has(asset.id)&&asset.markingPolicy==='letters-v1'&&asset.markStatus==='assigned'&&asset.nuevaMarca){
    reserveEntry({code:String(asset.nuevaMarca).trim().toUpperCase(),scheme:asset.markScheme,sequence:asset.markSequence},ownerMine(asset));
   }
@@ -582,8 +602,11 @@ function assignAssetMarks_(cloud,rows,requestAuth){
     entry={id:asset.id,assetClass:asset.clase,ownerMine:mine,code:code(sequence),sequence:sequence,issuedAt:new Date().toISOString(),scheme:'mine-prefix-v1',prefix:prefix,mine:asset.mina};
    }else{
     // PAA (Sandra K) y P-AA (Providencia) son códigos distintos.
-    while(pool.next<17576&&pool.used.has(automaticAssetMarkCode_(pool.next)))pool.next++;
-    entry={id:asset.id,assetClass:asset.clase,ownerMine:mine,code:automaticAssetMarkCode_(pool.next),sequence:pool.next,issuedAt:new Date().toISOString()};
+    const released=[...pool.released].sort().find(code=>!pool.used.has(code));
+    if(!released)while(pool.next<17576&&pool.used.has(automaticAssetMarkCode_(pool.next)))pool.next++;
+    const code=released||automaticAssetMarkCode_(pool.next);
+    const ordinal=released?[...code].reduce((n,c)=>n*26+c.charCodeAt(0)-65,0):pool.next;
+    entry={id:asset.id,assetClass:asset.clase,ownerMine:mine,code,sequence:ordinal,issuedAt:new Date().toISOString()};
    }
    registry.push(entry);byId.set(entry.id,entry);reserveEntry(entry,mine);changed=true;
   }
@@ -622,6 +645,43 @@ function assignAssetMarks_(cloud,rows,requestAuth){
  return{assets:assets,registry:registry,changed:changed};
 }
 
+function adminReleaseLegacyMark_(q,auth){
+ requireAdmin_(auth);
+ const assetId=String(q.assetId||'').trim(),code=String(q.expectedMark||'').trim().toUpperCase();
+ if(!assetId||!/^[A-Z]{3}$/.test(code))throw new Error('Selecciona el activo y su marca automática de tres letras.');
+ const lock=LockService.getScriptLock();lock.waitLock(30000);
+ try{
+  const fileId=findFile_(),cloud=fileId?readFile_(fileId,lock):{},assets=cloud.assets||[],registry=cloud.assetMarkRegistry||[];
+  const old=assets.find(asset=>asset.id===assetId);
+  if(!old||old.deleted)throw new Error('La ficha del activo ya no está disponible.');
+  if(old.markRelease?.code===code&&old.legacyUnmarked)return json_({ok:true,asset:old,updatedAt:cloud.updatedAt});
+  const key=value=>String(value||'').trim().toUpperCase();
+  if(old.markingPolicy!=='letters-v1'||old.markStatus!=='assigned'||old.markScheme==='mine-prefix-v1'||!usesAutomaticAssetMark_(old)||key(old.nuevaMarca)!==code)throw new Error('La marca automática de esta ficha cambió. Sincroniza y revisa el activo.');
+  const entries=registry.filter(entry=>entry.id===assetId);
+  if(entries.length>1||entries.some(entry=>entry.reservedForAssetId||entry.scheme==='mine-prefix-v1'||key(entry.code)!==code))throw new Error('La reserva central no coincide con la ficha. Revisa el historial de marcación.');
+  const byId=new Map(assets.map(row=>[row.id,row])),mine=entries.length?reservationMine_(entries[0],byId):ownerMine(old);
+  const aliases=['nuevaMarca','marcaInterna','marcaActual','marcaPrevia','marcaAnterior','numeroMarcaActual'];
+  const otherUse=assets.some(row=>row.id!==assetId&&ownerMine(row)===mine&&aliases.some(field=>key(row[field])===code));
+  const otherReservation=registry.some(entry=>entry.id!==assetId&&key(entry.code)===code&&reservationMine_(entry,byId)===mine);
+  const historicUse=['marcaPrevia','marcaAnterior','numeroMarcaActual'].some(field=>key(old[field])===code);
+  if(otherUse||otherReservation||historicUse)throw new Error('La marca '+code+' tiene otra asignación o reserva en esta mina. Revisa las fichas antes de liberarla.');
+  const at=nextRevision_(old.updatedAt||old.createdAt);
+  const asset=protectLegacyMark_(Object.assign({},old,{legacyUnmarked:true}),null);
+  for(const field of ['marcaInterna','marcaActual']){
+   if(key(asset[field])===code)asset[field]=old.markPreviousValues?.[field]||'';
+   if(key(asset[field])===code)throw new Error('La marca también figura como identificación previa del activo.');
+  }
+  asset.markRelease={code,ownerMine:mine,at,by:auth.username,byName:auth.name||auth.username,assignedAt:old.markAssignedAt||entries[0]?.issuedAt||''};
+  asset.updatedAt=at;asset.syncState='synced';
+  const remaining=registry.filter(entry=>entry.id!==assetId);
+  validateNewAssetMarks_(cloud,[asset],remaining);
+  cloud.assets=assets.map(row=>row.id===assetId?asset:row);
+  cloud.assetMarkRegistry=remaining;
+  cloud.updatedAt=nextRevision_(cloud.updatedAt);
+  writeFile_(fileId,cloud);
+  return json_({ok:true,asset,updatedAt:cloud.updatedAt});
+ }finally{lock.releaseLock()}
+}
 function adminCorrectAssetMark_(q,auth){
  requireAssetManager_(auth);
  const assetId=String(q.assetId||'').trim(),expectedMark=String(q.expectedMark||'').trim().toUpperCase();
@@ -674,6 +734,7 @@ function assistantAssetFingerprint_(row,includeAccessories=true,includeSerialSta
  if(row.classNumberPolicy==='auto-v1'){for(const field of ['numeroYT','numeroClase']){const index=fields.indexOf(field);if(index>=0)fields.splice(index,1)}}
  if(includeAccessories&&(Object.prototype.hasOwnProperty.call(row,'hasAccessories')||Object.prototype.hasOwnProperty.call(row,'accessories')))fields.push('hasAccessories','accessories');
  if(includeSerialStatus&&row.serialStatus)fields.push('serialStatus');
+ if(row.legacyUnmarked===true)fields.push('legacyUnmarked');
  if(row.marcaPrevia)fields.push('marcaPrevia');if(row.areaAsignada)fields.push('areaAsignada');
  if(row.incomeMarking||row.tipoIngresoInicial)fields.push('incomeMarking','tipoIngresoInicial','minaOrigen','activoExterno');
  if(!usesAutomaticAssetMark_(row))fields.push('marcaInterna','marcaActual','nuevaMarca');
@@ -991,10 +1052,14 @@ function adminSync_(incoming,since,auth,productionVersions){
   const criterionRows=new Map((cloud.inventoryCriteria||[]).map(row=>[row.id,row]));
   for(const row of changes.inventoryCriteria||[])criterionRows.set(row.id,choose_(row,criterionRows.get(row.id)));
   // Una novedad por sí sola no modifica el serial de una ficha histórica.
+  if(changes.assets){
+   const known=new Map((cloud.assets||[]).map(row=>[row.id,row]));
+   changes.assets=changes.assets.map(row=>protectLegacyMark_(row,known.get(row.id)));
+  }
   validateAssetSerials_(cloud.assets||[],(changes.assets||[]).filter(row=>editedAssets.has(row.id)),Array.from(criterionRows.values()));
   const marking=assignAssetMarks_(cloud,changes.assets||[],auth);if(changes.assets)changes.assets=marking.assets;delete changes.assetMarkRegistry;delete changes.warehouseQuantityHistory;
   const merged=merge_(cloud,changes);if(marking.registry.length)merged.assetMarkRegistry=marking.registry;writeFile_(id,merged);
-  if(!recovered&&since&&baseUpdatedAt===since&&!marking.changed&&!marking.assets.some(asset=>asset.markingPolicy==='letters-v1'))return respond(merged,{ok:true,capabilities:collaboratorSyncCapabilities_(),acknowledged:true,updatedAt:merged.updatedAt});
+  if(!recovered&&since&&baseUpdatedAt===since&&!marking.changed&&!marking.assets.some(asset=>asset.markingPolicy==='letters-v1'||asset.legacyUnmarked))return respond(merged,{ok:true,capabilities:collaboratorSyncCapabilities_(),acknowledged:true,updatedAt:merged.updatedAt});
   return respond(merged,{ok:true,capabilities:collaboratorSyncCapabilities_(),data:merged,updatedAt:merged.updatedAt});
  }finally{lock.releaseLock()}
 }
