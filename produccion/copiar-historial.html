@@ -1,0 +1,64 @@
+<!doctype html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Copiar código del histórico de inventario</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #edf3f6; color: #173950; font: 1rem/1.5 system-ui, sans-serif; }
+  main { max-width: 39rem; margin: min(10vh, 4rem) auto; padding: 1.5rem; }
+  section { border: 1px solid #c9d8df; border-radius: 1rem; background: white; padding: clamp(1rem, 5vw, 2rem); }
+  h1 { font-size: clamp(1.5rem, 4vw, 2rem); line-height: 1.2; margin: 0 0 1rem; }
+  button { font: inherit; font-weight: 700; border: none; border-radius: .5rem; padding: .65rem 1.1rem; background: #173d57; color: white; cursor: pointer; }
+  button:disabled { opacity: .6; cursor: wait; }
+  button:focus-visible, a:focus-visible { outline: 3px solid #2182b2; outline-offset: 3px; }
+  a { color: #105b86; }
+  #estado { margin: .65rem 0; }
+  textarea { width: 100%; height: 8rem; font: .85rem/1.4 monospace; }
+</style>
+</head>
+<body>
+<main><section>
+<h1>Histórico de inventario</h1>
+<p>Copia el código completo para pegarlo en un proyecto nuevo de Google Apps Script.</p>
+<button type="button" id="copiar" disabled>Copiar código</button>
+<p id="estado" role="status" aria-live="polite">Cargando el código…</p>
+<textarea id="codigo" aria-label="Código completo de Apps Script" readonly wrap="off" hidden></textarea>
+<p><a href="https://script.google.com/home/projects/create" target="_blank" rel="noopener">Abrir un proyecto nuevo en Apps Script</a></p>
+<p>En el proyecto nuevo, reemplaza el texto de ejemplo de <strong>Código.gs</strong>, guarda y ejecuta <strong>activarHistorialInventario</strong>.</p>
+<a href="https://raw.githubusercontent.com/controlesmineras/SK-Web/main/backend/archivo-inventario/codigo-apps-script.txt">Abrir el código como texto</a>
+</section></main>
+<script>
+  const copiar = document.getElementById('copiar');
+  const estado = document.getElementById('estado');
+  const codigo = document.getElementById('codigo');
+  async function preparar() {
+    try {
+      const respuesta = await fetch('../backend/archivo-inventario/codigo-apps-script.txt', {cache:'no-store'});
+      if (!respuesta.ok) throw Error();
+      const completo = await respuesta.text();
+      if (!completo.includes('async function activarHistorialInventario()') ||
+          !completo.includes('function motorArchivoInventario_()') || !completo.trimEnd().endsWith('return initSqlJs();\n}')) throw Error();
+      codigo.value = completo;
+      estado.textContent = '';
+      copiar.disabled = false;
+    } catch {
+      estado.textContent = 'No se pudo cargar el código. Abre el enlace de texto al pie de esta página.';
+    }
+  }
+  copiar.addEventListener('click', async () => {
+    try {
+      await navigator.clipboard.writeText(codigo.value);
+      estado.textContent = 'Código copiado. Ya puedes pegarlo en Apps Script.';
+    } catch {
+      codigo.hidden = false;
+      codigo.focus();
+      codigo.select();
+      estado.textContent = 'El código completo está seleccionado. Presiona Ctrl + C para copiarlo.';
+    }
+  });
+  preparar();
+</script>
+</body>
+</html>

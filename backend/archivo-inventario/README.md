@@ -4,7 +4,7 @@ La copia lee los archivos de Drive ya guardados por el servicio central. Respald
 
 ## Activación en Google Drive
 
-1. Descarga y descomprime Historial-SQLite.zip. Abre Codigo.gs con un editor de texto.
+1. Abre la [página del histórico de inventario](https://controlesmineras.github.io/SK-Web/produccion/copiar-historial.html) y pulsa **Copiar código**. Si usas Historial-SQLite.zip, puedes descomprimirlo y copiar el contenido de Codigo.gs con un editor de texto.
 2. Con la cuenta que administra el Drive de inventario, crea un **proyecto nuevo** en Google Apps Script. Llámalo «Histórico de inventario». Pega el contenido de Codigo.gs en el editor y guarda el proyecto. El motor SQLite viene incluido.
 3. En el selector de funciones ejecuta **activarHistorialInventario** y concede los permisos de Drive y de creación de un activador. Esta función hace la primera copia y programa una actualización cada hora. Si ya existe el activador, lo reutiliza. Para hacer solo una copia de prueba, ejecuta **copiarHistorialConfirmado**.
 4. En Drive abre **SK - Histórico de inventario SQLite**. Encontrarás archivos separados para la base central y para Producción. El registro de ejecución muestra el ID de la copia vigente y cuántas filas leyó, incorporó, actualizó u omitió.
