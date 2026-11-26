@@ -15,7 +15,7 @@ const defaults={
   'asset.manufacturer.motosierra':['Makita','Stihl'],
   'asset.viewerColor':['Marrón','Azul celeste','Blanco','Negro','Amarillo','Averiado'],
   'asset.owner':['Sandra K','Providencia','El Silencio','Carla','Alianza'],
-  'asset.location':['Bodega de Superficie','Bodega de Producción-N. 4','Socavón','Extraviado'],
+  'asset.location':['Bodega de Superficie','Bodega de Producción-N. 4','Socavón','Extraviado','Desechado/a'],
   'asset.state.standard':['Operativo/a','Averiado/a','En reparación','No apareció','Por dar de baja','Dado/a de baja','Extraviado/a'],
   'asset.state.autorrescatador':['Apto según inspección','Pendiente de inspección','No apto – Abierto o activado','No apto – Daño físico visible','No apto – Sello o precinto alterado','No apto – Indicador negro','No apto – Vida útil vencida','En oficina para garantía','Dado de baja'],
   'asset.physicallyMarked':['Sí','No','Desconocido'],

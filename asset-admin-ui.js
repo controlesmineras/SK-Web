@@ -28,6 +28,7 @@ function setAssetMode(editing){
  }
  const remove=document.querySelector('#assetDeleteBtn');if(remove){remove.hidden=!editing||!window.SKAdminAuth?.canManageAssets?.();remove.disabled=assetSaving;}
  const b=document.querySelector('#assetSaveBtn');if(b){b.textContent=readOnly?'SOLO CONSULTA':editing?'Guardar cambios':'Registrar activo';b.disabled=readOnly||assetSaving||!!form?.dataset.assetLoading;}
+ if(form?.elements.estadoVisor&&!form.elements.estadoVisor.disabled)form.elements.estadoVisor.disabled=editing;
  if(form){const criterion=criteriaByClass.get(norm(form.elements.clase?.value));updateSerialFields(form,criterion,readOnly);updatePreviousMarkFields(form,readOnly);window.SKAssetAccessories?.configure(form,criterion,readOnly);}
  window.SKAssetMarking?.refreshRequestButton?.().catch(console.error);
 }
@@ -43,7 +44,7 @@ function updateSerialFields(form,criterion,readOnly){
  const column=window.SKAssetRules.isColumn(form.elements.clase?.value);
  serial.closest('label').classList.toggle('criterion-disabled-field',column);serial.disabled=readOnly||column;serial.required=window.SKAssetRules.requiresSerial({clase:form.elements.clase?.value},criterion);
  const hint=form.querySelector('#assetIdentityHint');
- if(hint){const single=usesNewMarkForm(form);hint.textContent=serial.required?'El serial es obligatorio. Escribe el serial real; únicamente si el equipo no lo trae, escribe «No trae», o si no se ve o no se puede leer, escribe «No visible».'+(single?'':' La marca anterior se registra aparte y no reemplaza el serial.'):'Esta clase no requiere serial.'+(single?'':' Activa «¿Tiene marca anterior?» únicamente si necesitas registrarla.');if(column)hint.hidden=true;}
+ if(hint){const single=usesNewMarkForm(form);hint.textContent=serial.required?'El serial es obligatorio. Si desconoces el serial, selecciona «No registra».'+(single?'':' La marca anterior se registra aparte y no reemplaza el serial.'):'Esta clase no requiere serial.'+(single?'':' Activa «¿Tiene marca anterior?» únicamente si necesitas registrarla.');if(column)hint.hidden=true;}
 }
 function isRepair(f){const t=[f.elements.descripcionNovedad?.value,f.elements.estado?.value,f.elements.observaciones?.value].join(' ').toLowerCase();return /reparaci[oó]n|reparar/.test(t)}
 function suggestedMark(f){return norm(f.elements.clase?.value)==='yt'&&norm(f.elements.mina?.value)==='providencia'&&isRepair(f)?'P-AAA':''}
@@ -169,7 +170,7 @@ const numberOf=a=>txt(window.SKAssetFields?.numero(a)||a.numeroClase||a.numeroYT
   if(present(number))parts.push('N.º de marca actual: '+number);
  }else{
   if(present(a.fabricante))parts.push(txt(a.fabricante));
-  if(present(a.serial))parts.push('Serial: '+txt(a.serial));
+  const serial=window.SKAssetRules.searchSerial(a.serial);if(serial)parts.push('Serial: '+serial);
   const marks=[];if(present(a.nuevaMarca))marks.push(txt(a.nuevaMarca));
   const previous=txt(a.marcaPrevia||(!a.markingPolicy?a.marcaActual||a.marcaInterna:'')||a.marcaAnterior);
   if(!marks.length&&present(previous))marks.push(previous);if(marks.length)parts.push('Marca: '+marks.join(' / '));
@@ -179,7 +180,21 @@ const numberOf=a=>txt(window.SKAssetFields?.numero(a)||a.numeroClase||a.numeroYT
 window.SKAssetListLabel=cleanLabel;
 function installAssetList(){window.assetLabel=window.SKAssetOwnership.label;window.renderAssetList=window.SKAssetOwnership.render}
 function fillAssignedArea(value){const form=document.querySelector('#assetForm'),control=form?.elements.areaAsignada;if(!control)return;const current=value??control.value,areas=window.SKAssetRules.assignmentAreas(window.SKFormOptions?.values?.('personal.area'));control.replaceChildren(new Option('Seleccionar área…',''),...areas.map(area=>new Option(area,area)));if(current&&!areas.includes(current))control.add(new Option(current,current));control.value=current}
-function openNewAsset(prefillYT=false,className=''){const f=document.querySelector('#assetForm');if(!f||!window.SKAdminAuth?.canView?.('assets'))return;f.reset();delete f.dataset.assetLoading;f.dataset.assetLoadToken=String(Number(f.dataset.assetLoadToken||0)+1);delete f.dataset.autoMarkPolicy;f.elements.id.value='';f.elements.modelo.value='';setAssetMode(false);refreshClassOptions().catch(console.error);if(navigator.onLine&&window.skSyncApi?.configured?.())window.skSyncApi.sync({silent:true,forceFull:true});f.elements.ubicacion.value='Bodega de Superficie';f.elements.estado.value='Operativo/a';if(className)f.elements.clase.value=className;else if(prefillYT)f.elements.clase.value='YT';updateAssetFields();document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='assets'));document.querySelectorAll('#nav [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view==='assets'));setAssetMode(false);setTimeout(()=>f.scrollIntoView({behavior:'smooth',block:'start'}),0)}
+function openNewAsset(prefillYT=false,className=''){const f=document.querySelector('#assetForm');if(!f||!window.SKAdminAuth?.canView?.('assets'))return;f.reset();showLatestSummary(null);delete f.dataset.assetLoading;f.dataset.assetLoadToken=String(Number(f.dataset.assetLoadToken||0)+1);delete f.dataset.autoMarkPolicy;f.elements.id.value='';f.elements.modelo.value='';setAssetMode(false);refreshClassOptions().catch(console.error);if(navigator.onLine&&window.skSyncApi?.configured?.())window.skSyncApi.sync({silent:true,forceFull:true});f.elements.ubicacion.value='Bodega de Superficie';f.elements.estado.value='Operativo/a';if(className)f.elements.clase.value=className;else if(prefillYT)f.elements.clase.value='YT';updateAssetFields();document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='assets'));document.querySelectorAll('#nav [data-view]').forEach(b=>b.classList.toggle('active',b.dataset.view==='assets'));setAssetMode(false);setTimeout(()=>f.scrollIntoView({behavior:'smooth',block:'start'}),0)}
+function showLatestSummary(asset){
+ const panel=document.querySelector('#assetLatestSummary');if(!panel)return;
+ panel.hidden=!asset;
+ if(!asset)return;
+ const fields=[['Fecha',[asset.fechaNovedad?.split('-').reverse().join('/'),asset.horaNovedad].filter(Boolean).join(' · ')],
+  ['Novedad',asset.descripcionNovedad],['Responsable',asset.nombreResponsable],['Bodeguero/a',asset.nombreBodeguero],
+  ['Estado',asset.estado],['Ubicación',asset.ubicacion],['Disponible para operación',window.SKAssetHistory.operationStatus(asset)]];
+ const details=panel.querySelector('dl');details.replaceChildren();
+ for(const [label,value] of fields){
+  if(!value)continue;
+  const group=document.createElement('div'),term=document.createElement('dt'),description=document.createElement('dd');
+  term.textContent=label;description.textContent=value;group.append(term,description);details.append(group);
+ }
+}
 async function hydrateEdit(){
  const f=document.querySelector('#assetForm'),id=f?.elements.id.value;if(!id)return;
  const revision=f.dataset.historyEditRevision||'',loadToken=f.dataset.assetLoadToken;
@@ -200,7 +215,7 @@ async function hydrateEdit(){
  for(const name of ['modelo','fabricante','ubicacion','estado'])restoreAssetValue(f.elements[name],a[name]);
  syncModelChoices(f);
  f.elements.disponibleEntrega.value=window.SKAssetHistory.operationStatus(a);
- setAssetMode(true);
+ setAssetMode(true);showLatestSummary(a);
  window.SKAssetHistoryUI.show('asset',stored,projection.events,actas);
 }
 window.SKAssetAdminUI={hydrateEdit};
@@ -217,12 +232,12 @@ async function saveAsset(e){
   if(!validClass(x.clase)||!criterion)return alert('Selecciona una CLASE activa de Criterios de inventario.');
   delete x._assetModelo;
   if((type==='yt'||window.SKAssetRules.isColumn(type))&&!['28','29'].includes(txt(x.modelo))){f.querySelector('.assetModelChoices input')?.focus();return alert('Selecciona el MODELO: 28 o 29.');}
-  x.disponibleEntrega=window.SKAssetHistory.operationStatus(x);
+  if(!editing){x.estado=f.elements.estado?.value||'';x.ubicacion='Bodega de Superficie';x.disponibleEntrega=window.SKAssetHistory.operationStatus(x);}
   x.serialStatus='';
   x.serial=window.SKAssetRules.serialDescription(x.serial)||txt(x.serial);
   if(window.SKAssetRules.automaticNumberEligible(x.clase)){x.numeroYT=window.SKAssetRules.classNumber(rows,x);x.classNumberPolicy='auto-v1';}
   if(!txt(x.numeroYT))return alert('Ingresa el NÚMERO DE CLASE del activo.');
-  if(!window.SKAssetRules.hasIdentity(x,criterion)){f.elements.serial?.focus();return alert('Ingresa el SERIAL. Si el equipo no lo trae escribe «No trae»; si no se ve o no se puede leer, escribe «No visible». La marca anterior no reemplaza el serial.');}
+  if(!window.SKAssetRules.hasIdentity(x,criterion)){f.elements.serial?.focus();return alert('Ingresa el SERIAL o selecciona «No registra». La marca anterior no reemplaza el serial.');}
   if(f.elements.hasPreviousMark&&!usesNewMarkForm(f)){
    x.marcaPrevia=f.elements.hasPreviousMark.checked?txt(f.elements.marcaPrevia.value):'';
    if(f.elements.hasPreviousMark.checked&&!x.marcaPrevia){f.elements.marcaPrevia.focus();return alert('Ingresa la MARCA ANTERIOR o desmarca «¿Tiene marca anterior?» si el equipo no tiene una.');}
@@ -254,7 +269,7 @@ async function saveAsset(e){
    const old=rows.find(a=>a.id===x.id&&!a.deleted);if(!old)return alert('No se encontró el activo.');
    const savedAt=now();
    if(txt(x.areaAsignada)!==txt(f.dataset.assignedAreaBefore??old.areaAsignada))x.areaAsignadaRevision={value:txt(x.areaAsignada),at:savedAt};
-   await put('assets',{...old,...x,updatedAt:savedAt,syncState:'pending'});alert('Activo actualizado.');
+   await put('assets',{...old,...x,assetDetailsOnly:true,updatedAt:savedAt,syncState:'pending'});alert('Activo actualizado.');
   }else{
    delete x.id;const record=window.SKAssetMarking.prepare({...x,...mark(),ubicacion:x.ubicacion||'Bodega de Superficie'});
    if(record.areaAsignada)record.areaAsignadaRevision={value:record.areaAsignada,at:record.createdAt};
@@ -277,7 +292,7 @@ async function deleteAsset(){
   if(!window.SKAdminAuth?.canManageAssets?.())return;
   const timestamp=new Date(Math.max(Date.now(),(Date.parse(asset.updatedAt||asset.createdAt)||0)+1)).toISOString(),user=window.SKAdminAuth.user?.();
   await put('assets',{...asset,deleted:true,deletedAt:timestamp,deletedBy:user?.username||'admin',deletedByName:user?.name||'',updatedAt:timestamp,syncState:'pending'});
-  saved=true;form.reset();form.elements.id.value='';delete form.dataset.autoMarkPolicy;updateAssetFields();
+  saved=true;showLatestSummary(null);form.reset();form.elements.id.value='';delete form.dataset.autoMarkPolicy;updateAssetFields();
   window.skSyncApi?.schedule?.(300);
   await refresh();await window.refreshConsumptionMachines?.();
   alert('Activo eliminado en este dispositivo. La eliminación está pendiente de sincronizar con los demás equipos.');

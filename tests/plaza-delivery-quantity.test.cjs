@@ -113,7 +113,7 @@ test('YT, columns and self rescuers fall back to previous marks without inventin
   assert.equal(c.api.selectionLabel({clase:'YT',marcaPrevia:'37',nuevaMarca:'P-AB',modelo:'29'}),'YT - 29 · P-AB');
   assert.equal(c.api.selectionLabel({clase:'Columna',modelo:'No aplica',marcaAnterior:'15'}),'Columna · 15');
   assert.equal(c.api.selectionLabel({clase:'YT',serial:'123'}),'YT · 123');
-  assert.equal(c.api.selectionLabel({clase:'Pulidora',fabricante:'DEWALT',serial:'No trae',marcaPrevia:'OLD',modelo:'DWE'}),'DEWALT · No trae · DWE');
+  assert.equal(c.api.selectionLabel({clase:'Pulidora',fabricante:'DEWALT',serial:'No trae',marcaPrevia:'OLD',modelo:'DWE'}),'DEWALT · DWE');
 });
 
 test('ARIS recipient company is visible only for loans and is cleared on switching to assignment',()=>{

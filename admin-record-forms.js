@@ -14,7 +14,7 @@
   function update(form) {
     const button = form.querySelector('button[type="submit"],button:not([type])');
     if (!button) return;
-    const empty = !hasEntry[form.id](form.elements);
+    const empty = !hasEntry[form.getAttribute('id')](form.elements);
     if (button.inert !== empty) button.inert = empty;
     if (empty) button.setAttribute('aria-disabled','true');
     else button.removeAttribute('aria-disabled');
@@ -44,7 +44,8 @@
   document.addEventListener('click',() => requestAnimationFrame(bind));
   document.addEventListener('submit',event => {
     const form = event.target;
-    if (Object.hasOwn(hasEntry,form.id) && (form.inert || !hasEntry[form.id](form.elements))) {
+    const entry = hasEntry[form.getAttribute('id')];
+    if (entry && (form.inert || !entry(form.elements))) {
       event.preventDefault();
       event.stopImmediatePropagation();
     }

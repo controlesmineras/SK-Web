@@ -22,6 +22,6 @@ test('cada persona de la ficha ocupa un buscador con sus datos dentro del mismo 
     assert.equal(saved.length, 1, key);
     assert.match(saved[0], /type="hidden"/);
   }
-  const assignment = form.split('3. ASIGNACIÓN')[1].split('4. INFORMACIÓN ADICIONAL')[0];
+  const assignment = form.split('>Asignación<')[1].split('>Información adicional<')[0];
   assert.equal([...assignment.matchAll(/<input\b(?![^>]*type="hidden")[^>]*>/g)].length, 1);
 });

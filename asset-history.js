@@ -6,7 +6,9 @@ function createAssetHistory(){
  const millis=value=>Date.parse(value)||0;
  let colombiaClock;
  const reversed=row=>!!(row.reversed||row.reversado||row.reversedAt);
- const retired=asset=>/dado\/?a? de baja|retirado|desechado/i.test(`${asset.estado||''} ${asset.ubicacion||''}`);
+ const isRetiredState=value=>/^dad[oa](?:\/[oa])? de baja$/.test(norm(value));
+ const isRetirementNotice=value=>/^dad[oa](?:\/[oa])? de baja(?: mediante acta)?$/.test(norm(value));
+ const retired=asset=>isRetiredState(asset?.estado)||/retirad[oa]|desechad[oa]/i.test(`${asset?.estado||''} ${asset?.ubicacion||''}`);
  const inventoryLocation=area=>text(area)?'Inventario de '+text(area):'Inventario de área por confirmar';
  function assignmentArea(row,receiver){return text(row.destinationArea)||(/^Inventario de (.+)$/i.exec(text(row.destination))?.[1]||'')||receiver?.area||'';}
  function assignmentLocation(row,receiver){
@@ -60,7 +62,12 @@ function createAssetHistory(){
   return [...entries.values()].sort((a,b)=>b.epoch-a.epoch||b.order-a.order);
  }
  function damaged(asset){return /^(?:averiado|averiada|averiado\/a)$/.test(norm(asset?.estado));}
- function operationStatus(asset){return damaged(asset)?'No':'Sí';}
+ function operationStatus(asset){return damaged(asset)||retired(asset)?'No':'Sí';}
+ function preserveLastNovelty(edit,stored){
+  for(const key of ['fechaNovedad','horaNovedad','descripcionNovedad','currentNoveltyId','estado','estadoVisor','ubicacion','disponibleEntrega','nombreResponsable','documentoResponsable','nombreBodeguero','documentoBodeguero','pendingNoveltyActions']){
+   if(Object.prototype.hasOwnProperty.call(stored,key))edit[key]=stored[key];else delete edit[key];
+  }
+ }
  function latestIncomeNote(asset,data){
   const event=timeline(data,asset.id).find(entry=>entry.kind==='income'&&!entry.reversed&&!entry.raw.reversalOf&&norm(entry.raw.movementType)!=='reversion');
   return text(event?.raw.notes);
@@ -136,6 +143,7 @@ function createAssetHistory(){
    }
    if(value===undefined)delete result[key];else result[key]=value;
   }
+  if(isRetiredState(result.estado))result.ubicacion='Desechado/a';
   result.disponibleEntrega=operationStatus(result);
   return result;
  }
@@ -146,6 +154,7 @@ function createAssetHistory(){
   const result={...asset,fechaNovedad:day,horaNovedad:time,descripcionNovedad:row.descripcion,currentNoveltyId:row.id};
   for(const [source,target] of Object.entries(noveltyFields))if(text(row[source]))result[target]=text(row[source]);
   if(text(row.areaAsignada))result.areaAsignadaRevision={value:result.areaAsignada,at:eventTime(row)};
+  if(isRetiredState(result.estado))result.ubicacion='Desechado/a';
   result.disponibleEntrega=operationStatus(result);
   return result;
  }
@@ -200,6 +209,7 @@ function createAssetHistory(){
    const updated=applyDatedNovelty(result,entry.raw);
    if(updated){result=updated;latest=entry;}
   }
+  if(isRetiredState(result.estado))result.ubicacion='Desechado/a';
   result.disponibleEntrega=operationStatus(result);
   return {asset:result,events,latest,assigned};
  }
@@ -225,7 +235,7 @@ function createAssetHistory(){
   const empty={lookupPerson};
   return asset=>project(asset,asset.id?(byAsset.get(text(asset.id))||empty):data);
  }
- return {timeline,project,batchProjector,applyDatedNovelty,snapshot,restoreNovelty,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
+ return {isRetiredState,isRetirementNotice,preserveLastNovelty,timeline,project,batchProjector,applyDatedNovelty,snapshot,restoreNovelty,localTime,available,damaged,operationStatus,latestIncomeNote,inventoryLocation,assignmentArea,assignmentLocation};
 }
 
 if(typeof module==='object'&&module.exports)module.exports=createAssetHistory();

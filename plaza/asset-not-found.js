@@ -35,7 +35,7 @@ function recentManufacturerControl(control,clase){
 const assetLabel=asset=>{
  const heading=window.SKAssetRules?.equipmentHeading?.(asset)||asset.clase;
  if(window.SKAssetRules.isColumn(asset))return window.SKAssetRules.columnLabel(asset,heading);
- return [heading,assetNumber(asset)&&`N.º ${assetNumber(asset)}`,asset?.marcaActual||asset?.marcaInterna||asset?.marcaAnterior,asset?.serial&&`Serial ${asset.serial}`,asset?.minaOrigen&&`Origen: ${asset.minaOrigen}`].filter(Boolean).join(' · ');
+ return [heading,assetNumber(asset)&&`N.º ${assetNumber(asset)}`,asset?.marcaActual||asset?.marcaInterna||asset?.marcaAnterior,window.SKAssetRules.searchSerial(asset?.serial)&&`Serial ${asset.serial}`,asset?.minaOrigen&&`Origen: ${asset.minaOrigen}`].filter(Boolean).join(' · ');
 };
 
 const assetAreas=()=>{const record=(window.SKPlaza?.getData?.().inventoryCriteria||[]).find(row=>row.id==='SYSTEM-FORM-OPTIONS-V1'||row.recordType==='formOptions');return window.SKAssetRules.assignmentAreas(window.SKFormOptions?.values?.('personal.area')||record?.options?.['personal.area'])};
@@ -44,7 +44,7 @@ function fillAssetArea(control,value=''){const values=assetAreas();control.repla
 function selectedItem(){const data=window.SKPlaza?.getData?.()||{},id=document.querySelector('#deliveryForm [name="itemId"]')?.value;return(data.inventoryCriteria||[]).find(item=>item.id===id)}
 function field(panel,name){return panel.querySelector(`[name="${name}"]`)}
 function visibleFields(item,newAsset=false,assetContext=null){return{numeroYT:true,modelo:flag(item,'usesModel','CI_USA_MODELO'),serial:!window.SKAssetRules.isColumn(itemName(item)),marcaPrevia:true,largo:flag(item,'usesLength','CI_USA_LARGO'),fabricante:/^motosierras?$/.test(norm(itemName(item)))||flag(item,'usesManufacturer','CI_USA_FABRICANTE'),marcaInterna:!(newAsset&&window.SKAssetMarking.eligible(assetContext||itemName(item)))&&flag(item,'requiresInternalMark','CI_REQUIERE_MARCA_INTERNA')}}
-const serialPrompt='Ingresa el SERIAL real, «No trae» o «No visible».';
+const serialPrompt='Ingresa el serial o escribe «No registra».';
 const assetFieldLabels={numeroYT:'NÚMERO DE CLASE',modelo:'MODELO',largo:'LARGO FT',fabricante:'MARCA COMERCIAL / FABRICANTE',marcaInterna:'MARCA INTERNA'};
 function requiredField(name,item){
  if(name==='serial')return window.SKAssetRules.requiresSerial({clase:itemName(item)},item);
@@ -64,6 +64,7 @@ function newAssetIssue(item,asset){
 function readAssetFields(fields,getInput,clase){
  const asset={clase};
  for(const [name,show] of Object.entries(fields))if(show)asset[name]=clean(getInput(name).value);
+ if(asset.serial)asset.serial=window.SKAssetRules.serialDescription(asset.serial)||asset.serial;
  return asset;
 }
 function validAssetForm(item,asset,getInput){
@@ -285,7 +286,7 @@ function mountIncome(){
   hint.textContent=isNew?newAssetHint(item):'Busca y selecciona un activo existente. Si aún no está registrado, elige ACTIVO NUEVO.';
   select.replaceChildren(new Option('Seleccionar…',''));if(fixed&&(isNew||asset)){select.add(new Option(isNew?'Nuevo activo':assetLabel(asset),isNew?'__new__':asset.id));select.value=isNew?'__new__':asset.id}
  };
- const choose=asset=>{if(blockedReason(asset))return;registeredId=asset.id;search.value=window.SKAssetRules.isColumn(asset)?(window.SKAssetRules.columnIdentity(asset).number||window.SKAssetRules.columnIdentity(asset).mark):(asset.serial||asset.marcaActual||asset.marcaInterna||assetNumber(asset));const mine=clean(asset.mina||asset.minaOrigen);if(mine){if(!Array.from(originMine.options).some(option=>option.value===mine))originMine.add(new Option(mine,mine));originMine.value=mine}configure()};
+ const choose=asset=>{if(blockedReason(asset))return;registeredId=asset.id;search.value=window.SKAssetRules.isColumn(asset)?(window.SKAssetRules.columnIdentity(asset).number||window.SKAssetRules.columnIdentity(asset).mark):(window.SKAssetRules.searchSerial(asset.serial)||asset.marcaActual||asset.marcaInterna||assetNumber(asset));const mine=clean(asset.mina||asset.minaOrigen);if(mine){if(!Array.from(originMine.options).some(option=>option.value===mine))originMine.add(new Option(mine,mine));originMine.value=mine}configure()};
  const renderSearch=()=>{
   const item=currentItem();if(!isFixed(item)||mode!=='registered')return;
   const query=clean(search.value),matcher=window.SKAssetSearch.query(query),rows=matches(matcher);results.replaceChildren();results.hidden=false;

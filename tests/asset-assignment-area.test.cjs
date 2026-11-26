@@ -24,7 +24,7 @@ for(const role of ['owner','assistant'])test(role+': guardar una novedad persist
  vm.runInContext(read('app.js').split('const PARTS=')[0],ctx);await ctx.openDB();await ctx.put('assets',clone(asset));
  const values={assetId:asset.id,descripcion:'Revista física',areaAsignada:warehouse,ubicacion:asset.ubicacion,estado:asset.estado,fechaNovedad:'2026-10-22',horaNovedad:'14:00'};
  ctx.FormData=class{entries(){return Object.entries(values)}};
- Object.assign(ctx,{fd:()=>({...values}),mark:()=>({id:'novelty',createdAt:'2026-10-22T19:00:00Z',updatedAt:'2026-10-22T19:00:00Z',syncState:'pending'}),refresh:async()=>{},update:async()=>{},saving:false,selectedAsset:null,noveltyText:x=>x,isRetirement:()=>false,isRetiredState:()=>false,isVisorChange:()=>false});
+ Object.assign(ctx,{fd:()=>({...values}),mark:()=>({id:'novelty',createdAt:'2026-10-22T19:00:00Z',updatedAt:'2026-10-22T19:00:00Z',syncState:'pending'}),refresh:async()=>{},update:async()=>{},saving:false,selectedAsset:null,noveltyText:x=>x,requiresActa:()=>false,isRetiredState:()=>false,isVisorChange:()=>false});
  const source=read('novelty-form.js'),start=source.indexOf('async function save(event)'),end=source.indexOf('\nfunction installAssetPicker',start);vm.runInContext(source.slice(start,end),ctx);
  await ctx.save({target:form,preventDefault(){}});assert.deepEqual(alerts,[]);
  const incoming={assets:clone(await ctx.storedRows('assets')).filter(row=>row.syncState==='pending'),novelties:clone(await ctx.all('novelties'))};
