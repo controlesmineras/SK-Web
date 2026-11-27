@@ -12,6 +12,8 @@ function archivoConfirmado_(fuente, serie, r) {
 }
 function archivoColumnas_(serie, r) {
   var _a, _b, _c, _d, _e;
+  const datos = { ...r };
+  delete datos.requestSignature;
   const reversion = !!r.reversalOf || r.movementType === "REVERSIÓN";
   const autor = r.operatorName || r.recordedByName || r.registradoPorNombre || r.registeredBy || r.registradoPor;
   const tipo = r.movementType || r.kind || r.action || {
@@ -37,7 +39,7 @@ function archivoColumnas_(serie, r) {
     r.reversalRequestedBy || null,
     r.shiftKeeperName || null,
     r.reversalOf || r.loanId || r.incomeId || null,
-    JSON.stringify(r)
+    JSON.stringify(datos)
   ];
 }
 function archivoCopiar_(SQL, fuente, sourceId, data, bytes) {

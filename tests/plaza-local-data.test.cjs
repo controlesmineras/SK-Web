@@ -238,3 +238,29 @@ test('a repeated item or invalid edited quantity blocks the entire delivery befo
   assert.deepEqual(Array.from(stored.blendingDeliveries,row=>row.quantity),[4,1]);
   assert.equal(stored.inventoryStock[0].quantity,5);
 });
+
+test('a movement updates its stock and pending record together without rewriting the archived snapshot',async()=>{
+  const c=setup();
+  const base={blendingDeliveries:[{id:'historical'}],inventoryStock:[{id:'stock-wheel',quantity:5}]};
+  const movement={id:'pending-wheel',syncState:'pending',syncEventId:'event-wheel',quantity:1};
+  const stock={id:'stock-wheel',quantity:4};
+  await c.api.read();
+  await c.api.write(base);
+  await c.api.write({...base,blendingDeliveries:[...base.blendingDeliveries,movement],inventoryStock:[stock]},[
+    {name:'blendingDeliveries',id:movement.id,index:1,value:movement},
+    {name:'inventoryStock',id:stock.id,index:0,value:stock}
+  ]);
+  const request=c.factory.open('sk-plaza-offline-v1',2);
+  const db=await new Promise((resolve,reject)=>{request.onsuccess=()=>resolve(request.result);request.onerror=()=>reject(request.error)});
+  const snapshotRequest=db.transaction('state').objectStore('state').get('snapshot');
+  const snapshot=await new Promise((resolve,reject)=>{snapshotRequest.onsuccess=()=>resolve(snapshotRequest.result);snapshotRequest.onerror=()=>reject(snapshotRequest.error)});
+  assert.deepEqual(clone(snapshot.data),base);
+  db.close();
+  const reopened=setup({factory:c.factory});
+  const current=clone(await reopened.api.read());
+  assert.deepEqual(current.blendingDeliveries,[...base.blendingDeliveries,movement]);
+  assert.deepEqual(current.inventoryStock,[stock]);
+  const confirmed={...current,blendingDeliveries:[base.blendingDeliveries[0],{...movement,syncState:'synced'}]};
+  await reopened.api.write(confirmed);
+  assert.deepEqual(clone(await setup({factory:c.factory}).api.read()),confirmed);
+});

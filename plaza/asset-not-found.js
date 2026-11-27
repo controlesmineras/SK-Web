@@ -231,7 +231,7 @@ function mountIncome(){
  <select name="assetId" id="incomeAssetId" hidden aria-label="Activo seleccionado"><option value="">Seleccionar…</option></select>
  <label class="incomeAssetSearchField">BUSCAR ACTIVO<input type="search" id="incomeAssetSearch" placeholder="Buscar por serial, marca o número de clase…" autocomplete="off" aria-controls="incomeAssetResults" aria-describedby="incomeAssetSearchStatus"></label>
  <p id="incomeAssetSearchStatus" role="status" aria-live="polite"></p><div id="incomeAssetResults"></div>
- <label data-income-area-field>DESTINADO A<select data-income-asset-input="areaAsignada"></select></label>\n <label id="incomeTypeField">TIPO DE INGRESO<select id="incomeType"><option value="">Seleccionar…</option><option value="TRASLADO">TRASLADO</option><option value="REPARACIÓN">REPARACIÓN</option></select></label>
+ <label data-income-area-field>DESTINADO A<select data-income-asset-input="areaAsignada"></select></label>\n <label id="incomeConditionField">ESTADO AL INGRESAR<select id="incomeCondition" required><option value="">Seleccionar…</option><option>Operativo/a</option><option>Averiado/a</option></select></label> <label id="incomeTypeField">TIPO DE INGRESO<select id="incomeType"><option value="">Seleccionar…</option><option value="TRASLADO">TRASLADO</option><option value="REPARACIÓN">REPARACIÓN</option></select></label>
  <label id="incomeOriginField">MINA DE ORIGEN<select id="incomeOriginMine"><option value="">Seleccionar…</option></select></label>
  <p id="incomeOriginHint" class="assetRegisterHint"></p>
  <label class="assetClassNumberField" data-income-asset-field="numeroYT">NÚMERO DE CLASE<button type="button" class="assetFieldInfo" data-class-number-info aria-label="¿Qué es el número de clase?">i</button><input data-income-asset-input="numeroYT" autocomplete="off"></label><label data-income-asset-field="fabricante">MARCA COMERCIAL<input data-income-asset-input="fabricante" autocomplete="off"></label><label data-income-asset-field="modelo">MODELO<input data-income-asset-input="modelo" autocomplete="off"></label><label data-income-asset-field="serial">SERIAL<input data-income-asset-input="serial" list="plazaNoRegistraOptions" placeholder="Serial o No registra" autocomplete="off"></label><label data-income-asset-field="largo">LARGO FT<input data-income-asset-input="largo" type="number" min="0" step="any"></label><label data-income-asset-field="marcaInterna">MARCA INTERNA<input data-income-asset-input="marcaInterna" list="plazaNoRegistraOptions" placeholder="Marca o No registra" autocomplete="off"></label>`;
@@ -299,7 +299,7 @@ function mountIncome(){
    button.append(label,note);button.addEventListener('click',()=>choose(asset));results.append(button);
   });
  };
- const refresh=()=>{const id=form.elements.itemId.value;if(id!==lastItemId){lastItemId=id;mode='registered';newValues={};registeredId='';search.value='';incomeType.value='';originMine.value=''}fillMines();configure();if(!registeredId)renderSearch()};
+ const refresh=()=>{const id=form.elements.itemId.value;if(id!==lastItemId){lastItemId=id;mode='registered';newValues={};registeredId='';search.value='';incomeType.value='';originMine.value='';panel.querySelector('#incomeCondition').value=''}fillMines();configure();if(!registeredId)renderSearch()};
  panel.querySelector('[data-class-number-info]').addEventListener('click',()=>alert(CLASS_NUMBER_HELP));
  panel.querySelectorAll('[data-income-mode]').forEach(button=>button.addEventListener('click',()=>{rememberNew();mode=button.dataset.incomeMode;configure();if(mode==='registered'&&!registeredId)renderSearch()}));
  search.addEventListener('input',()=>{
@@ -317,6 +317,10 @@ function mountIncome(){
   const item=currentItem();if(!isFixed(item))return{};
   const special=isRepairClass(itemName(item)),context=special?{incomeType:incomeType.value,originMine:clean((mode==='registered'&&(selectedAsset()?.mina||selectedAsset()?.minaOrigen))||originMine.value)}:{};
   if(special&&!['TRASLADO','REPARACIÓN'].includes(context.incomeType)){alert('Selecciona TIPO DE INGRESO: TRASLADO o REPARACIÓN.');return null}if(special&&!context.originMine){alert('Selecciona la MINA DE ORIGEN.');return null}
+  const condition=panel.querySelector('#incomeCondition');
+  const receivedState=condition.value;
+  if(!receivedState){alert('Selecciona el ESTADO AL INGRESAR.');condition.focus();return null}
+  context.receivedState=receivedState;
   if(mode==='registered'){const asset=selectedAsset();if(!asset){alert('Busca y selecciona el ACTIVO REGISTRADO.');return null}const reason=blockedReason(asset);if(reason){alert(reason);return null}return{assetId:asset.id,assetLabel:assetLabel(asset),...context}}
   rememberNew();if(automaticClassNumber(itemName(item)))input('numeroYT').value=nextClassNumber(itemName(item));const candidate=readAssetFields(incomeFields(item,true,markingContext()),input,itemName(item));
   if(automaticClassNumber(candidate.clase))candidate.classNumberPolicy='auto-v1';candidate.areaAsignada=clean(input('areaAsignada').value);candidate.numeroClase=candidate.numeroYT;candidate.marcaActual=candidate.marcaInterna||'';
@@ -336,6 +340,7 @@ function mountIncome(){
   const data=snapshot||window.SKPlaza?.getData?.(),user=window.SKPlaza?.getUser?.();if(!data)return null;
   let asset;if(draft.assetCandidate){checkDraft(draft,data,data.assets||[]);if(duplicate(data.assets||[],draft.assetCandidate))throw new Error('El activo ya fue registrado. Selecciónalo como ACTIVO REGISTRADO.');asset={id:uuid(),mina:'Sandra K',...draft.assetCandidate,...initialArrivalDetails(timestamp,person,shift),criteriaId:draft.itemId,ubicacion:'Bodega de Superficie',estado:'Operativo/a',disponibleEntrega:'Sí',fechaIngreso:initialArrivalDate(timestamp),createdAt:timestamp,recordedAt,updatedAt:recordedAt,syncState:'pending',registeredFrom:'plaza-income',registeredBy:user?.documento||''};if(asset.areaAsignada)asset.areaAsignadaRevision={value:asset.areaAsignada,at:asset.createdAt};Object.assign(asset,window.SKAssetMarking.prepare(asset));(data.assets||(data.assets=[])).push(asset)}else asset=(data.assets||[]).find(row=>row.id===draft.assetId);
   if(asset){asset.ubicacion='Bodega de Superficie';asset.updatedAt=recordedAt;asset.syncState='pending';if(draft.incomeType){asset.ultimoTipoIngreso=draft.incomeType;asset.ultimaMinaOrigen=draft.originMine;if(!asset.minaOrigen)asset.minaOrigen=draft.originMine;if(draft.incomeType==='TRASLADO')asset.mina='Sandra K';else if(!asset.mina)asset.mina=draft.originMine;asset.activoExterno=!isSandraK(asset.mina);asset.ingresoTemporal=draft.incomeType==='REPARACIÓN'&&!isSandraK(asset.mina||asset.minaOrigen);if(draft.incomeType==='REPARACIÓN'){asset.estado='En reparación';asset.disponibleEntrega='No'}}}
+  if(asset&&draft.receivedState){asset.estado=draft.receivedState;asset.disponibleEntrega=draft.receivedState==='Operativo/a'?'Sí':'No'}
   return asset||null;
  };
  const validateBatch=batch=>{

@@ -24,7 +24,8 @@
     const assetById = id => (api.getData().assets || []).find(row => row.id === id);
     const carrier = () => (api.getData().personal || []).find(person =>
       person.id && person.id === fields.carrierId.value && !person.deleted && person.active !== false);
-    const available = asset => eligible(asset) && Boolean(owner(asset)) && api.assetAvailableForDelivery(asset);
+    const availabilityOptions = () => ({allowNonOperational:fields.operation.value==='SALIDA A REPARACIÓN'||selectedDestination()==='Segovia'});
+    const available = asset => eligible(asset) && Boolean(owner(asset)) && api.assetAvailableForDelivery(asset,availabilityOptions());
     function showNotice(title, message) {
       dialog.querySelector('h3').textContent = title;
       document.querySelector('#mineMismatchText').textContent = message;
@@ -34,11 +35,12 @@
       selectedId = ''; submit.disabled = true;
       const reasons = [];
       if (eligible(asset)) {
-        if (!api.assetAvailableForDelivery(asset)) {
+        if (!api.assetAvailableForDelivery(asset,availabilityOptions())) {
           const {asset: current, events} = window.SKAssetHistory.project(asset, api.getData());
           const hadEntry = events.some(e => (e.kind === 'income' || e.kind === 'return') &&
             !e.reversed && !e.raw.reversalOf && normalize(e.raw.movementType) !== 'reversion');
           if (!eligible(current)) reasons.push('Este activo ya no está habilitado para salidas fuera de mina.');
+          else if (normalize(current.ubicacion)==='bodega de superficie') reasons.push('El estado del activo impide esta salida.');
           else if (!hadEntry) reasons.push('No puedes darle salida porque no tiene un ingreso. Debes darle ingreso primero a Plaza Blending.');
           else reasons.push('El activo está fuera de Plaza Blending.' +
             (current.ubicacion ? ' Ubicación registrada: ' + current.ubicacion + '.' : '') +
@@ -159,13 +161,17 @@
           itemId:asset.criteriaId || criterion?.id || asset.id, itemName:asset.clase, assetId:asset.id, assetLabel:api.assetLabel(asset),
           quantity:1, unit:'Unidad', notes:fields.notes.value.trim(), ...shift, operatorId:user.id,
           operatorName:user.nombre, operatorDocument:user.documento, ...times, syncState:'pending'};
-        if (operation === 'TRASLADO' && mine !== 'Segovia') {target.mina = mine; target.activoExterno = true;}
+        if (operation === 'TRASLADO' && mine !== 'Segovia') {
+          if (!String(target.minaOrigen || '').trim() && row.ownerMineBefore) target.minaOrigen = row.ownerMineBefore;
+          target.mina = mine;
+          target.activoExterno = true;
+        }
         if (operation === 'SALIDA A REPARACIÓN') target.estado = 'En reparación';
         target.ingresoTemporal = false; target.ubicacion = destination; target.asignadaId = ''; target.areaAsignada = '';
         target.updatedAt = times.recordedAt; target.syncState = 'pending';
         (next.blendingDeliveries ||= []).push(row);
         form.inert = true;
-        await api.saveData(next); reset(); api.updatePendingBadge(); api.renderRecentQueries(); window.SKPlazaReturns?.refresh();
+        await api.saveData(next,['blendingDeliveries','assets']); reset(); api.updatePendingBadge(); api.renderRecentQueries(); window.SKPlazaReturns?.refresh();
         alert(operation + ' · ' + mine + '\n\nSalida registrada en este dispositivo y pendiente de sincronización.');
         void api.sync(true);
       } catch (error) {alert(error.message || 'No fue posible registrar la salida.');}

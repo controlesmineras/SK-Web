@@ -1,3 +1,4 @@
+const {entry}=require('./session-fixture.cjs');
 const {test}=require('node:test');
 const assert=require('node:assert/strict'),vm=require('node:vm'),fs=require('node:fs'),path=require('node:path');
 const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8'),clone=x=>JSON.parse(JSON.stringify(x));
@@ -9,13 +10,15 @@ function backend(seed={}){
  return {ctx,cloud:()=>clone(cloud),writes:()=>writes,sync:(data,protocol='plaza-receipts-v1')=>ctx.plazaSync_({token:'test',syncProtocol:protocol,data:clone(data)})};
 }
 function client(){
+ let persisted;
  const storage=new Map(),nodes=new Map();
  const node=()=>({value:'',hidden:false,textContent:'',dataset:{},classList:{add(){},remove(){}},setAttribute(){},removeAttribute(){},addEventListener(){}});
- const ctx=vm.createContext({document:{querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}},alert(){},window:{SK_SYNC_CONFIG:{apiUrl:'https://script.google.com/macros/s/test/exec'},alert(){},addEventListener(){},dispatchEvent(){}},sessionStorage:{getItem:key=>key==='skPlazaToken'?'test':key==='skPlazaUser'?JSON.stringify({id:'operator',documento:'operator'}):null},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:require('node:crypto').webcrypto,setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
+ const ctx=vm.createContext({document:{querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}},alert(){},window:{SKEntry:entry,SK_SYNC_CONFIG:{apiUrl:'https://script.google.com/macros/s/test/exec'},alert(){},addEventListener(){},dispatchEvent(){}},sessionStorage:{setItem(){},getItem:key=>key==='skPlazaToken'?'test':key==='skPlazaUser'?JSON.stringify({id:'operator',documento:'operator',role:'plaza_operator'}):null},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:require('node:crypto').webcrypto,setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
  vm.runInContext(read('asset-history.js'),ctx);vm.runInContext(read('asset-record-rules.js'),ctx);
+ ctx.window.SKPlazaLocal={write:async next=>{persisted=JSON.stringify(next)}};
  const start=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
- vm.runInContext(start+'\nrender=()=>{};movementShift=()=>({});window.audit={sync,mode:value=>{deliveryMode=value},get:()=>data,set:value=>{data=value;localStorage.setItem("skPlazaData",JSON.stringify(value))},post:fn=>{post=fn},periodicSync,refreshSharedPeople,refreshSyncedView,setView:view=>{currentView=view},expireAttempt:()=>{lastSyncAttempt=0},saveDeliveryBatch,prepareDelivery:rows=>{deliveryDraft=rows;validateDeliveryRecipient=()=>true;discardDeliveryForm=()=>{};renderRecentQueries=()=>{}}};})();',ctx);
- return {api:ctx.window.audit,storage,ctx,nodes};
+ vm.runInContext(start+'\nrender=()=>{};movementShift=()=>({});window.audit={sync,mode:value=>{deliveryMode=value},get:()=>data,set:value=>{data=value;appReady=true;window.SKPlazaLocal.write(value)},post:fn=>{post=fn},periodicSync,refreshSharedData,refreshSyncedView,setView:view=>{currentView=view},expireAttempt:()=>{lastSyncAttempt=0},saveDeliveryBatch,prepareDelivery:rows=>{deliveryDraft=rows;validateDeliveryRecipient=()=>true;discardDeliveryForm=()=>{};renderRecentQueries=()=>{}}};})();',ctx);
+ return {api:ctx.window.audit,storage,persisted:()=>persisted,ctx,nodes};
 }
 const row=(id,extra={})=>({id,syncEventId:'event-'+id,itemId:'gloves',quantity:2,createdAt:'2026-10-14T07:00:00.000Z',updatedAt:'2026-10-14T07:00:00.000Z',syncState:'pending',...extra});
 const snapshot=rows=>({personal:[],assets:[],inventoryStock:[],blendingIncomes:rows,blendingDeliveries:[]});
@@ -43,12 +46,12 @@ test('dos ingresos legítimos en 10 segundos se confirman individualmente',async
 test('respuesta ok sin datos conserva los pendientes y no muestra éxito',async()=>{
  const c=client();c.api.set(snapshot([row('one')]));c.api.post(async()=>({ok:true}));
  assert.equal(await c.api.sync(true),false);assert.equal(c.api.get().blendingIncomes.length,1);
- assert.equal(JSON.parse(c.storage.get('skPlazaData')).blendingIncomes.length,1);assert.doesNotMatch(c.nodes.get('#syncStatus').textContent,/^Sincronizado/);assert.equal(c.storage.has('skPlazaLastSync'),false);
+ assert.equal(JSON.parse(c.persisted()).blendingIncomes.length,1);assert.doesNotMatch(c.nodes.get('#syncStatus').textContent,/^Sincronizado/);assert.equal(c.storage.has('skPlazaLastSync'),false);
 });
 test('proteccion: fallo de red conserva movimientos y el estado pendiente',async()=>{
  const c=client();c.api.set(snapshot([row('one')]));c.api.post(async()=>{throw Error('Network failure')});
  assert.equal(await c.api.sync(true),false);assert.equal(c.api.get().blendingIncomes[0].syncState,'pending');
- assert.equal(JSON.parse(c.storage.get('skPlazaData')).blendingIncomes.length,1);
+ assert.equal(JSON.parse(c.persisted()).blendingIncomes.length,1);
 });
 test('una entrega inválida no bloquea un ingreso válido y permanece identificada',async()=>{
  const b=backend(),c=client(),s=snapshot([row('valid-income')]);s.blendingDeliveries=[row('bad-delivery',{quantity:1000,recipientId:'recipient'})];
@@ -97,9 +100,9 @@ test('servidor antiguo que omite una fila solo confirma las filas presentes y co
 });
 test('recibos incompletos o contradictorios se rechazan sin alterar los datos locales',async()=>{
  for(const corrupt of [r=>{r.acknowledgements.blendingIncomes=[]},r=>{r.data.blendingIncomes=[]},r=>{r.acknowledgements.blendingIncomes[0].status='rejected'},r=>{delete r.data.inventoryStock}]){
-  const b=backend(),c=client();c.api.set(snapshot([row('one')]));const before=c.storage.get('skPlazaData');
+  const b=backend(),c=client();c.api.set(snapshot([row('one')]));const before=c.persisted();
   c.api.post(async q=>{const r=b.sync(q.data);corrupt(r);return r});
-  assert.equal(await c.api.sync(true),false);assert.equal(c.storage.get('skPlazaData'),before);assert.equal(c.storage.has('skPlazaLastSync'),false);
+  assert.equal(await c.api.sync(true),false);assert.equal(c.persisted(),before);assert.equal(c.storage.has('skPlazaLastSync'),false);
  }
 });
 test('sin cambios no confirma un envío con registros pendientes',async()=>{
@@ -127,7 +130,7 @@ test('una segunda entrega deliberada es válida; volver a enviar el formulario v
  assert.equal(await c.api.saveDeliveryBatch(form),false);assert.equal(c.api.get().blendingDeliveries.length,1);
  c.api.prepareDelivery(draft());assert.equal(await c.api.saveDeliveryBatch(form),true);
  const rows=c.api.get().blendingDeliveries;assert.equal(rows.length,2);assert.notEqual(rows[0].id,rows[1].id);assert.notEqual(rows[0].syncEventId,rows[1].syncEventId);
- assert.equal(JSON.parse(c.storage.get('skPlazaData')).blendingDeliveries.length,2);
+ assert.equal(JSON.parse(c.persisted()).blendingDeliveries.length,2);
  assert.equal(rows[0].recipientName,'Persona');assert.equal(rows[0].recipientDocument,'123');assert.equal(rows[0].recipientArea,'Producción');assert.equal(rows[0].recipientCargo,'Operador');
 });
 test('un alta de activo y su ingreso fallido permanecen juntos sin consumir una marca',()=>{
@@ -142,6 +145,7 @@ test('asignación guarda el inventario manual y excluye el activo aunque la fich
  const c=client();const initial={personal:[{id:'recipient',nombre:'Receptor',documento:'123',area:'Desmin - Obras civiles'}],inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true}],assets:[{id:'saw1',clase:'Motosierra',serial:'TEST',ubicacion:'Bodega de Superficie'}],blendingIncomes:[],blendingDeliveries:[]};c.api.set(initial);
  const form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'SK'}},querySelector:()=>({})};
  const draft={itemId:'saw',assetId:'saw1',quantity:1,deliveryType:'ASIGNACIÓN',destinationArea:'Producción',destinationAreaMode:'manual'};
+ c.api.mode('warehouse');
  c.api.prepareDelivery([draft]);assert.equal(await c.api.saveDeliveryBatch(form),true);
  const data=c.api.get(),movement=data.blendingDeliveries[0];assert.equal(movement.destination,'Inventario de Producción');assert.equal(movement.recipientArea,'Desmin - Obras civiles');assert.equal(data.assets[0].ubicacion,'Inventario de Producción');assert.equal(data.personal[0].area,'Desmin - Obras civiles');
  data.assets[0].ubicacion='Bodega de Superficie';c.api.prepareDelivery([draft]);assert.equal(await c.api.saveDeliveryBatch(form),false);assert.equal(data.blendingDeliveries.length,1);
@@ -149,6 +153,7 @@ test('asignación guarda el inventario manual y excluye el activo aunque la fich
 test('el destino automático sigue el área del receptor al confirmar y valida todo el lote antes de escribir',async()=>{
  const c=client();c.api.set({personal:[{id:'recipient',nombre:'Receptor',area:'Producción'}],inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true}],assets:[{id:'saw1',clase:'Motosierra',serial:'TEST',ubicacion:'Bodega de Superficie'}],blendingIncomes:[],blendingDeliveries:[]});
  const form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'SK'}},querySelector:()=>({})},draft={itemId:'saw',assetId:'saw1',quantity:1,deliveryType:'ASIGNACIÓN',destinationArea:'Desmin - Obras civiles',destinationAreaMode:'recipient'};
+ c.api.mode('warehouse');
  c.api.prepareDelivery([draft,{...draft}]);assert.equal(await c.api.saveDeliveryBatch(form),false);assert.equal(c.api.get().blendingDeliveries.length,0);assert.equal(c.api.get().assets[0].ubicacion,'Bodega de Superficie');
  c.api.prepareDelivery([draft]);assert.equal(await c.api.saveDeliveryBatch(form),true);assert.equal(c.api.get().blendingDeliveries[0].destination,'Inventario de Producción');
 });
@@ -160,22 +165,21 @@ test('el backend actual conserva el área destino y rechaza otra asignación del
 });
 
 const collaborator={id:'person-1',documento:'TEST-123',primerNombre:'Persona',primerApellido:'Prueba',empresa:'SK 3.7',area:'Producción',cargo:'Operador minero',telefono:'111'};
-test('ARIS MINING persists for both loans and assignments through the existing backend',async()=>{
- for(const deliveryType of ['ASIGNACIÓN','PRÉSTAMO']){
-  const c=client(),destination='A cargo de ARIS MINING',initial={personal:[{id:'recipient',nombre:'Receptor',documento:'123',area:'Producción'}],inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true,isEpp:true,allowLoan:true}],assets:[{id:'saw1',clase:'Motosierra',serial:'TEST',ubicacion:'Bodega de Superficie'}],inventoryStock:[{id:'stock',itemId:'other',quantity:10}],blendingIncomes:[],blendingDeliveries:[]};
-  c.api.set(clone(initial));
-  const form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'SK'}},querySelector:()=>({})};
-  c.api.prepareDelivery([{itemId:'saw',assetId:'saw1',quantity:1,deliveryType,destination,destinationAreaMode:'manual',bringsReplacement:true}]);
-  assert.equal(await c.api.saveDeliveryBatch(form),true);
-  const local=c.api.get(),movement=local.blendingDeliveries[0];assert.equal(movement.destination,destination);
-  assert.equal(Object.hasOwn(movement,'bringsReplacement'),false);
-  assert.equal(local.assets[0].ubicacion,destination);assert.equal(local.personal[0].area,'Producción');
-  assert.equal(c.ctx.window.SKAssetHistory.project(local.assets[0],local).asset.ubicacion,destination);
-  assert.equal(c.ctx.window.SKAssetHistory.available(local.assets[0],local),false);
-  const b=backend(initial);b.sync({blendingDeliveries:local.blendingDeliveries});b.sync({blendingDeliveries:local.blendingDeliveries});
-  assert.equal(b.cloud().assets[0].ubicacion,destination);assert.equal(b.cloud().blendingDeliveries.length,1);
-  assert.equal(b.cloud().inventoryStock[0].quantity,10);assert.equal(b.cloud().personal[0].area,'Producción');
- }
+test('ARIS MINING persists for loans through the existing backend',async()=>{
+ const deliveryType='PRÉSTAMO';
+ const c=client(),destination='A cargo de ARIS MINING',initial={personal:[{id:'recipient',nombre:'Receptor',documento:'123',area:'Producción'}],inventoryCriteria:[{id:'saw',name:'Motosierra',isFixedAsset:true,isEpp:true,allowLoan:true}],assets:[{id:'saw1',clase:'Motosierra',serial:'TEST',ubicacion:'Bodega de Superficie'}],inventoryStock:[{id:'stock',itemId:'other',quantity:10}],blendingIncomes:[],blendingDeliveries:[]};
+ c.api.set(clone(initial));
+ const form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'SK'}},querySelector:()=>({})};
+ form.elements.recipientCompany.value='ARIS MINING';c.api.mode('loan');c.api.prepareDelivery([{itemId:'saw',assetId:'saw1',quantity:1,deliveryType,destination,destinationAreaMode:'manual',bringsReplacement:true}]);
+ assert.equal(await c.api.saveDeliveryBatch(form),true);
+ const local=c.api.get(),movement=local.blendingDeliveries[0];assert.equal(movement.destination,destination);
+ assert.equal(Object.hasOwn(movement,'bringsReplacement'),false);
+ assert.equal(local.assets[0].ubicacion,destination);assert.equal(local.personal[0].area,'Producción');
+ assert.equal(c.ctx.window.SKAssetHistory.project(local.assets[0],local).asset.ubicacion,destination);
+ assert.equal(c.ctx.window.SKAssetHistory.available(local.assets[0],local),false);
+ const b=backend(initial);b.sync({blendingDeliveries:local.blendingDeliveries});b.sync({blendingDeliveries:local.blendingDeliveries});
+ assert.equal(b.cloud().assets[0].ubicacion,destination);assert.equal(b.cloud().blendingDeliveries.length,1);
+ assert.equal(b.cloud().inventoryStock[0].quantity,10);assert.equal(b.cloud().personal[0].area,'Producción');
 });
 
 test('ARIS recipient company is rejected outside loans and persists on a loan through sync',async()=>{
@@ -232,6 +236,7 @@ test('Plaza usa la revisión solo después de confirmarla y la consulta manual s
 test('Plaza asigna a Bodega Plaza Blending, conserva al receptor y sincroniza sin duplicar',async()=>{
  const area='Bodega Plaza Blending',c=client();const initial={personal:[{id:'recipient',nombre:'Receptor',documento:'123',area:'Producción'}],inventoryCriteria:[{id:'tool',name:'Taladro',isFixedAsset:true}],assets:[{id:'tool1',clase:'Taladro',serial:'TEST',ubicacion:'Bodega de Superficie'}],blendingIncomes:[],blendingDeliveries:[]};c.api.set(initial);
  const form={elements:{itemId:{value:''},recipientId:{value:'recipient'},recipientCompany:{value:'SK'}},querySelector:()=>({})};
+ c.api.mode('warehouse');
  c.api.prepareDelivery([{itemId:'tool',assetId:'tool1',quantity:1,deliveryType:'ASIGNACIÓN',destinationArea:area,destinationAreaMode:'manual'}]);
  assert.equal(await c.api.saveDeliveryBatch(form),true);assert.equal(c.api.get().personal[0].area,'Producción');
  const b=backend({...initial,assets:[{id:'tool1',clase:'Taladro',serial:'TEST',ubicacion:'Bodega de Superficie'}],blendingDeliveries:[]});c.api.post(q=>b.sync(q.data));assert.equal(await c.api.sync(true),true,c.nodes.get('#syncStatus')?.textContent);assert.equal(await c.api.sync(true),true);
@@ -244,11 +249,26 @@ test('Plaza sincroniza desde un formulario sin redibujar ni borrar lo que se est
  c.nodes.set('#deliveryForm',{elements:Object.fromEntries(Object.entries(values).map(([key,value])=>[key,{value}]))});
  c.api.setView('delivery');c.api.periodicSync();await new Promise(resolve=>setImmediate(resolve));
  assert.equal(calls,1);assert.ok(c.storage.has('skPlazaLastSync'));assert.equal(c.nodes.get('#deliveryForm').elements.notes.value,values.notes);assert.equal(c.nodes.get('#deliveryForm').elements.quantity.value,'5');
- c.api.expireAttempt();c.api.refreshSharedPeople();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,2);
+ c.api.expireAttempt();c.api.refreshSharedData();await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,2);
 });
 test('Plaza no superpone la consulta periódica y la de volver a la app',async()=>{
  const c=client();c.api.set(snapshot([]));let calls=0,finish;c.api.post(()=>{calls++;return new Promise(resolve=>finish=resolve)});
- c.api.periodicSync();await new Promise(resolve=>setImmediate(resolve));c.api.periodicSync();c.api.refreshSharedPeople();assert.equal(calls,1);
+ c.api.periodicSync();await new Promise(resolve=>setImmediate(resolve));c.api.periodicSync();c.api.refreshSharedData();assert.equal(calls,1);
  finish({ok:true,notModified:true});await new Promise(resolve=>setImmediate(resolve));assert.equal(calls,1);
  c.ctx.navigator.onLine=false;c.api.periodicSync();assert.equal(calls,1);
+});
+
+test('el servidor conserva el estado del ingreso y bloquea la salida de un activo averiado o dado de baja',()=>{
+ const asset={id:'tool',clase:'Taladro',estado:'Operativo/a',ubicacion:'Operación'};
+ const b=backend({assets:[asset]});
+ const income=row('income-state',{assetId:asset.id,quantity:1,receivedState:'Averiado/a'});
+ const delivery=row('delivery-state',{assetId:asset.id,quantity:1,recipientId:'recipient',deliveryType:'ASIGNACIÓN',destination:'Operación'});
+ assert.equal(b.sync({blendingDeliveries:[delivery]}).acknowledgements.blendingDeliveries[0].status,'rejected');
+ assert.equal(b.sync({blendingIncomes:[income]}).acknowledgements.blendingIncomes[0].status,'accepted');
+ assert.equal(b.cloud().assets[0].ubicacion,'Bodega de Superficie');
+ assert.equal(b.cloud().assets[0].estado,'Averiado/a');
+ assert.equal(b.sync({blendingDeliveries:[delivery]}).acknowledgements.blendingDeliveries[0].status,'rejected');
+ const retired=backend({assets:[{...asset,estado:'Dado de baja',ubicacion:'Bodega de Superficie'}]});
+ assert.equal(retired.sync({blendingIncomes:[income]}).acknowledgements.blendingIncomes[0].status,'rejected');
+ assert.equal(retired.sync({blendingDeliveries:[delivery]}).acknowledgements.blendingDeliveries[0].status,'rejected');
 });

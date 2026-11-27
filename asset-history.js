@@ -62,7 +62,7 @@ function createAssetHistory(){
   return [...entries.values()].sort((a,b)=>b.epoch-a.epoch||b.order-a.order);
  }
  function damaged(asset){return /^(?:averiado|averiada|averiado\/a)$/.test(norm(asset?.estado));}
- function operationStatus(asset){return damaged(asset)||retired(asset)?'No':'Sí';}
+ function operationStatus(asset){return damaged(asset)||retired(asset)||norm(asset?.estado)==='en reparacion'?'No':'Sí';}
  function preserveLastNovelty(edit,stored){
   for(const key of ['fechaNovedad','horaNovedad','descripcionNovedad','currentNoveltyId','estado','estadoVisor','ubicacion','disponibleEntrega','nombreResponsable','documentoResponsable','nombreBodeguero','documentoBodeguero','pendingNoveltyActions']){
    if(Object.prototype.hasOwnProperty.call(stored,key))edit[key]=stored[key];else delete edit[key];
@@ -181,6 +181,10 @@ function createAssetHistory(){
    Object.assign(result,{fechaNovedad:latest.date,horaNovedad:latest.time,descripcionNovedad:latest.title,documentoResponsable:latest.responsible.document,nombreResponsable:latest.responsible.name,documentoBodeguero:latest.warehouse.document,nombreBodeguero:latest.warehouse.name});
    if(!retired(asset)&&latest.location)result.ubicacion=latest.kind==='assignment'?assignmentLocation(latest.raw,latest.responsible):latest.location;
 
+   if(!retired(asset)&&latest.kind==='income'){
+    if(latest.raw.receivedState)result.estado=latest.raw.receivedState;
+    else if(norm(latest.raw.incomeType)==='reparacion')result.estado='En reparación';
+   }
    if(asset.currentNoveltyId)delete result.currentNoveltyId;
    // Keep the stored physical state: an assignment by itself does not certify operability.
   }
@@ -213,7 +217,7 @@ function createAssetHistory(){
   result.disponibleEntrega=operationStatus(result);
   return {asset:result,events,latest,assigned};
  }
- function available(asset,data){const current=project(asset,data).asset;return !current.deleted&&!retired(current)&&norm(current.ubicacion)==='bodega de superficie';}
+ function available(asset,data,{allowNonOperational=false}={}){const current=project(asset,data).asset;return !current.deleted&&!retired(current)&&norm(current.ubicacion)==='bodega de superficie'&&(allowNonOperational||operationStatus(current)==='Sí');}
  // Prepara una consulta de varios activos sobre una misma lectura, incluidas novedades pendientes o eliminadas.
  function batchProjector(data={}){
   const byId=new Map(),byDocument=new Map();

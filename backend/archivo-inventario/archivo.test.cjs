@@ -73,15 +73,16 @@ test('de la confirmación central a un SQLite portátil; conserva identidades, s
       {...movimiento,id:'loan',assetId:'af',deliveryType:'PRÉSTAMO'}],
     warehouseQuantityHistory:[{id:'d1',status:'synced',kind:'quantity_adjustment',balanceBefore:2,balanceAfter:5,recordedByName:'Nelson',recordedByRole:'owner'}]};
   const produccion={consumptions:[{id:'op1',cantidad:1,partId:'YT',registradoPor:'doc',createdAt:hora}],
-    warehouseMovements:[{id:'afpend',status:'synced',bridgePending:true}],incomes:[{id:'inválido',createdAt:hora},{id:'proyección',partId:'YT',cantidad:1,createdAt:hora,sourceWarehouseMovementId:'afpend'}]};
+    warehouseMovements:[{id:'afpend',status:'synced',bridgePending:true},{id:'confirmado',status:'synced',requestSignature:'cuerpo-sin-validar'}],incomes:[{id:'inválido',createdAt:hora},{id:'proyección',partId:'YT',cantidad:1,createdAt:hora,sourceWarehouseMovementId:'afpend'}]};
   h.entrada('sk-web-central.json',central);h.entrada('sk-web-production.json',produccion);
   const original=JSON.stringify(central);
   const first=await h.ctx.copiarHistorialConfirmado();
-  assert.equal(first[0].nuevos,4);assert.equal(first[0].omitidos,3);assert.equal(first[1].nuevos,1);assert.equal(first[1].omitidos,3);
+  assert.equal(first[0].nuevos,4);assert.equal(first[0].omitidos,3);assert.equal(first[1].nuevos,2);assert.equal(first[1].omitidos,3);
   assert.equal(JSON.stringify(central),original);
   assert.deepEqual(h.leer('central',"SELECT id,saldo_anterior,saldo_nuevo,hora_registro,bodeguero FROM registros WHERE serie='blendingDeliveries' AND id='d1'"),
     [{id:'d1',saldo_anterior:5,saldo_nuevo:4,hora_registro:hora,bodeguero:'María'}]);
   assert.deepEqual(h.leer('central',"SELECT id FROM registros WHERE datos LIKE '%solo-en-el-operativo%'"),[]);
+  assert.deepEqual(h.leer('produccion',"SELECT id FROM registros WHERE datos LIKE '%cuerpo-sin-validar%'"),[]);
   const archivos=h.copias.size;
   await h.ctx.activarHistorialInventario();await h.ctx.activarHistorialInventario();
   assert.equal(h.activadores.length,1);assert.equal(h.copias.size,archivos);

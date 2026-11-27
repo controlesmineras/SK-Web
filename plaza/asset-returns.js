@@ -126,7 +126,7 @@
         stock.quantity = row.balanceAfter; stock.updatedAt = row.updatedAt;
       }
       form.inert = true;
-      await app.saveData(next); // Persistir antes de cambiar la pantalla o liberar el activo.
+      await app.saveData(next,['blendingDeliveries','assets','inventoryStock']); // Persistir antes de cambiar la pantalla o liberar el activo.
       $('#assetReturnSearch').value = '';
       reset(); refresh(); app.refreshDelivery(); app.updatePendingBadge(); app.renderRecentQueries();
       alert('RETORNO REGISTRADO\n\nLos elementos volvieron a estar disponibles en bodega. El registro queda guardado en este dispositivo y pendiente de sincronización.');
