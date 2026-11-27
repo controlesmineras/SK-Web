@@ -142,7 +142,7 @@
     column||text(a.largo)?field('Largo (ft)',a.largo):'',
     selfRescuer||text(a.estadoVisor)?field('Color del visor',a.estadoVisor):'',
     field('¿Marcada físicamente?',a.marcada),field('Mina propietaria',a.mina),field('Mina de origen',a.minaOrigen),
-    field('Fecha de ingreso',date(a.fechaIngreso))
+    field('Fecha de ingreso',date(a.fechaIngreso)||'Sin registro')
    ].join(''))}
    ${group('Última novedad / estado actual',[
     field('Traslado permanente',projection.transferLabel),field('Ubicación',a.ubicacion,true),field('Estado',a.estado),field('Disponible para operación',a.disponibleEntrega),
