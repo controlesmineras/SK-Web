@@ -4,10 +4,12 @@
 }
 
 @media (prefers-reduced-motion: no-preference) {
+  .adminUpdateStarting #adminUpdateAppHome .appUpdateArrows,
   button[aria-busy="true"] .appUpdateArrows {
     animation: appUpdateRotation 1s linear infinite reverse;
   }
 
+  .adminUpdateStarting #adminUpdateAppHome .appUpdateGear,
   button[aria-busy="true"] .appUpdateGear {
     animation: appUpdateRotation 1s linear infinite;
   }
@@ -27,4 +29,28 @@
 
 .appVersionStamp time {
   white-space: nowrap;
+}
+
+
+#home .appVersionStamp { color: #d6e7f1; }
+
+.adminUpdateStatus,
+.adminUpdateStarting #home .appVersionStamp {
+  display: none;
+}
+
+.adminUpdateStarting .adminUpdateStatus {
+  display: block;
+  position: fixed;
+  z-index: 70;
+  top: 5.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  width: max-content;
+  max-width: calc(100% - 2rem);
+  padding: .55rem .9rem;
+  border-radius: .5rem;
+  background: #eaf3f8;
+  color: #173d59;
+  font-weight: 650;
 }
