@@ -1,0 +1,47 @@
+.assetClassNumberField,
+.assetSerialField {
+  position: relative;
+}
+
+.assetClassNumberField > .assetFieldInfo,
+.assetSerialField > .assetFieldInfo {
+  position: absolute;
+  inset: -6px 0 auto auto;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
+  cursor: pointer;
+}
+
+.assetFieldInfo::before {
+  content: "";
+  width: 16px;
+  height: 16px;
+  background: #285571;
+  -webkit-mask: url("./plaza/icono-informacion.png") center / contain no-repeat;
+  mask: url("./plaza/icono-informacion.png") center / contain no-repeat;
+}
+
+.assetFieldInfo:hover,
+.assetFieldInfo[aria-expanded="true"] {
+  background: #eef6fa;
+}
+
+.assetFieldInfo:focus-visible {
+  outline: 2px solid #285571;
+  outline-offset: 1px;
+}
+
+@media (forced-colors: active) {
+  .assetFieldInfo::before {
+    forced-color-adjust: none;
+    background: ButtonText;
+  }
+}
