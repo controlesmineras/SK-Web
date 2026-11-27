@@ -1,0 +1,30 @@
+.appUpdateArrows,
+.appUpdateGear {
+  transform-origin: 14px 14px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  button[aria-busy="true"] .appUpdateArrows {
+    animation: appUpdateRotation 1s linear infinite reverse;
+  }
+
+  button[aria-busy="true"] .appUpdateGear {
+    animation: appUpdateRotation 1s linear infinite;
+  }
+}
+
+@keyframes appUpdateRotation {
+  to { transform: rotate(360deg); }
+}
+
+.appVersionStamp {
+  margin: .3rem .15rem .65rem;
+  color: inherit;
+  font-size: .78rem;
+  line-height: 1.35;
+  font-variant-numeric: tabular-nums;
+}
+
+.appVersionStamp time {
+  white-space: nowrap;
+}

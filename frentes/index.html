@@ -5,7 +5,7 @@
 <link rel="manifest" href="manifest.webmanifest"><link rel="icon" href="./labor-192.png"><link rel="apple-touch-icon" href="./labor-180.png">
 <link rel="stylesheet" href="app.css?v=20261125-guardado-apps"><link rel="stylesheet" href="../date-calendar.css">
 <script defer src="../sync-config.js"></script><script defer src="../date-calendar.js"></script><script defer data-options-only src="../form-option-catalog.js"></script><script defer src="store.js?v=20261125-guardado-apps"></script><script defer src="../app-entry.js?v=20261125-sesion-offline-36h"></script><script defer src="app.js?v=20261125-guardado-apps"></script>
-</head><body>
+<link rel="stylesheet" href="../app-update-icon.css?v=20261127-version-visible"></head><body>
 <header><div class="bar"><div class="brand"><img src="./labor.svg" alt="" width="48" height="48"><span>ASOCIACIÓN MINERA<strong>SK 3.7</strong></span></div><div id="sessionActions" hidden><button type="button" id="logout">Salir</button></div></div></header>
 <main>
 <section id="login" class="login card">
@@ -15,7 +15,7 @@
 <label>Contraseña<input name="password" type="password" autocomplete="current-password" required></label>
 <button class="primary">Ingresar</button><p id="loginMessage" role="status"></p></form></section>
 <section id="workspace" hidden>
-<div class="accountBar"><button id="updateLabor" type="button" aria-label="Actualizar app" title="Actualizar app"><svg aria-hidden="true" width="42" height="42" viewBox="-3 -3 34 34" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path stroke="#214b63" stroke-width="2.1" d="M14 0a14 14 0 0 0-14 14m0 0-1.5-4m1.5 4 4-2.8m11 16a14 14 0 0 0 14-14m0 0-4 2.8m4-2.8 1.5 4"/><path fill="#416a89" d="M12 5h4l.5 2.4 1.6.9 2.4-.8 2 3.5-1.8 1.7v2.6l1.8 1.7-2 3.5-2.4-.8-1.6.9-.5 2.4h-4l-.5-2.4-1.6-.9-2.4.8-2-3.5 1.8-1.7v-2.6L5.5 11l2-3.5 2.4.8 1.6-.9z"/><circle cx="14" cy="14" r="4" fill="#eef4f8" stroke="#214b63"/></svg></button><p class="sectionLabel" id="account"></p><button id="sync" type="button">Sincronizar</button></div>
+<div class="accountBar"><button id="updateLabor" type="button" aria-label="Actualizar app" title="Actualizar app"><svg aria-hidden="true" width="42" height="42" viewBox="-3 -3 34 34" fill="none" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path class="appUpdateArrows" stroke="#214b63" stroke-width="2.1" d="M14 0a14 14 0 0 0-14 14m0 0-1.5-4m1.5 4 4-2.8m11 16a14 14 0 0 0 14-14m0 0-4 2.8m4-2.8 1.5 4"/><g class="appUpdateGear"><path fill="#416a89" d="M12 5h4l.5 2.4 1.6.9 2.4-.8 2 3.5-1.8 1.7v2.6l1.8 1.7-2 3.5-2.4-.8-1.6.9-.5 2.4h-4l-.5-2.4-1.6-.9-2.4.8-2-3.5 1.8-1.7v-2.6L5.5 11l2-3.5 2.4.8 1.6-.9z"/><circle cx="14" cy="14" r="4" fill="#eef4f8" stroke="#214b63"/></g></svg></button><p class="sectionLabel" id="account"></p><button id="sync" type="button">Sincronizar</button></div><div class="appVersionStamp">Versión <time datetime="2026-11-27T11:23-05:00">27/11/2026 · 11:23</time></div>
 <details id="laborRoles" class="card" hidden><summary>Consultar roles de Labor</summary><ul id="laborRoleList" aria-live="polite"></ul></details>
 <div class="pageTitle"><h1>Labor</h1><span id="connection" class="pill"></span></div>
 <nav aria-label="Reportes"><button id="newTab" aria-current="page">Nuevo reporte</button><button id="historyTab">Mis reportes <span id="badge"></span></button></nav>
