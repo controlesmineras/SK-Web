@@ -1359,6 +1359,7 @@ byId('updateProduction').onclick=async event=>{
  if(countDirty)return status('Guarda el borrador de inventario antes de actualizar.');
  if(draft.length)return status('Guarda o quita los repuestos seleccionados antes de actualizar.');
  button.disabled=true;
+ button.setAttribute('aria-busy','true');
  status('Buscando la versión más reciente de Producción…');
  try{
   const url=new URL(location.href);
@@ -1375,6 +1376,6 @@ byId('updateProduction').onclick=async event=>{
  }catch{
   status('No se pudo actualizar Producción. Revisa la conexión y vuelve a intentarlo.');
  }finally{
-  button.disabled=false;
+  button.disabled=false;button.removeAttribute('aria-busy');
  }
 };
