@@ -343,13 +343,28 @@ async function saveAsset(e){
  }catch(error){console.error(error);alert('No se pudo completar el registro: '+(error.message||error));}
  finally{f.inert=false;assetSaving=false;if(button)button.disabled=false;}
 }
+function confirmAssetDeletion(asset){
+ const dialog=document.querySelector('#assetDeleteDialog');
+ const accept=dialog.querySelector('[value="delete"]');
+ dialog.querySelector('#assetDeleteName').textContent=cleanLabel(asset);
+ accept.disabled=true;
+ dialog.returnValue='';
+ dialog.showModal();
+ return new Promise(resolve=>{
+  const timer=setTimeout(()=>{accept.disabled=false;},3000);
+  dialog.addEventListener('close',()=>{
+   clearTimeout(timer);
+   resolve(dialog.returnValue==='delete'&&!accept.disabled);
+  },{once:true});
+ });
+}
 async function deleteAsset(){
  if(assetSaving||!window.SKAdminAuth?.canManageAssets?.())return;
  const form=document.querySelector('#assetForm'),id=form?.elements.id.value;if(!id)return;
  assetSaving=true;setAssetMode(true);let saved=false;
  try{
   const asset=(await all('assets')).find(row=>row.id===id&&!row.deleted);if(!asset)return;
-  if(!confirm(`¿Eliminar este activo fijo?\n\n${cleanLabel(asset)}\n\nDejará de aparecer en el listado y en las opciones para nuevos registros. Se conservarán sus novedades, ingresos, entregas y consumos.\n\nLa eliminación se enviará a los demás dispositivos al sincronizar.`))return;
+  if(!await confirmAssetDeletion(asset))return;
   if(!window.SKAdminAuth?.canManageAssets?.())return;
   const timestamp=new Date(Math.max(Date.now(),(Date.parse(asset.updatedAt||asset.createdAt)||0)+1)).toISOString(),user=window.SKAdminAuth.user?.();
   await put('assets',{...asset,deleted:true,deletedAt:timestamp,deletedBy:user?.username||'admin',deletedByName:user?.name||'',updatedAt:timestamp,syncState:'pending'});

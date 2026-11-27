@@ -365,3 +365,22 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
   #assetAdminList .assetRow{min-height:42px;padding:.35rem .55rem;line-height:1.18}
   #assetAdminList .assetRow small{margin-top:.12rem;line-height:1.15}
 }
+
+#assetDeleteDialog {
+  width: min(30rem, calc(100% - 2rem));
+  border: 1px solid #cbd7df;
+  border-radius: 12px;
+  padding: 1.2rem;
+  color: #102f45;
+}
+#assetDeleteDialog::backdrop { background: #10283a99; }
+#assetDeleteTitle { margin-top: 0; }
+#assetDeleteTitle span { color: #a84d00; }
+#assetDeleteName { font-weight: 700; overflow-wrap: anywhere; }
+#assetDeleteDialog .assetDeleteActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: .6rem;
+}
+#assetDeleteDialog .dangerBtn:disabled { opacity: .45; cursor: wait; }
