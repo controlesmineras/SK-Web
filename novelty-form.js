@@ -46,6 +46,8 @@ function updateRetiredLocation(){
  const retired=isRetiredState(state.value);
  const availability=form.elements.namedItem('novOperationStatus');
  if(availability){availability.readOnly=true;availability.value=retired?'No':state.value?window.SKAssetHistory.operationStatus({estado:state.value}):(selectedAsset?window.SKAssetHistory.operationStatus(selectedAsset):'');}
+ location.disabled=retired;
+ if(availability){availability.disabled=retired;availability.style.background=retired?'#eef2f5':'';}
  if(retired){if(!location.readOnly)location.dataset.beforeRetirement=location.value;location.value='Desechado/a';location.readOnly=true;location.style.background='#eef2f5';}
  else{if(location.readOnly&&location.dataset.beforeRetirement!==undefined)location.value=location.dataset.beforeRetirement;delete location.dataset.beforeRetirement;location.readOnly=false;location.style.background='';}
 }
@@ -284,7 +286,7 @@ function installNoveltyMenu(){
 }
 installNoveltyMenu();
 
-const noveltyForm=document.querySelector('#noveltyForm');if(noveltyForm){noveltyForm.elements.ubicacion.closest('label').before(noveltyForm.elements.estado.closest('label'));noveltyForm.elements.estado.addEventListener('change',updateRetiredLocation);noveltyForm.addEventListener('reset',()=>{delete noveltyForm.elements.estado.dataset.beforeActa;noveltyForm.elements.estado.disabled=false;noveltyForm.elements.ubicacion.readOnly=false;delete noveltyForm.elements.ubicacion.dataset.beforeRetirement;});}
+const noveltyForm=document.querySelector('#noveltyForm');if(noveltyForm){noveltyForm.elements.ubicacion.closest('label').before(noveltyForm.elements.estado.closest('label'));noveltyForm.elements.estado.addEventListener('change',updateRetiredLocation);noveltyForm.addEventListener('reset',()=>{delete noveltyForm.elements.estado.dataset.beforeActa;noveltyForm.elements.estado.disabled=false;noveltyForm.elements.ubicacion.readOnly=false;noveltyForm.elements.ubicacion.disabled=false;const availability=noveltyForm.elements.namedItem('novOperationStatus');if(availability){availability.disabled=false;availability.style.background='';}delete noveltyForm.elements.ubicacion.dataset.beforeRetirement;});}
 mountActaField();window.SKNoveltyForm={update,updateFields,save,renderSaveStatus,actaHTML};window.addEventListener('skweb-synced',update);
 document.querySelector('#novDesc')?.addEventListener('change',updateFields);
 document.querySelector('#noveltyForm')?.addEventListener('reset',()=>setTimeout(update,0));
