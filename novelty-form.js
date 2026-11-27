@@ -170,7 +170,11 @@ function installAssetPicker(){
  const form=document.querySelector('#noveltyForm'),select=document.querySelector('#novAsset');if(!form||!select||document.querySelector('#novAssetSearch'))return;
  const assetField=select.closest('label'),classField=document.createElement('label'),classes=document.createElement('select');
  classField.className='novPickerField';assetField.classList.add('novPickerField');
- classField.append('CLASE',classes);classes.id='novAssetClass';classes.add(new Option('Todas las clases',''));assetField.before(classField);
+ const classSearch=document.createElement('input'),classOptions=document.createElement('div');
+ classSearch.type='search';classSearch.autocomplete='off';classSearch.placeholder='Mostrando todas las clases — elige o busca';
+ classSearch.setAttribute('aria-controls','novClassOptions');classSearch.setAttribute('aria-expanded','false');
+ classOptions.id='novClassOptions';classOptions.hidden=true;classes.hidden=true;
+ classField.append('CLASE',classSearch,classes,classOptions);classes.id='novAssetClass';classes.add(new Option('Todas las clases',''));assetField.before(classField);
  const input=document.createElement('input'),results=document.createElement('div'),status=document.createElement('small');
  input.id='novAssetSearch';input.type='search';input.autocomplete='off';input.placeholder='Clase, modelo, número de clase, marca o serial…';input.setAttribute('role','combobox');input.setAttribute('aria-expanded','false');input.setAttribute('aria-controls','novAssetSearchResults');
  results.id='novAssetSearchResults';results.hidden=true;status.id='novAssetSearchStatus';status.style.cssText='color:#667085;font-size:.86rem;font-weight:400';input.setAttribute('aria-describedby',status.id);
@@ -188,6 +192,8 @@ function installAssetPicker(){
  #noveltyForm[data-asset-picker] > :not(.novPickerField){display:none!important}
  #noveltyForm[data-asset-selected] > .novPickerField,
  #noveltyForm > .novSelectedAsset[hidden]{display:none!important}
+ #noveltyForm #novClassOptions:not([hidden]){display:grid;gap:4px;max-height:220px;overflow:auto}
+ #noveltyForm #novClassOptions button{width:100%;text-align:left;background:#fff;color:#173d59;border:1px solid #ccd8e0;padding:.45rem .7rem;font-weight:400!important;text-transform:none!important}
  #noveltyForm .novSelectedAsset{padding:.65rem .8rem;border-radius:8px;background:#e3eff7;color:#173d59}
  #noveltyForm #novAssetSearchResults{grid-column:1/-1;min-width:0;display:grid;gap:5px;max-height:280px;overflow:auto;margin-top:6px}#noveltyForm #novAssetSearchResults[hidden]{display:none}#noveltyForm #novAssetSearchResults button{width:100%;text-align:left;white-space:normal;background:#fff;color:#173d59;border:1px solid #ccd8e0;padding:.45rem .7rem;font-family:system-ui,sans-serif!important;font-weight:400!important;text-transform:none!important;letter-spacing:normal!important}#novAssetSearchResults button:focus-visible{outline:3px solid #e7b45a}
  #noveltyForm #novAssetSearchResults button.novRetired{background:#e2e5e8;border-color:#9faab3;color:#263744}
@@ -220,12 +226,44 @@ function installAssetPicker(){
   results.hidden=false;input.setAttribute('aria-expanded','true');
  };
  const load=async()=>{if(typeof db==='undefined'||!db)return;const token=++version,next=(await all('assets')).filter(asset=>!asset.deleted);if(token!==version)return;rows=next;const current=classes.value,values=[...new Set(rows.map(asset=>asset.clase).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'es'));classes.replaceChildren(new Option('Todas las clases',''),...values.map(value=>new Option(value,value)));classes.value=values.includes(current)?current:'';const selected=rows.find(asset=>asset.id===select.value);if(selected){input.value=label(selected);input.setCustomValidity('');status.textContent='Activo seleccionado.'}else if(!results.hidden)draw()};
- classes.addEventListener('change',()=>{select.value='';input.value='';input.setCustomValidity('Selecciona un activo de la lista.');update();draw()});
+ const closeClasses=()=>{
+  classOptions.hidden=true;
+  classSearch.setAttribute('aria-expanded','false');
+  classSearch.value=classes.value;
+ };
+ const drawClasses=(query='')=>{
+  classOptions.replaceChildren();
+  for(const option of classes.options){
+   if(!norm(option.textContent).includes(norm(query)))continue;
+   const button=document.createElement('button');
+   button.type='button';button.textContent=option.textContent;
+   button.addEventListener('click',()=>{
+    classes.value=option.value;closeClasses();
+    select.value='';input.value='';input.setCustomValidity('Selecciona un activo de la lista.');
+    update().catch(console.error);draw();
+   });
+   classOptions.append(button);
+  }
+  if(!classOptions.children.length)classOptions.textContent='No hay clases que coincidan.';
+  classOptions.hidden=false;
+  classSearch.setAttribute('aria-expanded','true');
+ };
+ classSearch.addEventListener('focus',()=>{drawClasses();classSearch.select()});
+ classSearch.addEventListener('click',()=>{if(classOptions.hidden)drawClasses()});
+ classSearch.addEventListener('input',()=>drawClasses(classSearch.value));
+ classField.addEventListener('keydown',event=>{
+  if(event.key==='Escape'){event.preventDefault();closeClasses();}
+  if(event.target!==classSearch)return;
+  if(event.key==='ArrowDown'){event.preventDefault();classOptions.querySelector('button')?.focus();}
+  if(event.key==='Enter'){event.preventDefault();if(classOptions.children.length===1)classOptions.firstElementChild.click();}
+ });
+ document.addEventListener('pointerdown',event=>{if(!classOptions.hidden&&!classField.contains(event.target))closeClasses()});
+ classField.addEventListener('focusout',event=>{if(!classField.contains(event.relatedTarget))closeClasses()});
  input.addEventListener('input',()=>{select.value='';input.setCustomValidity('Selecciona un activo de la lista.');update();draw()});
  input.addEventListener('focus',()=>{load().then(draw).catch(console.error)});input.addEventListener('click',draw);
  input.addEventListener('keydown',event=>{if(event.key==='Escape')close();if(event.key==='ArrowDown'){event.preventDefault();draw();results.querySelector('button')?.focus()}if(event.key==='Enter'&&!select.value){event.preventDefault();const matches=filtered(window.SKAssetSearch.query(input.value));if(matches.length===1)choose(matches[0].asset)}});
  results.addEventListener('pointerdown',event=>event.preventDefault());document.addEventListener('pointerdown',event=>{if(!assetField.contains(event.target)&&!results.contains(event.target))close()});
- form.addEventListener('reset',()=>{showSelected(null);setTimeout(()=>{select.value='';classes.value='';input.value='';input.setCustomValidity('');status.textContent='';close();load().catch(console.error)},0)});
+ form.addEventListener('reset',()=>{showSelected(null);setTimeout(()=>{select.value='';classes.value='';closeClasses();input.value='';input.setCustomValidity('');status.textContent='';close();load().catch(console.error)},0)});
  new MutationObserver(()=>load().catch(console.error)).observe(select,{childList:true});
  select.addEventListener('change',()=>{showSelected(rows.find(row=>row.id===select.value));load().catch(console.error)});
  window.addEventListener('skweb-synced',()=>load().catch(console.error));window.addEventListener('skweb-db-ready',()=>load().catch(console.error));load().catch(console.error);
