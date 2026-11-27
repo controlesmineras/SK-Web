@@ -68,6 +68,9 @@
    #documentQuery dl{display:grid;grid-template-columns:minmax(130px,.65fr) minmax(0,1fr) minmax(0,1.6fr);gap:16px;margin:0}
    #documentQuery dt{font-size:.78rem;font-weight:700;color:#526777;text-transform:uppercase;margin-bottom:2px}
    #documentQuery dd{margin:0;white-space:pre-wrap;line-height:1.45}
+   #documentQuery .documentQueryReserved{grid-column:2 / -1}
+   #documentQuery .documentQueryReserved dd{display:inline-block;padding:2px 7px;border-radius:5px;background:#fff0b3;color:#713f12;font-size:.88rem}
+   #documentQuery .documentQueryReason{margin:4px 0 0;color:#526777;font-size:.88rem}
    #documentQuery .documentQueryPending{margin:12px 0 0;color:#805400;font-size:.86rem}
    #documentQuery a:focus-visible,#documentQuery button:focus-visible{outline:3px solid #245779;outline-offset:3px}
    @media(min-width:960px){
@@ -79,7 +82,7 @@
     #documentQuery .documentQueryCard > p{grid-column:1 / -1}
    }
    @media(max-width:800px){#documentQuery .documentQueryFilters{grid-template-columns:repeat(2,minmax(0,1fr))}#documentQuery .documentQuerySearchLabel{grid-column:1/-1}}
-   @media(max-width:480px){#documentQuery dl{grid-template-columns:minmax(0,1fr)}#documentQuery .documentQueryCard{padding:10px}}
+   @media(max-width:480px){#documentQuery .documentQueryReserved{grid-column:1}#documentQuery dl{grid-template-columns:minmax(0,1fr)}#documentQuery .documentQueryCard{padding:10px}}
   `;document.head.append(style);
  }
 
@@ -100,8 +103,12 @@
   count.textContent=`${rows.length} documento${rows.length===1?'':'s'} encontrado${rows.length===1?'':'s'} · ${type==='ACTA'?'Número de acta: de mayor a menor':'Fecha de origen: del más antiguo al más reciente'}`;
   host.innerHTML=rows.map(row=>{
    const type=typeOf(row),title=`${type==='ACTA'?'Acta':'Oficio'} N.º ${text(row.consecutivo)||'Sin número'}`,url=documentUrl(row.enlace);
-   return `<article class="documentQueryCard" ${window.SKAdminAuth?.canView?.('actas')?`data-edit-document="${esc(row.id)}" tabindex="0" aria-label="Seleccionar ${esc(title)} para editar"`:''}><div class="documentQueryCardHead"><h3>${esc(title)}</h3>${url?`<a class="documentQueryLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(title)}">Abrir ${type==='ACTA'?'acta':'oficio'} ↗</a>`:`<span class="documentQueryNoLink">${text(row.enlace)?'Enlace no válido':'Sin enlace digitalizado'}</span>`}</div>
-    ${row.documentStatus==='not_created'?`<p style="background:#fff0b3;color:#713f12;padding:12px;border-radius:8px;font-weight:800">⚠ ACTA NO ELABORADA · CONSECUTIVO RESERVADO</p><p>${esc(row.notCreatedReason||'')}</p>`:''}<dl>${field('Fecha de origen',displayDate(row.fecha))}${type==='ACTA'?field('Área',row.area)+field('Motivo',row.motivo):field('Dirigido a',row.dirigidoA)+field('Asunto',row.asunto)}</dl>
+   const reserved=row.documentStatus==='not_created';
+   const reason=text(row.notCreatedReason);
+   const showReason=reserved&&reason&&normalize(reason).replace(/[.,]/g,'')!=='acta registrada pero no elaborada';
+   return `<article class="documentQueryCard" ${window.SKAdminAuth?.canView?.('actas')?`data-edit-document="${esc(row.id)}" tabindex="0" aria-label="Seleccionar ${esc(title)} para editar"`:''}><div class="documentQueryCardHead"><h3>${esc(title)}</h3>${reserved?'':url?`<a class="documentQueryLink" href="${esc(url)}" target="_blank" rel="noopener noreferrer" aria-label="Abrir ${esc(title)}">Abrir ${type==='ACTA'?'acta':'oficio'} ↗</a>`:`<span class="documentQueryNoLink">${text(row.enlace)?'Enlace no válido':'Sin enlace digitalizado'}</span>`}</div>
+    <dl>${field('Fecha de origen',displayDate(row.fecha))}${reserved?'<div class="documentQueryReserved"><dt>Estado</dt><dd><strong>Acta no elaborada</strong> · N.º reservado</dd></div>':type==='ACTA'?field('Área',row.area)+field('Motivo',row.motivo):field('Dirigido a',row.dirigidoA)+field('Asunto',row.asunto)}</dl>
+    ${showReason?`<p class="documentQueryReason">${esc(reason)}</p>`:''}
     ${row.syncState==='pending'?'<p class="documentQueryPending">Pendiente de sincronizar</p>':''}</article>`;
   }).join('')||'<p class="hint">No hay documentos que coincidan. Revisa los filtros o sincroniza para recibir registros de otros dispositivos.</p>';
  }
