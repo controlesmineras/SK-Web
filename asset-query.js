@@ -134,11 +134,11 @@
    <button type="button" data-back-to-assets>Volver al listado</button>
    <h3 id="assetQueryTitle" tabindex="-1">${esc(window.SKAssetOwnership.label(a))}</h3>
    ${group('Información principal',[
-    field('Clase',identity.label),field('#',canonical.numeroClase||a.orden),
-    identity.equipment?'':field('Modelo',a.modelo),field('Marca comercial',a.fabricante),
-    field('MARCA',(singleMark?a.nuevaMarca:canonical.marcaActual)||(a.marcaInternaNoRegistra?'No registra':'')),
-    singleMark?(previousMark?field('MARCA ANTERIOR',previousMark):''):field('No. de marca actual',canonical.numeroMarcaActual)+field('Nueva marca',a.nuevaMarca)+field('Marca anterior',a.marcaPrevia),
+    field('Clase',identity.clase),field('Modelo',a.modelo||(identity.equipment?identity.label.slice(identity.clase.length+1):'')),
     column&&window.SKAssetOwnership.isSK(a)?'':field('Serial',a.serial||window.SKAssetRules?.serialStatusLabel(a)),
+    field('Marca comercial',a.fabricante),field('Número de clase',canonical.numeroClase||a.orden),
+    field('Marca actual',(singleMark?a.nuevaMarca:canonical.marcaActual)||(a.marcaInternaNoRegistra?'No registra':'')),
+    singleMark?(previousMark?field('MARCA ANTERIOR',previousMark):''):field('No. de marca actual',canonical.numeroMarcaActual)+field('Nueva marca',a.nuevaMarca)+field('Marca anterior',a.marcaPrevia),
     column||text(a.largo)?field('Largo (ft)',a.largo):'',
     selfRescuer||text(a.estadoVisor)?field('Color del visor',a.estadoVisor):'',
     field('¿Marcada físicamente?',a.marcada),field('Mina propietaria',a.mina),field('Mina de origen',a.minaOrigen),
