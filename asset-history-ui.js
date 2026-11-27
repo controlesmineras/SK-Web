@@ -60,123 +60,39 @@
   const current=document.querySelector(target==='asset'?'#assetForm [name="id"]':'#novAsset')?.value;if(current!==id)return;
   const asset=assets.find(row=>row.id===id&&!row.deleted);show(target,asset,window.SKAssetHistory.timeline(data,id),actas);
  }
- function historyAssetPicker(select){
-  const host=document.querySelector('#novFilterPicker'),input=host.querySelector('input'),menu=host.querySelector('[role=listbox]');
-  host.querySelector('label').htmlFor=input.id;
-  select.hidden=true;input.hidden=false;
-  const title=asset=>window.SKAssetRules.label(asset)||label(asset);
-  const order=new Intl.Collator('es',{numeric:true,sensitivity:'base'});
-  let assets=[],editing=false,active=-1;
-  function caption(){return select.value?select.selectedOptions[0].textContent:''}
-  function close(){
-   editing=false;active=-1;menu.hidden=true;input.value=caption();
-   input.setAttribute('aria-expanded','false');input.removeAttribute('aria-activedescendant');
-  }
-  function draw(){
-   const term=editing?input.value.trim():'',query=window.SKAssetSearch.query(term);
-   const hits=query.rows(assets,asset=>[title(asset),
-    [asset.fabricante||asset.marcaComercial,asset.modelo,asset.mina,asset.estado].filter(Boolean).join(' · ')]);
-   const options=hits.map(({asset,lines,detail})=>{
-    const button=document.createElement('button');
-    button.dataset.assetId=asset.id;
-    button.innerHTML='<strong>'+query.html(lines[0])+'</strong>'+[lines[1],detail].filter(Boolean).map(line=>'<small>'+query.html(line)+'</small>').join('');
-    return button;
-   });
-   if(!term){
-    const all=document.createElement('button');all.dataset.assetId='';all.textContent='Todos los activos';options.unshift(all);
-   }
-   options.forEach((button,index)=>{
-    button.type='button';button.tabIndex=-1;button.id='novFilterOption-'+index;
-    button.setAttribute('role','option');button.setAttribute('aria-selected',String(button.dataset.assetId===select.value));
-   });
-   menu.replaceChildren(...options);
-   if(!options.length){
-    const message=document.createElement('p');message.setAttribute('role','status');message.textContent='No hay activos que coincidan.';menu.append(message);
-   }
-   active=-1;menu.hidden=false;input.setAttribute('aria-expanded','true');input.removeAttribute('aria-activedescendant');
-  }
-  function apply(id){
-   const changed=id!==select.value;select.value=id;
-   if(changed)select.dispatchEvent(new Event('change',{bubbles:true}));
-  }
-  function choose(button){apply(button.dataset.assetId);input.focus();close()}
-  input.addEventListener('focus',()=>{if(select.value)input.select();draw()});
-  input.addEventListener('click',()=>{if(menu.hidden){if(select.value)input.select();draw()}});
-  input.addEventListener('input',()=>{editing=true;if(!input.value.trim())apply('');draw()});
-  input.addEventListener('keydown',event=>{
-   if(event.key==='Escape'){event.preventDefault();close();return}
-   if(event.key==='Tab'){close();return}
-   if(event.key!=='ArrowDown'&&event.key!=='ArrowUp'&&event.key!=='Enter')return;
-   event.preventDefault();if(menu.hidden)draw();
-   const options=menu.querySelectorAll('[role=option]');if(!options.length)return;
-   if(event.key==='Enter'){
-    const option=options[active]||(options.length===1&&options[0]);if(option)choose(option);return;
-   }
-   const step=event.key==='ArrowDown'?1:-1;
-   options[active]?.classList.remove('isActive');
-   active=active<0?(step>0?0:options.length-1):(active+step+options.length)%options.length;
-   const option=options[active];option.classList.add('isActive');
-   input.setAttribute('aria-activedescendant',option.id);option.scrollIntoView({block:'nearest'});
-  });
-  menu.addEventListener('mousedown',event=>event.preventDefault());
-  menu.addEventListener('click',event=>{const button=event.target.closest('[role=option]');if(button)choose(button)});
-  document.addEventListener('click',event=>{if(!menu.hidden&&!host.contains(event.target))close()});
-  document.querySelector('#novFilterClear').addEventListener('click',()=>{select.value='';close()});
-  return function update(rows,selectedId){
-   const id=selectedId??select.value;
-   if(selectedId!==undefined){editing=false;menu.hidden=true;input.setAttribute('aria-expanded','false');}
-   assets=rows.slice().sort((a,b)=>order.compare(title(a),title(b)));
-   select.replaceChildren(new Option('Todos los activos',''),...assets.map(asset=>new Option(title(asset),asset.id)));
-   select.value=id;
-   if(!editing)input.value=caption();
-   if(!menu.hidden)draw();
-  };
- }
- let updateAssetFilter,listVersion=0,reveal=null,justSaved='';
- function selectSavedRow(row,assets){
-  const select=document.querySelector('#novFilterAsset');
-  updateAssetFilter??=historyAssetPicker(select);
-  updateAssetFilter(assets,row.assetId);
-  document.querySelector('#novFilterFrom').value=row.fechaNovedad;
-  document.querySelector('#novFilterTo').value=row.fechaNovedad;
-  reveal={id:row.id,assetId:row.assetId,date:row.fechaNovedad,focus:true};
- }
- async function renderList(_rows,assets){
+ let listVersion=0;
+ async function renderList(_rows,assets,savedId=''){
   const ticket=++listVersion;
   const [data,actas]=await Promise.all([read(),all('actas')]);
   if(ticket!==listVersion)return;
   const list=document.querySelector('#noveltyList');if(!list)return;
+  const assetMap=new Map(assets.map(row=>[row.id,row])),actaMap=new Map(actas.map(row=>[row.id,row]));
   const receipt=document.querySelector('#noveltySaveStatus');
   if(receipt?.dataset?.noveltyId){
    const row=data.novelties.find(item=>item.id===receipt.dataset.noveltyId);
-   if(row){
-    window.SKNoveltyForm?.renderSaveStatus?.(receipt,row,assets.find(asset=>asset.id===row.assetId));
-    if(justSaved===row.id){
-     justSaved='';
-     if(!row.deleted)selectSavedRow(row,assets);
-    }
-   }
+   if(row)window.SKNoveltyForm?.renderSaveStatus?.(receipt,row,assetMap.get(row.assetId));
   }
-  const from=document.querySelector('#novFilterFrom')?.value||'',to=document.querySelector('#novFilterTo')?.value||'',select=document.querySelector('#novFilterAsset'),assetMap=new Map(assets.map(row=>[row.id,row])),actaMap=new Map(actas.map(row=>[row.id,row]));
-  if(select){updateAssetFilter??=historyAssetPicker(select);updateAssetFilter(assets);}
-  const assetId=select?.value||'';
-  const events=window.SKAssetHistory.timeline(data).filter(entry=>(!from||entry.date>=from)&&(!to||entry.date<=to)&&(!assetId||entry.assetId===assetId));
-  if(reveal&&(reveal.assetId!==assetId||reveal.date!==from||reveal.date!==to))reveal=null;
-  const position=reveal?events.findIndex(entry=>entry.kind==='novelty'&&entry.raw.id===reveal.id):-1;
-  list.innerHTML=events.slice(0,Math.max(100,position+1)).map(entry=>`<div class="assetHistoryResult"${entry.kind==='novelty'?' id="saved-novelty-'+escape(entry.raw.id)+'" tabindex="-1"':''}>${eventHTML(entry,assetMap.get(entry.assetId),actaMap.get(entry.raw.actaId),true)}<button type="button" data-history-asset="${escape(entry.assetId)}">Ver historial del activo</button></div>`).join('')||'<p class="hint">No hay novedades que coincidan con los filtros.</p>';
-  const counter=document.querySelector('#nCount');if(counter)counter.textContent=window.SKAssetHistory.timeline(data).filter(entry=>!entry.reversed).length;
-  if(reveal?.focus&&position>=0){
-   const entry=document.getElementById('saved-novelty-'+reveal.id);
-   reveal.focus=false;
-   if(entry.closest('.view')?.classList.contains('active')){entry.focus({preventScroll:true});entry.scrollIntoView({block:'center'});}
-  }
+  const events=window.SKAssetHistory.timeline(data);
+  const recent=events.slice(0,10);
+  const saved=savedId&&events.find(entry=>entry.kind==='novelty'&&entry.raw.id===savedId);
+  if(saved&&!recent.includes(saved))recent.splice(9,1,saved);
+  list.innerHTML=recent.map(entry=>{
+   const asset=assetMap.get(entry.assetId),date=entry.date?entry.date.split('-').reverse().join('/')+' · '+entry.time:'Sin fecha';
+   const status=entry.reversed?'Revertida':entry.pending?'Pendiente de sincronización':'';
+   const id=entry.kind==='novelty'?' id="saved-novelty-'+escape(entry.raw.id)+'"':'';
+   return `<details class="novRecentRow"${id}${entry===saved?' open':''}><summary>
+    <span>${escape(date)}</span><strong>${escape(entry.title)}</strong><span>${escape(asset?label(asset):'Activo sin ficha')}</span>
+    ${status?`<small>${escape(status)}</small>`:''}</summary>
+    ${eventHTML(entry,asset,actaMap.get(entry.raw.actaId),true)}</details>`;
+  }).join('')||'<p class="hint">Todavía no hay novedades registradas.</p>';
+  const counter=document.querySelector('#nCount');if(counter)counter.textContent=events.filter(entry=>!entry.reversed).length;
+  if(saved)document.getElementById('saved-novelty-'+savedId)?.scrollIntoView({block:'nearest'});
   await selectCurrent();
  }
  async function showSaved(id){
   const [row,assets]=await Promise.all([idbResult(db.transaction('novelties').objectStore('novelties').get(id)),all('assets')]);
   if(!row||row.deleted)throw new Error('Esta novedad ya no figura en el historial del dispositivo.');
-  selectSavedRow(row,assets);
-  await renderList(null,assets);
+  await renderList(null,assets,id);
  }
  async function selectCurrent(){await Promise.all([select('asset',document.querySelector('#assetForm [name="id"]')?.value),select('novelty',document.querySelector('#novAsset')?.value)]);}
  let changing=false;
@@ -225,12 +141,11 @@
   button.disabled=true;
   changeNovelty(button.dataset.noveltyId,button.dataset.noveltyAction).catch(error=>alert(error.message)).finally(()=>button.disabled=false);
  });
- window.SKAssetHistoryUI={read,show,select,renderList,showSaved,changeNovelty,followSaved(id){justSaved=id}};
+ window.SKAssetHistoryUI={read,show,select,renderList,showSaved,changeNovelty};
  window.addEventListener('load',()=>{
   const style=document.createElement('style');style.textContent='.assetHistory{margin:0 0 20px;padding:16px;border:1px solid #ccd8e0;border-radius:12px;background:#f8fafc}.assetHistory[hidden]{display:none}.assetHistory h3{margin:0 0 8px}.assetHistoryEntry{padding:12px 0;border-bottom:1px solid #dce4ea;overflow-wrap:anywhere}.assetHistoryEntry>b,.assetHistoryEntry>small{display:block;margin-bottom:5px}.assetHistoryEntry>small{line-height:1.45;color:#3c4b59}.assetHistoryEntry.isReversed{border-left:3px solid #ab6a21;padding-left:10px}.assetHistoryResult{padding:10px 0;border-bottom:1px solid #dce4ea}.assetHistoryResult button,.assetHistory .historyMore{margin-top:10px;width:auto}.assetHistoryEntry strong{font-weight:600}.noveltyActions{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}.noveltyActions button{width:auto;font-size:.85rem;padding:8px 12px}';document.head.append(style);
   document.querySelector('#novAsset')?.addEventListener('change',event=>select('novelty',event.target.value).catch(console.error));
   document.querySelector('#assetForm')?.addEventListener('reset',()=>{versions.set('asset',(versions.get('asset')||0)+1);show('asset',null,[]);});
-  document.querySelector('#noveltyList')?.addEventListener('click',event=>{const button=event.target.closest('[data-history-asset]');if(!button)return;const selectAsset=document.querySelector('#novAsset');selectAsset.value=button.dataset.historyAsset;selectAsset.dispatchEvent(new Event('change',{bubbles:true}));select('novelty',selectAsset.value).then(()=>document.getElementById('noveltyAssetHistory')?.scrollIntoView({behavior:'smooth',block:'start'})).catch(console.error);});
   window.addEventListener('skweb-synced',()=>selectCurrent().catch(console.error));
  });
 })();

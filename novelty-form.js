@@ -140,7 +140,6 @@ async function save(event){
     const status=document.querySelector('#noveltySaveStatus');
     status.setAttribute?.('data-novelty-id',novelty.id);
     renderSaveStatus(status,novelty,asset);
-    window.SKAssetHistoryUI?.followSaved?.(novelty.id);
     const showButton=document.querySelector('#noveltyShowSaved');
     if(showButton){
       showButton.hidden=false;
