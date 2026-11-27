@@ -170,23 +170,51 @@ function renderSaveStatus(status,row,asset){
 function installAssetPicker(){
  const form=document.querySelector('#noveltyForm'),select=document.querySelector('#novAsset');if(!form||!select||document.querySelector('#novAssetSearch'))return;
  const assetField=select.closest('label'),classField=document.createElement('label'),classes=document.createElement('select');
+ classField.className='novPickerField';assetField.classList.add('novPickerField');
  classField.append('CLASE',classes);classes.id='novAssetClass';classes.add(new Option('Todas las clases',''));assetField.before(classField);
  const input=document.createElement('input'),results=document.createElement('div'),status=document.createElement('small');
- input.id='novAssetSearch';input.type='search';input.required=true;input.autocomplete='off';input.placeholder='Buscar por serial o marca…';input.setAttribute('role','combobox');input.setAttribute('aria-expanded','false');input.setAttribute('aria-controls','novAssetSearchResults');
+ input.id='novAssetSearch';input.type='search';input.autocomplete='off';input.placeholder='Clase, modelo, número de clase, marca o serial…';input.setAttribute('role','combobox');input.setAttribute('aria-expanded','false');input.setAttribute('aria-controls','novAssetSearchResults');
  results.id='novAssetSearchResults';results.hidden=true;status.id='novAssetSearchStatus';status.style.cssText='color:#667085;font-size:.86rem;font-weight:400';input.setAttribute('aria-describedby',status.id);
  select.hidden=true;select.required=false;assetField.insertBefore(input,select);assetField.append(status,results);
- const style=document.createElement('style');style.textContent='#noveltyForm #novAssetSearchResults{display:grid;gap:5px;max-height:280px;overflow:auto;margin-top:6px}#noveltyForm #novAssetSearchResults[hidden]{display:none}#novAssetSearchResults button{width:100%;text-align:left;white-space:normal;background:#f2f6f9;color:#173d59;border:1px solid #ccd8e0;padding:10px;font-weight:500}#novAssetSearchResults button:focus-visible{outline:3px solid #e7b45a}';document.head.append(style);
+ const summary=document.createElement('div');
+ summary.className='novSelectedAsset wideField';summary.hidden=true;
+ const selectedLabel=document.createElement('strong');
+ const reset=document.createElement('button');
+ reset.type='reset';reset.className='adminFormCancel';reset.textContent='Cancelar';
+ summary.append(selectedLabel);
+ form.prepend(classField,assetField,summary);
+ form.append(reset);
+ form.setAttribute('data-asset-picker','');
+ const style=document.createElement('style');style.textContent=`
+ #noveltyForm[data-asset-picker] > :not(.novPickerField){display:none!important}
+ #noveltyForm[data-asset-selected] > .novPickerField,
+ #noveltyForm > .novSelectedAsset[hidden]{display:none!important}
+ #noveltyForm .novSelectedAsset{padding:.65rem .8rem;border-radius:8px;background:#e3eff7;color:#173d59}
+ #noveltyForm #novAssetSearchResults{display:grid;gap:5px;max-height:280px;overflow:auto;margin-top:6px}#noveltyForm #novAssetSearchResults[hidden]{display:none}#novAssetSearchResults button{width:100%;text-align:left;white-space:normal;background:#f2f6f9;color:#173d59;border:1px solid #ccd8e0;padding:10px;font-weight:500}#novAssetSearchResults button:focus-visible{outline:3px solid #e7b45a}
+ #novAssetSearchResults button.novRetired{background:#e2e5e8;border-color:#9faab3;color:#263744}
+ #novAssetSearchResults .novRetiredLabel{display:block;font-size:.8rem;font-weight:700}`;document.head.append(style);
  let rows=[],version=0;
- const label=asset=>window.SKAssetRules?.isColumn(asset)?window.SKAssetRules.columnLabel(asset):[asset.clase,asset.fabricante,window.SKAssetRules.searchSerial(asset.serial)&&'Serial: '+asset.serial,asset.marcaPrevia&&'Marca: '+asset.marcaPrevia,asset.marcaActual||asset.marcaInterna,asset.nuevaMarca,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.mina].filter(Boolean).join(' · ');
+ const label=asset=>window.SKAssetRules?.isColumn(asset)?window.SKAssetRules.columnLabel(asset):[asset.clase,asset.modelo,asset.fabricante,window.SKAssetRules.searchSerial(asset.serial)&&'Serial: '+asset.serial,asset.marcaPrevia&&'Marca: '+asset.marcaPrevia,asset.marcaActual||asset.marcaInterna,asset.nuevaMarca,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.mina].filter(Boolean).join(' · ');
  const filtered=query=>query.rows(rows.filter(asset=>!classes.value||norm(asset.clase)===norm(classes.value)),asset=>[label(asset)]);
  const close=()=>{results.hidden=true;input.setAttribute('aria-expanded','false')};
- const choose=asset=>{if(![...select.options].some(option=>option.value===asset.id))select.add(new Option(label(asset),asset.id));select.value=asset.id;classes.value=asset.clase;input.value=label(asset);input.setCustomValidity('');status.textContent='Activo seleccionado.';close();select.dispatchEvent(new Event('change',{bubbles:true}))};
+ const showSelected=asset=>{
+  form.toggleAttribute('data-asset-selected',Boolean(asset));
+  form.toggleAttribute('data-asset-picker',!asset);
+  summary.hidden=!asset;
+  selectedLabel.textContent=asset?'Activo seleccionado · '+label(asset)+(isRetiredState(asset.estado)?' · Dado de baja':''):'';
+ };
+ const choose=asset=>{if(![...select.options].some(option=>option.value===asset.id))select.add(new Option(label(asset),asset.id));select.value=asset.id;classes.value=asset.clase;input.value=label(asset);input.setCustomValidity('');status.textContent='Activo seleccionado.';close();showSelected(asset);select.dispatchEvent(new Event('change',{bubbles:true}))};
  const draw=()=>{
   const query=window.SKAssetSearch.query(input.value),matches=filtered(query);
   results.replaceChildren();
   for(const {asset,lines,detail} of matches.slice(0,30)){
    const button=document.createElement('button');button.type='button';
    button.innerHTML=query.html([...lines,detail].filter(Boolean).join(' · '));
+   if(isRetiredState(asset.estado)){
+    button.classList.add('novRetired');
+    const state=document.createElement('small');state.className='novRetiredLabel';state.textContent='Dado de baja';
+    button.append(state);
+   }
    button.addEventListener('click',()=>choose(asset));results.append(button);
   }
   status.textContent=matches.length?matches.length+' activos encontrados. Selecciona uno.':'No hay coincidencias. Revisa la clase, el serial o la marca.';
@@ -198,9 +226,9 @@ function installAssetPicker(){
  input.addEventListener('focus',()=>{load().then(draw).catch(console.error)});input.addEventListener('click',draw);
  input.addEventListener('keydown',event=>{if(event.key==='Escape')close();if(event.key==='ArrowDown'){event.preventDefault();draw();results.querySelector('button')?.focus()}if(event.key==='Enter'&&!select.value){event.preventDefault();const matches=filtered(window.SKAssetSearch.query(input.value));if(matches.length===1)choose(matches[0].asset)}});
  results.addEventListener('pointerdown',event=>event.preventDefault());document.addEventListener('pointerdown',event=>{if(!assetField.contains(event.target))close()});
- form.addEventListener('reset',()=>setTimeout(()=>{classes.value='';input.value='';input.setCustomValidity('');status.textContent='';close();load().catch(console.error)},0));
+ form.addEventListener('reset',()=>{showSelected(null);setTimeout(()=>{select.value='';classes.value='';input.value='';input.setCustomValidity('');status.textContent='';close();load().catch(console.error)},0)});
  new MutationObserver(()=>load().catch(console.error)).observe(select,{childList:true});
- select.addEventListener('change',()=>load().catch(console.error));
+ select.addEventListener('change',()=>{showSelected(rows.find(row=>row.id===select.value));load().catch(console.error)});
  window.addEventListener('skweb-synced',()=>load().catch(console.error));window.addEventListener('skweb-db-ready',()=>load().catch(console.error));load().catch(console.error);
 }
 installAssetPicker();
