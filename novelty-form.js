@@ -47,9 +47,9 @@ function updateRetiredLocation(){
  const availability=form.elements.namedItem('novOperationStatus');
  if(availability){availability.readOnly=true;availability.value=retired?'No':state.value?window.SKAssetHistory.operationStatus({estado:state.value}):(selectedAsset?window.SKAssetHistory.operationStatus(selectedAsset):'');}
  location.disabled=retired;
- if(availability){availability.disabled=retired;availability.style.background=retired?'#eef2f5':'';}
- if(retired){if(!location.readOnly)location.dataset.beforeRetirement=location.value;location.value='Desechado/a';location.readOnly=true;location.style.background='#eef2f5';}
- else{if(location.readOnly&&location.dataset.beforeRetirement!==undefined)location.value=location.dataset.beforeRetirement;delete location.dataset.beforeRetirement;location.readOnly=false;location.style.background='';}
+ if(availability)availability.disabled=retired;
+ if(retired){if(!location.readOnly)location.dataset.beforeRetirement=location.value;location.value='Desechado/a';location.readOnly=true;}
+ else{if(location.readOnly&&location.dataset.beforeRetirement!==undefined)location.value=location.dataset.beforeRetirement;delete location.dataset.beforeRetirement;location.readOnly=false;}
 }
 
 let selectedAsset=null,generation=0,saving=false;
@@ -196,6 +196,7 @@ function installAssetPicker(){
  #noveltyForm > .novSelectedAsset[hidden]{display:none!important}
  #noveltyForm #novClassOptions:not([hidden]){display:grid;gap:4px;max-height:220px;overflow:auto}
  #noveltyForm #novClassOptions button{width:100%;text-align:left;background:#fff;color:#173d59;border:1px solid #ccd8e0;padding:.45rem .7rem;font-weight:400!important;text-transform:none!important}
+ #noveltyForm :is([name="estado"],[name="ubicacion"],#novOperationStatus):disabled{background:#eef2f5;color:#536879;opacity:1;-webkit-text-fill-color:#536879}
  #noveltyForm .novSelectedAsset{padding:.65rem .8rem;border-radius:8px;background:#e3eff7;color:#173d59}
  #noveltyForm #novAssetSearchResults{grid-column:1/-1;min-width:0;display:grid;gap:5px;max-height:280px;overflow:auto;margin-top:6px}#noveltyForm #novAssetSearchResults[hidden]{display:none}#noveltyForm #novAssetSearchResults button{width:100%;text-align:left;white-space:normal;background:#fff;color:#173d59;border:1px solid #ccd8e0;padding:.45rem .7rem;font-family:system-ui,sans-serif!important;font-weight:400!important;text-transform:none!important;letter-spacing:normal!important}#novAssetSearchResults button:focus-visible{outline:3px solid #e7b45a}
  #noveltyForm #novAssetSearchResults button.novRetired{background:#e2e5e8;border-color:#9faab3;color:#263744}
@@ -286,7 +287,7 @@ function installNoveltyMenu(){
 }
 installNoveltyMenu();
 
-const noveltyForm=document.querySelector('#noveltyForm');if(noveltyForm){noveltyForm.elements.ubicacion.closest('label').before(noveltyForm.elements.estado.closest('label'));noveltyForm.elements.estado.addEventListener('change',updateRetiredLocation);noveltyForm.addEventListener('reset',()=>{delete noveltyForm.elements.estado.dataset.beforeActa;noveltyForm.elements.estado.disabled=false;noveltyForm.elements.ubicacion.readOnly=false;noveltyForm.elements.ubicacion.disabled=false;const availability=noveltyForm.elements.namedItem('novOperationStatus');if(availability){availability.disabled=false;availability.style.background='';}delete noveltyForm.elements.ubicacion.dataset.beforeRetirement;});}
+const noveltyForm=document.querySelector('#noveltyForm');if(noveltyForm){noveltyForm.elements.ubicacion.closest('label').before(noveltyForm.elements.estado.closest('label'));noveltyForm.elements.estado.addEventListener('change',updateRetiredLocation);noveltyForm.addEventListener('reset',()=>{delete noveltyForm.elements.estado.dataset.beforeActa;noveltyForm.elements.estado.disabled=false;noveltyForm.elements.ubicacion.readOnly=false;noveltyForm.elements.ubicacion.disabled=false;const availability=noveltyForm.elements.namedItem('novOperationStatus');if(availability)availability.disabled=false;delete noveltyForm.elements.ubicacion.dataset.beforeRetirement;});}
 mountActaField();window.SKNoveltyForm={update,updateFields,save,renderSaveStatus,actaHTML};window.addEventListener('skweb-synced',update);
 document.querySelector('#novDesc')?.addEventListener('change',updateFields);
 document.querySelector('#noveltyForm')?.addEventListener('reset',()=>setTimeout(update,0));

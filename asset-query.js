@@ -36,7 +36,7 @@
   if(document.getElementById('assetQuery'))return;
   const main=document.querySelector('main');if(!main)return;
   const section=document.createElement('section');section.id='assetQuery';section.className='view';
-  section.innerHTML=`<div class="sectionHead"><h2>Consultar activos fijos</h2><button type="button" data-query-back>Volver a consultas</button></div>
+  section.innerHTML=`<div class="sectionHead"><h2>Consultar activos fijos</h2></div>
    <div class="assetQueryLayout"><aside class="assetQueryFilters">
     <label for="assetQueryClass">Clase</label>
     <select id="assetQueryClass"><option value="">Todas las clases</option></select>
@@ -55,7 +55,6 @@
     <div id="assetQueryDetail" hidden></div>
    </div></div>`;
   main.append(section);
-  section.querySelector('[data-query-back]').onclick=()=>window.SKAdminNav?.openQueryMenu?.();
   function filterChanged(){
    selectedId=''; draw();
    find('assetQueryList').scrollTop=0;
