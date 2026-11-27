@@ -189,9 +189,9 @@ function installAssetPicker(){
  #noveltyForm[data-asset-selected] > .novPickerField,
  #noveltyForm > .novSelectedAsset[hidden]{display:none!important}
  #noveltyForm .novSelectedAsset{padding:.65rem .8rem;border-radius:8px;background:#e3eff7;color:#173d59}
- #noveltyForm #novAssetSearchResults{display:grid;gap:5px;max-height:280px;overflow:auto;margin-top:6px}#noveltyForm #novAssetSearchResults[hidden]{display:none}#noveltyForm #novAssetSearchResults button{width:100%;text-align:left;white-space:normal;background:#fff;color:#173d59;border:1px solid #ccd8e0;padding:.45rem .7rem;font:inherit;font-weight:400;text-transform:none;letter-spacing:normal}#novAssetSearchResults button:focus-visible{outline:3px solid #e7b45a}
+ #noveltyForm #novAssetSearchResults{grid-column:1/-1;min-width:0;display:grid;gap:5px;max-height:280px;overflow:auto;margin-top:6px}#noveltyForm #novAssetSearchResults[hidden]{display:none}#noveltyForm #novAssetSearchResults button{width:100%;text-align:left;white-space:normal;background:#fff;color:#173d59;border:1px solid #ccd8e0;padding:.45rem .7rem;font-family:system-ui,sans-serif!important;font-weight:400!important;text-transform:none!important;letter-spacing:normal!important}#novAssetSearchResults button:focus-visible{outline:3px solid #e7b45a}
  #noveltyForm #novAssetSearchResults button.novRetired{background:#e2e5e8;border-color:#9faab3;color:#263744}
- #novAssetSearchResults .novRetiredLabel{display:block;font-size:.8rem;font-weight:700}`;document.head.append(style);
+ #novAssetSearchResults .novRetiredLabel{display:block;font-size:.8rem;font-weight:400}`;document.head.append(style);
  let rows=[],version=0;
  const label=asset=>window.SKAssetRules?.isColumn(asset)?window.SKAssetRules.columnLabel(asset):[asset.clase,asset.modelo,asset.fabricante,window.SKAssetRules.searchSerial(asset.serial)&&'Serial: '+asset.serial,asset.marcaPrevia&&'Marca: '+asset.marcaPrevia,asset.marcaActual||asset.marcaInterna,asset.nuevaMarca,(asset.numeroClase||asset.numeroYT)&&'N.º '+(asset.numeroClase||asset.numeroYT),asset.mina].filter(Boolean).join(' · ');
  const filtered=query=>query.rows(rows.filter(asset=>!classes.value||norm(asset.clase)===norm(classes.value)),asset=>[label(asset)]);
@@ -208,7 +208,7 @@ function installAssetPicker(){
   results.replaceChildren();
   for(const {asset,lines,detail} of matches.slice(0,30)){
    const button=document.createElement('button');button.type='button';
-   button.innerHTML=query.html([...lines,detail].filter(Boolean).join(' · '));
+   button.textContent=[...lines,detail].filter(Boolean).join(' · ');
    if(isRetiredState(asset.estado)){
     button.classList.add('novRetired');
     const state=document.createElement('small');state.className='novRetiredLabel';state.textContent='Dado de baja';
