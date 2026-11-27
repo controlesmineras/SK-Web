@@ -318,6 +318,26 @@ body:has(.adminHomeMenuOverlay) > #adminBack{display:none}
 #assetLatestSummary dd{margin:.1rem 0 0;overflow-wrap:anywhere}
 #assetAdminList .assetRow{font-size:.91rem}
 #assetAdminList .assetRow small{font-size:.8rem}
+#assetForm > .assetCompactCheck {
+  min-width: 0;
+  min-height: var(--control-height, 2.5rem);
+  padding: .3rem .5rem;
+  gap: .4rem;
+}
+#assetForm > .assetCompactCheck > input {
+  width: 16px;
+  height: 16px;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  flex: 0 0 16px;
+}
+#assetForm > .assetCompactCheck > span {
+  min-width: 0;
+  font-size: .78rem;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
 @media(min-width:721px){
   #assets .adminSplit{grid-template-columns:minmax(0,34%) minmax(0,1fr);gap:.65rem}
   #assets .adminSplit>aside,#assets .editor{padding:.6rem}
