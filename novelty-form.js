@@ -45,7 +45,7 @@ function updateRetiredLocation(){
  state.disabled=notice;
  const retired=isRetiredState(state.value);
  const availability=form.elements.namedItem('novOperationStatus');
- if(availability)availability.value=state.value?window.SKAssetHistory.operationStatus({estado:state.value}):(selectedAsset?window.SKAssetHistory.operationStatus(selectedAsset):'');
+ if(availability){availability.readOnly=true;availability.value=retired?'No':state.value?window.SKAssetHistory.operationStatus({estado:state.value}):(selectedAsset?window.SKAssetHistory.operationStatus(selectedAsset):'');}
  if(retired){if(!location.readOnly)location.dataset.beforeRetirement=location.value;location.value='Desechado/a';location.readOnly=true;location.style.background='#eef2f5';}
  else{if(location.readOnly&&location.dataset.beforeRetirement!==undefined)location.value=location.dataset.beforeRetirement;delete location.dataset.beforeRetirement;location.readOnly=false;location.style.background='';}
 }
