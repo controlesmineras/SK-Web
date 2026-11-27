@@ -66,7 +66,7 @@ test('cards, Excel and PDF share the selected rows and retain reversal informati
 });
 test('clearing restores each default date range and removes the selected element and times',()=>{
  const c=client();c.category('epp');
- for(const kind of ['delivery','income']){c.select(kind,'b4');c.node('#'+kind+'TimeFrom').value='12:00';c.api.reset(kind);assert.equal(c.node('#'+kind+'HistoryQueryForm').elements.itemId.value,'');assert.equal(c.node('#'+kind+'TimeFrom').value,'');assert.equal(c.node('#'+kind+'TimeTo').value,'');const start=new Date(c.node('#'+kind+'DateFrom').value+'T12:00:00'),end=new Date(c.node('#'+kind+'DateTo').value+'T12:00:00');assert.equal(Math.round((end-start)/86400000),kind==='delivery'?6:29)}
+ for(const kind of ['delivery','income']){c.select(kind,'b4');c.node('#'+kind+'TimeFrom').value='12:00';c.api.reset(kind);assert.equal(c.node('#'+kind+'HistoryQueryForm').elements.itemId.value,'');assert.equal(c.node('#'+kind+'TimeFrom').value,'');assert.equal(c.node('#'+kind+'TimeTo').value,'');const start=new Date(c.node('#'+kind+'DateFrom').value+'T12:00:00'),end=new Date(c.node('#'+kind+'DateTo').value+'T12:00:00');assert.equal(Math.round((end-start)/86400000),29)}
 });
 
 test('columns append in tap order, direction stays in place, and only the line changes priority',async()=>{

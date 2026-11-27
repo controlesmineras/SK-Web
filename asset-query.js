@@ -141,11 +141,11 @@
     column&&window.SKAssetOwnership.isSK(a)?'':field('Serial',a.serial||window.SKAssetRules?.serialStatusLabel(a)),
     column||text(a.largo)?field('Largo (ft)',a.largo):'',
     selfRescuer||text(a.estadoVisor)?field('Color del visor',a.estadoVisor):'',
-    field('¿Marcada físicamente?',a.marcada),field('Mina propietaria',a.mina),
+    field('¿Marcada físicamente?',a.marcada),field('Mina propietaria',a.mina),field('Mina de origen',a.minaOrigen),
     field('Fecha de ingreso',date(a.fechaIngreso))
    ].join(''))}
    ${group('Última novedad / estado actual',[
-    field('Ubicación',a.ubicacion,true),field('Estado',a.estado),field('Disponible para operación',a.disponibleEntrega),
+    field('Traslado permanente',projection.transferLabel),field('Ubicación',a.ubicacion,true),field('Estado',a.estado),field('Disponible para operación',a.disponibleEntrega),
     field('Fecha de novedad',date(a.fechaNovedad)),field('Hora de novedad',a.horaNovedad),
     field('Descripción de la novedad',a.descripcionNovedad,true),
     field('Responsable',a.nombreResponsable),field('Documento responsable',a.documentoResponsable),
@@ -159,7 +159,12 @@
    ${group('Información adicional',field('Observaciones',a.observaciones,true))}
    ${a.hasAccessories!=null||(Array.isArray(a.accessories)&&a.accessories.length)?group('Accesorios',field('¿Trae accesorios?',a.hasAccessories===false?'No':a.hasAccessories===true||a.accessories?.length?'Sí':'Sin especificar')+((Array.isArray(a.accessories)?a.accessories:[]).map((row,index)=>field('Accesorio '+(index+1),typeof row==='string'?row:row.description,true)).join(''))):''}
    <section class="assetHistory" id="assetQueryHistory" aria-label="Historial del activo"></section>
+   ${identity.equipment?'<details id="assetProductionMovements"><summary>Movimientos y repuestos de Producción</summary><div></div></details>':''}
   </article>`;
+  const production=host.querySelector('#assetProductionMovements');
+  production?.addEventListener('toggle',()=>{
+    if(production.open)window.SKProductionMovements?.forAsset(production.querySelector('div'),a.id);
+  });
   void showHistory(host.querySelector('#assetQueryHistory'),a,projection.events);
  }
 
@@ -179,6 +184,19 @@
 
   function describe(projection) {
     const asset=projection.asset;
+    const mineKey = value => clean(value).toLowerCase().replace(/[.\s-]/g,'');
+    const transfers = projection.events.filter(entry => entry.kind==='mineExit' && !entry.reversed &&
+      entry.raw.deliveryType==='TRASLADO' && clean(entry.raw.destinationMine) && entry.raw.destinationMine!=='Segovia');
+    const firstTransfer = transfers[transfers.length-1];
+    const latestTransfer = transfers[0];
+    const origin = clean(asset.minaOrigen) || clean(firstTransfer?.raw.ownerMineBefore);
+    const current = clean(asset.mina);
+    const transferLabel = origin && current && mineKey(origin)!==mineKey(current) &&
+      (latestTransfer ? mineKey(latestTransfer.raw.destinationMine)===mineKey(current) :
+        mineKey(asset.ubicacion)===mineKey('Mina '+current))
+      ? 'Trasladado a Mina ' + current : '';
+    if (origin && !clean(asset.minaOrigen)) projection.asset={...asset,minaOrigen:origin};
+    projection.transferLabel=transferLabel;
     const fields = window.SKAssetFields.canonical(asset);
     const {clase,label,model,equipment}=classModel(asset);
     const key = 'clase:' + clase.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
@@ -186,9 +204,9 @@
     const values={label,model,number:clean(fields.numeroClase)||clean(asset.orden),
       serial:clean(asset.serial)||window.SKAssetRules.serialStatusLabel(asset),
       mark:equipment?currentMark||newMark||clean(fields.numeroMarcaActual):newMark||currentMark,
-      mine:clean(asset.mina),state:clean(asset.estado),location:clean(asset.ubicacion)};
+      mine:clean(asset.mina),state:clean(asset.estado),location:[clean(asset.ubicacion),transferLabel].filter(Boolean).join(' · ')};
     const external=!window.SKAssetOwnership.isSK(asset);
-    const searchText=[...Object.values({...values,serial:window.SKAssetRules.searchSerial(asset.serial)}),window.SKAssetOwnership.label(asset),external?'externo externa externos externas transitorio':''].join(' ');
+    const searchText=[...Object.values({...values,serial:window.SKAssetRules.searchSerial(asset.serial)}),origin,window.SKAssetOwnership.label(asset),external?'externo externa externos externas transitorio':''].join(' ');
     const searchIndex=window.SKAssetSearch.indexText(asset,searchText);
     return {asset,key,clase,values,searchIndex,external,projection};
   }

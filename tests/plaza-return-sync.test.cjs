@@ -4,14 +4,16 @@ const {readFileSync}=require('node:fs'),{join}=require('node:path');
 const read=file=>readFileSync(join(__dirname,'..',file),'utf8');
 const clone=value=>JSON.parse(JSON.stringify(value));
 function harness(){
+ let persisted;
  const storage=new Map(),alerts=[],errors=[],nodes=new Map();
  const node=()=>({value:'',hidden:false,textContent:'',dataset:{},classList:{add(){},remove(){}},addEventListener(){},setAttribute(){},removeAttribute(){}});
  const document={querySelector(selector){if(!nodes.has(selector))nodes.set(selector,node());return nodes.get(selector)}};
- const ctx=vm.createContext({document,alert:message=>alerts.push(message),window:{SKEntry:entry,alert:message=>alerts.push(message),addEventListener(){},dispatchEvent(){},SKPlazaReturns:{setSyncError:message=>errors.push(message)}},sessionStorage:{getItem(){return null}},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:{},setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
+ const ctx=vm.createContext({document,alert:message=>alerts.push(message),window:{SKEntry:entry,alert:message=>alerts.push(message),addEventListener(){},dispatchEvent(){},SKPlazaReturns:{setSyncError:message=>errors.push(message)}},sessionStorage:{getItem:key=>key==='skPlazaToken'?'test':key==='skPlazaUser'?JSON.stringify({id:'operator',documento:'operator'}):null},localStorage:{getItem:key=>storage.get(key)||null,setItem:(key,value)=>storage.set(key,value),removeItem:key=>storage.delete(key)},navigator:{onLine:true},console,crypto:{},setTimeout(){return 1},clearTimeout(){},Event:class Event{}});
+ ctx.window.SKPlazaLocal={write:async next=>{persisted=JSON.stringify(next)}};
  const source=read('plaza/plaza.js').split('  injectItemSearchStyle();setupDeliveryForm();')[0];
  vm.runInContext(read('asset-history.js'),ctx);
- vm.runInContext(source+`\nrender=()=>{};window.testing={sync,deliveryCatalog,currentDeliveryItem,setupRegisterMenu,mode:value=>{deliveryMode=value},get:()=>data,set:value=>{data=value},post:fn=>{post=fn},storage:next=>{localStorage.setItem('skPlazaData',JSON.stringify(next));data=next}};})();`,ctx);
- return {api:ctx.window.testing,storage,alerts,errors,ctx,nodes};
+ vm.runInContext(source+`\nrender=()=>{};window.testing={sync,deliveryCatalog,currentDeliveryItem,setupRegisterMenu,mode:value=>{deliveryMode=value},get:()=>data,set:value=>{data=value;appReady=true;window.SKPlazaLocal.write(value)},post:fn=>{post=fn},storage:next=>{data=next;appReady=true;window.SKPlazaLocal.write(next)}};})();`,ctx);
+ return {api:ctx.window.testing,storage,persisted:()=>persisted,alerts,errors,ctx,nodes};
 }
 const pending=()=>({personal:[],assets:[{id:'asset',ubicacion:'Bodega de Superficie',syncState:'pending'}],blendingIncomes:[],blendingDeliveries:[{id:'return',syncEventId:'return',movementType:'DEVOLUCIÓN',loanId:'loan',assetId:'asset',syncState:'pending'}]});
 
@@ -38,7 +40,7 @@ test('servidor actualizado confirma la devolución sin perder otra guardada dura
  });
  assert.equal(await h.api.sync(true),false);assert.equal(calls,2);
  const rows=h.api.get().blendingDeliveries;assert.equal(rows.length,2);assert.equal(rows[0].syncState,'synced');assert.equal(rows[1].syncState,'pending');
- assert.equal(JSON.parse(h.storage.get('skPlazaData')).blendingDeliveries.length,2);
+ assert.equal(JSON.parse(h.persisted()).blendingDeliveries.length,2);
 });
 test('el formulario conserva el préstamo si falla el almacenamiento y evita doble devolución',async()=>{
  const nodes=new Map(),alerts=[];const button={disabled:false};

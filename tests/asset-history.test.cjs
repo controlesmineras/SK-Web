@@ -29,6 +29,8 @@ test('una ubicación antigua de bodega no permite entregar otra vez un activo as
  data.blendingIncomes=[{id:'back-to-warehouse',assetId:asset.id,createdAt:'2026-10-19T12:00:00Z'}];
  assert.equal(history.available(stored,data),true);assert.equal(history.project(stored,data).asset.asignadaId,'');
  data.blendingIncomes[0].incomeType='REPARACIÓN';assert.equal(history.available(stored,data),false);
+ data.blendingIncomes[0].receivedState='Averiado/a';assert.equal(history.project(stored,data).asset.estado,'Averiado/a');
+ data.blendingIncomes[0].receivedState='Operativo/a';assert.equal(history.available(stored,data),true);
 });
 test('el inventario del área elegida es independiente del área registrada del funcionario',()=>{
  const data=seed();Object.assign(data.blendingDeliveries[0],{destination:'Inventario de Producción',destinationArea:'Producción',recipientArea:'Desmin - Obras civiles'});

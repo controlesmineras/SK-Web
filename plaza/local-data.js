@@ -1,7 +1,7 @@
-/* IndexedDB owns the full offline snapshot. localStorage is read only for migration. */
+/* IndexedDB stores the synced snapshot and local movement changes. */
 (()=>{
   'use strict';
-  const legacyKey='skPlazaData',dbName='sk-plaza-offline-v1',storeName='state',slot='snapshot';
+  const legacyKey='skPlazaData',dbName='sk-plaza-offline-v1',storeName='state',slot='snapshot',changesStore='changes',revisionKey='revision';
   let opening=null,initializing=null,revision=null,queue=Promise.resolve();
   const clone=value=>JSON.parse(JSON.stringify(value));
   function open(){
@@ -11,8 +11,8 @@
       let done=false;
       const timer=setTimeout(()=>finish(new Error('La base local no respondió. Cierra las otras ventanas de Plaza Blending y vuelve a abrir la app.')),20000);
       const finish=(error,db)=>{if(done){db?.close();return}done=true;clearTimeout(timer);error?reject(error):resolve(db)};
-      let request;try{request=indexedDB.open(dbName,1)}catch(error){finish(error);return}
-      request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains(storeName))db.createObjectStore(storeName)};
+      let request;try{request=indexedDB.open(dbName,2)}catch(error){finish(error);return}
+      request.onupgradeneeded=()=>{const db=request.result;if(!db.objectStoreNames.contains(storeName))db.createObjectStore(storeName);if(!db.objectStoreNames.contains(changesStore))db.createObjectStore(changesStore)};
       request.onblocked=()=>finish(new Error('Otra ventana está bloqueando la base local. Ciérrala y vuelve a abrir Plaza Blending.'));
       request.onerror=()=>finish(new Error('No se pudo abrir la base local. Los registros anteriores se conservaron.'));
       request.onsuccess=()=>{const db=request.result;db.onversionchange=()=>{db.close();opening=null};finish(null,db)};
@@ -23,16 +23,35 @@
     const db=await open();
     return new Promise((resolve,reject)=>{
       let tx,result,failure;
-      try{tx=db.transaction(storeName,mode)}catch(error){reject(error);return}
+      try{tx=db.transaction([storeName,changesStore],mode)}catch(error){reject(error);return}
       const timer=setTimeout(()=>{failure=new Error('El guardado local tardó demasiado. No se confirmó ningún cambio.');try{tx.abort()}catch(_){}},20000);
       tx.oncomplete=()=>{clearTimeout(timer);resolve(result)};
       tx.onabort=()=>{clearTimeout(timer);reject(failure||tx.error||new Error('No se pudo guardar en la base local. La copia anterior se conservó.'))};
       tx.onerror=()=>{};
-      try{work(tx.objectStore(storeName),value=>{result=value},error=>{failure=error;tx.abort()})}
+      try{work(tx.objectStore(storeName),value=>{result=value},error=>{failure=error;tx.abort()},tx.objectStore(changesStore))}
       catch(error){failure=error;tx.abort()}
     });
   }
-  const getRow=()=>transaction('readonly',(store,set)=>{const request=store.get(slot);request.onsuccess=()=>set(request.result)});
+  function readSnapshot(store,changes,done){
+    const snapshot=store.get(slot),currentRevision=store.get(revisionKey),patches=changes.getAll();
+    patches.onsuccess=()=>{
+      const row=snapshot.result;
+      if(!row){done(null);return}
+      const collections=new Map();
+      for(const {name,id,value} of patches.result.sort((a,b)=>a.index-b.index)){
+        if(!collections.has(name))collections.set(name,new Map((row.data[name]||[]).map(item=>[item.id,item])));
+        collections.get(name).set(id,value);
+      }
+      for(const [name,items] of collections)row.data[name]=[...items.values()];
+      done({revision:currentRevision.result??row.revision,data:row.data});
+    };
+  }
+  const getRow=()=>transaction('readonly',(store,set,fail,changes)=>readSnapshot(store,changes,set));
+  function replaceSnapshot(store,changes,row){
+    store.put(row,slot);
+    store.put(row.revision,revisionKey);
+    changes.clear();
+  }
   function decodeLegacy(raw){
     if(!raw)return {};
     try{
@@ -73,17 +92,15 @@
   }
   async function initialize(){
     const raw=localStorage.getItem(legacyKey),legacy=decodeLegacy(raw);
-    const row=await transaction('readwrite',(store,set,fail)=>{
-      const request=store.get(slot);
-      request.onsuccess=()=>{
-        const existing=request.result;
+    const row=await transaction('readwrite',(store,set,fail,changes)=>{
+      readSnapshot(store,changes,existing=>{
         if(existing){
           const merged=raw?mergeLegacyPending(legacy,existing.data):existing.data;
-          if(JSON.stringify(merged)!==JSON.stringify(existing.data)){const recovered={revision:existing.revision+1,data:merged};store.put(recovered,slot);set(recovered)}else set(existing);
+          if(JSON.stringify(merged)!==JSON.stringify(existing.data)){const recovered={revision:existing.revision+1,data:merged};replaceSnapshot(store,changes,recovered);set(recovered)}else {store.put(existing.revision,revisionKey);set(existing)};
           return;
         }
-        const first={revision:1,data:legacy};store.put(first,slot);set(first);
-      };
+        const first={revision:1,data:legacy};replaceSnapshot(store,changes,first);set(first);
+      });
     });
     // Verify the committed record before retiring the previous storage key.
     const verified=await getRow();
@@ -95,17 +112,37 @@
   function ready(){return initializing||(initializing=initialize())}
   function enqueue(work){const task=queue.then(work);queue=task.catch(()=>{});return task}
   function read(){return enqueue(async()=>{await ready();const row=await getRow();if(!row)throw new Error('No se encontró la copia local. No se realizaron cambios.');revision=row.revision;return clone(row.data)})}
-  function write(data){
+  function write(data,patches){
+    if(patches)return writeMovement(patches);
     // Capture before waiting: edits made later cannot change an in-flight transaction.
     let snapshot;try{snapshot=clone(data)}catch(error){return Promise.reject(error)}
     return enqueue(async()=>{
       await ready();
-      const next=await transaction('readwrite',(store,set,fail)=>{
-        const request=store.get(slot);
+      const next=await transaction('readwrite',(store,set,fail,changes)=>{
+        const request=store.get(revisionKey);
         request.onsuccess=()=>{
           const existing=request.result;
-          if(!existing||existing.revision!==revision){fail(new Error('Los datos cambiaron en otra ventana de Plaza Blending. No se sobrescribieron; vuelve a abrir esta ventana antes de registrar.'));return}
-          const row={revision:existing.revision+1,data:snapshot};store.put(row,slot);set(row.revision);
+          if(existing!==revision){fail(new Error('Los datos cambiaron en otra ventana de Plaza Blending. No se sobrescribieron; vuelve a abrir esta ventana antes de registrar.'));return}
+          const row={revision:revision+1,data:snapshot};replaceSnapshot(store,changes,row);set(row.revision);
+        };
+      });
+      revision=next;
+    });
+  }
+  function writeMovement(records){
+    const patches=clone(records);
+    return enqueue(async()=>{
+      await ready();
+      const next=await transaction('readwrite',(store,set,fail,changes)=>{
+        const request=store.get(revisionKey);
+        request.onsuccess=()=>{
+          if(request.result!==revision){
+            fail(new Error('Los datos cambiaron en otra ventana de Plaza Blending. Vuelve a abrir esta ventana antes de registrar.'));
+            return;
+          }
+          for(const patch of patches)changes.put(patch,[patch.name,patch.id]);
+          store.put(revision+1,revisionKey);
+          set(revision+1);
         };
       });
       revision=next;

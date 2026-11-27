@@ -17,6 +17,9 @@ function archivoConfirmado_(fuente, serie, r) {
 }
 
 function archivoColumnas_(serie, r) {
+  // La firma de idempotencia de Bodega contiene el cuerpo original enviado por el dispositivo.
+  const datos = {...r};
+  delete datos.requestSignature;
   const reversion = !!r.reversalOf || r.movementType === 'REVERSIÓN';
   const autor = r.operatorName || r.recordedByName || r.registradoPorNombre || r.registeredBy || r.registradoPor;
   const tipo = r.movementType || r.kind || r.action || ({
@@ -28,7 +31,7 @@ function archivoColumnas_(serie, r) {
     r.balanceBefore ?? null, r.balanceAfter ?? null,
     reversion || typeof autor !== 'string' ? null : autor,
     reversion ? null : r.actorRole || r.recordedByRole || null, r.reversalRequestedBy || null,
-    r.shiftKeeperName || null, r.reversalOf || r.loanId || r.incomeId || null, JSON.stringify(r)];
+    r.shiftKeeperName || null, r.reversalOf || r.loanId || r.incomeId || null, JSON.stringify(datos)];
 }
 
 function archivoCopiar_(SQL, fuente, sourceId, data, bytes) {
