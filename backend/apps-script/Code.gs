@@ -968,6 +968,24 @@ function validateAssetSerials_(cloudAssets,changes,criteria=[]){
   if(duplicate)throw new Error('El serial '+String(saved.serial).trim()+' ya existe en: '+[duplicate.clase,duplicate.numeroClase||duplicate.numeroYT,duplicate.marcaActual||duplicate.marcaInterna].filter(Boolean).join(' · ')+'.');
  }
 }
+function actaYear_(value){return String(value||'').match(/^(\d{4})-\d{2}-\d{2}(?:T|$)/)?.[1]||String(value||'').match(/^\d{2}\/\d{2}\/(\d{4})$/)?.[1]||'';}
+function validateActaNumbers_(incoming,cloud){
+ const pending=(incoming.actas||[]).filter(row=>row?.id&&row.syncState==='pending');
+ const records=new Map((cloud.actas||[]).filter(row=>row?.id).map(row=>[row.id,row]));
+ for(const row of pending)records.set(row.id,row);
+ const counts=new Map();
+ const key=row=>actaYear_(row.fecha)+'/'+Number(row.consecutivo);
+ for(const row of records.values()){
+  if(row.deleted||row.tipo==='OFICIO')continue;
+  const id=key(row);counts.set(id,(counts.get(id)||0)+1);
+ }
+ for(const row of pending){
+  if(row.deleted||row.tipo==='OFICIO')continue;
+  const number=Number(row.consecutivo),year=actaYear_(row.fecha);
+  if(!year||!Number.isSafeInteger(number)||number<1)throw new Error('Indica una fecha y un número válidos para el acta.');
+  if(counts.get(key(row))>1)throw new Error('El acta N.º '+number+' de '+year+' ya está registrada.');
+ }
+}
 function validateLastActaDeletion_(incoming,cloud,auth){
  const pending=(incoming.actas||[]).filter(row=>row&&row.syncState==='pending');
  const deletions=pending.filter(row=>row.deleted).sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo));
@@ -978,7 +996,7 @@ function validateLastActaDeletion_(incoming,cloud,auth){
  for(const row of deletions){
   const previous=finalRows.get(row.id);
   if(previous&&previous.deleted)continue;
-  const active=Array.from(finalRows.values()).filter(x=>!x.deleted&&x.tipo!=='OFICIO');
+  const active=Array.from(finalRows.values()).filter(x=>!x.deleted&&x.tipo!=='OFICIO'&&actaYear_(x.fecha)===actaYear_(previous?.fecha));
   const last=active.sort((a,b)=>Number(b.consecutivo)-Number(a.consecutivo))[0];
   if(row.tipo==='OFICIO'||!previous||!last||last.id!==row.id)throw new Error('Solo puedes eliminar la última acta. Sincroniza para conocer el consecutivo más reciente.');
   finalRows.set(row.id,Object.assign({},previous,{deleted:true}));
@@ -998,7 +1016,7 @@ function validateActaStatus_(incoming,cloud,auth){
   if(row.documentStatus==='not_created'){
    if(!old||row.tipo==='OFICIO'||!String(row.notCreatedReason||'').trim())throw new Error('Selecciona un acta registrada e indica por qué no fue elaborada.');
   }
-  if(old&&old.documentStatus==='not_created'&&(row.documentStatus!=='not_created'||row.deleted||Number(row.consecutivo)!==Number(old.consecutivo)))throw new Error('El consecutivo del acta no elaborada se conserva y no puede reutilizarse.');
+  if(old&&old.documentStatus==='not_created'&&(row.documentStatus!=='not_created'||row.deleted||Number(row.consecutivo)!==Number(old.consecutivo)||actaYear_(row.fecha)!==actaYear_(old.fecha)))throw new Error('El consecutivo del acta no elaborada se conserva y no puede reutilizarse.');
  }
 }
 
@@ -1019,6 +1037,7 @@ function adminSync_(incoming,since,auth,productionVersions){
   if(deletions.length)requireAdmin_(auth);
   validateLastActaDeletion_(incoming||{},cloud,auth);
   validateActaStatus_(incoming||{},cloud,auth);
+  validateActaNumbers_(incoming||{},cloud);
   const editedAssets=new Set((incoming.assets||[]).filter(row=>row?.syncState==='pending').map(row=>row.id));
   incoming=prepareAdminNovelties_(incoming,cloud,auth);
   const hasPending=Object.keys(incoming||{}).some(name=>Array.isArray(incoming[name])&&incoming[name].some(x=>x&&x.id&&x.syncState==='pending'));
