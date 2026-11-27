@@ -31,7 +31,11 @@
     <button type="button" id="documentQueryClear">Limpiar filtros</button>
    </div>
    <p id="documentQueryCount" class="hint" role="status" aria-live="polite"></p>
-   <div class="documentQueryHeading"><button id="documentQueryNumber" type="button">N.º de acta ↓</button></div>
+   <div class="documentQueryHeading">
+    <button id="documentQueryNumber" type="button">N.º de acta ↓</button>
+    <div class="documentQueryColumnNames"><span>Fecha de origen</span><span id="documentQueryWho">Área</span><span id="documentQueryTopic">Motivo</span></div>
+    <span class="documentQueryLinkHeading">Enlace</span>
+   </div>
    <div id="documentQueryList" aria-busy="false"></div>`;
   main.append(section);
   section.addEventListener('keydown',event=>{if(event.target.matches('[data-edit-document]')&&['Enter',' '].includes(event.key)){event.preventDefault();event.target.click()}});
@@ -53,16 +57,17 @@
   node('documentQueryClear').onclick=()=>{for(const id of ['documentQuerySearch','documentQueryYear'])node(id).value='';draw();node('documentQuerySearch').focus()};
   const style=document.createElement('style');style.textContent=`
    #documentQuery .sectionHead{gap:12px;flex-wrap:wrap}
-   #documentQuery .documentQueryFilters{display:grid;grid-template-columns:minmax(230px,2fr) repeat(2,minmax(130px,1fr));gap:14px;align-items:end;margin:20px 0}
+   #documentQuery .documentQueryFilters{display:grid;grid-template-columns:minmax(230px,2fr) repeat(2,minmax(130px,1fr)) auto;gap:14px;align-items:end;margin:20px 0}
    #documentQuery label{display:grid;gap:7px;min-width:0;font-size:.9rem;font-weight:700;color:#fff}
    #documentQuery .documentQueryTypeFilter{display:grid;gap:7px;min-width:0;font-size:.9rem;font-weight:700;color:#fff}
    #documentQuery .documentQueryTypes{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
    #documentQuery .documentQueryTypes button{min-height:44px;padding:.35rem .2rem;border:1px solid #bed3df;border-radius:7px;background:#eaf2f7;color:#173d59;font-size:.82rem;font-weight:750}
    #documentQuery .documentQueryTypes button[aria-pressed="true"]{background:#20628c;color:#fff;border-color:#78b4d7}
    #documentQuery :is(input,select){width:100%;min-width:0;box-sizing:border-box}
-   #documentQueryClear{justify-self:start;background:#fff;color:#102f45;border:1px solid #b9cad6}
+   #documentQueryClear{justify-self:start;min-height:44px;background:#fff;color:#102f45;border:1px solid #b9cad6}
    #documentQuery .documentQueryHeading{margin:0 0 .45rem;padding-inline:12px}
    #documentQueryNumber{background:#eaf2f7;color:#173d59}
+   #documentQuery .documentQueryColumnNames,#documentQuery .documentQueryLinkHeading{display:none}
    #documentQueryList{display:grid;gap:8px}
    #documentQuery .documentQueryCard{border:1px solid #cdd9e2;border-radius:10px;padding:10px 12px;background:#fff;overflow-wrap:anywhere}
    #documentQuery [data-edit-document]{cursor:pointer}#documentQuery [data-edit-document]:focus-visible{outline:3px solid #245779;outline-offset:3px}#documentQuery .documentQueryCardHead{display:flex;justify-content:space-between;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:8px}
@@ -78,14 +83,19 @@
    #documentQuery .documentQueryPending{margin:12px 0 0;color:#805400;font-size:.86rem}
    #documentQuery a:focus-visible,#documentQuery button:focus-visible{outline:3px solid #245779;outline-offset:3px}
    @media(min-width:960px){
-    #documentQuery .documentQueryCard{display:grid;grid-template-columns:minmax(8rem, .8fr) minmax(0, 4fr) minmax(7rem, auto);align-items:center;gap:0 14px;padding:5px 12px}
+    #documentQuery :is(.documentQueryCard,.documentQueryHeading){display:grid;grid-template-columns:minmax(8rem,.8fr) minmax(0,4fr) 10rem;align-items:center;gap:0 14px;padding:5px 12px}
+    #documentQuery .documentQueryHeading{background:#eaf2f7;color:#173d59;border-radius:8px;font-size:.82rem;font-weight:750}
+    #documentQueryNumber{justify-self:start;padding:.45rem .25rem;text-align:left}
+    #documentQuery .documentQueryLinkHeading{display:block;text-align:right}
+    #documentQuery .documentQueryColumnNames{display:grid;grid-template-columns:minmax(6rem,.65fr) minmax(0,1fr) minmax(0,1.6fr);gap:12px}
+    #documentQuery .documentQueryCard dt{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%)}
     #documentQuery .documentQueryCardHead{display:contents}
     #documentQuery .documentQueryCardHead h3{grid-area:1 / 1}
     #documentQuery .documentQueryCardHead :is(a,span){grid-area:1 / 3;justify-self:end;text-align:right}
     #documentQuery .documentQueryCard > dl{grid-area:1 / 2;grid-template-columns:minmax(6rem, .65fr) minmax(0, 1fr) minmax(0, 1.6fr);gap:12px}
     #documentQuery .documentQueryCard > p{grid-column:1 / -1}
    }
-   @media(max-width:800px){#documentQuery .documentQueryFilters{grid-template-columns:repeat(2,minmax(0,1fr))}#documentQuery .documentQuerySearchLabel{grid-column:1/-1}}
+   @media(max-width:800px){#documentQuery .documentQueryFilters{grid-template-columns:repeat(2,minmax(0,1fr))}#documentQuery :is(.documentQuerySearchLabel,.documentQueryTypeFilter){grid-column:1/-1}}
    @media(max-width:480px){#documentQuery .documentQueryReserved{grid-column:1}#documentQuery dl{grid-template-columns:minmax(0,1fr)}#documentQuery .documentQueryCard{padding:10px}}
   `;document.head.append(style);
  }
@@ -102,6 +112,8 @@
   yearInput.innerHTML='<option value="">Todos los años</option>'+yearOptions.map(value=>'<option>'+esc(value)+'</option>').join('');
   yearInput.value=year;
   search.placeholder=type==='ACTA'?'Número, área o motivo…':'Número, asunto o destinatario…';
+  node('documentQueryWho').textContent=type==='ACTA'?'Área':'Dirigido a';
+  node('documentQueryTopic').textContent=type==='ACTA'?'Motivo':'Asunto';
   const heading=type==='ACTA'?'N.º de acta':'N.º de oficio';
   numberHeader.textContent=heading+(numberDirection===-1?' ↓':' ↑');
   numberHeader.setAttribute('aria-label',heading+(numberDirection===-1?', de mayor a menor. Ordenar de menor a mayor':', de menor a mayor. Ordenar de mayor a menor'));
