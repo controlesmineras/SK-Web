@@ -26,7 +26,7 @@
     }
   }
 
-  function picker(inputId, savedFields, {eligible = () => true, showAssignment = false, showEmployer = false} = {}) {
+  function picker(inputId, savedFields, {eligible = () => true, showAssignment = false, showEmployer = false, compact = false} = {}) {
     const input = document.getElementById(inputId);
     const form = input.form;
     const host = input.closest('.assetPersonField');
@@ -51,18 +51,18 @@
       selected = person;
       for (const [key, field] of Object.entries(savedFields)) field.value = person?.[key] ?? '';
       const description = [];
-      if (person?.nombre && person.documento) description.push('Documento ' + person.documento);
+      if (!compact && person?.nombre && person.documento) description.push('Documento ' + person.documento);
       if (showEmployer && person?.empresa) description.push('Empresa: ' + person.empresa);
       if (showAssignment && person?.area) description.push('Área: ' + person.area);
       if (showAssignment && person?.cargo) description.push('Cargo: ' + person.cargo);
       details.textContent = description.join(' · ');
       details.hidden = !description.length;
       clear.hidden = !person;
-      host.classList.toggle('hasSelection', Boolean(person));
+      host.classList.toggle('hasSelection', Boolean(person)&&!compact);
     }
     function set(person) {
       writeSelection(person);
-      input.value = person ? (person.nombre || person.documento || 'Colaborador histórico') : '';
+      input.value = person ? (compact ? [person.documento,person.nombre].filter(Boolean).join(' - ') : (person.nombre || person.documento || 'Colaborador histórico')) : '';
       input.setCustomValidity('');
       close();
     }
@@ -183,7 +183,7 @@
   const noveltyFields = document.querySelector('#noveltyForm').elements;
   const noveltyWarehouse = picker('novWarehouseSearch', {
     id: noveltyFields.bodegueroId, nombre: noveltyFields.bodegueroNombre, documento: noveltyFields.documentoBodeguero
-  }, {eligible: person => !!person.id, showEmployer: true});
+  }, {eligible: person => !!person.id, compact: true});
 
   function snapshot(nombre, documento) {
     return nombre || documento ? {nombre, documento} : null;
